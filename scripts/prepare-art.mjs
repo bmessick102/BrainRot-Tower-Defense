@@ -1,0 +1,307 @@
+// Prepares Cole's art for the game. Run with: npm run prepare-art
+//
+// 1. Reads full-size originals from art-source/<category>/<key>.png
+// 2. Trims empty transparent margins, scales to game size, writes public/assets/images/<category>/<key>.png
+// 3. Scans public/assets/ and writes src/assetManifest.js so BootScene only loads files that exist
+//    (missing files would otherwise show 404 errors in the console).
+//
+// No dependencies: PNG decode/encode uses Node's built-in zlib.
+// Images without transparency are skipped (with a warning) so they never show as a solid box in game.
+
+import fs from 'node:fs';
+import path from 'node:path';
+import zlib from 'node:zlib';
+import { fileURLToPath } from 'node:url';
+
+const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
+const SRC = path.join(ROOT, 'art-source');
+const OUT_IMAGES = path.join(ROOT, 'public', 'assets', 'images');
+const OUT_AUDIO = path.join(ROOT, 'public', 'assets', 'audio');
+const MANIFEST = path.join(ROOT, 'src', 'assetManifest.js');
+
+// Output width in pixels per key pattern. Buildings are 2x their 192/256 px in-game width so they stay sharp at 2x zoom.
+const TARGETS = [
+  { match: /^bld_townHall_/, width: 512, trim: true, needsAlpha: true },
+  // Wall pillars (one per 2 levels): one shared crop box so every level keeps the same scale and baseline.
+  { match: /^bld_wall_lv[0-9]+$/, width: 256, trim: 'group', needsAlpha: true },
+  // Destroyed-wall rubble (wood for levels 1-2, stone for 3-10): flat piles, drawn about a tile wide.
+  { match: /^bld_wall_rubble_/, width: 256, trim: true, needsAlpha: true },
+  { match: /^bld_wall_/, width: 128, trim: true, needsAlpha: true },
+  // Cannon and Catapult tiers are drawn on one shared canvas, each bulkier than the last. Cropping them all with
+  // the same box (instead of each to its own edges) keeps one scale and one ground point, so the
+  // upgrades really look bigger in game.
+  { match: /^bld_cannon_lv[0-9]+$/, width: 384, trim: 'group', needsAlpha: true },
+  { match: /^bld_catapult_lv[0-9]+$/, width: 384, trim: 'group', needsAlpha: true },
+  { match: /^bld_house_lv[0-9]+$/, width: 384, trim: 'group', needsAlpha: true },
+  { match: /^bld_flock_lv[0-9]+$/, width: 384, trim: 'group', needsAlpha: true },
+  { match: /^bld_mousetrap_lv[0-9]+$/, width: 384, trim: 'group', needsAlpha: true },
+  { match: /^bld_ra_lv[0-9]+$/, width: 384, trim: true, needsAlpha: true },
+  { match: /^bld_/, width: 384, trim: true, needsAlpha: true },
+  { match: /^enemy_/, width: 160, trim: true, needsAlpha: true },
+  { match: /^villager_/, width: 128, trim: true, needsAlpha: true },
+  { match: /^proj_(slinger|bomb)$/, width: 48, trim: true, needsAlpha: true },
+  { match: /^proj_cannon$/, width: 48, trim: true, needsAlpha: true },
+  { match: /^proj_mortar$/, width: 64, trim: true, needsAlpha: true },
+  { match: /^proj_(arrow|wizard)$/, width: 96, trim: true, needsAlpha: true },
+  { match: /^ui_coin$/, width: 96, trim: true, needsAlpha: true },
+  { match: /^guide_portrait$/, width: 256, trim: true, needsAlpha: true },
+  { match: /^ui_(shop|settings|edit_layout)_button$/, width: 160, trim: true, needsAlpha: true },
+  { match: /^ui_start_button$/, width: 480, trim: true, needsAlpha: true },
+  { match: /^ui_league_[a-z]+$/, width: 160, trim: true, needsAlpha: true }, // leaderboard league badges
+  { match: /^ui_title_background$/, width: 1280, trim: false, needsAlpha: false }
+];
+
+// ---------- PNG decode ----------
+function decodePng(buf) {
+  const SIG = '89504e470d0a1a0a';
+  if (buf.subarray(0, 8).toString('hex') !== SIG) throw new Error('not a PNG');
+  let pos = 8, width, height, bitDepth, colorType, interlace, palette = null, trns = null;
+  const idat = [];
+  while (pos < buf.length) {
+    const len = buf.readUInt32BE(pos);
+    const type = buf.toString('latin1', pos + 4, pos + 8);
+    const data = buf.subarray(pos + 8, pos + 8 + len);
+    if (type === 'IHDR') {
+      width = data.readUInt32BE(0); height = data.readUInt32BE(4);
+      bitDepth = data[8]; colorType = data[9]; interlace = data[12];
+    } else if (type === 'PLTE') palette = data;
+    else if (type === 'tRNS') trns = data;
+    else if (type === 'IDAT') idat.push(data);
+    else if (type === 'IEND') break;
+    pos += 12 + len;
+  }
+  if (bitDepth !== 8) throw new Error(`unsupported bit depth ${bitDepth}`);
+  if (interlace) throw new Error('interlaced PNGs are not supported');
+  const channels = { 0: 1, 2: 3, 3: 1, 4: 2, 6: 4 }[colorType];
+  if (!channels) throw new Error(`unsupported color type ${colorType}`);
+  const raw = zlib.inflateSync(Buffer.concat(idat));
+  const stride = width * channels;
+  const px = Buffer.alloc(height * stride);
+  let prev = Buffer.alloc(stride);
+  for (let y = 0; y < height; y++) {
+    const f = raw[y * (stride + 1)];
+    const line = raw.subarray(y * (stride + 1) + 1, (y + 1) * (stride + 1));
+    const out = px.subarray(y * stride, (y + 1) * stride);
+    for (let i = 0; i < stride; i++) {
+      const a = i >= channels ? out[i - channels] : 0, b = prev[i], c = i >= channels ? prev[i - channels] : 0;
+      let v = line[i];
+      if (f === 1) v += a;
+      else if (f === 2) v += b;
+      else if (f === 3) v += (a + b) >> 1;
+      else if (f === 4) v += paeth(a, b, c);
+      out[i] = v & 255;
+    }
+    prev = out;
+  }
+  const rgba = Buffer.alloc(width * height * 4);
+  const hasAlpha = colorType === 4 || colorType === 6 || !!trns;
+  for (let i = 0; i < width * height; i++) {
+    const s = i * channels, d = i * 4;
+    if (colorType === 6) { rgba[d] = px[s]; rgba[d + 1] = px[s + 1]; rgba[d + 2] = px[s + 2]; rgba[d + 3] = px[s + 3]; }
+    else if (colorType === 2) {
+      rgba[d] = px[s]; rgba[d + 1] = px[s + 1]; rgba[d + 2] = px[s + 2]; rgba[d + 3] = 255;
+      if (trns && trns.readUInt16BE(0) === px[s] && trns.readUInt16BE(2) === px[s + 1] && trns.readUInt16BE(4) === px[s + 2]) rgba[d + 3] = 0;
+    } else if (colorType === 3) {
+      const p = px[s]; rgba[d] = palette[p * 3]; rgba[d + 1] = palette[p * 3 + 1]; rgba[d + 2] = palette[p * 3 + 2];
+      rgba[d + 3] = trns && p < trns.length ? trns[p] : 255;
+    } else if (colorType === 0) { rgba[d] = rgba[d + 1] = rgba[d + 2] = px[s]; rgba[d + 3] = 255; }
+    else if (colorType === 4) { rgba[d] = rgba[d + 1] = rgba[d + 2] = px[s]; rgba[d + 3] = px[s + 1]; }
+  }
+  return { width, height, data: rgba, hasAlpha };
+}
+
+function paeth(a, b, c) {
+  const p = a + b - c, pa = Math.abs(p - a), pb = Math.abs(p - b), pc = Math.abs(p - c);
+  return pa <= pb && pa <= pc ? a : pb <= pc ? b : c;
+}
+
+// ---------- PNG encode (RGBA, adaptive filter per row) ----------
+const CRC_TABLE = new Int32Array(256).map((_, n) => {
+  let c = n;
+  for (let k = 0; k < 8; k++) c = c & 1 ? 0xedb88320 ^ (c >>> 1) : c >>> 1;
+  return c;
+});
+function crc32(buf) {
+  let c = -1;
+  for (let i = 0; i < buf.length; i++) c = CRC_TABLE[(c ^ buf[i]) & 255] ^ (c >>> 8);
+  return (c ^ -1) >>> 0;
+}
+function chunk(type, data) {
+  const len = Buffer.alloc(4); len.writeUInt32BE(data.length);
+  const td = Buffer.concat([Buffer.from(type, 'latin1'), data]);
+  const crc = Buffer.alloc(4); crc.writeUInt32BE(crc32(td));
+  return Buffer.concat([len, td, crc]);
+}
+function encodePng({ width, height, data }) {
+  const stride = width * 4;
+  const raw = Buffer.alloc(height * (stride + 1));
+  const cand = [0, 1, 2, 3, 4].map(() => Buffer.alloc(stride));
+  for (let y = 0; y < height; y++) {
+    const cur = data.subarray(y * stride, (y + 1) * stride);
+    const prev = y ? data.subarray((y - 1) * stride, y * stride) : Buffer.alloc(stride);
+    let best = 0, bestSum = Infinity;
+    for (let f = 0; f < 5; f++) {
+      let sum = 0;
+      for (let i = 0; i < stride; i++) {
+        const a = i >= 4 ? cur[i - 4] : 0, b = prev[i], c = i >= 4 ? prev[i - 4] : 0;
+        const pred = f === 0 ? 0 : f === 1 ? a : f === 2 ? b : f === 3 ? (a + b) >> 1 : paeth(a, b, c);
+        const v = (cur[i] - pred) & 255;
+        cand[f][i] = v; sum += v < 128 ? v : 256 - v;
+      }
+      if (sum < bestSum) { bestSum = sum; best = f; }
+    }
+    raw[y * (stride + 1)] = best;
+    cand[best].copy(raw, y * (stride + 1) + 1);
+  }
+  const ihdr = Buffer.alloc(13);
+  ihdr.writeUInt32BE(width, 0); ihdr.writeUInt32BE(height, 4);
+  ihdr[8] = 8; ihdr[9] = 6; ihdr[10] = 0; ihdr[11] = 0; ihdr[12] = 0;
+  return Buffer.concat([
+    Buffer.from('89504e470d0a1a0a', 'hex'),
+    chunk('IHDR', ihdr),
+    chunk('IDAT', zlib.deflateSync(raw, { level: 9 })),
+    chunk('IEND', Buffer.alloc(0))
+  ]);
+}
+
+// ---------- image ops ----------
+/** Bounding box of the visible pixels, or null if the image is empty. */
+function visibleBox(img, alphaThreshold = 40) {
+  const { width: w, height: h, data } = img;
+  let x0 = w, y0 = h, x1 = -1, y1 = -1;
+  for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) {
+    if (data[(y * w + x) * 4 + 3] >= alphaThreshold) {
+      if (x < x0) x0 = x; if (x > x1) x1 = x; if (y < y0) y0 = y; if (y > y1) y1 = y;
+    }
+  }
+  return x1 < 0 ? null : { x0, y0, x1, y1 };
+}
+
+function crop(img, { x0, y0, x1, y1 }) {
+  const { width: w, data } = img;
+  const nw = x1 - x0 + 1, nh = y1 - y0 + 1, out = Buffer.alloc(nw * nh * 4);
+  for (let y = 0; y < nh; y++) data.copy(out, y * nw * 4, ((y + y0) * w + x0) * 4, ((y + y0) * w + x1 + 1) * 4);
+  return { width: nw, height: nh, data: out };
+}
+
+function trim(img) {
+  const box = visibleBox(img);
+  return box ? crop(img, box) : img;
+}
+
+// Area-average downscale on premultiplied alpha (no dark halos around transparent edges).
+function resize(img, targetW) {
+  const { width: w, height: h, data } = img;
+  if (targetW >= w) return img;
+  const targetH = Math.max(1, Math.round(h * targetW / w));
+  const sx = w / targetW, sy = h / targetH;
+  const out = Buffer.alloc(targetW * targetH * 4);
+  for (let ty = 0; ty < targetH; ty++) {
+    const yA = ty * sy, yB = yA + sy;
+    for (let tx = 0; tx < targetW; tx++) {
+      const xA = tx * sx, xB = xA + sx;
+      let r = 0, g = 0, b = 0, a = 0, wsum = 0;
+      for (let y = Math.floor(yA); y < Math.ceil(yB); y++) {
+        const wy = Math.min(y + 1, yB) - Math.max(y, yA);
+        for (let x = Math.floor(xA); x < Math.ceil(xB); x++) {
+          const wx = Math.min(x + 1, xB) - Math.max(x, xA);
+          const wt = wx * wy, i = (y * w + x) * 4, al = data[i + 3] / 255;
+          r += data[i] * al * wt; g += data[i + 1] * al * wt; b += data[i + 2] * al * wt; a += al * wt; wsum += wt;
+        }
+      }
+      const o = (ty * targetW + tx) * 4;
+      if (a > 0) { out[o] = Math.round(r / a); out[o + 1] = Math.round(g / a); out[o + 2] = Math.round(b / a); }
+      out[o + 3] = Math.round((a / wsum) * 255);
+    }
+  }
+  return { width: targetW, height: targetH, data: out };
+}
+
+// ---------- main ----------
+function walk(dir) {
+  if (!fs.existsSync(dir)) return [];
+  return fs.readdirSync(dir, { withFileTypes: true })
+    .flatMap((e) => (e.isDirectory() ? walk(path.join(dir, e.name)) : [path.join(dir, e.name)]));
+}
+
+const sources = walk(SRC).filter((f) => f.toLowerCase().endsWith('.png'));
+
+// Shared crop boxes for 'group' targets: the union of every matching picture's visible box.
+// Pictures must share one canvas size; otherwise each is trimmed on its own.
+const groupBoxes = new Map();
+for (const t of TARGETS.filter((x) => x.trim === 'group')) {
+  const imgs = sources.filter((f) => t.match.test(path.basename(f, '.png'))).map((f) => decodePng(fs.readFileSync(f)));
+  if (!imgs.length) continue;
+  if (imgs.some((im) => im.width !== imgs[0].width || im.height !== imgs[0].height)) {
+    console.warn(`  WARN   ${t.match}: pictures differ in canvas size, trimming each on its own`);
+    continue;
+  }
+  const boxes = imgs.map((im) => visibleBox(im)).filter(Boolean);
+  groupBoxes.set(t, {
+    x0: Math.min(...boxes.map((b) => b.x0)), y0: Math.min(...boxes.map((b) => b.y0)),
+    x1: Math.max(...boxes.map((b) => b.x1)), y1: Math.max(...boxes.map((b) => b.y1))
+  });
+}
+
+let made = 0, skipped = 0;
+for (const file of sources) {
+  const key = path.basename(file, '.png');
+  const category = path.basename(path.dirname(file));
+  const target = TARGETS.find((t) => t.match.test(key));
+  if (!target) { console.log(`  skip   ${key} (not used in game)`); continue; }
+  const outFile = path.join(OUT_IMAGES, category, `${key}.png`);
+  let img;
+  try { img = decodePng(fs.readFileSync(file)); } catch (e) { console.warn(`  ERROR  ${key}: ${e.message}`); skipped++; continue; }
+  if (target.needsAlpha && !img.hasAlpha) {
+    console.warn(`  WARN   ${key}: no transparency, left out (re-export as a transparent PNG)`);
+    if (fs.existsSync(outFile)) fs.rmSync(outFile);
+    skipped++;
+    continue;
+  }
+  if (target.trim === 'group' && groupBoxes.has(target)) img = crop(img, groupBoxes.get(target));
+  else if (target.trim) img = trim(img);
+  img = resize(img, target.width);
+  fs.mkdirSync(path.dirname(outFile), { recursive: true });
+  fs.writeFileSync(outFile, encodePng(img));
+  console.log(`  ok     ${category}/${key}.png  ${img.width}x${img.height}`);
+  made++;
+}
+
+// Wall pillars (bld_wall_lvN, all cropped to one shared box): measure each pillar so the game can stand it
+// on a tile center. visX0..visX1 is the pillar's visible width (its base is that wide), bottom its lowest
+// row (the front corner of its base).
+const WALL_META = path.join(ROOT, 'src', 'wallArtMeta.js');
+function measurePillar(img) {
+  const box = visibleBox(img, 128);
+  return { width: img.width, height: img.height, visX0: box.x0, visX1: box.x1, bottom: box.y1 };
+}
+const wallMeta = {};
+for (const f of walk(path.join(OUT_IMAGES, 'buildings'))) {
+  const key = path.basename(f, '.png');
+  if (/^bld_wall_lv[0-9]+$/.test(key)) wallMeta[key] = measurePillar(decodePng(fs.readFileSync(f)));
+}
+fs.writeFileSync(WALL_META, `// AUTO-GENERATED by scripts/prepare-art.mjs (measured from the wall pillar pictures). Do not edit by hand.
+// Per picture: its size, the pillar's visible width (visX0..visX1) and its lowest row (bottom), in picture
+// pixels. Used by src/objects/WallView.js.
+export const WALL_ART_META = ${JSON.stringify(wallMeta, null, 2)};
+`);
+
+// Manifest of every file actually present under public/assets (art-source output plus anything dropped in by hand).
+const rel = (f, base) => path.relative(base, f).split(path.sep).join('/');
+const images = walk(OUT_IMAGES).filter((f) => /\.png$/i.test(f)).sort()
+  .map((f) => ({ key: path.basename(f, path.extname(f)), path: `assets/images/${rel(f, OUT_IMAGES)}` }));
+const audio = walk(OUT_AUDIO).filter((f) => /\.(mp3|ogg|wav)$/i.test(f)).sort()
+  .map((f) => ({ key: path.basename(f, path.extname(f)), path: `assets/audio/${rel(f, OUT_AUDIO)}` }));
+const fmt = (list) => list.map((a) => `  { key: '${a.key}', path: '${a.path}' }`).join(',\n');
+fs.writeFileSync(MANIFEST, `// AUTO-GENERATED by scripts/prepare-art.mjs. Do not edit by hand; run \`npm run prepare-art\`.
+// Every file listed here exists under public/assets/. BootScene loads these and draws placeholders for the rest.
+
+export const IMAGE_FILES = [
+${fmt(images)}
+];
+
+export const AUDIO_FILES = [
+${fmt(audio)}
+];
+`);
+console.log(`\n${made} images prepared, ${skipped} skipped. Manifest: ${images.length} images, ${audio.length} audio files.`);

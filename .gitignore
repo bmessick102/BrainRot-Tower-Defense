@@ -1,0 +1,12 @@
+node_modules/
+dist/
+.DS_Store
+.vscode/
+
+# Art and sound files dropped in the project root to be installed. Their game copies live in
+# art-source/ and public/assets/, so the drops themselves aren't kept.
+/*.png
+/*.webp
+/*.jpg
+/*.mp3
+/*.wav

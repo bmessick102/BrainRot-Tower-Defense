@@ -1,0 +1,229 @@
+// Save format (versioned JSON), validation, and safe localStorage access.
+// `storage` is passed in (window.localStorage in the game, a fake in tests). Every access is try/catch.
+import { CONFIG } from '../config.js';
+import { BUILDING_TYPES, WALL_ORIENTS, footprintDims, buildingSize, maxLevel, levelStats, isDefense } from './buildings.js';
+import { isRectOnGrass, footprintsOverlap } from './grid.js';
+
+// Version 2 adds the day/night clock and nightsAtMaxTownHall (waves come at night).
+// Version 1 saves (waves on Town Hall upgrade) still load: see migrateV1.
+export const SAVE_VERSION = 3;
+// Wall segments were 3 tiles long up to save version 2.
+const V2_WALL_LENGTH = 3;
+export const SAVE_KEYS = {
+  save: 'ibtd.save', checkpoint: 'ibtd.checkpoint', settings: 'ibtd.settings',
+  // New Game moves the old save and checkpoint here instead of deleting them, so a village can be recovered
+  // (e.g. a save the game failed to read because of a bug). One slot each: the most recent replaced game.
+  backup: 'ibtd.save.backup', checkpointBackup: 'ibtd.checkpoint.backup'
+};
+export const DEFAULT_SETTINGS = { music: 0.7, sfx: 0.7 };
+const CLOCK_PHASES = ['day', 'dusk', 'night', 'dawn'];
+// A grace period longer than a day stores a negative day time; anything beyond this is corrupt.
+const MAX_GRACE_SECONDS = 3600;
+
+/** Game state -> plain save object (version 2 format). */
+export function serializeGame(state, now = new Date()) {
+  const th = state.buildings.find((b) => b.type === 'townHall');
+  const clock = state.clock || { phase: 'day', t: 0 };
+  return {
+    version: SAVE_VERSION,
+    savedAt: now.toISOString(),
+    gold: Math.floor(state.gold),
+    townHallLevel: th ? th.level : 1,
+    wavesCleared: state.wavesCleared,
+    nightsAtMaxTownHall: state.nightsAtMaxTownHall || 0,
+    clock: { phase: clock.phase, t: Math.round(clock.t * 100) / 100 },
+    tutorialStep: state.tutorialStep,
+    tutorialDone: !!state.tutorialDone,
+    buildings: state.buildings.map((b) => {
+      const out = { id: b.id, type: b.type, level: b.level, col: b.col, row: b.row };
+      if (b.type === 'mine') out.stock = Math.round((b.stock || 0) * 100) / 100;
+      if (b.type === 'wall') out.orient = b.orient || 'x';
+      // Ruins stay ruins until rebuilt (walls are rebuilt at dawn, so a saved broken wall only happens mid-night).
+      if (b.destroyed && b.type !== 'townHall') out.destroyed = true;
+      return out;
+    })
+  };
+}
+
+const isInt = (v) => Number.isInteger(v);
+
+/**
+ * Version 1 -> version 2. v1 had no clock (start at morning) and a 10-step tutorial whose
+ * steps 8-10 were "upgrade Town Hall / wave incoming / you did it" (now: night falls / you survived).
+ */
+export function migrateV1(obj) {
+  const stepMap = { 8: 8, 9: 8, 10: 9, 11: 10 };
+  const step = stepMap[obj.tutorialStep] ?? Math.min(obj.tutorialStep, 10);
+  return { ...obj, version: 2, nightsAtMaxTownHall: 0, clock: { phase: 'day', t: 0 }, tutorialStep: step, tutorialDone: obj.tutorialDone || step >= 10 };
+}
+
+/**
+ * Version 2 -> version 3: walls became single tiles. Each old 3-tile segment becomes one wall per tile
+ * (same level; the first keeps the segment's id), so the same fence stands where it stood.
+ */
+export function migrateV2(obj) {
+  if (!Array.isArray(obj.buildings)) return { ...obj, version: 3 };
+  let maxId = 0;
+  for (const b of obj.buildings) {
+    const n = parseInt(String(b && b.id).replace(/\D/g, ''), 10);
+    if (Number.isFinite(n)) maxId = Math.max(maxId, n);
+  }
+  const buildings = [];
+  for (const b of obj.buildings) {
+    if (!b || b.type !== 'wall' || CONFIG.walls.segmentLength >= V2_WALL_LENGTH) { buildings.push(b); continue; }
+    for (let i = 0; i < V2_WALL_LENGTH; i++) {
+      const col = b.orient === 'y' ? b.col : b.col + i;
+      const row = b.orient === 'y' ? b.row + i : b.row;
+      buildings.push({ ...b, id: i === 0 ? b.id : `b${++maxId}`, col, row });
+    }
+  }
+  return { ...obj, version: 3, buildings };
+}
+
+/** True only for a well-formed version 3 save whose buildings all sit on grass without overlapping. */
+export function validateSave(obj) {
+  if (!obj || typeof obj !== 'object') return false;
+  if (obj.version !== SAVE_VERSION) return false;
+  if (!isInt(obj.nightsAtMaxTownHall) || obj.nightsAtMaxTownHall < 0) return false;
+  if (!obj.clock || !CLOCK_PHASES.includes(obj.clock.phase) || typeof obj.clock.t !== 'number' || !Number.isFinite(obj.clock.t) || obj.clock.t < -MAX_GRACE_SECONDS) return false;
+  if (typeof obj.gold !== 'number' || !Number.isFinite(obj.gold) || obj.gold < 0) return false;
+  if (!isInt(obj.townHallLevel) || obj.townHallLevel < 0 || obj.townHallLevel > maxLevel('townHall')) return false;
+  if (!isInt(obj.wavesCleared) || obj.wavesCleared < 0) return false;
+  if (!isInt(obj.tutorialStep) || obj.tutorialStep < 1) return false;
+  if (typeof obj.tutorialDone !== 'boolean') return false;
+  if (!Array.isArray(obj.buildings)) return false;
+
+  const seen = new Set();
+  const placed = [];
+  let townHalls = 0;
+  for (const b of obj.buildings) {
+    if (!b || typeof b !== 'object' || typeof b.id !== 'string' || seen.has(b.id)) return false;
+    seen.add(b.id);
+    if (!BUILDING_TYPES.includes(b.type)) return false;
+    if (!isInt(b.level) || b.level < (b.type === 'townHall' ? 0 : 1) || b.level > maxLevel(b.type)) return false;
+    if (!isInt(b.col) || !isInt(b.row)) return false;
+    if (b.type === 'wall' && !WALL_ORIENTS.includes(b.orient)) return false;
+    const fp = { col: b.col, row: b.row, ...footprintDims(b.type, b.orient) };
+    if (!isRectOnGrass(fp.col, fp.row, fp.w, fp.h)) return false;
+    if (placed.some((p) => footprintsOverlap(p, fp))) return false;
+    placed.push(fp);
+    if (b.type === 'townHall') {
+      townHalls++;
+      if (b.level !== obj.townHallLevel) return false;
+    }
+    if (b.type === 'mine' && b.stock !== undefined && (typeof b.stock !== 'number' || !Number.isFinite(b.stock) || b.stock < 0)) return false;
+    if (b.destroyed !== undefined && (b.destroyed !== true || b.type === 'townHall')) return false;
+  }
+  if (townHalls !== 1) return false;
+  // Level 1 buildings are allowed beside the ruined level 0 hall (the skip-tutorial starter base).
+  return obj.buildings.every((b) => b.level <= Math.max(1, obj.townHallLevel));
+}
+
+/** Save object -> fresh game data (buildings at full HP, ruins at 0). Assumes validateSave passed. */
+export function deserializeGame(obj) {
+  let maxId = 0;
+  const buildings = obj.buildings.map((s) => {
+    const n = parseInt(String(s.id).replace(/\D/g, ''), 10);
+    if (Number.isFinite(n)) maxId = Math.max(maxId, n);
+    const b = { id: s.id, type: s.type, level: s.level, col: s.col, row: s.row, ...footprintDims(s.type, s.orient), hp: levelStats(s.type, s.level).hp, destroyed: false };
+    if (s.type === 'wall') b.orient = s.orient;
+    else b.size = buildingSize(s.type);
+    if (s.type === 'mine') b.stock = Math.min(s.stock || 0, levelStats('mine', s.level).stockCap);
+    if (isDefense(s.type)) { b.cooldown = 0; b.targetId = null; }
+    if (s.destroyed) { b.destroyed = true; b.hp = 0; }
+    return b;
+  });
+  return {
+    gold: obj.gold,
+    wavesCleared: obj.wavesCleared,
+    nightsAtMaxTownHall: obj.nightsAtMaxTownHall,
+    clock: { phase: obj.clock.phase, t: obj.clock.t },
+    tutorialStep: obj.tutorialStep,
+    tutorialDone: obj.tutorialDone,
+    buildings,
+    nextId: maxId + 1
+  };
+}
+
+/** JSON text -> { status: 'none' | 'ok' | 'invalid', data }. Never throws. */
+export function parseSave(text) {
+  if (text === null || text === undefined || text === '') return { status: 'none', data: null };
+  let obj;
+  try { obj = JSON.parse(text); } catch { return { status: 'invalid', data: null }; }
+  if (obj && typeof obj === 'object' && obj.version === 1 && Number.isInteger(obj.tutorialStep)) obj = migrateV1(obj);
+  if (obj && typeof obj === 'object' && obj.version === 2) obj = migrateV2(obj);
+  if (!validateSave(obj)) return { status: 'invalid', data: null };
+  return { status: 'ok', data: obj };
+}
+
+export function readKey(storage, key) {
+  try { return storage ? storage.getItem(key) : null; } catch { return null; }
+}
+
+export function writeKey(storage, key, value) {
+  try { if (!storage) return false; storage.setItem(key, value); return true; } catch { return false; }
+}
+
+export function removeKey(storage, key) {
+  try { if (storage) storage.removeItem(key); return true; } catch { return false; }
+}
+
+/** Load and validate a save slot. */
+export function loadGame(storage, key = SAVE_KEYS.save) {
+  return parseSave(readKey(storage, key));
+}
+
+export function writeGame(storage, state, key = SAVE_KEYS.save) {
+  return writeKey(storage, key, JSON.stringify(serializeGame(state)));
+}
+
+/** Retry after game over: copy the checkpoint into the save slot. Returns true if a checkpoint existed. */
+export function restoreCheckpoint(storage) {
+  const text = readKey(storage, SAVE_KEYS.checkpoint);
+  if (!text) return false;
+  return writeKey(storage, SAVE_KEYS.save, text);
+}
+
+/**
+ * New Game clears the save and checkpoint (settings stay). The old ones are kept in the backup slots
+ * first, so the previous village is never lost for good; restoreBackup() brings it back.
+ */
+export function deleteGame(storage) {
+  const save = readKey(storage, SAVE_KEYS.save);
+  const checkpoint = readKey(storage, SAVE_KEYS.checkpoint);
+  if (save) writeKey(storage, SAVE_KEYS.backup, save);
+  if (checkpoint) writeKey(storage, SAVE_KEYS.checkpointBackup, checkpoint);
+  removeKey(storage, SAVE_KEYS.save);
+  removeKey(storage, SAVE_KEYS.checkpoint);
+}
+
+/** Put the backed-up game (from the last New Game) back into the save slots. Returns true if there was one. */
+export function restoreBackup(storage) {
+  const save = readKey(storage, SAVE_KEYS.backup);
+  if (!save) return false;
+  writeKey(storage, SAVE_KEYS.save, save);
+  const checkpoint = readKey(storage, SAVE_KEYS.checkpointBackup);
+  if (checkpoint) writeKey(storage, SAVE_KEYS.checkpoint, checkpoint);
+  return true;
+}
+
+/**
+ * Music and SFX volume (0-1). Older settings stored one shared `volume`; it seeds both levels.
+ */
+export function loadSettings(storage) {
+  try {
+    const obj = JSON.parse(readKey(storage, SAVE_KEYS.settings) || 'null') || {};
+    const level = (v, fallback) => (typeof v === 'number' && v >= 0 && v <= 1 ? v : fallback);
+    const legacy = level(obj.volume, null);
+    return {
+      music: level(obj.music, legacy ?? DEFAULT_SETTINGS.music),
+      sfx: level(obj.sfx, legacy ?? DEFAULT_SETTINGS.sfx)
+    };
+  } catch {
+    return { ...DEFAULT_SETTINGS };
+  }
+}
+
+export function saveSettings(storage, settings) {
+  return writeKey(storage, SAVE_KEYS.settings, JSON.stringify({ music: settings.music, sfx: settings.sfx }));
+}
