@@ -8,7 +8,7 @@ Built from [docs/BUILD_CHARTER.md](docs/BUILD_CHARTER.md) with JavaScript (ES mo
 
 ```bash
 npm install        # once
-npm run dev        # dev server with hot reload: open the URL it prints (…/TowerDefense/)
+npm run dev        # dev server with hot reload: open the URL it prints (…/BrainRot-Tower-Defense/)
 npm test           # Vitest logic tests
 npm run build      # static site in dist/ (GitHub Pages)
 npm run preview    # serve dist/ locally
@@ -27,7 +27,7 @@ npm run prepare-art   # after adding or changing art in art-source/
 
 **Moving buildings:** only in edit mode. Click the Edit Base Layout button (next to Shop), click a building to pick it up, then click a green spot to drop it. Drop it on top of one other building and the two swap places: the ghost snaps onto that building, which dims, and a ghost of it shows where it will go (your carried building's old spot, centered when the sizes differ). The swap only goes green if both fit (`planSwap` in [src/logic/buildings.js](src/logic/buildings.js)). Esc puts a carried building back; Esc again (or the Edit button) leaves edit mode. Edit mode isn't available during a wave or the tutorial, and it turns off when a wave starts.
 
-**Deploying:** pushing to `main` runs [.github/workflows/deploy.yml](.github/workflows/deploy.yml). It runs the tests, builds, and publishes `dist/` to GitHub Pages. `vite.config.js` sets `base: '/TowerDefense/'` to match the repo name.
+**Deploying:** pushing to `main` runs [.github/workflows/deploy.yml](.github/workflows/deploy.yml). It runs the tests, builds, and publishes `dist/` to GitHub Pages. `vite.config.js` sets `base: '/BrainRot-Tower-Defense/'` to match the repo name ([github.com/bmessick102/BrainRot-Tower-Defense](https://github.com/bmessick102/BrainRot-Tower-Defense)); the game is at https://bmessick102.github.io/BrainRot-Tower-Defense/.
 
 ## Folder layout
 
