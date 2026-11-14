@@ -21,7 +21,7 @@ export const ACHIEVEMENTS = [
   { id: 'hall5', group: 'village', name: 'Brainrot Town', desc: 'Upgrade a Village Hall to level 5', stat: 'bestTownHall', goal: 5, reward: 3000 },
   { id: 'hall7', group: 'village', name: 'Brainrot City', desc: 'Upgrade a Village Hall to level 7', stat: 'bestTownHall', goal: 7, reward: 8000 },
   { id: 'hall10', group: 'village', name: 'Capital of Brainrot', desc: 'Upgrade a Village Hall to level 10', stat: 'bestTownHall', goal: 10, reward: 25000 },
-  { id: 'wave1', group: 'village', name: 'First Night', desc: 'Survive wave 1', stat: 'bestWave', goal: 1, reward: 100 },
+  { id: 'wave1', group: 'village', name: 'First Wave', desc: 'Survive wave 1', stat: 'bestWave', goal: 1, reward: 100 },
   { id: 'wave5', group: 'village', name: 'Night Watch', desc: 'Survive wave 5', stat: 'bestWave', goal: 5, reward: 2000 },
   { id: 'wave10', group: 'village', name: 'Siege Survivor', desc: 'Survive wave 10', stat: 'bestWave', goal: 10, reward: 8000 },
   { id: 'wave20', group: 'village', name: 'Endless Night', desc: 'Survive wave 20', stat: 'bestWave', goal: 20, reward: 20000 },
@@ -35,11 +35,11 @@ export const ACHIEVEMENTS = [
   { id: 'balloons', group: 'battle', name: 'Pop Goes the Neegy', desc: 'Shoot down 5 Neegy Balloons', stat: 'balloonKills', goal: 5, reward: 3000 },
   { id: 'snap', group: 'battle', name: 'Snap!', desc: 'Catch enemies in a Mousetrap', stat: 'traps', goal: 1, reward: 200 },
   { id: 'meltdown', group: 'battle', name: 'Meltdown', desc: 'Heat a Tower of Rah beam all the way up', stat: 'rahMax', goal: 1, reward: 2000 },
-  { id: 'flawless', group: 'battle', name: 'Flawless Night', desc: 'Survive a wave without losing a building (walls don’t count)', stat: 'perfect', goal: 1, reward: 500 },
+  { id: 'flawless', group: 'battle', name: 'Flawless Defense', desc: 'Survive a wave without losing a building (walls don’t count)', stat: 'perfect', goal: 1, reward: 500 },
   { id: 'untouchable', group: 'battle', name: 'Untouchable', desc: 'Survive 10 waves without losing a building', stat: 'perfect', goal: 10, reward: 4000 },
 
   // ---- Builder: your villages ----
-  { id: 'early', group: 'builder', name: 'Bring It On', desc: 'Call 5 waves early', stat: 'early', goal: 5, reward: 500 },
+  { id: 'early', group: 'builder', name: 'Bring It On', desc: 'Start a wave within 10 s of clearing the last one, 5 times', stat: 'early', goal: 5, reward: 500 },
   { id: 'mined10k', group: 'builder', name: 'Gold Rush', desc: 'Collect 10,000 gold from Bitcoin Mines', stat: 'mined', goal: 10000, reward: 1000 },
   { id: 'mined100k', group: 'builder', name: 'Bitcoin Baron', desc: 'Collect 100,000 gold from Bitcoin Mines', stat: 'mined', goal: 100000, reward: 6000 },
   { id: 'walls', group: 'builder', name: 'Great Wall', desc: 'Have 50 walls in one village', stat: 'walls', goal: 50, reward: 1500 },
@@ -93,13 +93,10 @@ export function newlyEarned(values, earned) {
 }
 
 /**
- * The furthest wave a village has (at least) survived, for villages that were played before waves were
- * tracked (e.g. one imported from this device). Waves follow the Village Hall level until the top level,
- * then count up one per night. This is a safe lower bound.
+ * The furthest wave a village has survived, for villages that were played before waves were tracked
+ * (e.g. one imported from this device). Waves are numbered in the order they're fought, so it's simply
+ * the number of waves cleared.
  */
-export function estimateBestWave(save, maxTownHall) {
-  if (!save || !save.wavesCleared) return 0;
-  const th = save.townHallLevel || 0;
-  if (th >= maxTownHall) return Math.max(1, maxTownHall - 1 + (save.nightsAtMaxTownHall || 0));
-  return Math.max(1, th - 1);
+export function estimateBestWave(save) {
+  return (save && save.wavesCleared) || 0;
 }

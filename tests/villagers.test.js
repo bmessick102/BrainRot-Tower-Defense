@@ -3,25 +3,23 @@ import { CONFIG } from '../src/config.js';
 import { villagersShouldBeOut, VILLAGER_SETTINGS, gnomeHeading, pickWanderSpot } from '../src/objects/Villagers.js';
 import { makeStateWithTownHall, seededRng } from './helpers.js';
 
-const DAY = CONFIG.dayNight.daySeconds;
-const LEAD = VILLAGER_SETTINGS.homeLeadSeconds;
 const play = (clock, th = 1) => makeStateWithTownHall({ tutorialDone: true, tutorialStep: 10, clock }, th);
 
 describe('gnome villagers', () => {
-  it('are out during the day and head home shortly before dusk', () => {
+  it('are out all day, however long it lasts (they head home when a wave starts)', () => {
     expect(villagersShouldBeOut(play({ phase: 'day', t: 0 }))).toBe(true);
-    expect(villagersShouldBeOut(play({ phase: 'day', t: DAY - LEAD - 1 }))).toBe(true);
-    expect(villagersShouldBeOut(play({ phase: 'day', t: DAY - LEAD + 1 }))).toBe(false);
+    expect(villagersShouldBeOut(play({ phase: 'day', t: 5000 }))).toBe(true);
   });
 
-  it('stay inside through dusk and night, and come out at dawn', () => {
-    expect(villagersShouldBeOut(play({ phase: 'dusk', t: 5 }))).toBe(false);
-    expect(villagersShouldBeOut(play({ phase: 'night', t: 0 }))).toBe(false);
-    expect(villagersShouldBeOut(play({ phase: 'dawn', t: 1 }))).toBe(true);
+  it('are out day and night while no wave attacks', () => {
+    for (const phase of ['day', 'dusk', 'night', 'dawn']) expect(villagersShouldBeOut(play({ phase, t: 5 }))).toBe(true);
+    const s = play({ phase: 'day', t: 5 });
+    s.wave.phase = 'active';
+    expect(villagersShouldBeOut(s)).toBe(false);
   });
 
   it('are always out while the tutorial keeps it daytime', () => {
-    const s = makeStateWithTownHall({ tutorialStep: 4, clock: { phase: 'day', t: DAY - 1 } });
+    const s = makeStateWithTownHall({ tutorialStep: 4, clock: { phase: 'day', t: 100 } });
     expect(villagersShouldBeOut(s)).toBe(true);
   });
 

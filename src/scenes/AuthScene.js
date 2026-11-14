@@ -1,9 +1,13 @@
 // Login screen (first screen after loading). Picks up a saved login and goes straight to the title screen;
 // otherwise shows the account window over the title art: Log In (email + password) and Sign Up (username,
 // email, password, confirm). Without a server set up (src/backendConfig.js) it offers offline play.
+// Passwords go straight to Supabase over HTTPS (stored there only as a bcrypt hash). New passwords need
+// PASSWORD_MIN characters with a letter and a number. With TURNSTILE_SITE_KEY set, a Cloudflare Turnstile
+// "are you human?" box sits beside the button and its token goes along with each log in / sign up.
 import Phaser from 'phaser';
 import { session } from '../net/account.js';
-import { USERNAME_RE, EMAIL_RE } from '../net/session.js';
+import { USERNAME_RE, EMAIL_RE, PASSWORD_MIN, passwordProblem } from '../net/session.js';
+import { TURNSTILE_SITE_KEY } from '../backendConfig.js';
 import { Button } from '../objects/Button.js';
 import { addTextField } from '../objects/TextField.js';
 import { drawWindow, drawHudPill } from '../objects/uiDraw.js';
@@ -18,6 +22,24 @@ const ROW0 = 140;           // first field row, from the window top
 const ROW_GAP = 54;
 const LABEL_W = 150;
 const LAST_EMAIL = 'ibtd.lastEmail';
+const CAPTCHA_ROW = 18;     // extra window height when the human check sits beside the button
+
+/** Loads Cloudflare Turnstile once (only when a site key is set). */
+let turnstileLoading = null;
+function loadTurnstile() {
+  if (window.turnstile) return Promise.resolve(window.turnstile);
+  if (!turnstileLoading) {
+    turnstileLoading = new Promise((resolve, reject) => {
+      const s = document.createElement('script');
+      s.src = 'https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit';
+      s.async = true;
+      s.onload = () => resolve(window.turnstile);
+      s.onerror = () => { turnstileLoading = null; reject(new Error('Couldn\u2019t load the \u201cI\u2019m human\u201d check. Check your connection.')); };
+      document.head.appendChild(s);
+    });
+  }
+  return turnstileLoading;
+}
 
 export class AuthScene extends Phaser.Scene {
   constructor() {
@@ -31,6 +53,9 @@ export class AuthScene extends Phaser.Scene {
     this.fields = null;
     this.msg = null;
     this.submitBtn = null;
+    this.captchaToken = null;
+    this.captchaId = null;
+    this.canResend = false;
   }
 
   create() {
@@ -68,8 +93,41 @@ export class AuthScene extends Phaser.Scene {
   }
 
   clearUi() {
+    this.removeCaptcha();
     this.ui.forEach((o) => o.destroy());
     this.ui = [];
+  }
+
+  // ---------- "are you human?" check ----------
+  get captchaOn() { return !!TURNSTILE_SITE_KEY && session.backend.kind === 'supabase'; }
+
+  /** The Turnstile box (300 x 65) with its left edge at x, centered on y. */
+  addCaptcha(x, y) {
+    const box = document.createElement('div');
+    Object.assign(box.style, { width: '300px', height: '65px' });
+    this.keep(this.add.dom(x, y, box).setOrigin(0, 0.5));
+    this.captchaToken = null;
+    loadTurnstile().then((ts) => {
+      if (!box.isConnected || !this.sys.isActive()) return;
+      this.captchaId = ts.render(box, {
+        sitekey: TURNSTILE_SITE_KEY, theme: 'light', size: 'normal', action: this.tab === 'signup' ? 'signup' : 'login',
+        callback: (token) => { this.captchaToken = token; },
+        'expired-callback': () => { this.captchaToken = null; },
+        'error-callback': () => { this.captchaToken = null; }
+      });
+    }).catch((e) => this.showMessage(e.message));
+  }
+
+  /** Tokens work once: get a fresh one after every try. */
+  resetCaptcha() {
+    this.captchaToken = null;
+    if (this.captchaId !== null && window.turnstile) { try { window.turnstile.reset(this.captchaId); } catch { /* gone */ } }
+  }
+
+  removeCaptcha() {
+    if (this.captchaId !== null && window.turnstile) { try { window.turnstile.remove(this.captchaId); } catch { /* gone */ } }
+    this.captchaId = null;
+    this.captchaToken = null;
   }
 
   keep(o) { this.ui.push(o); return o; }
@@ -92,7 +150,7 @@ export class AuthScene extends Phaser.Scene {
     const signup = this.tab === 'signup';
     const rows = signup ? 4 : 2;
     const msgY = ROW0 + (rows - 1) * ROW_GAP + 40;
-    const h = msgY + 96;
+    const h = msgY + 96 + (this.captchaOn ? CAPTCHA_ROW : 0);
     const top = Math.min(TOP, this.scale.height - 12 - h);
     const px = cx - W / 2;
 
@@ -122,7 +180,7 @@ export class AuthScene extends Phaser.Scene {
     if (signup) {
       row(0, 'username', 'Username', { placeholder: '3-16 letters, numbers, _', maxLength: 16, autocomplete: 'username' });
       row(1, 'email', 'Email', { type: 'email', placeholder: 'you@example.com', maxLength: 120, autocomplete: 'email' });
-      row(2, 'password', 'Password', { type: 'password', placeholder: 'At least 6 characters', maxLength: 72, autocomplete: 'new-password' });
+      row(2, 'password', 'Password', { type: 'password', placeholder: `${PASSWORD_MIN}+ characters, letters & numbers`, maxLength: 72, autocomplete: 'new-password' });
       row(3, 'confirm', 'Confirm', { type: 'password', placeholder: 'Type it again', maxLength: 72, autocomplete: 'new-password' });
     } else {
       row(0, 'email', 'Email', { type: 'email', placeholder: 'you@example.com', maxLength: 120, autocomplete: 'email', value: lastEmail });
@@ -130,12 +188,23 @@ export class AuthScene extends Phaser.Scene {
     }
     this.fields = fields;
 
-    const good = /check your email|created/i.test(this.message);
+    const good = /check your email|sent|almost done/i.test(this.message);
     this.msg = this.keep(this.add.text(cx, top + msgY, this.message, bodyStyle(16, good ? COLORS.inkGood : COLORS.inkBad, { align: 'center', wordWrap: { width: W - 50 } })).setOrigin(0.5));
-    this.submitBtn = this.keep(new Button(this, cx, top + h - 46, 280, 56, signup ? 'Create Account' : 'Log In', () => this.submit(), { color: COLORS.buttonGood, fontSize: 23 }));
+    // "Confirm your email first": the message becomes a link that sends the email again.
+    this.msg.on('pointerdown', () => { if (this.canResend) this.resend(); });
+    this.setResend(this.canResend);
+    const label = signup ? 'Create Account' : 'Log In';
+    if (this.captchaOn) {
+      // Human check on the left, a narrower button on the right.
+      const by = top + h - 50;
+      this.addCaptcha(px + 22, by);
+      this.submitBtn = this.keep(new Button(this, px + W - 22 - 86, by, 172, 56, label, () => this.submit(), { color: COLORS.buttonGood, fontSize: 21 }));
+    } else {
+      this.submitBtn = this.keep(new Button(this, cx, top + h - 46, 280, 56, label, () => this.submit(), { color: COLORS.buttonGood, fontSize: 23 }));
+    }
 
     if (session.backend.kind === 'local') {
-      const t = this.keep(this.add.text(16, this.scale.height - 16, 'Dev mode: accounts are kept in this browser only (no Supabase keys yet)', textStyle(15, COLORS.textGold)).setOrigin(0, 1));
+      const t = this.keep(this.add.text(16, this.scale.height - 28, 'Dev mode: accounts are kept in this browser only (no Supabase keys yet)', textStyle(15, COLORS.textGold)).setOrigin(0, 1));
       void t;
     }
     this.time.delayedCall(60, () => {
@@ -155,6 +224,35 @@ export class AuthScene extends Phaser.Scene {
   showMessage(text, good = false) {
     this.message = text;
     if (this.msg && this.msg.active) this.msg.setColor(good ? COLORS.inkGood : COLORS.inkBad).setText(text);
+    this.setResend(/confirm your email/i.test(text));
+  }
+
+  /** Turn the message into a "send it again" link (or back). */
+  setResend(on) {
+    this.canResend = on;
+    if (!this.msg || !this.msg.active) return;
+    if (on) {
+      if (!/send it again/i.test(this.msg.text)) this.msg.setText(`${this.message}\nClick here to send it again.`);
+      this.msg.setInteractive({ useHandCursor: true });
+    } else if (this.msg.input) {
+      this.msg.disableInteractive();
+    }
+  }
+
+  async resend() {
+    const email = this.fields && this.fields.email.value.trim();
+    if (!email || this.busy) return;
+    if (this.captchaOn && !this.captchaToken) { this.showMessage('Tick the \u201cI\u2019m human\u201d box first, then click here again.'); this.canResend = true; this.setResend(true); return; }
+    this.busy = true;
+    try {
+      await session.backend.resendConfirmation(email, this.captchaToken);
+      this.showMessage(`Sent! Check ${email} for the link (and your spam folder).`, true);
+    } catch (e) {
+      this.showMessage(e.message || String(e));
+    } finally {
+      this.busy = false;
+      this.resetCaptcha();
+    }
   }
 
   async submit() {
@@ -166,36 +264,41 @@ export class AuthScene extends Phaser.Scene {
       const username = f.username.value.trim();
       if (!USERNAME_RE.test(username)) return this.showMessage('Username: 3-16 letters, numbers or _ (no spaces).');
       if (!EMAIL_RE.test(email)) return this.showMessage('That email address doesn’t look right.');
-      if (password.length < 6) return this.showMessage('Password must be at least 6 characters.');
+      const weak = passwordProblem(password);
+      if (weak) return this.showMessage(weak);
       if (password !== f.confirm.value) return this.showMessage('The passwords don’t match.');
+      if (this.captchaOn && !this.captchaToken) return this.showMessage('Tick the \u201cI\u2019m human\u201d box first.');
       this.setBusy(true, 'Creating…');
       try {
         if (!await session.backend.usernameAvailable(username)) throw new Error('That username is taken. Try another.');
-        const r = await session.signUp(email, password, username);
+        const r = await session.signUp(email, password, username, { captchaToken: this.captchaToken });
         this.rememberEmail(email);
         if (r.needsConfirm) {
           this.setBusy(false);
           this.tab = 'login';
-          this.message = 'Account created! Check your email to confirm it, then log in.';
+          this.message = `Almost done! Open the link we sent to ${email} to finish signing up (check spam too).`;
           this.showForm();
           return;
         }
         this.scene.start('TitleScene', { justLoggedIn: true });
       } catch (e) {
         this.setBusy(false);
+        this.resetCaptcha();
         this.showMessage(e.message || String(e));
       }
       return;
     }
     if (!EMAIL_RE.test(email)) return this.showMessage('Type the email you signed up with.');
     if (!password) return this.showMessage('Type your password.');
+    if (this.captchaOn && !this.captchaToken) return this.showMessage('Tick the \u201cI\u2019m human\u201d box first.');
     this.setBusy(true, 'Logging in…');
     try {
-      await session.signIn(email, password);
+      await session.signIn(email, password, { captchaToken: this.captchaToken });
       this.rememberEmail(email);
       this.scene.start('TitleScene', { justLoggedIn: true });
     } catch (e) {
       this.setBusy(false);
+      this.resetCaptcha();
       this.showMessage(e.message || String(e));
     }
   }

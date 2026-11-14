@@ -1,12 +1,17 @@
 // Save format (versioned JSON), validation, and safe localStorage access.
 // `storage` is passed in (window.localStorage in the game, a fake in tests). Every access is try/catch.
 import { CONFIG } from '../config.js';
-import { BUILDING_TYPES, WALL_ORIENTS, footprintDims, buildingSize, maxLevel, levelStats, isDefense } from './buildings.js';
+import { BUILDING_TYPES, WALL_ORIENTS, footprintDims, buildingSize, maxLevel, levelStats, isDefense, maxHp } from './buildings.js';
 import { isRectOnGrass, footprintsOverlap } from './grid.js';
+import { serializeResearch, validResearch, deserializeResearch, hasAbilities, convertOldResearch, picksForLevel } from './abilities.js';
+import { validLabGuide } from './labGuide.js';
+import { validResearchPoints } from './researchPoints.js';
 
 // Version 2 adds the day/night clock and nightsAtMaxTownHall (waves come at night).
 // Version 1 saves (waves on Town Hall upgrade) still load: see migrateV1.
-export const SAVE_VERSION = 3;
+// Version 4: walls went from 10 levels (a picture per 2) to 6 (a picture each); see migrateV3.
+// Version 5: the RV Lab's research applies to every building (one pick per tier per type); see migrateV4.
+export const SAVE_VERSION = 5;
 // Wall segments were 3 tiles long up to save version 2.
 const V2_WALL_LENGTH = 3;
 export const SAVE_KEYS = {
@@ -34,11 +39,16 @@ export function serializeGame(state, now = new Date()) {
     clock: { phase: clock.phase, t: Math.round(clock.t * 100) / 100 },
     tutorialStep: state.tutorialStep,
     tutorialDone: !!state.tutorialDone,
+    // RV Lab research: { type: "aba" }, the pick at each tier (left out when nothing is researched). Every
+    // building of that type has those tiers as far as its level allows, so buildings don't store them.
+    research: serializeResearch(state.research),
+    labGuide: state.labGuideStep || 0, // RV Lab guide step (labGuide.js); missing in older saves
+    researchPoints: Math.floor(state.researchPoints || 0), // RP for RV Lab abilities; missing in older saves
     buildings: state.buildings.map((b) => {
       const out = { id: b.id, type: b.type, level: b.level, col: b.col, row: b.row };
       if (b.type === 'mine') out.stock = Math.round((b.stock || 0) * 100) / 100;
       if (b.type === 'wall') out.orient = b.orient || 'x';
-      // Ruins stay ruins until rebuilt (walls are rebuilt at dawn, so a saved broken wall only happens mid-night).
+      // Ruins only exist mid-night (everything is rebuilt free when the wave is beaten).
       if (b.destroyed && b.type !== 'townHall') out.destroyed = true;
       return out;
     })
@@ -80,7 +90,38 @@ export function migrateV2(obj) {
   return { ...obj, version: 3, buildings };
 }
 
-/** True only for a well-formed version 3 save whose buildings all sit on grass without overlapping. */
+/**
+ * Version 3 -> version 4: walls went from 10 levels to 6, one picture per level. An old wall keeps its picture:
+ * old Level L showed picture ceil(L / 2), which is now Level ceil(L / 2).
+ */
+export function migrateV3(obj) {
+  if (!Array.isArray(obj.buildings)) return { ...obj, version: 4 };
+  const buildings = obj.buildings.map((b) => (b && b.type === 'wall' && Number.isInteger(b.level)
+    ? { ...b, level: Math.max(1, Math.ceil(b.level / 2)) } : b));
+  return { ...obj, version: 4, buildings };
+}
+
+/**
+ * Version 4 -> version 5: research was options per path and each building bought its own tiers; now the
+ * RV Lab picks one option per tier for a type and every building of that type gets it. The kept pick at
+ * each tier is the one most buildings bought (convertOldResearch); research that isn't kept is refunded in RP.
+ * The RV Lab guide lost its "open Abilities" and "buy" steps (4, 5): those villages finish it.
+ */
+export function migrateV4(obj) {
+  const { research, refund } = convertOldResearch(obj.research, obj.buildings);
+  const buildings = Array.isArray(obj.buildings) ? obj.buildings.map((b) => {
+    if (!b || typeof b !== 'object') return b;
+    const rest = { ...b };
+    delete rest.picks; // old per-building tiers (now from the research)
+    delete rest.paths;
+    return rest;
+  }) : obj.buildings;
+  const rp = Number.isInteger(obj.researchPoints) && obj.researchPoints >= 0 ? obj.researchPoints : 0;
+  const labGuide = Number.isInteger(obj.labGuide) && obj.labGuide >= 4 && obj.labGuide < 99 ? 99 : obj.labGuide;
+  return { ...obj, version: 5, research, researchPoints: rp + refund, labGuide, buildings };
+}
+
+/** True only for a well-formed version 5 save whose buildings all sit on grass without overlapping. */
 export function validateSave(obj) {
   if (!obj || typeof obj !== 'object') return false;
   if (obj.version !== SAVE_VERSION) return false;
@@ -92,6 +133,9 @@ export function validateSave(obj) {
   if (!isInt(obj.tutorialStep) || obj.tutorialStep < 1) return false;
   if (typeof obj.tutorialDone !== 'boolean') return false;
   if (!Array.isArray(obj.buildings)) return false;
+  if (!validResearch(obj.research)) return false;
+  if (!validLabGuide(obj.labGuide)) return false;
+  if (!validResearchPoints(obj.researchPoints)) return false;
 
   const seen = new Set();
   const placed = [];
@@ -122,6 +166,7 @@ export function validateSave(obj) {
 /** Save object -> fresh game data (buildings at full HP, ruins at 0). Assumes validateSave passed. */
 export function deserializeGame(obj) {
   let maxId = 0;
+  const research = deserializeResearch(obj.research);
   const buildings = obj.buildings.map((s) => {
     const n = parseInt(String(s.id).replace(/\D/g, ''), 10);
     if (Number.isFinite(n)) maxId = Math.max(maxId, n);
@@ -130,6 +175,8 @@ export function deserializeGame(obj) {
     else b.size = buildingSize(s.type);
     if (s.type === 'mine') b.stock = Math.min(s.stock || 0, levelStats('mine', s.level).stockCap);
     if (isDefense(s.type)) { b.cooldown = 0; b.targetId = null; }
+    if (hasAbilities(s.type)) b.picks = picksForLevel(research, s.type, s.level);
+    b.hp = maxHp(b); // with any health tiers
     if (s.destroyed) { b.destroyed = true; b.hp = 0; }
     return b;
   });
@@ -140,6 +187,9 @@ export function deserializeGame(obj) {
     clock: { phase: obj.clock.phase, t: obj.clock.t },
     tutorialStep: obj.tutorialStep,
     tutorialDone: obj.tutorialDone,
+    research,
+    labGuideStep: obj.labGuide || 0,
+    researchPoints: obj.researchPoints || 0,
     buildings,
     nextId: maxId + 1
   };
@@ -152,6 +202,8 @@ export function parseSave(text) {
   try { obj = JSON.parse(text); } catch { return { status: 'invalid', data: null }; }
   if (obj && typeof obj === 'object' && obj.version === 1 && Number.isInteger(obj.tutorialStep)) obj = migrateV1(obj);
   if (obj && typeof obj === 'object' && obj.version === 2) obj = migrateV2(obj);
+  if (obj && typeof obj === 'object' && obj.version === 3) obj = migrateV3(obj);
+  if (obj && typeof obj === 'object' && obj.version === 4) obj = migrateV4(obj);
   if (!validateSave(obj)) return { status: 'invalid', data: null };
   return { status: 'ok', data: obj };
 }

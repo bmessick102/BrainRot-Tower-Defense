@@ -44,10 +44,13 @@ const TARGETS = [
   { match: /^proj_mortar$/, width: 64, trim: true, needsAlpha: true },
   { match: /^proj_(arrow|wizard)$/, width: 96, trim: true, needsAlpha: true },
   { match: /^ui_coin$/, width: 96, trim: true, needsAlpha: true },
+  { match: /^ui_research_point$/, width: 96, trim: true, needsAlpha: true }, // research points (RP) token
+  { match: /^ui_research_ready$/, width: 128, trim: true, needsAlpha: true }, // book over the RV Lab: research ready
   { match: /^guide_portrait$/, width: 256, trim: true, needsAlpha: true },
   { match: /^ui_(shop|settings|edit_layout)_button$/, width: 160, trim: true, needsAlpha: true },
   { match: /^ui_start_button$/, width: 480, trim: true, needsAlpha: true },
   { match: /^ui_league_[a-z]+$/, width: 160, trim: true, needsAlpha: true }, // leaderboard league badges
+  { match: /^ui_achievement$/, width: 160, trim: true, needsAlpha: true }, // achievement cards, header and unlock toast
   { match: /^ui_title_background$/, width: 1280, trim: false, needsAlpha: false }
 ];
 

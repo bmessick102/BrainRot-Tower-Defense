@@ -8,7 +8,7 @@ import { PROJECTILE_KEYS, TEX } from '../assetKeys.js';
 import { attachFireballFx, attachRocketFx } from './Effects.js';
 
 // On-screen width in pixels for each projectile kind.
-const DISPLAY_WIDTH = { cannon: 14, archer: 34, mortar: 34, wizard: 34, firework: 28, catapult: 16, slinger: 18, bomb: 18 };
+const DISPLAY_WIDTH = { cannon: 14, archer: 34, mortar: 34, wizard: 34, firework: 28, catapult: 16, slinger: 18, bomb: 18, pellet: 8, boulder: 26, bomblet: 18 };
 const SHURIKEN_SPIN = 0.35; // radians per frame the Slinger's shuriken turns in flight
 // The bomb picture's nose points left (180°): turn it so the nose leads the way down.
 const BOMB_NOSE_ANGLE = Math.PI;
@@ -17,7 +17,10 @@ const SHOT_HEIGHT = { cannon: 30, archer: 40, wizard: 44, firework: 52, slinger:
 const MORTAR_ARC = 150;
 const CATAPULT_ARC = 230; // the Catapult lobs higher and farther
 // Lobbed shots and how high they arc.
-const LOBBED = { mortar: MORTAR_ARC, catapult: CATAPULT_ARC };
+const LOBBED = { mortar: MORTAR_ARC, catapult: CATAPULT_ARC, bomblet: 45 };
+// Shots that travel in a straight line along the ground (a cannonball that punched through, a boulder):
+// drawn this far above the ground spot when they have no earlier height to keep.
+const LINE_LIFT = { boulder: 11, cannon: 20 };
 const MORTAR_LAUNCH = 40;
 const BOMBER_HEIGHT = 24;
 // Where each tower's shot leaves from: this share of the tower picture's height above its base.
@@ -48,6 +51,8 @@ export class ProjectileView {
   launchOffset(p) {
     const views = this.scene.views || {};
     const g = gridToScreen(p.x, p.y);
+    if (p.kind === 'bomblet' || p.fromBlast) return { x: 0, y: -6 }; // scattered from the blast on the ground
+    if (p.ricochets) return { x: 0, y: -22 };                        // Locklair Ricochet: bounced off its last target
     if (p.owner === 'tower') {
       const v = views.buildings && views.buildings.get(p.sourceId);
       const s = v && v.sprite;
@@ -94,6 +99,7 @@ export class ProjectileView {
 
   sync(p) {
     const s = gridToScreen(p.x, p.y);
+    if (p.line) { this.syncLine(p, s); return; }
     const spot = this.targetSpot(p);
     // How far along the flight it is: timed shots know; homing shots compare to their starting distance.
     let t;
@@ -129,6 +135,20 @@ export class ProjectileView {
     } else {
       this.image.setTint(this.scene.ambientTint ?? 0xffffff);
     }
+    this.last = { x, y };
+  }
+
+  /** Straight-line shots: keep the height they had when they hit (pierce), or roll along the ground (boulder). */
+  syncLine(p, s) {
+    if (this.lineLift === undefined) {
+      this.lineLift = this.last ? this.last.y - s.y : -(LINE_LIFT[p.kind] ?? 16);
+      if (p.kind === 'boulder') this.lineLift = -(LINE_LIFT.boulder);
+    }
+    const x = s.x, y = s.y + this.lineLift;
+    if (p.kind === 'boulder') this.image.rotation += 0.25 * Math.sign(p.dirX - p.dirY || 1);
+    this.image.setPosition(x, y).setDepth(2000 + p.x + p.y);
+    if (this.fx) this.fx.update(x, y, 2000 + p.x + p.y, this.scene.time.now);
+    else this.image.setTint(this.scene.ambientTint ?? 0xffffff);
     this.last = { x, y };
   }
 

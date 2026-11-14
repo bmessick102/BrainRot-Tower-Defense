@@ -13,18 +13,15 @@
 // The gnome sprites (src/objects/Villagers.js) only act out these assignments.
 import { CONFIG } from '../config.js';
 import { getTownHall, levelStats, maxHp } from './buildings.js';
-import { isClockRunning, secondsUntilDusk } from './dayNight.js';
 import { distanceToFootprint, footprintCenter } from './grid.js';
 import { emit, isWaveActive } from './util.js';
 import { addGold } from './economy.js';
 
 const V = () => CONFIG.villagers;
 
-/** Should the gnomes be out working right now? (Only depends on the clock.) */
-export function villagersShouldBeOut(state, lead = V().homeLeadSeconds) {
-  if (!isClockRunning(state)) return true; // tutorial days never end
-  const left = secondsUntilDusk(state.clock);
-  return left !== null && left > lead;
+/** Should the gnomes be out working right now? Whenever no wave is attacking (day or night). */
+export function villagersShouldBeOut(state) {
+  return !isWaveActive(state);
 }
 
 /** Which stat tier a house level's gnomes are on: 1 at level 1, +1 at every level that improves them. */

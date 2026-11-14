@@ -4,10 +4,12 @@ import { CONFIG } from '../config.js';
 import { MAP } from '../mapTiles.js';
 import { closestPointOnFootprint, distanceToFootprint, footprintCenter, isInsideFootprint, fpW, fpH } from './grid.js';
 import { distance } from './iso.js';
-import { damageBuilding, fireEnemyProjectile, findBuilding, matchesTypes, enemyDamageVs, explode } from './combat.js';
+import { damageBuilding, fireEnemyProjectile, findBuilding, matchesTypes, enemyDamageVs, explode, damageEnemy, enemyWeaken } from './combat.js';
+import { abilityFx } from './abilities.js';
 import { getNav, distanceField, nextStep } from './pathfinding.js';
 import { emit, nextId, random } from './util.js';
 import { enrageFactor } from './enrage.js';
+import { walkToward } from './motion.js';
 
 // Re-exported: they live in combat.js so a Wall Breaker can blow up from any death (being shot included).
 export { matchesTypes, enemyDamageVs, explode };
@@ -240,8 +242,23 @@ export function stepEnemy(state, e, dt, nav = null) {
   e.slowTimer = Math.max(0, (e.slowTimer || 0) - dt);
   const rage = enrageFactor(state); // a stalled wave's enemies get faster and hit harder
   const step = cfg.speed * slowed * rage.speed * dt;
+  // Firework Grounding Burst: a flyer knocked out of the sky lies stunned until it takes off again.
+  if (e.grounded > 0) { e.grounded = Math.max(0, e.grounded - dt); e.attacking = false; return; }
+  // F.L.O.C.K Override: hacked, it fights the enemies next to it instead of your base.
+  if (e.hackedT > 0) { stepHacked(state, e, cfg, dt); return; }
+  // Firework Decoy Flare: flyers chase the decoy instead of their target.
+  if (e.decoyT > 0 && cfg.type === 'air') {
+    e.decoyT = Math.max(0, e.decoyT - dt);
+    moveToward(e, e.decoyX, e.decoyY, step);
+    e.attacking = false;
+    return;
+  }
   // Balloons pick their own stops (and drift off when there are none left), so they go first.
-  if (cfg.drops) { stepBalloon(state, e, cfg, step, dt); return; }
+  if (cfg.drops) {
+    if (e.held > 0) { e.held = Math.max(0, e.held - dt); e.attacking = false; return; } // stunned (Firework Dazzle)
+    stepBalloon(state, e, cfg, step, dt);
+    return;
+  }
   const target = ensureTarget(state, e);
   if (!target) { e.attacking = false; return; }
   let attackTarget = null;
@@ -250,6 +267,26 @@ export function stepEnemy(state, e, dt, nav = null) {
   if (e.landing > 0) { e.landing = Math.max(0, e.landing - dt); e.attacking = false; return; }
   // Caught in a Mousetrap: held in place, can't move or attack.
   if (e.held > 0) { e.held = Math.max(0, e.held - dt); e.attacking = false; return; }
+  // Cheese Bait (a Mousetrap ability): lured straight onto the trap until it snaps. A building or wall in
+  // the way breaks the spell for that trap.
+  if (e.lureId) {
+    const trap = findBuilding(state, e.lureId);
+    if (!trap || trap.destroyed || trap.sprung) e.lureId = null;
+    else if (walkToward(state, e, e.lureX, e.lureY, step)) { e.entry = null; e.attacking = false; return; }
+    else { e.lureRefused = e.lureId; e.lureId = null; }
+  }
+
+  // Diddypult Hangover: staggering around aimlessly.
+  if (e.wanderT > 0 && cfg.type !== 'air') {
+    e.wanderT = Math.max(0, e.wanderT - dt);
+    if (!e.wanderTo || distance(e.x, e.y, e.wanderTo.x, e.wanderTo.y) < 0.1) {
+      const a = random(state) * Math.PI * 2;
+      e.wanderTo = { x: e.x + Math.cos(a) * 1.5, y: e.y + Math.sin(a) * 1.5 };
+    }
+    if (!walkToward(state, e, e.wanderTo.x, e.wanderTo.y, step * 0.7)) e.wanderTo = null;
+    e.attacking = false;
+    return;
+  }
 
   if (e.entry && cfg.type !== 'air') {
     // Still marching in along the dirt path from the map edge.
@@ -269,14 +306,39 @@ export function stepEnemy(state, e, dt, nav = null) {
   }
 
   e.attacking = !!attackTarget;
-  if (attackTarget && e.cooldown <= 0) {
+  // Firework Showstopper: too dazzled to attack (it still walks). Frequency Jam: no bombs.
+  const disarmed = e.disarmT > 0 || (e.airJammed && cfg.type === 'air');
+  if (attackTarget && e.cooldown <= 0 && !disarmed) {
     e.cooldown = cfg.attackInterval;
     if (cfg.explodes) { explode(state, e, cfg); return; }
     revealEnemy(state, e); // so does its first hit (a base with no walls in its way)
-    if (cfg.type === 'ground') damageBuilding(state, attackTarget, enemyDamageVs(cfg, attackTarget) * rage.damage);
+    if (cfg.type === 'ground') {
+      // Jammed / melted enemies hit softer; Spiked Plating hits back.
+      const dealt = enemyDamageVs(cfg, attackTarget) * rage.damage * (1 - enemyWeaken(e));
+      damageBuilding(state, attackTarget, dealt, e);
+      const thorns = abilityFx(attackTarget).thorns;
+      if (thorns && e.alive && !attackTarget.destroyed) damageEnemy(state, e, dealt * thorns, 'thorns');
+    }
     else fireEnemyProjectile(state, e, attackTarget);
     emit(state, 'enemyAttack', { id: e.id, kind: e.kind, targetId: attackTarget.id });
   }
+}
+
+/** F.L.O.C.K Override: a hacked enemy stays put and hits the nearest other enemy within 2 tiles. */
+function stepHacked(state, e, cfg, dt) {
+  e.hackedT = Math.max(0, e.hackedT - dt);
+  e.attacking = false;
+  let foe = null, best = Infinity;
+  for (const o of state.enemies) {
+    if (o === e || !o.alive || o.hackedT > 0) continue;
+    const d = distance(e.x, e.y, o.x, o.y);
+    if (d <= 2 && d < best) { foe = o; best = d; }
+  }
+  if (!foe || e.cooldown > 0) return;
+  e.cooldown = cfg.attackInterval;
+  e.attacking = true;
+  damageEnemy(state, foe, Math.max(20, cfg.damage * 2), 'hacked');
+  emit(state, 'enemyAttack', { id: e.id, kind: e.kind, targetId: null });
 }
 
 /**
@@ -320,6 +382,7 @@ function stepBalloon(state, e, cfg, step, dt) {
   if (e.dropTimer === null) e.dropTimer = cfg.dropHover; // just arrived
   e.dropTimer -= dt;
   if (e.dropTimer > 0) return;
+  if (e.airJammed) return; // F.L.O.C.K Frequency Jam: no troops while it's in range
   const dropped = dropTroops(state, e, cfg.drops, cfg.perDrop, target);
   e.dropTimer = cfg.dropInterval;
   emit(state, 'balloonDrop', { id: e.id, x: e.x, y: e.y, targetId: target.id, troops: dropped.map((t) => t.id) });
@@ -363,7 +426,10 @@ export function stepEnemies(state, dt) {
   // One nav map per step (rebuilt only when buildings changed). A wall broken mid-step shows up next step.
   const nav = getNav(state);
   for (const e of state.enemies) {
+    const px = e.x, py = e.y;
     stepEnemy(state, e, dt, nav);
+    // Velocity (tiles per second), for the Mortar's Ranging Shot.
+    if (dt > 0) { e.vx = (e.x - px) / dt; e.vy = (e.y - py) / dt; }
     if (state.gameOver) return;
   }
   separateEnemies(state, nav);

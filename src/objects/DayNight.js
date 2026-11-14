@@ -3,10 +3,18 @@
 // (0 = day, 1 = full night) and scene.ambientTint every frame.
 import { TEX } from '../assetKeys.js';
 import { MAP } from '../mapTiles.js';
-import { nightAmount } from '../logic/dayNight.js';
+import { nightAmount, DARK_AT } from '../logic/clockLight.js';
 
 // Light moonlit tint: buildings and enemies stay clearly visible at night (the night map does the darkening).
 export const NIGHT_TINT = 0xbcc6ee;
+
+/**
+ * Night lighting strength (enemy glows, building light pools) for a night amount: 0 until it's dark
+ * (nightAmount >= DARK_AT), then rising to 1 at full night, so nothing glows in daylight or early dusk.
+ */
+export function darkness(night) {
+  return Math.max(0, Math.min(1, (night - DARK_AT) / (1 - DARK_AT)));
+}
 
 /** Blend two 0xRRGGBB colors. */
 export function lerpColor(a, b, t) {

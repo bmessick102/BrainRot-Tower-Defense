@@ -67,6 +67,17 @@ export class Button extends Phaser.GameObjects.Container {
     this.label.setAlpha(this.enabled ? 1 : 0.85);
   }
 
+  /** Change the button's size (drawing and click area). */
+  resize(width, height = this.btnH) {
+    if (width === this.btnW && height === this.btnH) return this;
+    this.btnW = width;
+    this.btnH = height;
+    this.setSize(width, height);
+    if (this.input && this.input.hitArea) this.input.hitArea.setTo(0, 0, width, height);
+    this.redraw();
+    return this;
+  }
+
   setLabel(text, sub = '') {
     if (this.label.text !== text) this.label.setText(text);
     if (this.sub.text !== sub) this.sub.setText(sub);

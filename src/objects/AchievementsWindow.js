@@ -1,5 +1,5 @@
 // Achievements window: tabs (Village / Battle / Builder), a card per achievement with its medal, progress and
-// gold reward. Earned rewards are claimed into the village being played (opened from the Pause menu);
+// gold reward. Earned rewards are claimed into the village being played (opened from the in-game Profile, top left);
 // from the title screen the window only shows progress.
 import { Modal } from './Modal.js';
 import { Button } from './Button.js';
@@ -24,6 +24,37 @@ function star(g, cx, cy, r, color) {
   }
   g.fillStyle(color, 1).fillPoints(pts, true);
   g.lineStyle(2, COLORS.frame, 0.8).strokePoints(pts, true);
+}
+
+const ICON_H = 62, HEADER_ICON_H = 36;
+
+/**
+ * A faded grey copy of a texture for achievements not earned yet, made once and cached as `<key>_grey`
+ * (drawn on a canvas, so it works with both renderers).
+ */
+function greyTexture(scene, key) {
+  const greyKey = `${key}_grey`;
+  if (scene.textures.exists(greyKey)) return greyKey;
+  const src = scene.textures.get(key).getSourceImage();
+  const tex = scene.textures.createCanvas(greyKey, src.width, src.height);
+  const ctx = tex.getContext();
+  ctx.drawImage(src, 0, 0);
+  const img = ctx.getImageData(0, 0, src.width, src.height), d = img.data;
+  for (let i = 0; i < d.length; i += 4) {
+    const lum = 0.3 * d[i] + 0.59 * d[i + 1] + 0.11 * d[i + 2];
+    d[i] = d[i + 1] = d[i + 2] = 60 + lum * 0.7; // lifted and flattened so it reads as "locked"
+  }
+  ctx.putImageData(img, 0, 0);
+  tex.refresh();
+  return greyKey;
+}
+
+/** The achievement icon centered on (x, y), `h` px tall: full color when earned, grey when not. */
+function addIcon(scene, x, y, h, earned) {
+  const img = scene.add.image(x, y, earned ? TEX.achievementIcon : greyTexture(scene, TEX.achievementIcon));
+  img.setScale(h / img.frame.height);
+  if (!earned) img.setAlpha(0.85);
+  return img;
 }
 
 export class AchievementsWindow {
@@ -54,8 +85,9 @@ export class AchievementsWindow {
     const values = progressValues(ses.stats, this.gs);
 
     // Count in the header (left).
-    const cg = m.add(s.add.graphics());
-    star(cg, m.x + 36, m.y + 34, 15, GOLD);
+    this.hasIcon = s.textures.exists(TEX.achievementIcon);
+    if (this.hasIcon) m.add(addIcon(s, m.x + 36, m.y + 33, HEADER_ICON_H, true));
+    else star(m.add(s.add.graphics()), m.x + 36, m.y + 34, 15, GOLD);
     m.add(s.add.text(m.x + 58, m.y + 34, `${earned.size} / ${ACHIEVEMENTS.length}`, textStyle(22, COLORS.textGold)).setOrigin(0, 0.5));
 
     // Tabs, each with a red badge counting rewards ready to claim.
@@ -80,7 +112,7 @@ export class AchievementsWindow {
       this.card(a, m.x + PAD + col * (cardW + COL_GAP), top + rowI * (CARD_H + CARD_GAP), cardW, earned.has(a.id), claimable.has(a.id), values);
     });
 
-    const note = this.message || (this.gs ? '' : 'Rewards are claimed inside a village: Pause menu → Achievements.');
+    const note = this.message || (this.gs ? '' : 'Rewards are claimed inside a village: Profile (top left) → Achievements.');
     this.msg = m.add(s.add.text(m.cx, m.y + H - 22, note, bodyStyle(16, this.message ? COLORS.inkBad : COLORS.inkDim, { align: 'center' })).setOrigin(0.5));
   }
 
@@ -92,12 +124,16 @@ export class AchievementsWindow {
     g.fillStyle(face, 1).fillRoundedRect(x + 3, y + 3, w - 6, CARD_H - 6, 10);
     if (claimable) g.lineStyle(3, COLORS.button, 1).strokeRoundedRect(x + 3, y + 3, w - 6, CARD_H - 6, 10);
 
-    // Medal: gold with a star when earned, grey when not.
+    // Icon: the achievement trophy, full color when earned, grey when not (a drawn medal if the art is missing).
     const mx = x + 40, my = y + CARD_H / 2;
-    g.fillStyle(COLORS.frame, 1).fillCircle(mx, my + 2, 27);
-    g.fillStyle(earned ? GOLD_DARK : 0x6f6a62, 1).fillCircle(mx, my, 26);
-    g.fillStyle(earned ? GOLD : 0xa9a397, 1).fillCircle(mx, my - 2, 22);
-    star(g, mx, my - 2, 14, earned ? 0xfff6d0 : 0xcfc9bd);
+    if (this.hasIcon) {
+      m.add(addIcon(s, mx, my, ICON_H, earned));
+    } else {
+      g.fillStyle(COLORS.frame, 1).fillCircle(mx, my + 2, 27);
+      g.fillStyle(earned ? GOLD_DARK : 0x6f6a62, 1).fillCircle(mx, my, 26);
+      g.fillStyle(earned ? GOLD : 0xa9a397, 1).fillCircle(mx, my - 2, 22);
+      star(g, mx, my - 2, 14, earned ? 0xfff6d0 : 0xcfc9bd);
+    }
 
     const tx = x + 78;
     m.add(s.add.text(tx, y + 16, a.name, bodyStyle(18, earned ? COLORS.ink : COLORS.inkDim)).setOrigin(0, 0.5));

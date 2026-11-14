@@ -60,7 +60,7 @@ export class LocalBackend {
     const d = this.db();
     if (d.users.some((u) => u.email.toLowerCase() === email.toLowerCase())) throw new Error('That email already has an account. Log in instead.');
     if (d.users.some((u) => u.username.toLowerCase() === username.toLowerCase())) throw new Error('That username is taken or not allowed.');
-    if (password.length < 6) throw new Error('Password must be at least 6 characters.');
+    if (password.length < 8 || !/[A-Za-z]/.test(password) || !/[0-9]/.test(password)) throw new Error('Password must be at least 8 characters, with a letter and a number.');
     const u = { id: uuid(), email, username, password: await hash(password) };
     d.users.push(u);
     d.stats.push({ userId: u.id, bestWave: 0, bestTownHall: 0, counters: {}, reachedAt: null });
@@ -78,6 +78,8 @@ export class LocalBackend {
     this.userId = u.id;
     return { user: { id: u.id, email: u.email, username: u.username } };
   }
+
+  async resendConfirmation() { await wait(); } // nothing to confirm in the browser-only accounts
 
   async signOut() {
     await wait();

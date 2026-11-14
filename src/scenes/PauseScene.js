@@ -1,5 +1,5 @@
-// Pause menu: Resume, Save, Achievements (logged in: claim rewards into this village), Music and Effects
-// volume sliders (0-100%, saved to ibtd.settings), Quit to Title.
+// Pause menu: Resume, Save, Music and Effects volume sliders (0-100%, saved to ibtd.settings), Quit to Title.
+// (Achievements moved to the in-game Profile, top left: src/objects/ProfileWindow.js.)
 import Phaser from 'phaser';
 import { saveSettings } from '../logic/save.js';
 import { getStorage } from '../state/GameState.js';
@@ -10,9 +10,6 @@ import { stopMusic, getMusicLevel, getSfxLevel, setMusicLevel, setSfxLevel } fro
 import { drawWindow } from '../objects/uiDraw.js';
 import { COLORS, textStyle } from '../theme.js';
 import { session } from '../net/account.js';
-import { AchievementsWindow } from '../objects/AchievementsWindow.js';
-import { Modal } from '../objects/Modal.js';
-import { drawBadge } from '../objects/uiDraw.js';
 
 const BANNER_MS = 2500;
 
@@ -25,9 +22,7 @@ export class PauseScene extends Phaser.Scene {
     const { width, height } = this.scale;
     this.gs = this.registry.get('gameState');
     this.add.rectangle(0, 0, width, height, 0x000000, 0.55).setOrigin(0).setInteractive();
-    const online = session.loggedIn && !!session.activeBase;
-    const pw = 440, ph = online ? 550 : 480, px = width / 2 - pw / 2, py = height / 2 - ph / 2, header = 64;
-    const extra = online ? 70 : 0; // room for the Achievements button
+    const pw = 440, ph = 480, px = width / 2 - pw / 2, py = height / 2 - ph / 2, header = 64;
     const g = this.add.graphics();
     drawWindow(g, px, py, pw, ph, { header });
     this.add.text(width / 2, py + 4 + header / 2, 'Paused', textStyle(38)).setOrigin(0.5);
@@ -35,35 +30,11 @@ export class PauseScene extends Phaser.Scene {
 
     new Button(this, width / 2, py + 126, 290, 58, 'Resume', () => this.resume(), { color: COLORS.buttonGood, fontSize: 24 });
     new Button(this, width / 2, py + 196, 290, 58, 'Save', () => this.save(), { color: COLORS.buttonBlue, fontSize: 24 });
-    if (online) this.buildAchievementsButton(width / 2, py + 266);
-    this.buildVolume(width / 2, py + 272 + extra);
+    this.buildVolume(width / 2, py + 272);
     new Button(this, width / 2, py + ph - 62, 290, 58, 'Quit to Title', () => this.quit(), { color: COLORS.buttonDanger, fontSize: 24 });
 
     this.banner = this.add.text(width / 2, py - 34, '', textStyle(26, COLORS.textGold)).setOrigin(0.5);
-    // ESC resumes, unless an Achievements window is open (that ESC closes the window instead; this
-    // listener runs first, while the window is still open).
-    this.input.keyboard.on('keydown-ESC', () => { if (!Modal.isOpen(this)) this.resume(); });
-  }
-
-  buildAchievementsButton(x, y) {
-    this.achBtn = new Button(this, x, y, 290, 58, 'Achievements', () => this.openAchievements(), { color: COLORS.buttonGood, fontSize: 24 });
-    this.refreshBadge();
-  }
-
-  /** Red badge on Achievements: rewards ready to claim. */
-  refreshBadge() {
-    if (this.badge) this.badge.forEach((o) => o.destroy());
-    this.badge = null;
-    const n = session.unclaimed().length;
-    if (!n) return;
-    const bx = this.achBtn.x + 145 - 8, by = this.achBtn.y - 29 + 2;
-    this.badge = [this.add.graphics().setDepth(1), this.add.text(bx, by - 1, String(n), textStyle(15)).setOrigin(0.5).setDepth(2)];
-    drawBadge(this.badge[0], bx, by, 13);
-  }
-
-  openAchievements() {
-    if (Modal.isOpen(this)) return;
-    new AchievementsWindow(this, { session, gs: this.gs, onClose: () => this.refreshBadge() });
+    this.input.keyboard.on('keydown-ESC', () => this.resume());
   }
 
   buildVolume(cx, y) {

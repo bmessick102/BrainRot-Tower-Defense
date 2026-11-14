@@ -53,7 +53,7 @@ describe('free mine salvage at dawn', () => {
     expect(salvageMine(s)).toBeNull();            // can pay for it yourself
   });
 
-  it('happens as the wave is cleared, and the banner data says so', () => {
+  it('is no longer needed: a destroyed mine is rebuilt free as the wave is cleared', () => {
     const s = makeStateWithTownHall({ gold: 0 });
     const m = addBuilding(s, 'mine', 9, 16);
     m.destroyed = true; m.hp = 0;
@@ -61,7 +61,7 @@ describe('free mine salvage at dawn', () => {
     expect(checkWaveCleared(s)).toBe(true);
     expect(m.destroyed).toBe(false);
     const ev = s.events.find((e) => e.name === 'waveCleared');
-    expect(ev.data.salvaged).toBe(m.id);
+    expect(ev.data.salvaged).toBe(null);
     expect(ev.data.ruins).toBe(0);
   });
 });

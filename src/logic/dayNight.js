@@ -1,14 +1,21 @@
-// The day/night clock. Waves come at night:
-//   day  (CONFIG.dayNight.daySeconds)  -> building time
-//   dusk (CONFIG.rules.waveCountdown)  -> the wave countdown; a wave is triggered as dusk begins
-//   night (until the wave is cleared)  -> enemies attack
-//   dawn (CONFIG.dayNight.dawnSeconds) -> back to day
-// The clock is game state (saved) and only runs once the tutorial reaches its night step.
+// The day/night clock: a cycle that runs on its own while you play, separate from the waves.
+//   day   (CONFIG.dayNight.daySeconds)    -> full daylight
+//   dusk  (CONFIG.dayNight.duskSeconds)   -> it gets dark
+//   night (CONFIG.dayNight.nightSeconds)  -> dark: the night map, building lights, glowing enemies
+//   dawn  (CONFIG.dayNight.dawnSeconds)   -> it gets light, then day again
+// Start Wave sends the next wave right away, whatever the time: start it by day and they attack by day, at
+// night and they attack at night. While it's dark, attacking enemies are restless (enrage.js): they hit harder
+// and move faster, but pay more gold and research points. Otherwise the time of day changes nothing (gnomes
+// work, mines produce).
+// The clock is game state (saved) and only runs once the tutorial reaches its first wave (and the starting
+// Village Hall ruin is rebuilt). It runs on game time, so it stops while the game is paused.
 import { CONFIG } from '../config.js';
 import { triggerWave } from './waves.js';
-import { addGold } from './economy.js';
 import { TUTORIAL_NIGHT_STEP } from './tutorial.js';
 import { emit } from './util.js';
+import { phaseLength, nightAmount, isDark, DARK_AT } from './clockLight.js';
+
+export { phaseLength, nightAmount, isDark, DARK_AT };
 
 export const PHASES = ['day', 'dusk', 'night', 'dawn'];
 
@@ -16,124 +23,88 @@ export function createClock() {
   return { phase: 'day', t: 0 };
 }
 
-export function phaseLength(phase) {
-  if (phase === 'day') return CONFIG.dayNight.daySeconds;
-  if (phase === 'dusk') return CONFIG.rules.waveCountdown;
-  if (phase === 'dawn') return CONFIG.dayNight.dawnSeconds;
-  return Infinity; // night lasts until the wave is cleared
+/** Seconds in one full day + night. */
+export function cycleLength() {
+  return PHASES.reduce((s, p) => s + phaseLength(p), 0);
 }
 
-/** The clock stands still at day during the tutorial until night is introduced. */
+/** The clock stands still at day during the tutorial until its first wave. */
 export function isClockRunning(state) {
-  // Nights wait until the starting Village Hall ruin is rebuilt.
+  // The clock waits until the starting Village Hall ruin is rebuilt.
   const th = state.buildings && state.buildings.find((b) => b.type === 'townHall');
   if (th && th.level === 0) return false;
   return !!state.tutorialDone || state.tutorialStep >= TUTORIAL_NIGHT_STEP;
 }
 
-function smooth(t) {
-  const x = Math.max(0, Math.min(1, t));
-  return x * x * (3 - 2 * x);
+/** Daytime (day or dawn). */
+export function isDaytime(clock) {
+  return !!clock && (clock.phase === 'day' || clock.phase === 'dawn');
 }
 
-/** How dark it is (0 day .. 1 night), for the visuals. */
-export function nightAmount(clock) {
+/** Seconds until the next phase starts. */
+export function secondsToNextPhase(clock) {
   if (!clock) return 0;
-  if (clock.phase === 'dusk') return smooth(clock.t / phaseLength('dusk'));
-  if (clock.phase === 'night') return 1;
-  if (clock.phase === 'dawn') return smooth(1 - clock.t / phaseLength('dawn'));
-  return 0;
+  return Math.max(0, phaseLength(clock.phase) - clock.t);
 }
 
-/** Seconds until dusk (the next wave countdown), or null during dusk/night. */
-export function secondsUntilDusk(clock) {
-  if (clock.phase === 'day') return phaseLength('day') - clock.t;
-  if (clock.phase === 'dawn') return phaseLength('dawn') - clock.t + phaseLength('day');
-  return null;
+/** The phase after this one. */
+export function nextPhase(phase) {
+  return PHASES[(PHASES.indexOf(phase) + 1) % PHASES.length];
 }
 
-function setPhase(state, phase) {
-  state.clock = { phase, t: 0 };
+function setPhase(state, phase, t = 0) {
+  state.clock = { phase, t };
   emit(state, 'clockPhase', { phase });
 }
 
-/** Dusk begins now: start the wave countdown (used by the clock, the tutorial, and loading a save). */
-export function beginDusk(state) {
-  setPhase(state, 'dusk');
+/** Can the player start the next wave right now? (Not in the tutorial, mid-wave, or after losing.) Any time of day. */
+export function canStartWave(state) {
+  if (!state.tutorialDone || state.gameOver || !state.clock) return false;
+  if (!isClockRunning(state)) return false; // the starting hall ruin must be rebuilt first
+  return !state.wave || state.wave.phase === 'idle';
+}
+
+/**
+ * The Start Wave button: the next wave starts right away, at whatever time of day it is. Starting within
+ * rules.quickStartSeconds of clearing the last wave counts as a quick start (the "Bring It On" achievement).
+ */
+export function startNextWave(state) {
+  if (!canStartWave(state)) return { ok: false, quick: false };
+  const quick = (state.sinceWaveCleared ?? Infinity) <= CONFIG.rules.quickStartSeconds;
+  triggerWave(state);
+  emit(state, 'waveCalled', { number: state.wave.number, quick });
+  if (quick) emit(state, 'waveQuickStarted', { number: state.wave.number });
+  return { ok: true, quick };
+}
+
+/** The tutorial's first wave: sent as soon as the tutorial reaches it (no button). */
+export function startTutorialWave(state) {
   if (!state.wave || state.wave.phase === 'idle') triggerWave(state);
 }
 
-/**
- * Seconds the player would skip by calling the next wave now, or null when they can't:
- * during day or dawn it's the time left until dusk; during the dusk countdown it's the countdown left.
- * Not available during the tutorial, a running wave, or after the game is lost.
- */
-export function earlyCallSkip(state) {
-  if (!state.tutorialDone || state.gameOver || !state.clock) return null;
-  if (!isClockRunning(state)) return null; // the starting hall ruin must be rebuilt first
-  const c = state.clock;
-  if (c.phase === 'day' || c.phase === 'dawn') return Math.max(0, secondsUntilDusk(c));
-  if (c.phase === 'dusk' && state.wave && state.wave.phase === 'countdown') return Math.max(0, state.wave.countdown);
-  return null;
-}
-
-/** Gold bonus for calling the next wave now (rules.earlyCallGoldPerSecond per second skipped, rounded down). */
-export function earlyCallBonus(state) {
-  const skip = earlyCallSkip(state);
-  // The epsilon keeps clock float drift (e.g. 79.9999999 s) from rounding a whole bonus down by one.
-  return skip === null ? 0 : Math.floor(skip * CONFIG.rules.earlyCallGoldPerSecond + 1e-6);
-}
-
-/**
- * Call the next wave early. From day/dawn: dusk (the 30 s countdown) starts now. From the countdown:
- * the wave starts on the next step. Pays the bonus first (up to capacity) so the dusk checkpoint keeps it.
- */
-export function callWaveEarly(state) {
-  const skipped = earlyCallSkip(state);
-  if (skipped === null) return { ok: false, bonus: 0 };
-  const from = state.clock.phase;
-  const bonus = addGold(state, earlyCallBonus(state));
-  if (from === 'dusk') state.wave.countdown = 0; // stepWaveSpawning starts the wave next step
-  else beginDusk(state);
-  emit(state, 'waveCalledEarly', { from, skipped, bonus });
-  return { ok: true, bonus, from };
-}
-
-/** Advance the clock. Runs before wave spawning each simulation step. */
+/** Advance the clock: day -> dusk -> night -> dawn -> day, on its own. Runs before wave spawning each step. */
 export function stepClock(state, dt) {
   if (!state.clock) state.clock = createClock();
+  // How long the village has been calm since the last wave was cleared (for quick starts; not saved).
+  if (state.sinceWaveCleared !== undefined && (!state.wave || state.wave.phase === 'idle')) state.sinceWaveCleared += dt;
   if (!isClockRunning(state)) return;
   const c = state.clock;
-  if (c.phase === 'night') {
-    // Night holds until the wave is over (waves.js also moves the clock to dawn when it clears).
-    if (!state.wave || state.wave.phase === 'idle') setPhase(state, 'dawn');
-    return;
-  }
-  const before = secondsUntilDusk(c);
-  c.t += dt;
-  if (c.t >= phaseLength(c.phase)) {
-    if (c.phase === 'day') beginDusk(state);
-    else if (c.phase === 'dusk') setPhase(state, 'night');
-    else if (c.phase === 'dawn') setPhase(state, 'day');
-    return;
-  }
-  const after = secondsUntilDusk(c);
-  if (before !== null && after !== null && Math.ceil(before) !== Math.ceil(after)) {
-    emit(state, 'clockTick', { secondsUntilDusk: Math.ceil(after) });
+  c.t = Math.max(0, c.t) + dt; // (older saves could hold a negative "grace" time)
+  // A long step (or a save from a longer phase) can pass more than one phase.
+  for (let i = 0; i < PHASES.length && state.clock.t >= phaseLength(state.clock.phase); i++) {
+    const over = state.clock.t - phaseLength(state.clock.phase);
+    setPhase(state, nextPhase(state.clock.phase), over);
   }
 }
 
-/**
- * After losing a night: daytime with exactly `seconds` left before dusk, so the player can rebuild
- * instead of being thrown straight back into the same wave. (t can be negative for a grace longer than a day.)
- */
-export function startGrace(state, seconds = CONFIG.dayNight.graceSeconds) {
-  state.clock = { phase: 'day', t: phaseLength('day') - seconds };
-  emit(state, 'graceStarted', { seconds });
-}
-
-/** After loading: a save made at dusk or night means that night's wave comes again from the start of dusk. */
-export function resumeClockOnLoad(state) {
+/** Retry after losing a wave: the village goes back to before that wave; the clock keeps the checkpoint's time. */
+export function startGrace(state) {
   if (!state.clock) state.clock = createClock();
-  if (isClockRunning(state) && (state.clock.phase === 'dusk' || state.clock.phase === 'night')) beginDusk(state);
+  emit(state, 'graceStarted', {});
+}
+
+/** After loading: the clock carries on from the saved time of day. */
+export function resumeClockOnLoad(state) {
+  if (!state.clock || !PHASES.includes(state.clock.phase)) state.clock = createClock();
+  if (state.clock.t < 0) state.clock.t = 0;
 }

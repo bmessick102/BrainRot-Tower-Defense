@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { CONFIG } from '../src/config.js';
-import { createBuilding, wallGroup, planWallGroupUpgrade, upgradeCost } from '../src/logic/buildings.js';
+import { createBuilding, wallGroup, planWallGroupUpgrade, upgradeCost, checkUpgrade } from '../src/logic/buildings.js';
 import { makeStateWithTownHall } from './helpers.js';
 
 const wall = (s, c, r, level = 1) => { const b = createBuilding(s, 'wall', c, r, level, null, 'x'); s.buildings.push(b); return b; };
@@ -48,6 +48,19 @@ describe('wall groups (upgrade a whole stretch at once)', () => {
     const plan = planWallGroupUpgrade(s, wallGroup(s, ws[0]));
     expect(plan.ids).toEqual([]);
     expect(plan.reason).toMatch(/VH2/);
-    expect(CONFIG.walls.levels.length).toBe(10);
+    expect(CONFIG.walls.levels.length).toBe(7);
+  });
+
+  it('wall levels unlock at Village Hall 1, 2, 3, 5, 7, 9 and 10', () => {
+    expect(CONFIG.walls.levels.map((l) => l.townHall)).toEqual([1, 2, 3, 5, 7, 9, 10]);
+    const s = makeStateWithTownHall({ gold: 1e6 }, 4);
+    const [w] = [wall(s, 2, 22, 3)];
+    expect(checkUpgrade(s, w)).toMatchObject({ ok: false, reason: 'Requires VH5' });
+    const s5 = makeStateWithTownHall({ gold: 1e6 }, 5);
+    expect(checkUpgrade(s5, wall(s5, 2, 22, 3)).ok).toBe(true);
+    const s9 = makeStateWithTownHall({ gold: 1e6 }, 9);
+    expect(checkUpgrade(s9, wall(s9, 2, 22, 6))).toMatchObject({ ok: false, reason: 'Requires VH10' });
+    const s10 = makeStateWithTownHall({ gold: 1e6 }, 10);
+    expect(checkUpgrade(s10, wall(s10, 2, 22, 7))).toMatchObject({ ok: false, reason: 'Max level' });
   });
 });

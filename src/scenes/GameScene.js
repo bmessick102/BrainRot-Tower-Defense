@@ -9,7 +9,8 @@ import { session } from '../net/account.js';
 import { AchievementTracker } from '../net/AchievementTracker.js';
 import { gridToScreen, screenToGrid, rangeEllipse } from '../logic/iso.js';
 import { canPlaceRect, footprintCenter, fpW, fpH, rectTiles } from '../logic/grid.js';
-import { checkBuy, footprintDims, isDefense, typeConfig, planSwap, defenseRange, wallGroup } from '../logic/buildings.js';
+import { checkBuy, footprintDims, isDefense, typeConfig, defenseRange, wallGroup } from '../logic/buildings.js';
+import { createLayoutDraft, draftBuildings, layoutChanged, isStored, storeAll, storeBuilding, hotbarGroups, checkDraftPlacement, placeInDraft, shiftLayout } from '../logic/layout.js';
 import { tutorialAllows } from '../logic/tutorial.js';
 import { isWaveActive, clamp } from '../logic/util.js';
 import { mineShowsCoin } from '../logic/economy.js';
@@ -26,8 +27,11 @@ import { AirHum } from '../objects/AirHum.js';
 import { BeamHum } from '../objects/BeamHum.js';
 import { floatText, splashRing, fireballImpact, fireworkBurst, breakerExplosion } from '../objects/Effects.js';
 import { TEX, SFX, MUSIC, FIRE_SFX, ENEMY_ATTACK_SFX, ENEMY_VOICE } from '../assetKeys.js';
-import { playSfx, playSfxCapped, playSfxEndingIn, playVoiceLine, playMusic, stopMusic, crossfadeMusic, fadeOutMusic, pauseMusic, resumeMusic } from '../audio.js';
+import { playSfx, playSfxCapped, playSfxEndingIn, playVoiceLine, playMusic, stopMusic, crossfadeMusic, fadeOutMusic, hasAmbience, startAmbience, updateAmbience, stopAmbience } from '../audio.js';
 import { COLORS } from '../theme.js';
+import { abilityFx, towerRange, towerMinRange } from '../logic/abilities.js';
+import { chainLightningFx, arrowStormFx, meteorFx, solarFlareFx, sparklerFx, drawFireRing } from '../objects/AbilityFx.js';
+import { Modal, confirmDialog } from '../objects/Modal.js';
 
 const ZOOM_STEP = 1.1;
 const FIREWORK_IMPACT_MAX = 3; // copies of the 6 s firework crackle allowed at once
@@ -46,9 +50,16 @@ const BEAM_STAGES = [
 ];
 const FLOCK_SCAN_MS = 2600;
 const CHATTER_SECONDS = [6, 14]; // how often an enemy says its voice line while it's on the map // how often a F.L.O.C.K Tower pulses its scan ring during attacks
-const PLANNING_FADE_MS = 600; // village music hands over to the planning track this fast at dusk
 /** 120 -> "2:00" */
-const UIClock = (seconds) => `${Math.floor(seconds / 60)}:${String(Math.round(seconds) % 60).padStart(2, '0')}`;
+
+// A building in front of the hovered / selected one fades to this alpha when it covers more than FADE_OVERLAP of
+// that building's picture.
+const FADE_ALPHA = 0.35;
+const FADE_OVERLAP = 0.12;
+// A building whose picture is more than this share covered by buildings in front gets an outline.
+const OCCLUDED_SHARE = 0.45;
+// Ground plots under buildings.
+const PLOT_COLOR = 0x6b4a2b, PLOT_ALPHA = 0.22, PLOT_RIM = 0xf0dcae, PLOT_RIM_ALPHA = 0.28;
 
 export class GameScene extends Phaser.Scene {
   constructor() {
@@ -80,6 +91,14 @@ export class GameScene extends Phaser.Scene {
     this.views = { buildings: new Map(), enemies: new Map(), projectiles: new Map(), pools: new Map() };
     this.rangeCircle = new RangeCircle(this);
     this.selectionGfx = this.add.graphics().setDepth(-5000);
+    // The building under the pointer: outlined on its tiles, shows its labels, and anything drawn in front of
+    // it fades (updateHover / updateFocusFade).
+    this.hoverGfx = this.add.graphics().setDepth(-5000);
+    this.hoverId = null;
+    // A soft dirt plot under every building's tiles, so you can see where each one stands even where the art
+    // overlaps (drawPlots). Above the map, below lights and buildings.
+    this.plotGfx = this.add.graphics().setDepth(-9000);
+    this.plotKey = '';
     this.ghost = null;
     this.placement = null;
     this.selectedId = null;
@@ -94,10 +113,10 @@ export class GameScene extends Phaser.Scene {
     this.setupInput();
     this.subscribe();
 
-    // Retry after a lost night: rewound to that dusk, then a grace period of daytime to rebuild.
+    // Retry after a lost wave: rewound to before that wave (the clock keeps the time it had then) to rebuild.
     if (this.mode === 'retry') {
       gs.startGrace();
-      this.registry.set('pendingBanner', `Rebuild! Night returns in ${UIClock(CONFIG.dayNight.graceSeconds)}`);
+      this.registry.set('pendingBanner', "Rebuild, then press Start Wave when you're ready");
     } else {
       gs.resumeClock();
     }
@@ -105,9 +124,7 @@ export class GameScene extends Phaser.Scene {
     this.scene.launch('UIScene');
     this.playPhaseMusic();
 
-    // The planning track is timed to the countdown, so it pauses with the game.
-    this.events.on(Phaser.Scenes.Events.PAUSE, () => pauseMusic(MUSIC.planning));
-    this.events.on(Phaser.Scenes.Events.RESUME, () => { this.resumedAt = this.time.now; resumeMusic(MUSIC.planning); });
+    this.events.on(Phaser.Scenes.Events.RESUME, () => { this.resumedAt = this.time.now; });
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => gs.offContext(this));
 
     // Logged in with a village open: count stats, record the furthest wave and award achievements.
@@ -117,26 +134,26 @@ export class GameScene extends Phaser.Scene {
     }
   }
 
-  /** Music for the current phase when the scene starts (e.g. Continue can resume mid-countdown). */
+  /**
+   * Sound for the current phase when the scene starts: the attack music during a wave; between waves the
+   * day / night ambience (falls back to the village music if those files are missing).
+   */
   playPhaseMusic() {
     const phase = this.gs.wave && this.gs.wave.phase;
-    if (phase === 'countdown') this.playPlanningMusic(true); // also replaces the title music
-    else if (phase === 'active') this.playAttackMusic();
+    const attacking = phase === 'countdown' || phase === 'active';
+    if (hasAmbience(this, MUSIC.ambientDay, MUSIC.ambientNight)) {
+      startAmbience(this, MUSIC.ambientDay, MUSIC.ambientNight, { presence: 0 });
+      if (attacking) this.playAttackMusic();
+      else fadeOutMusic(this, 800); // the title music fades as the ambience fades in
+    } else if (attacking) this.playAttackMusic();
     else playMusic(this, MUSIC.village);
+    this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => stopAmbience());
   }
 
-  /**
-   * The combat planning track for the wave countdown. It's as long as the countdown and plays once, so
-   * it ends as the wave hits; `resume` (Continue mid-countdown) starts it at the matching point.
-   */
-  playPlanningMusic(resume = false) {
-    if (!this.cache.audio.exists(MUSIC.planning)) { fadeOutMusic(this, PLANNING_FADE_MS); return; }
-    if (resume) {
-      const left = Math.max(0, this.gs.wave.countdown);
-      playMusic(this, MUSIC.planning, { loop: false, seek: CONFIG.rules.waveCountdown - left });
-    } else {
-      crossfadeMusic(this, MUSIC.planning, PLANNING_FADE_MS, { loop: false });
-    }
+  /** Between waves: the village track (only used when the ambience files are missing). */
+  playCalmMusic() {
+    if (hasAmbience(this, MUSIC.ambientDay, MUSIC.ambientNight)) fadeOutMusic(this, 1500); // the ambience fades back in
+    else crossfadeMusic(this, MUSIC.village);
   }
 
   /** Attack track at full volume immediately; the village track stands in if the attack file is missing. */
@@ -168,26 +185,56 @@ export class GameScene extends Phaser.Scene {
   drawBeams(time) {
     if (!this.beamGfx) {
       this.beamGfx = this.add.graphics().setDepth(2650).setBlendMode('ADD');
+      this.ringGfx = this.add.graphics().setDepth(-4150).setBlendMode('ADD'); // Fire Rings: on the ground
       this.beamGlows = [];
     }
     const g = this.beamGfx;
     g.clear();
+    this.ringGfx.clear();
     let n = 0;
-    for (const b of this.gs.buildings) {
-      if (b.type !== 'ra' || b.destroyed || !b.beamTargetId) continue;
-      const bv = this.views.buildings.get(b.id), ev = this.views.enemies.get(b.beamTargetId);
-      if (!bv || !ev || !bv.sprite || !ev.sprite) continue;
-      const a = { x: bv.sprite.x, y: bv.sprite.y - BEAM_MUZZLE * bv.sprite.displayHeight };
-      const t = { x: ev.sprite.x, y: ev.sprite.y - ev.sprite.originY * ev.sprite.displayHeight + 0.5 * ev.sprite.displayHeight };
-      const st = BEAM_STAGES[b.beamStage || 0];
-      const flick = 1 + 0.18 * Math.sin(time * 0.05 + b.col);
-      g.lineStyle(st.width * 2.6 * flick, st.glow, 0.28).lineBetween(a.x, a.y, t.x, t.y);
-      g.lineStyle(st.width * flick, st.color, 0.95).lineBetween(a.x, a.y, t.x, t.y);
-      g.lineStyle(Math.max(1, st.width * 0.35), 0xffffff, 0.9).lineBetween(a.x, a.y, t.x, t.y);
+    const bodyMid = (ev) => ({ x: ev.sprite.x, y: ev.sprite.y - ev.sprite.originY * ev.sprite.displayHeight + 0.5 * ev.sprite.displayHeight });
+    const beam = (a, t, stageIndex, flick, scale = 1) => {
+      const st = BEAM_STAGES[stageIndex || 0];
+      const w = st.width * scale;
+      g.lineStyle(w * 2.6 * flick, st.glow, 0.28).lineBetween(a.x, a.y, t.x, t.y);
+      g.lineStyle(w * flick, st.color, 0.95).lineBetween(a.x, a.y, t.x, t.y);
+      g.lineStyle(Math.max(1, w * 0.35), 0xffffff, 0.9).lineBetween(a.x, a.y, t.x, t.y);
       for (const [p, k] of [[a, 0.55], [t, 0.8]]) {
         const glow = this.beamGlows[n] || (this.beamGlows[n] = this.add.image(0, 0, TEX.light).setBlendMode('ADD').setDepth(2651));
-        glow.setVisible(true).setPosition(p.x, p.y).setTint(st.glow).setDisplaySize(st.width * 7 * k * flick, st.width * 7 * k * flick).setAlpha(0.9);
+        glow.setVisible(true).setPosition(p.x, p.y).setTint(st.glow).setDisplaySize(w * 7 * k * flick, w * 7 * k * flick).setAlpha(0.9);
         n++;
+      }
+    };
+    const waveOn = isWaveActive(this.gs);
+    // Diddypult Oil Moat: a pink slick around the catapult during attacks.
+    for (const b of this.gs.buildings) {
+      if (b.type !== 'catapult' || b.destroyed || !waveOn) continue;
+      const moat = abilityFx(b).moatRadius;
+      if (!moat) continue;
+      const c = footprintCenter(b), sc = gridToScreen(c.x, c.y), { rx, ry } = rangeEllipse(moat);
+      this.ringGfx.fillStyle(POOL_COLOR, 0.12).fillEllipse(sc.x, sc.y, rx * 2, ry * 2);
+      this.ringGfx.lineStyle(2, POOL_COLOR, 0.45).strokeEllipse(sc.x, sc.y, rx * 2, ry * 2);
+    }
+    for (const b of this.gs.buildings) {
+      if (b.type !== 'ra' || b.destroyed) continue;
+      const bv = this.views.buildings.get(b.id);
+      if (!bv || !bv.sprite) continue;
+      // Sun Ring: a band of flame on the ground around the tower while enemies attack.
+      const fx = abilityFx(b);
+      if (fx.ringRadius && waveOn) {
+        const c = footprintCenter(b), sc = gridToScreen(c.x, c.y);
+        drawFireRing(this.ringGfx, sc.x, sc.y, fx.ringRadius, time, b.col);
+      }
+      const a = { x: bv.sprite.x, y: bv.sprite.y - BEAM_MUZZLE * bv.sprite.displayHeight };
+      const flick = 1 + 0.18 * Math.sin(time * 0.05 + b.col);
+      // Every beam (Prism: up to 3), then the chains jumping on from their targets (thinner).
+      for (const bm of b.beams || []) {
+        const ev = this.views.enemies.get(bm.targetId);
+        if (ev && ev.sprite) beam(a, bodyMid(ev), bm.stage, flick);
+      }
+      for (const ch of b.beamChains || []) {
+        const from = this.views.enemies.get(ch.from), to = this.views.enemies.get(ch.to);
+        if (from && from.sprite && to && to.sprite) beam(bodyMid(from), bodyMid(to), ch.stage, flick, 0.6);
       }
     }
     for (let i = n; i < this.beamGlows.length; i++) this.beamGlows[i].setVisible(false);
@@ -202,7 +249,7 @@ export class GameScene extends Phaser.Scene {
     for (const b of this.gs.buildings) {
       if (b.type !== 'flock' || b.destroyed) continue;
       const c = gridToScreen(footprintCenter(b).x, footprintCenter(b).y);
-      const { rx, ry } = rangeEllipse(defenseRange('flock', b.level));
+      const { rx, ry } = rangeEllipse(towerRange(b));
       const ring = this.add.graphics().setDepth(2590).setPosition(c.x, c.y).setScale(0.1).setAlpha(0.55);
       ring.lineStyle(3, 0x4cd6ff, 1).strokeEllipse(0, 0, rx * 2, ry * 2);
       ring.fillStyle(0x4cd6ff, 0.06).fillEllipse(0, 0, rx * 2, ry * 2);
@@ -213,6 +260,8 @@ export class GameScene extends Phaser.Scene {
   update(time, delta) {
     if (!this.endingGame) this.gs.update(Math.min(delta / 1000, MAX_STEP));
     this.dayNight.update(this.gs.clock);
+    // Day / night ambience: follows how dark it is, and steps aside for the attack music during a wave.
+    updateAmbience(this.night || 0, !isWaveActive(this.gs) && !this.endingGame, Math.min(delta / 1000, MAX_STEP));
     this.villagers.update(Math.min(delta / 1000, MAX_STEP), time);
     this.airHum.update(this.endingGame ? [] : this.gs.enemies, delta / 1000);
     this.beamHum.update(this.endingGame ? [] : this.gs.buildings, delta / 1000);
@@ -228,6 +277,122 @@ export class GameScene extends Phaser.Scene {
       }
     }
     this.syncViews(time);
+    this.updateHover();
+    this.updateFocusFade();
+    this.updateLayoutExtras();
+  }
+
+  /** Ground plots and hidden-building outlines: worked out again only when the layout changes. */
+  updateLayoutExtras() {
+    const list = this.layoutList || [];
+    const key = list.map((b) => `${b.id}:${b.col},${b.row},${fpW(b)},${fpH(b)},${b.level},${b.destroyed ? 1 : 0}`).join('|')
+      + `|${this.placement ? this.placement.id : ''}`;
+    if (key === this.plotKey) return;
+    this.plotKey = key;
+    this.drawPlots(list);
+    this.updateOcclusion();
+  }
+
+  /** A dirt-colored diamond under each building (not walls), with a light rim. */
+  drawPlots(list) {
+    const g = this.plotGfx;
+    g.clear();
+    for (const b of list) {
+      if (b.type === 'wall' || (this.placement && this.placement.id === b.id)) continue;
+      const w = fpW(b), h = fpH(b);
+      const pts = [gridToScreen(b.col, b.row), gridToScreen(b.col + w, b.row), gridToScreen(b.col + w, b.row + h), gridToScreen(b.col, b.row + h)];
+      g.fillStyle(PLOT_COLOR, PLOT_ALPHA).fillPoints(pts, true);
+      const inset = 0.08;
+      const rim = [gridToScreen(b.col + inset, b.row + inset), gridToScreen(b.col + w - inset, b.row + inset),
+        gridToScreen(b.col + w - inset, b.row + h - inset), gridToScreen(b.col + inset, b.row + h - inset)];
+      g.lineStyle(2, PLOT_RIM, PLOT_RIM_ALPHA).strokePoints(rim, true);
+    }
+  }
+
+  /**
+   * Which buildings are mostly hidden behind others? Covered share = the overlap of its picture with the
+   * pictures of buildings drawn in front of it (their bounds, so it slightly overestimates), capped at 1.
+   * Those get an outline (BuildingView.setOccluded). Walls are short and are never counted.
+   */
+  updateOcclusion() {
+    const views = [...this.views.buildings.values()].filter((v) => v.setOccluded);
+    const boxes = new Map(views.map((v) => [v, v.sprite.getBounds()]));
+    for (const v of views) {
+      const a = boxes.get(v);
+      const area = Math.max(1, a.width * a.height);
+      let covered = 0;
+      for (const o of views) {
+        if (o === v || o.sprite.depth <= v.sprite.depth) continue;
+        const ob = boxes.get(o);
+        const ix = Math.min(a.right, ob.right) - Math.max(a.x, ob.x);
+        const iy = Math.min(a.bottom, ob.bottom) - Math.max(a.y, ob.y);
+        if (ix > 0 && iy > 0) covered += ix * iy;
+      }
+      v.setOccluded(covered / area > OCCLUDED_SHARE);
+    }
+  }
+
+  // ---------- hover, labels and fading (keep a crowded village readable) ----------
+  /** The building under the pointer (tile first, like a click), re-checked when the pointer or camera moves. */
+  updateHover() {
+    const p = this.input.activePointer;
+    const cam = this.cameras.main;
+    const camKey = `${cam.scrollX},${cam.scrollY},${cam.zoom}`; // its own key: cameraMoved() belongs to the ghost
+    const camMoved = camKey !== this.hoverCamKey;
+    this.hoverCamKey = camKey;
+    let id = null;
+    if (!this.placement && !this.endingGame && !(this.press && this.press.dragging) && !this.isOverUI(p)) {
+      if (this.lastHoverPtr && this.lastHoverPtr.x === p.x && this.lastHoverPtr.y === p.y && !camMoved && !this.hoverDirty) return;
+      const w = this.screenToWorld(p.x, p.y);
+      const b = this.pickBuilding(w.x, w.y);
+      id = b ? b.id : null;
+    }
+    this.lastHoverPtr = { x: p.x, y: p.y };
+    this.hoverDirty = false;
+    if (id === this.hoverId && !camMoved) return;
+    this.hoverId = id;
+    this.drawHover();
+  }
+
+  /** A thin white outline on the hovered building's tiles (the selected one has its own gold outline). */
+  drawHover() {
+    this.hoverGfx.clear();
+    const b = this.hoverId && this.hoverId !== this.selectedId ? this.layoutList?.find((x) => x.id === this.hoverId) : null;
+    if (!b) return;
+    const pts = [
+      gridToScreen(b.col, b.row), gridToScreen(b.col + fpW(b), b.row),
+      gridToScreen(b.col + fpW(b), b.row + fpH(b)), gridToScreen(b.col, b.row + fpH(b))
+    ];
+    this.hoverGfx.fillStyle(0xffffff, 0.12).fillPoints(pts, true);
+    this.hoverGfx.lineStyle(2, 0xffffff, 0.85).strokePoints(pts, true);
+  }
+
+  /** Show a building's "Lv" badge and tier pips? Only when it's hovered or selected, or in edit mode. */
+  showLabels(id) {
+    return this.editMode || id === this.hoverId || id === this.selectedId;
+  }
+
+  /**
+   * Buildings drawn in front of the hovered (else the selected) building, and covering a good part of it, fade
+   * to see-through so it can be seen and clicked. Eased so it doesn't flicker. Walls are short: they never fade.
+   */
+  updateFocusFade() {
+    const focusId = this.hoverId || this.selectedId;
+    const focus = focusId ? this.views.buildings.get(focusId) : null;
+    const fb = focus && focus.sprite ? focus.sprite.getBounds() : null;
+    const fArea = fb ? Math.max(1, fb.width * fb.height) : 1;
+    for (const [id, v] of this.views.buildings) {
+      if (!v.setFade) continue;
+      let target = 1;
+      if (fb && id !== focusId && !(v instanceof WallView) && v.sprite.depth > focus.sprite.depth) {
+        const ob = v.sprite.getBounds();
+        const ix = Math.min(fb.right, ob.right) - Math.max(fb.x, ob.x);
+        const iy = Math.min(fb.bottom, ob.bottom) - Math.max(fb.y, ob.y);
+        if (ix > 0 && iy > 0 && (ix * iy) / fArea > FADE_OVERLAP) target = FADE_ALPHA;
+      }
+      const cur = v.fade ?? 1;
+      v.setFade(Math.abs(target - cur) < 0.02 ? target : cur + (target - cur) * 0.3);
+    }
   }
 
   // ---------- camera ----------
@@ -302,7 +467,7 @@ export class GameScene extends Phaser.Scene {
       if (this.isOverUI(p)) return;
       if (p.rightButtonDown()) {
         if (this.placement) this.cancelPlacement();
-        else if (this.editMode) this.setEditMode(false);
+        else if (this.editMode) this.leaveEdit();
         return;
       }
       this.press = { x: p.x, y: p.y, scrollX: cam.scrollX, scrollY: cam.scrollY, dragging: false };
@@ -335,8 +500,9 @@ export class GameScene extends Phaser.Scene {
     this.input.keyboard.on('keydown-R', () => this.rotatePlacement());
     this.input.keyboard.on('keydown-ESC', () => {
       if (this.time.now - this.resumedAt < 250) return; // the Esc that closed the pause menu
+      if (Modal.isOpen(this.scene.get('UIScene'))) return; // Esc closes the ability window instead
       if (this.placement) this.cancelPlacement();
-      else if (this.editMode) this.setEditMode(false);
+      else if (this.editMode) this.leaveEdit();
       else this.openPause();
     });
   }
@@ -372,6 +538,14 @@ export class GameScene extends Phaser.Scene {
     // Mines: with the coin showing, a click only collects (coin sound). Otherwise (or if it couldn't
     // collect, e.g. storage full) it opens the panel with the info sound, like any building.
     const coinShowing = b.type === 'mine' && mineShowsCoin(b) && !isWaveActive(this.gs);
+    // RV Lab: a click opens its full info panel straight away (its Research button opens the research window).
+    if (b.type === 'rvlab' && tutorialAllows(this.gs, 'select', b.type)) {
+      this.views.buildings.get(b.id)?.pop();
+      playSfx(this, SFX.buildingSelect);
+      if (this.selectedId !== b.id) this.select(b.id);
+      this.scene.get('UIScene').openInfo();
+      return;
+    }
     let collected = false;
     if (coinShowing && tutorialAllows(this.gs, 'collect')) collected = this.gs.collect(b.id).ok;
     const canSelect = tutorialAllows(this.gs, 'select', b.type) && !collected;
@@ -384,13 +558,18 @@ export class GameScene extends Phaser.Scene {
 
   /** Frontmost building whose sprite has a visible pixel under the point, else whose footprint contains it. */
   pickBuilding(wx, wy) {
+    // The building standing on the tile under the point comes first, so a tall building in front can't steal
+    // the click from the one behind it. Off every footprint (e.g. on a tall roof), the frontmost picture wins.
+    const g = screenToGrid(wx, wy);
+    const onTile = this.layoutBuildings().find((b) => (!this.placement || this.placement.id !== b.id)
+      && g.x >= b.col && g.x < b.col + fpW(b) && g.y >= b.row && g.y < b.row + fpH(b));
+    if (onTile) return this.gs.getBuilding(onTile.id) || onTile;
     const views = [...this.views.buildings.values()].sort((a, b) => b.sprite.depth - a.sprite.depth);
     for (const v of views) {
       if (this.placement && this.placement.id === v.id) continue;
       if (v.hitTest(wx, wy)) return this.gs.getBuilding(v.id);
     }
-    const g = screenToGrid(wx, wy);
-    return this.gs.buildings.find((b) => g.x >= b.col && g.x < b.col + fpW(b) && g.y >= b.row && g.y < b.row + fpH(b)) || null;
+    return null;
   }
 
   openPause() {
@@ -419,6 +598,7 @@ export class GameScene extends Phaser.Scene {
   updateSelectionVisuals() {
     const b = this.selectedId ? this.gs.getBuilding(this.selectedId) : null;
     this.selectionGfx.clear();
+    this.drawHover(); // the hover outline steps aside for the selection
     if (!b) {
       if (!this.placement) this.rangeCircle.hide();
       return;
@@ -435,25 +615,109 @@ export class GameScene extends Phaser.Scene {
     if (isDefense(b.type)) {
       const cfg = typeConfig(b.type);
       const c = footprintCenter(b);
-      this.rangeCircle.show(c.x, c.y, defenseRange(b.type, b.level), cfg.minRange);
+      this.rangeCircle.show(c.x, c.y, towerRange(b), cfg.minRange ? towerMinRange(b) : cfg.minRange); // with ability bonuses
     } else {
       this.rangeCircle.hide();
     }
   }
 
-  // ---------- edit mode (the only way to move buildings) ----------
+  // ---------- edit mode: the layout editor (the only way to move buildings; src/logic/layout.js) ----------
+  // Edit mode works on a draft layout: buildings can be picked up into the hotbar (one at a time or
+  // Remove All) and placed again. The village itself only changes on Save; leaving without saving
+  // (after a yes) throws the draft away.
   canEdit() {
     return !isWaveActive(this.gs) && !this.gs.gameOver && tutorialAllows(this.gs, 'move');
   }
 
+  /** Edit mode on (a fresh draft) or off. Off discards the draft: players leave through leaveEdit / saveLayout. */
   setEditMode(on) {
     if (on && !this.canEdit()) return;
     if (this.editMode === on) return;
     if (this.placement) this.cancelPlacement();
     this.editMode = on;
+    this.layout = on ? createLayoutDraft(this.gs) : null;
     this.select(null);
+    this.syncViews(this.time.now);
     this.drawEditOutlines();
     this.gs.emit('editModeChanged', { active: on });
+  }
+
+  /** The buildings the map shows: the draft layout while editing, else the village. */
+  layoutBuildings() {
+    return this.layout ? draftBuildings(this.gs, this.layout) : this.gs.buildings;
+  }
+
+  /** Leave edit mode (Cancel, Esc, right click, the Edit button). Unsaved changes ask first. */
+  leaveEdit() {
+    if (!this.editMode) return;
+    if (this.placement) this.cancelPlacement();
+    if (!layoutChanged(this.gs, this.layout)) { this.setEditMode(false); return; }
+    const ui = this.scene.get('UIScene');
+    if (Modal.isOpen(ui)) return;
+    const left = this.layout.stored.length;
+    confirmDialog(ui, {
+      title: 'Leave edit mode?',
+      lines: ['Leave without saving?', `${left ? `${left} building${left === 1 ? ' is' : 's are'} still in your hotbar. ` : ''}Your layout changes will be lost and everything goes back where it was.`],
+      confirmLabel: 'Leave', cancelLabel: 'Keep editing',
+      onConfirm: () => this.setEditMode(false)
+    });
+  }
+
+  /** Save: the village takes the draft layout (every building must be placed). */
+  saveLayout() {
+    if (!this.layout) return { ok: false, reason: '' };
+    if (this.placement) this.cancelPlacement();
+    const r = this.gs.applyLayout(this.layout);
+    if (!r.ok) { playSfx(this, SFX.invalid); this.gs.emit('layoutRejected', { reason: r.reason }); return r; }
+    playSfx(this, SFX.place);
+    this.setEditMode(false);
+    return r;
+  }
+
+  /** Remove All: every building goes to the hotbar. */
+  storeAllBuildings() {
+    if (!this.layout) return;
+    if (this.placement) this.cancelPlacement();
+    storeAll(this.gs, this.layout);
+    playSfx(this, SFX.sell);
+    this.layoutUpdated();
+  }
+
+  /** Slide every placed building (dc, dr) tiles at once (the shift pad). */
+  shiftWholeLayout(dc, dr) {
+    if (!this.layout) return;
+    if (this.placement) this.cancelPlacement();
+    const r = shiftLayout(this.gs, this.layout, dc, dr);
+    if (!r.ok) { playSfx(this, SFX.invalid); this.gs.emit('layoutRejected', { reason: r.reason }); return; }
+    playSfx(this, SFX.place);
+    this.layoutUpdated();
+  }
+
+  /** Put the building being carried into the hotbar. Returns true if there was one. */
+  storeHeld() {
+    const pl = this.placement;
+    if (!this.layout || !pl || pl.mode !== 'move') return false;
+    storeBuilding(this.layout, pl.id);
+    this.endPlacement();
+    playSfx(this, SFX.place);
+    this.layoutUpdated();
+    return true;
+  }
+
+  /** Take the next building of a hotbar card (type + level) to place it. */
+  pickFromHotbar(type, level) {
+    if (!this.layout) return;
+    const group = hotbarGroups(this.gs, this.layout).find((g) => g.type === type && g.level === level);
+    if (!group) return;
+    playSfx(this, SFX.buildingSelect);
+    this.beginMove(group.ids[0]);
+  }
+
+  /** The draft changed: redraw the map and tell the UI (hotbar, Save button). */
+  layoutUpdated() {
+    this.syncViews(this.time.now);
+    this.drawEditOutlines();
+    this.gs.emit('layoutDraftChanged', {});
   }
 
   /** In edit mode every building's footprint is outlined so it's clear what can be picked up. */
@@ -461,7 +725,7 @@ export class GameScene extends Phaser.Scene {
     const g = this.editGfx;
     g.clear();
     if (!this.editMode) return;
-    for (const b of this.gs.buildings) {
+    for (const b of this.layoutBuildings()) {
       if (this.placement && this.placement.id === b.id) continue;
       const pts = [
       gridToScreen(b.col, b.row), gridToScreen(b.col + fpW(b), b.row),
@@ -488,10 +752,13 @@ export class GameScene extends Phaser.Scene {
 
   beginMove(id) {
     const b = this.gs.getBuilding(id);
-    if (!b || !this.editMode || isWaveActive(this.gs)) return;
+    if (!b || !this.editMode || !this.layout || isWaveActive(this.gs)) return;
     if (this.placement) this.endPlacement();
     this.select(null);
-    this.placement = { mode: 'move', id, type: b.type, level: b.level, orient: b.orient, w: fpW(b), h: fpH(b), col: b.col, row: b.row, valid: true };
+    // Picked up from its draft spot, or out of the hotbar.
+    const d = this.layout.pos[id];
+    const fromHotbar = isStored(this.layout, id);
+    this.placement = { mode: 'move', id, fromHotbar, type: b.type, level: b.level, orient: d.orient, w: d.w, h: d.h, col: d.col, row: d.row, valid: !fromHotbar };
     const view = this.views.buildings.get(id);
     if (view) view.setAlpha(0.3);
     this.createGhost();
@@ -532,12 +799,15 @@ export class GameScene extends Phaser.Scene {
     const g = screenToGrid(w.x, w.y);
     pl.col = Math.round(g.x - pl.w / 2);
     pl.row = Math.round(g.y - pl.h / 2);
-    const spot = canPlaceRect(this.gs.buildings, pl.col, pl.row, pl.w, pl.h, pl.mode === 'move' ? pl.id : null);
-    // Moving onto exactly one other building: snap onto it and preview the two trading places.
-    let swap = null;
-    if (pl.mode === 'move' && !spot.ok && !isWaveActive(this.gs)) {
-      const plan = planSwap(this.gs.buildings, this.gs.getBuilding(pl.id), pl.col, pl.row, pl.orient);
-      if (plan && plan.ok) { swap = plan; pl.col = plan.to.col; pl.row = plan.to.row; }
+    let spot, swap = null;
+    if (pl.mode === 'move' && this.layout) {
+      // Edit mode: checked against the draft layout. Dropped onto exactly one other building, the two
+      // trade places: snap onto it and preview the swap.
+      const check = checkDraftPlacement(this.gs, this.layout, pl.id, pl.col, pl.row, pl.orient);
+      spot = { ok: check.ok && !check.swap };
+      if (check.swap) { swap = check.swap; pl.col = swap.to.col; pl.row = swap.to.row; }
+    } else {
+      spot = canPlaceRect(this.gs.buildings, pl.col, pl.row, pl.w, pl.h);
     }
     this.showSwapPreview(swap);
     pl.valid = (spot.ok || !!swap) && (pl.mode === 'buy' ? checkBuy(this.gs, pl.type).ok : !isWaveActive(this.gs));
@@ -608,6 +878,20 @@ export class GameScene extends Phaser.Scene {
     const pl = this.placement;
     if (!pl) return;
     if (!pl.valid) { playSfx(this, SFX.invalid); return; }
+    if (pl.mode === 'move' && this.layout) {
+      // Edit mode: drop it into the draft layout (the village changes on Save).
+      if (!placeInDraft(this.gs, this.layout, pl.id, pl.col, pl.row, pl.orient).ok) { playSfx(this, SFX.invalid); return; }
+      playSfx(this, SFX.place);
+      this.endPlacement();
+      this.layoutUpdated();
+      // Walls out of the hotbar: keep laying the same stack in a row until it runs out (Esc to stop).
+      if (pl.fromHotbar && pl.type === 'wall') {
+        this.wallOrient = pl.orient;
+        this.pickFromHotbar(pl.type, pl.level);
+        if (this.placement) { this.placement.orient = pl.orient; Object.assign(this.placement, footprintDims('wall', pl.orient)); }
+      }
+      return;
+    }
     const r = pl.mode === 'buy'
       ? this.gs.placeNew(pl.type, pl.col, pl.row, pl.orient)
       : this.gs.moveBuilding(pl.id, pl.col, pl.row, pl.orient);
@@ -655,7 +939,8 @@ export class GameScene extends Phaser.Scene {
 
     on('enemyHit', (d) => {
       const v = this.views.enemies.get(d.id);
-      if (v && d.source !== 'pool' && d.source !== 'beam') v.flash(this.time.now); // pool / beam ticks would keep them white
+      const tick = d.source === 'pool' || d.source === 'beam' || d.source === 'burn' || d.source === 'ring' || d.source === 'poison' || d.source === 'bleed';
+      if (v && !tick) v.flash(this.time.now); // pool / beam / burn ticks would keep them white
       const s = enemyPos(d);
       if (d.source === 'beam') {
         this.beamText = this.beamText || new Map();
@@ -667,9 +952,18 @@ export class GameScene extends Phaser.Scene {
         }
         return;
       }
-      if (d.source === 'pool') {
-        // Pool ticks: small pink numbers, no hit sound (they come every half second).
-        floatText(this, s.x + Phaser.Math.Between(-6, 6), s.y - 16, `${Math.round(d.amount)}`, '#ff8fc8', 12);
+      if (d.source === 'pool' || d.source === 'burn' || d.source === 'ring' || d.source === 'poison' || d.source === 'bleed') {
+        // Damage over time: small numbers, no hit sound (they come every half second). Pink oil, orange fire,
+        // green poison, red bleeding.
+        const color = { pool: '#ff8fc8', poison: '#8be06b', bleed: '#ff6b6b' }[d.source] || '#ffa04a';
+        floatText(this, s.x + Phaser.Math.Between(-6, 6), s.y - 16, `${Math.round(d.amount)}`, color, 12);
+        return;
+      }
+      if (d.source === 'crit' || d.source === 'headshot') {
+        // Critical hits (Locklair, F.L.O.C.K Exposed) and Headshots: a bigger gold number with a "!".
+        const liftC = v && v.sprite ? v.sprite.y - v.sprite.originY * v.sprite.displayHeight + 0.35 * v.sprite.displayHeight - s.y : -20;
+        floatText(this, s.x, s.y + liftC - 6, `${Math.round(d.amount)}!`, '#ffe066', d.source === 'headshot' ? 22 : 18);
+        playSfx(this, SFX.hit);
         return;
       }
       // Over the enemy's body (flyers float high), not on the ground beneath it.
@@ -697,6 +991,11 @@ export class GameScene extends Phaser.Scene {
       if (d.bounty > 0) {
         const s = enemyPos(d);
         floatText(this, s.x, s.y - 34, `+${d.bounty}`, COLORS.textGold, 16);
+      }
+      if (d.rp > 0) {
+        // Research points for the RV Lab: a small purple tag beside the gold.
+        const s = enemyPos(d);
+        floatText(this, s.x + 26, s.y - 30, `+${d.rp} RP`, '#d3b0ff', 13);
       }
     });
     on('buildingDamaged', (d) => {
@@ -726,6 +1025,24 @@ export class GameScene extends Phaser.Scene {
         // The exact area of effect, drawn above the flash and held a little longer so it reads clearly.
         splashRing(this, s.x, s.y, d.radius, 0xc054ff, { duration: 600, depth: 2710 });
         playSfx(this, SFX.wizardImpact);
+      } else if (d.kind === 'sparkler') {
+        sparklerFx(this, s.x, s.y, d.radius, TEX.light);
+      } else if (d.kind === 'groundZero') {
+        splashRing(this, s.x, s.y, d.radius, 0xff9a3c, { duration: 380, depth: 2710 });
+      } else if (d.kind === 'fountain') {
+        sparklerFx(this, s.x, s.y + 20, d.radius, TEX.light);
+      } else if (d.kind === 'shatter') {
+        splashRing(this, s.x, s.y, d.radius, POOL_COLOR, { duration: 350, depth: 2710 });
+      } else if (d.kind === 'booby' || d.kind === 'supernova') {
+        // Mousetrap Booby Trap / Tower of Rah Supernova: a big fiery blast.
+        fireballImpact(this, s.x, s.y, d.radius, TEX.light);
+        splashRing(this, s.x, s.y, d.radius, d.kind === 'supernova' ? 0xfff0b0 : 0xff7a1a, { duration: 550, depth: 2710 });
+        this.cameras.main.shake(160, 0.004);
+      } else if (d.kind === 'aftershock') {
+        splashRing(this, s.x, s.y, d.radius, 0xb08a5a, { duration: 450, depth: 2710 });
+        playSfx(this, SFX.mortarImpact);
+      } else if (d.kind === 'arrowStorm' || d.kind === 'meteor') {
+        // Already drawn when they were called down (strikeIncoming).
       } else if (d.kind === 'catapult') {
         // The bottle bursts: a pink splash ring and droplets; the pool itself is a PoolView.
         splashRing(this, s.x, s.y, d.radius, POOL_COLOR, { duration: 450, depth: 2710 });
@@ -802,6 +1119,88 @@ export class GameScene extends Phaser.Scene {
       playSfxCapped(this, SFX.mousetrapSnap, 3);
       this.views.buildings.get(d.id)?.pop();
     });
+    // ---------- RV Lab abilities ----------
+    on('chainLightning', (d) => {
+      const pts = d.points.map((p) => { const g = gridToScreen(p.x, p.y); return { x: g.x, y: g.y - 18 }; });
+      chainLightningFx(this, pts, TEX.light);
+    });
+    on('strikeIncoming', (d) => {
+      const s = gridToScreen(d.x, d.y);
+      if (d.kind === 'meteor') meteorFx(this, s.x, s.y, d.radius, d.delay * 1000, TEX.light);
+      else if (d.kind === 'arrowStorm') arrowStormFx(this, s.x, s.y, d.radius, d.delay * 1000);
+      // (Aftershocks need no warning: they're drawn when they land.)
+    });
+    on('solarFlare', (d) => {
+      const s = gridToScreen(d.x, d.y);
+      solarFlareFx(this, s.x, s.y, d.radius, TEX.light);
+      playSfxCapped(this, SFX.raHeatUp, 2);
+    });
+    // Path C specials that hit everything around a tower at once: a ring in their color.
+    const AREA_FX = {
+      toxicCloud: { color: 0x7fe07f, text: 'Toxic Cloud!' },
+      earthquake: { color: 0xb08a5a, text: 'Earthquake!', shake: true },
+      timeWarp: { color: 0x9fb8ff, text: 'Time Warp!' },
+      starfall: { color: 0xffe066, text: 'Starfall!' },
+      systemCrash: { color: 0x4cd6ff, text: 'System Crash!' }
+    };
+    on('areaSpecial', (d) => {
+      const look = AREA_FX[d.kind];
+      if (!look) return;
+      const s = gridToScreen(d.x, d.y);
+      splashRing(this, s.x, s.y, d.radius, look.color, { duration: 700, depth: 2710 });
+      splashRing(this, s.x, s.y, d.radius * 0.6, look.color, { duration: 500, depth: 2710 });
+      const v = this.views.buildings.get(d.id);
+      if (v) { const top = v.topCenter(); floatText(this, top.x, top.y - 8, look.text, '#ffffff', 16); }
+      if (look.shake) this.cameras.main.shake(260, 0.006);
+    });
+    // ---------- building-specific tiers ----------
+    const tag = (x, y, text, color, size = 15) => floatText(this, x, y, text, color, size);
+    const at = (d) => gridToScreen(d.x, d.y);
+    const overBuilding = (id, text, color) => { const v = this.views.buildings.get(id); if (v) { const t = v.topCenter(); tag(t.x, t.y - 8, text, color, 16); } };
+    on('slam', (d) => { const s = at(d); tag(s.x, s.y - 34, 'SLAM!', '#ffcf5a', 17); this.cameras.main.shake(90, 0.003); });
+    on('flak', (d) => { const s = at(d); splashRing(this, s.x, s.y - 24, 0.6, 0xffe08a, { duration: 300, depth: 2710 }); playSfx(this, SFX.cannonFire); });
+    on('broadside', (d) => { overBuilding(d.id, 'Broadside!', '#ffffff'); playSfx(this, SFX.cannonFire); });
+    on('volleyLock', (d) => overBuilding(d.id, 'Volley!', '#ffffff'));
+    on('decoyFlare', (d) => {
+      const s = at(d);
+      splashRing(this, s.x, s.y - 30, d.radius, 0xff6b5b, { duration: 700, depth: 2710 });
+      overBuilding(d.id, 'Decoy!', '#ff9a8a');
+    });
+    on('grandDisplay', (d) => {
+      for (const p of d.points.slice(0, 12)) { const s = at(p); fireworkBurst(this, s.x, s.y - 30, 0.8, TEX.light); }
+      overBuilding(d.id, 'Grand Display!', '#ffe066');
+      playSfxCapped(this, SFX.fireworkImpact, FIREWORK_IMPACT_MAX);
+    });
+    on('grounded', (d) => { const s = at(d); tag(s.x, s.y - 20, 'Grounded!', '#ffd76a'); });
+    on('hacked', (d) => { const s = at(d); tag(s.x, s.y - 40, 'HACKED', '#c58cff', 16); splashRing(this, s.x, s.y, 0.6, 0xc58cff, { duration: 450, depth: 2710 }); });
+    on('blink', (d) => {
+      for (const p of [d.from, d.to]) { const s = at(p); splashRing(this, s.x, s.y - 10, 0.5, 0xb066ff, { duration: 380, depth: 2710 }); }
+    });
+    on('defused', (d) => { const s = at(d); tag(s.x, s.y - 30, 'Defused!', '#9bf07a', 16); });
+    on('celebrate', (d) => overBuilding(d.id, 'Celebrate!', '#ffe066'));
+    on('cauterize', (d) => { const s = at(d); splashRing(this, s.x, s.y, d.radius, 0x9bf07a, { duration: 500, depth: 2710 }); });
+    on('oilTanker', (d) => overBuilding(d.id, 'Oil Tanker!', '#ff9fd0'));
+    on('poisonSpread', (d) => {
+      const s = gridToScreen(d.x, d.y);
+      splashRing(this, s.x, s.y, d.radius, 0x7fe07f, { duration: 450, depth: 2710 });
+    });
+    on('lastStand', (d) => {
+      const v = this.views.buildings.get(d.id);
+      if (v) { const top = v.topCenter(); floatText(this, top.x, top.y - 10, 'LAST STAND!', '#ff6b5b', 20); v.pop(); }
+    });
+    on('trapRearmed', (d) => {
+      const v = this.views.buildings.get(d.id);
+      if (v) { const top = v.topCenter(); floatText(this, top.x, top.y + 6, 'Re-armed', '#ffd76a', 15); }
+    });
+    // RV Lab research (or a level-up) gave buildings a new tier: each one pops with a label.
+    on('abilitiesApplied', (d) => {
+      for (const id of d.ids.slice(0, 30)) {
+        const v = this.views.buildings.get(id);
+        if (v) { v.pop(); const top = v.topCenter(); floatText(this, top.x, top.y - 14, 'New ability!', '#ffe066', 18); }
+      }
+      this.updateSelectionVisuals(); // range tiers change the range circle
+    });
+    on('abilityResearched', () => playSfx(this, SFX.upgrade));
     // A Tower of Rah beam heats up a stage (x3, then x8).
     on('beamHeatUp', () => playSfxCapped(this, SFX.raHeatUp, 2));
     on('mineCollected', (d) => {
@@ -821,11 +1220,7 @@ export class GameScene extends Phaser.Scene {
     });
     on('buildingMoved', () => this.updateSelectionVisuals());
     on('baseReset', () => this.select(null));
-    on('waveTriggered', (d) => {
-      this.showSpawnMarkers(d.paths);
-      playSfx(this, SFX.waveCountdown);
-      this.playPlanningMusic(); // dusk: the combat planning track plays through the countdown
-    });
+    on('waveTriggered', (d) => this.showSpawnMarkers(d.paths)); // the wave starts on the next step
     on('waveStarted', () => {
       if (this.placement) this.cancelPlacement();
       this.setEditMode(false);
@@ -836,7 +1231,7 @@ export class GameScene extends Phaser.Scene {
       this.breakerAnnounced = false;
       this.clearSpawnMarkers();
       playSfx(this, SFX.waveClear);
-      crossfadeMusic(this, MUSIC.village); // dawn: back to the village music
+      this.playCalmMusic(); // the wave is beaten: back to the day / night ambience
     });
     on('gameOver', (d) => this.onGameOver(d));
   }
@@ -865,6 +1260,7 @@ export class GameScene extends Phaser.Scene {
     if (this.placement) this.endPlacement();
     this.setEditMode(false);
     stopMusic();
+    stopAmbience();
     playSfx(this, SFX.gameOver);
     this.cameras.main.shake(400, 0.006);
     this.time.delayedCall(1400, () => {
@@ -889,7 +1285,8 @@ export class GameScene extends Phaser.Scene {
 
   syncViews() {
     const gs = this.gs;
-    this.syncList(gs.buildings, this.views.buildings, (b) => (b.type === 'wall' ? new WallView(this, b) : new BuildingView(this, b)));
+    this.layoutList = this.layoutBuildings(); // the draft layout in edit mode
+    this.syncList(this.layoutList, this.views.buildings, (b) => (b.type === 'wall' ? new WallView(this, b) : new BuildingView(this, b)));
     this.syncList(gs.enemies.filter((e) => e.alive), this.views.enemies, (e) => new EnemyView(this, e));
     this.syncList(gs.projectiles, this.views.projectiles, (p) => new ProjectileView(this, p));
     this.syncList(gs.pools || [], this.views.pools, (p) => new PoolView(this, p));

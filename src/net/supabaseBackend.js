@@ -27,7 +27,9 @@ export function friendlyError(error) {
   const rules = [
     [/invalid login credentials/i, 'Wrong email or password.'],
     [/already registered|already been registered|user_already_exists/i, 'That email already has an account. Log in instead.'],
-    [/password should be at least|password is too short|weak_password/i, 'Password must be at least 6 characters.'],
+    [/password should|password is too short|weak_password|weak password/i, 'Password must be at least 8 characters, with a letter and a number.'],
+    [/captcha/i, 'The \u201cI\u2019m human\u201d check failed or expired. Try it again.'],
+    [/email rate limit|over_email_send_rate_limit/i, 'Too many emails were sent. Wait a few minutes and try again.'],
     [/database error saving new user|profiles_username|username_format/i, 'That username is taken or not allowed.'],
     [/email not confirmed/i, 'Confirm your email first (check your inbox), then log in.'],
     [/unable to validate email|invalid format|email address .* is invalid/i, 'That email address doesn’t look right.'],
@@ -38,6 +40,13 @@ export function friendlyError(error) {
   ];
   for (const [re, text] of rules) if (re.test(msg)) return new Error(text);
   return new Error(msg || 'Something went wrong.');
+}
+
+/** The game's own address (the confirmation link comes back here). */
+function gameUrl() {
+  if (typeof location === 'undefined') return undefined;
+  const base = (import.meta.env && import.meta.env.BASE_URL) || '/';
+  return location.origin + base;
 }
 
 function check({ data, error }) {
@@ -72,16 +81,29 @@ export class SupabaseBackend {
     return !!check(await this.db.rpc('username_available', { name }));
   }
 
-  /** Returns { user } when signed straight in, or { needsConfirm: true } if Supabase wants the email confirmed. */
-  async signUp({ email, password, username }) {
-    const data = check(await this.db.auth.signUp({ email, password, options: { data: { username } } }));
+  /**
+   * Returns { user } when signed straight in, or { needsConfirm: true } when Supabase emails a confirmation
+   * link first. (With confirmation on, an email that already has an account gets the same answer, so
+   * sign-up never reveals who has an account.) The link brings the player back to the game, logged in.
+   */
+  async signUp({ email, password, username, captchaToken = null }) {
+    const options = { data: { username }, emailRedirectTo: gameUrl() };
+    if (captchaToken) options.captchaToken = captchaToken;
+    const data = check(await this.db.auth.signUp({ email, password, options }));
     if (!data.session) return { needsConfirm: true };
     return { user: await this.profileFor(data.user) };
   }
 
-  async signIn({ email, password }) {
-    const data = check(await this.db.auth.signInWithPassword({ email, password }));
+  async signIn({ email, password, captchaToken = null }) {
+    const data = check(await this.db.auth.signInWithPassword({ email, password, options: captchaToken ? { captchaToken } : {} }));
     return { user: await this.profileFor(data.user) };
+  }
+
+  /** Send the sign-up confirmation email again. */
+  async resendConfirmation(email, captchaToken = null) {
+    const options = { emailRedirectTo: gameUrl() };
+    if (captchaToken) options.captchaToken = captchaToken;
+    check(await this.db.auth.resend({ type: 'signup', email, options }));
   }
 
   async signOut() {

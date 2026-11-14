@@ -68,11 +68,11 @@ describe('achievements', () => {
   });
 
   it('estimates the furthest wave of a village played before waves were tracked', () => {
-    expect(estimateBestWave(null, 10)).toBe(0);
-    expect(estimateBestWave({ townHallLevel: 4, wavesCleared: 0 }, 10)).toBe(0);
-    expect(estimateBestWave({ townHallLevel: 1, wavesCleared: 1 }, 10)).toBe(1);
-    expect(estimateBestWave({ townHallLevel: 6, wavesCleared: 7 }, 10)).toBe(5);
-    expect(estimateBestWave({ townHallLevel: 10, wavesCleared: 12, nightsAtMaxTownHall: 0 }, 10)).toBe(9);
-    expect(estimateBestWave({ townHallLevel: 10, wavesCleared: 14, nightsAtMaxTownHall: 3 }, 10)).toBe(12);
+    // Waves are numbered in the order they're fought, so the furthest one survived is the count cleared.
+    expect(estimateBestWave(null)).toBe(0);
+    expect(estimateBestWave({ townHallLevel: 4, wavesCleared: 0 })).toBe(0);
+    expect(estimateBestWave({ townHallLevel: 1, wavesCleared: 1 })).toBe(1);
+    expect(estimateBestWave({ townHallLevel: 6, wavesCleared: 7 })).toBe(7);
+    expect(estimateBestWave({ townHallLevel: 10, wavesCleared: 14, nightsAtMaxTownHall: 3 })).toBe(14);
   });
 });

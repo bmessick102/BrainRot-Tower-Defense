@@ -6,7 +6,7 @@
 //   - Workers walk to a spot beside their mine (or the building they're repairing) and work there.
 //   - Gnomes without a job wander, spreading out across the village: each favors its own direction from
 //     the hall (evenly spaced, reshuffled every morning) and picks spots away from the others.
-//   - Shortly before dusk everyone goes home; during an attack, repairers rush out and back.
+//   - When a wave starts everyone goes home; during an attack, repairers rush out and back.
 //   - A gnome whose house is destroyed runs to the Village Hall and hides there until it's rebuilt.
 import { CONFIG } from '../config.js';
 import { gridToScreen } from '../logic/iso.js';
@@ -21,7 +21,6 @@ import { floatText } from './Effects.js';
 export { villagersShouldBeOut };
 
 export const VILLAGER_SETTINGS = {
-  homeLeadSeconds: CONFIG.villagers.homeLeadSeconds, // start heading home this long before dusk
   walkSpeed: CONFIG.villagers.walkSpeed, // tiles per second: wandering, walking to work, carrying gold
   hurrySpeed: 1.5,      // rushing to a repair, home, or to shelter
   wanderRadius: 11,     // tiles from the Village Hall's center (most of the village)
@@ -385,7 +384,8 @@ export class Villagers {
   draw(time) {
     for (const g of this.gnomes.values()) {
       const s = g.sprite;
-      if (g.state === 'inside') { s.setVisible(false); g.coin.setVisible(false); continue; }
+      // Hidden while the layout editor rearranges the village (they'd walk the old layout).
+      if (g.state === 'inside' || this.scene.editMode) { s.setVisible(false); g.coin.setVisible(false); continue; }
       const moving = g.state === 'walking' || g.state === 'returning';
       const working = g.state === 'working';
       const p = gridToScreen(g.x, g.y);

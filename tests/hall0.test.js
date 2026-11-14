@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest';
 import { CONFIG } from '../src/config.js';
 import { levelStats, limitFor, upgradeCost, checkUpgrade, applyLevelUp, buildableCount } from '../src/logic/buildings.js';
 import { getCapacity } from '../src/logic/economy.js';
-import { isClockRunning, earlyCallSkip } from '../src/logic/dayNight.js';
+import { isClockRunning, canStartWave } from '../src/logic/dayNight.js';
 import { gnomeRoster } from '../src/logic/villagers.js';
 import { advanceTutorial, applyStarterBase } from '../src/logic/tutorial.js';
 import { serializeGame, validateSave, deserializeGame } from '../src/logic/save.js';
@@ -23,7 +23,7 @@ describe('the ruined Village Hall (level 0)', () => {
     expect(buildableCount(s)).toBe(0);
     expect(gnomeRoster(s)).toHaveLength(0);
     expect(isClockRunning(s)).toBe(false);
-    expect(earlyCallSkip(s)).toBeNull(); // no Start Wave button either
+    expect(canStartWave(s)).toBe(false); // no Start Wave button either
     expect(getCapacity(s)).toBe(CONFIG.townHall.ruin.capacity);
   });
 

@@ -25,7 +25,7 @@ export class AchievementTracker {
       const stages = CONFIG.defenses.ra ? CONFIG.defenses.ra.stages.length : 0;
       if (d.stage === stages - 1) bump('rahMax');
     });
-    on('waveCalledEarly', () => bump('early'));
+    on('waveQuickStarted', () => bump('early')); // Start Wave within rules.quickStartSeconds of the last clear
     on('mineCollected', (d) => bump('mined', d.amount || 0));
     on('gnomeDelivered', (d) => bump('mined', d.added || 0));
     on('waveStarted', () => { this.lostTonight = 0; });

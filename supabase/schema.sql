@@ -8,6 +8,12 @@
 --   player_stats  a player reads / writes only their own; best wave and best Village Hall never go down
 --   achievements  a player reads / records / claims only their own
 --   get_leaderboard()  top players by furthest wave: username, best wave, best Village Hall (no emails)
+--
+-- Anti-cheat (the game runs in the player's browser, so the database checks what it's told):
+--   a village's best wave can't be higher than its Village Hall level (up to 10); past wave 10 it only goes
+--   up one wave per night the database itself has counted, and it counts at most one night per 30 seconds
+--   of real time (no real night is that fast). A player's leaderboard wave can't be higher than their
+--   villages back up. A village imported with history counts for at most its Village Hall level.
 
 -- ---------------------------------------------------------------- tables
 create table if not exists public.profiles (
@@ -32,6 +38,13 @@ create table if not exists public.bases (
   constraint bases_save_size check (pg_column_size(save) < 512000 and pg_column_size(checkpoint) < 512000)
 );
 create index if not exists bases_user on public.bases (user_id);
+-- Kept by the database only (check_base), never by the game:
+alter table public.bases add column if not exists verified_cleared int not null default 0; -- nights counted so far
+alter table public.bases add column if not exists max_nights int not null default 0;       -- of those, at Village Hall 10
+alter table public.bases add column if not exists last_night_at timestamptz;               -- when the last one was counted
+-- Villages from before these columns existed start counted as they are (runs once: before the check trigger exists).
+update public.bases set verified_cleared = greatest(coalesce((save ->> 'wavesCleared')::int, 0), 0), last_night_at = now()
+  where last_night_at is null;
 
 create table if not exists public.player_stats (
   user_id uuid primary key default auth.uid() references auth.users (id) on delete cascade,
@@ -85,10 +98,68 @@ drop trigger if exists bases_limit on public.bases;
 create trigger bases_limit before insert on public.bases
   for each row execute function public.limit_bases();
 
+-- ---------------------------------------------------------------- villages: anti-cheat
+-- Village Hall 10 is the top level (CONFIG.rules.maxTownHallLevel); 30 s is the fastest a night can count.
+create or replace function public.check_base()
+returns trigger language plpgsql set search_path = '' as $$
+declare
+  th int;
+  cleared int;
+  credit int := 0;
+  supported int;
+begin
+  th := least(greatest(coalesce((new.save ->> 'townHallLevel')::int, 0), 0), 10);
+  cleared := greatest(coalesce((new.save ->> 'wavesCleared')::int, 0), 0);
+  new.town_hall := th;
+  if tg_op = 'INSERT' then
+    -- A village that starts with history (imported from a browser) can't be checked:
+    -- it counts for at most its Village Hall level.
+    new.verified_cleared := cleared;
+    new.max_nights := 0;
+    new.last_night_at := now();
+    new.best_wave := case when cleared > 0 then least(greatest(new.best_wave, 0), th) else 0 end;
+    return new;
+  end if;
+  new.user_id := old.user_id;
+  new.created_at := old.created_at;
+  new.max_nights := old.max_nights;
+  new.last_night_at := old.last_night_at;
+  -- Fewer nights than counted (an older save came back): count from there.
+  new.verified_cleared := least(old.verified_cleared, cleared);
+  if cleared > new.verified_cleared then
+    -- Nights not counted yet: at most one per 30 s since the last counted one, and 5 per save.
+    credit := least(cleared - new.verified_cleared, 5,
+      floor(extract(epoch from (now() - coalesce(old.last_night_at, old.created_at))) / 30)::int);
+  end if;
+  if credit > 0 then
+    new.verified_cleared := new.verified_cleared + credit;
+    new.last_night_at := now();
+    if th >= 10 then new.max_nights := old.max_nights + credit; end if;
+    -- The furthest wave this village can have survived: its Village Hall level, then one per counted night at the top.
+    supported := case when th < 10 then th else 9 + greatest(new.max_nights, 1) end;
+    new.best_wave := greatest(old.best_wave, least(greatest(new.best_wave, 0), supported));
+  else
+    new.best_wave := old.best_wave; -- no newly counted night: the best can't move
+  end if;
+  return new;
+end $$;
+
+drop trigger if exists bases_check on public.bases;
+create trigger bases_check before insert or update on public.bases
+  for each row execute function public.check_base();
+
 -- ---------------------------------------------------------------- stats: bests only go up
+-- ... and never past what the player's villages back up (their best_wave / town_hall, checked above).
 create or replace function public.keep_bests()
 returns trigger language plpgsql set search_path = '' as $$
+declare
+  cap_wave int;
+  cap_hall int;
 begin
+  select coalesce(max(best_wave), 0), coalesce(max(town_hall), 0) into cap_wave, cap_hall
+    from public.bases where user_id = new.user_id;
+  new.best_wave := least(greatest(new.best_wave, 0), cap_wave);
+  new.best_town_hall := least(greatest(new.best_town_hall, 0), cap_hall, 10);
   if tg_op = 'INSERT' then
     new.reached_at := case when new.best_wave > 0 then now() end;
   elsif new.best_wave > old.best_wave then
@@ -168,3 +239,5 @@ revoke execute on function public.username_available(text) from public;
 grant execute on function public.username_available(text) to anon, authenticated;
 revoke execute on function public.handle_new_user() from public, anon, authenticated;
 revoke execute on function public.limit_bases() from public, anon, authenticated;
+revoke execute on function public.check_base() from public, anon, authenticated;
+revoke execute on function public.keep_bests() from public, anon, authenticated;

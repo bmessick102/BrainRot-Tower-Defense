@@ -2,13 +2,16 @@
 import { CONFIG } from '../config.js';
 import { isWaveActive, nextId } from './util.js';
 import { canPlaceRect, footprintsOverlap, fpW, fpH } from './grid.js';
+import { ABILITIES, picksForLevel } from '../abilityConfig.js';
 
 // Every building type (saves only accept these). New types must be added here too; a test checks that the
 // defense / economy / wall lists are all covered.
-export const BUILDING_TYPES = ['townHall', 'mine', 'storage', 'house', 'cannon', 'archer', 'mortar', 'wizard', 'firework', 'mousetrap', 'flock', 'catapult', 'ra', 'wall'];
+export const BUILDING_TYPES = ['townHall', 'mine', 'storage', 'house', 'cannon', 'archer', 'mortar', 'wizard', 'firework', 'mousetrap', 'flock', 'catapult', 'ra', 'rvlab', 'wall'];
 export const DEFENSE_TYPES = ['cannon', 'archer', 'mortar', 'wizard', 'firework', 'mousetrap', 'flock', 'catapult', 'ra'];
 export const ECONOMY_TYPES = ['mine', 'storage', 'house'];
 export const WALL_TYPES = ['wall'];
+// Research buildings (the RV Lab: researches the defenses' ability paths, see abilities.js).
+export const RESEARCH_TYPES = ['rvlab'];
 /** Wall orientations: 'x' runs along columns (N wide, 1 tall), 'y' along rows (1 wide, N tall). */
 export const WALL_ORIENTS = ['x', 'y'];
 
@@ -44,6 +47,7 @@ export function typeConfig(type) {
   if (type === 'storage') return CONFIG.storage;
   if (type === 'house') return CONFIG.house;
   if (type === 'wall') return CONFIG.walls;
+  if (type === 'rvlab') return CONFIG.rvlab;
   return CONFIG.defenses[type];
 }
 
@@ -103,8 +107,19 @@ export function levelStats(type, level) {
   return typeConfig(type).levels[level - 1];
 }
 
+/** Health multiplier from ability tiers (Cannon Thick Walls: hpPct). Read straight from the trees (no import loop). */
+function hpBonus(b) {
+  const tree = ABILITIES[b.type];
+  if (!tree || !b.picks || !b.picks.length) return 1;
+  let pct = 0;
+  b.picks.forEach((p, i) => { pct += (tree[p] && tree[p].tiers[i].fx.hpPct) || 0; });
+  return 1 + pct / 100;
+}
+
 export function maxHp(b) {
-  return levelStats(b.type, b.level).hp;
+  const hp = levelStats(b.type, b.level).hp;
+  const k = hpBonus(b);
+  return k === 1 ? hp : Math.round(hp * k);
 }
 
 export function maxLevel(type) {
@@ -186,6 +201,9 @@ export function checkUpgrade(state, b) {
   if (b.type !== 'townHall' && b.level >= townHallLevel(state)) {
     return { ok: false, reason: `Requires VH${b.level + 1}`, cost };
   }
+  // Some levels need a higher Village Hall than that (the RV Lab: level N needs VH N+3).
+  const needVH = levelStats(b.type, b.level + 1).townHall;
+  if (needVH && townHallLevel(state) < needVH) return { ok: false, reason: `Requires VH${needVH}`, cost };
   if (isWaveActive(state)) return { ok: false, reason: 'Not during a wave', cost };
   if (b.destroyed) return { ok: false, reason: 'Destroyed', cost };
   if (state.gold < cost) return { ok: false, reason: needGoldReason(cost, state.gold), cost };
@@ -210,6 +228,8 @@ export function createBuilding(state, type, col, row, level = 1, id = null, orie
   else b.size = buildingSize(type); // square buildings keep `size` too (w = h = size)
   if (type === 'mine') b.stock = 0;
   if (isDefense(type)) { b.cooldown = 0; b.targetId = null; }
+  // RV Lab abilities: every building of a type gets its picks (as far as its level allows).
+  if (ABILITIES[type]) b.picks = picksForLevel(state && state.research, type, level);
   return b;
 }
 

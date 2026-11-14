@@ -1,14 +1,15 @@
 // Draws one wall (a single tile).
-// Wall art is one pillar per 2 levels (bld_wall_lv1..5: wooden post, banded post, stone block, riveted block,
-// gold-trimmed block), all cropped to one shared box so every level keeps the same scale and baseline.
+// Wall art is one pillar per level (bld_wall_lv1..7: wooden post, banded post, stone block, riveted block,
+// gold-trimmed block, skull fortress block, lava block), all cropped to one shared box so every level keeps the
+// same scale and baseline.
 // Walls are drawn as one connected wall: every wall tile has a pillar standing on its center, and wherever
 // two walls are side by side (in any direction: lines, corners, T-junctions, walls running alongside each
 // other) connecting pillars stand evenly between them (more for thin wooden posts, fewer for thick stone;
 // wallLinksFor), so neighboring pillars always overlap into a continuous wall.
 // Each wall draws its own pillar and the connectors leading forward (down-screen) from it, so every
 // connector is drawn once and everything is layered back to front.
-// A destroyed wall shows a rubble pile on its tile: broken wooden posts for levels 1-2, broken stone for
-// 3-10 (WALL_RUBBLE). Without wall art it's one placeholder sprite per tile.
+// A destroyed wall shows a rubble pile on its tile: broken wooden posts for level 1, broken stone for 2-5,
+// skull rubble for 6 and lava rubble for 7 (WALL_RUBBLE, in BuildingView.js). Without wall art it's one placeholder sprite per tile.
 // Ground enemies still layer correctly against it: depth.js treats each wall's tile as a building.
 // Same interface as BuildingView (sync, flash, pop, setAlpha, topCenter, hitTest, destroy, sprite).
 import { gridToScreen } from '../logic/iso.js';
@@ -17,20 +18,21 @@ import { buildingTiles, fpW, fpH } from '../logic/grid.js';
 import { MAP } from '../mapTiles.js';
 import { WALL_ART_META } from '../wallArtMeta.js';
 import { HealthBar, HP_TEAM } from './HealthBar.js';
-import { buildingTextureKey, spriteHit, startPop, footprintRipple, artTier } from './BuildingView.js';
+import { buildingTextureKey, spriteHit, startPop, footprintRipple, WALL_RUBBLE } from './BuildingView.js';
+
+export { WALL_RUBBLE };
 
 const FLASH_MIN_GAP_MS = 400;
 // On-screen width of the shared pillar box (the widest pillar, the stone blocks), as a share of a tile's
-// width. Walls start small and grow like buildings: only on the levels that keep the same picture (2, 4, 6,
-// 8, 10), in equal steps from min (Level 1) to max (Level 10), so an upgrade to a new picture never jumps
-// in size. Pillars stand half a tile apart along a wall, so even the smallest overlap into a solid wall.
-export const PILLAR_WIDTH = { min: 0.44, max: 0.6, maxLevel: 10 };
+// width. Walls start small and grow a little with each level (each level is a new picture), in equal steps
+// from min (Level 1) to max (Level 7). Pillars stand half a tile apart along a wall, so even the smallest
+// overlap into a solid wall.
+export const PILLAR_WIDTH = { min: 0.44, max: 0.6, maxLevel: 7 };
 
 /** Pillar box width (share of a tile) for a wall level. */
 export function wallPillarWidth(level) {
-  const steps = (lvl) => { let n = 0; for (let l = 2; l <= lvl; l++) if (artTier(l) === artTier(l - 1)) n++; return n; };
-  const total = steps(PILLAR_WIDTH.maxLevel);
-  const t = total ? steps(Math.max(1, Math.min(PILLAR_WIDTH.maxLevel, level))) / total : 0;
+  const top = PILLAR_WIDTH.maxLevel;
+  const t = (Math.max(1, Math.min(top, level)) - 1) / (top - 1);
   return PILLAR_WIDTH.min + (PILLAR_WIDTH.max - PILLAR_WIDTH.min) * t;
 }
 
@@ -52,11 +54,6 @@ export function placeWallPillar(sprite, x, y, depth, level = 1) {
   sprite.setDepth(depth);
 }
 
-// Rubble art for destroyed walls, by level (the first entry whose maxLevel covers the wall's level).
-export const WALL_RUBBLE = [
-  { maxLevel: 2, key: 'bld_wall_rubble_wood' },   // the wooden posts
-  { maxLevel: 10, key: 'bld_wall_rubble_stone' }  // the steel-banded posts on stone bases, and the stone blocks
-];
 const RUBBLE_WIDTH = 0.92; // share of a tile's width
 
 /** The rubble picture for a destroyed wall of this level, or null if that art isn't loaded. */
@@ -170,7 +167,8 @@ export class WallView {
     if (this.flashUntil && time > this.flashUntil) this.flashUntil = 0;
     if (this.pillars) {
       // Its pillar plus the connectors to the walls it touches.
-      const parts = wallParts(wallTiles(this.scene.gs ? this.scene.gs.buildings : [b]), b, wallLinksFor(key, b.level));
+      // Joined to its neighbors as the map shows them (the draft layout while editing).
+      const parts = wallParts(wallTiles(this.scene.layoutList || (this.scene.gs ? this.scene.gs.buildings : [b])), b, wallLinksFor(key, b.level));
       this.ensureSprites(parts.length, key);
       parts.forEach((part, i) => {
         const s = this.tiles[i];

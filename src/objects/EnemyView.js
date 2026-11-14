@@ -2,6 +2,7 @@
 // exists) an attack pose on each hit and a death pose left where it falls.
 // Placeholder shapes draw at their own size. Real art (art-source/enemies/) is scaled to DISPLAY_HEIGHT,
 // flipped to face the way it's walking (draw it facing right), and flyers get a ground shadow.
+import { darkness } from './DayNight.js';
 import { gridToScreen } from '../logic/iso.js';
 import { isAirKind, LANDING_SECONDS } from '../logic/enemies.js';
 import { enemyKey, TEX } from '../assetKeys.js';
@@ -32,6 +33,7 @@ const HIDDEN_ALPHA = 0.38;
 const HIDDEN_SHIMMER = 0.07;
 // Enemies of a wave that has stalled too long (see src/logic/enrage.js) are tinted this red.
 const ENRAGED_TINT = 0xff7a6a;
+const RESTLESS_TINT = 0xffc2b8; // night attackers (restless nights)
 /** Multiply two 0xRRGGBB colors channel by channel. */
 function mulColor(a, b) {
   const ch = (s) => Math.round((((a >> s) & 255) * ((b >> s) & 255)) / 255) << s;
@@ -39,7 +41,7 @@ function mulColor(a, b) {
 }
 // Wall jumpers arc up this high while they're over a wall.
 const HOP_HEIGHT = 30;
-// Night visibility: a soft warm glow around each enemy, fading in with the night.
+// Night visibility: a soft warm glow around each enemy, only once it's dark (DARK_AT), fading in from there.
 const NIGHT_GLOW_ALPHA = 0.75;
 const NIGHT_GLOW_COLOR = 0xffb36b;
 
@@ -79,7 +81,10 @@ export class EnemyView {
     const bob = this.air ? Math.sin(time * 0.004 + this.phase) * 2 : -Math.abs(Math.sin(time * 0.012 + this.phase)) * 2;
     this.hop += ((e.overWall ? HOP_HEIGHT : 0) - this.hop) * 0.3;
     const fall = e.landing > 0 ? (e.landing / LANDING_SECONDS) * DROP_HEIGHT : 0; // a dropped Neegy floating down
-    this.sprite.setPosition(s.x, s.y + bob - this.lift - this.hop - fall);
+    // Firework Grounding Burst: a flyer knocked down drops to the ground (and floats back up after).
+    this.groundedLift = this.groundedLift ?? 0;
+    this.groundedLift += ((e.grounded > 0 ? this.lift : 0) - this.groundedLift) * 0.25;
+    this.sprite.setPosition(s.x, s.y + bob - this.lift + this.groundedLift - this.hop - fall);
     // Ground enemies use the shared draw-order rule so they never vanish behind a building they're in front of.
     const depth = this.air ? e.x + e.y + 1000 : groundDepth(this.scene.gs ? this.scene.gs.buildings : [], e.x, e.y);
     this.sprite.setDepth(depth);
@@ -105,11 +110,19 @@ export class EnemyView {
     if (!this.flashUntil) {
       // Moonlit at night; a stalled wave's enraged enemies also glow angry red.
       const base = this.scene.ambientTint ?? 0xffffff;
-      this.sprite.setTint(this.scene.gs && this.scene.gs.wave && this.scene.gs.wave.enraged ? mulColor(base, ENRAGED_TINT) : base);
+      // Hacked by a F.L.O.C.K Override: purple. Dazzled by Showstopper: a pale flicker.
+      if (e.hackedT > 0) this.sprite.setTint(mulColor(base, 0xc58cff));
+      else if (e.disarmT > 0 && Math.sin(time * 0.03) > 0) this.sprite.setTint(mulColor(base, 0xfff3b0));
+      else {
+        const w = this.scene.gs && this.scene.gs.wave;
+        // Enraged (a stalled wave): angry red. Restless (attacking at night): a lighter red flush.
+        this.sprite.setTint(w && w.enraged ? mulColor(base, ENRAGED_TINT) : w && w.restless ? mulColor(base, RESTLESS_TINT) : base);
+      }
     }
-    const night = this.scene.night || 0;
-    this.glow.setVisible(night > 0.01);
-    if (night > 0.01) {
+    const dark = darkness(this.scene.night || 0); // 0 until it's dark enough, then up to 1
+    const night = dark;
+    this.glow.setVisible(dark > 0.01);
+    if (dark > 0.01) {
       const w = Math.max(48, this.sprite.displayWidth * 1.5);
       const cy = this.air ? s.y - this.lift - this.sprite.displayHeight * 0.4 : s.y - 4;
       this.glow.setPosition(s.x, cy).setDisplaySize(w, this.air ? w * 0.8 : w * 0.55)

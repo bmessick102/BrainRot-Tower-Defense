@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach } from 'vitest';
-import { Session, MAX_BASES, saveWave } from '../src/net/session.js';
+import { Session, MAX_BASES, saveWave, passwordProblem } from '../src/net/session.js';
 import { LocalBackend } from '../src/net/localBackend.js';
 import { serializeGame, loadGame, writeGame, SAVE_KEYS } from '../src/logic/save.js';
 import { makeStateWithTownHall } from './helpers.js';
@@ -23,6 +23,15 @@ function manualTimers() {
 
 const village = (th = 3, gold = 500) => serializeGame(makeStateWithTownHall({ gold, wavesCleared: 2, tutorialStep: 11, tutorialDone: true }, th));
 
+describe('new passwords', () => {
+  it('need 8+ characters with a letter and a number', () => {
+    expect(passwordProblem('abc12')).toMatch(/at least 8/);
+    expect(passwordProblem('abcdefgh')).toMatch(/letter and one number/);
+    expect(passwordProblem('12345678')).toMatch(/letter and one number/);
+    expect(passwordProblem('brainrot67')).toBe('');
+  });
+});
+
 describe('Session (accounts, villages, sync)', () => {
   let device, backend, timers, session;
   const make = () => new Session({ backend, storage: device, timers });
@@ -32,7 +41,7 @@ describe('Session (accounts, villages, sync)', () => {
     backend = new LocalBackend(memoryStorage()); // "the server" (its own storage)
     timers = manualTimers();
     session = make();
-    await session.signUp('ann@example.com', 'secret1', 'Ann');
+    await session.signUp('ann@example.com', 'secret123', 'Ann');
   });
 
   it('signs up into an empty account, logs out, and logs back in', async () => {
@@ -42,7 +51,7 @@ describe('Session (accounts, villages, sync)', () => {
     await session.signOut();
     expect(session.loggedIn).toBe(false);
     await expect(session.signIn('ann@example.com', 'wrong!')).rejects.toThrow(/Wrong email or password/);
-    await session.signIn('ann@example.com', 'secret1');
+    await session.signIn('ann@example.com', 'secret123');
     expect(session.user.username).toBe('Ann');
   });
 
@@ -69,6 +78,16 @@ describe('Session (accounts, villages, sync)', () => {
     expect(remote.save.gold).toBe(777);
     expect(remote.townHall).toBe(4);
     expect(JSON.parse(device.getItem(`ibtd.cloud.${b.id}`)).dirty).toBe(false);
+  });
+
+  it('renames a village (trimmed, length-capped, saved on the server)', async () => {
+    const b = await session.createBase('Home');
+    await session.renameBase(b.id, '  67 City  ');
+    expect(session.baseById(b.id).name).toBe('67 City');
+    expect((await backend.listBases())[0].name).toBe('67 City');
+    await session.renameBase(b.id, 'x'.repeat(40));
+    expect(session.baseById(b.id).name.length).toBe(20);
+    await expect(session.renameBase(b.id, '   ')).rejects.toThrow(/Type a name/);
   });
 
   it('each village keeps its own save and checkpoint', async () => {
@@ -131,7 +150,26 @@ describe('Session (accounts, villages, sync)', () => {
     expect(device.getItem(SAVE_KEYS.save)).not.toBe(null);   // the original stays on the device
     expect(session.legacyVillage()).toBe(null);              // but isn't offered again
     expect(session.stats.bestTownHall).toBe(6);
-    expect(session.stats.bestWave).toBe(5);
+    expect(session.stats.bestWave).toBe(2); // its waves cleared
+  });
+
+  it('finds villages anywhere in this browser: the New Game backup and browser-only (dev) accounts', async () => {
+    const backup = { ...village(4, 400), savedAt: '2026-11-01T00:00:00.000Z' };
+    const dev = { ...village(7, 700), savedAt: '2026-11-10T00:00:00.000Z' };
+    device.setItem('ibtd.save.backup', JSON.stringify(backup));
+    device.setItem('ibtd.dev.db', JSON.stringify({ users: [{ id: 'u1', username: 'Old' }], bases: [{ id: 'b1', userId: 'u1', name: 'Kingdom', save: dev, checkpoint: null }, { id: 'b2', userId: 'u1', name: 'Same', save: dev }] }));
+    device.setItem(SAVE_KEYS.save, '{ broken');
+    const found = session.deviceVillages();
+    expect(found.map((v) => [v.key, v.save.gold])).toEqual([['dev:b1', 700], ['backup', 400]]); // newest first, copies once, broken skipped
+    expect(found[0].source).toMatch(/Old/);
+    await session.importLegacy('Kingdom', 'dev:b1');
+    expect(loadGame(session.storage).data.gold).toBe(700);
+    expect(session.deviceVillages().map((v) => v.key)).toEqual(['backup']);
+    // Another account on the same browser can still import it.
+    await session.signOut();
+    const other = make();
+    await other.signUp('cat@example.com', 'secret789', 'Cat');
+    expect(other.deviceVillages().map((v) => v.key)).toEqual(['dev:b1', 'backup']);
   });
 
   it('stats keep their best, and earned / claimed achievements reach the server', async () => {
@@ -183,9 +221,9 @@ describe('Session (accounts, villages, sync)', () => {
     await session.createBase('Ann’s');
     await session.signOut();
     const bob = make();
-    await bob.signUp('bob@example.com', 'secret2', 'Bob');
+    await bob.signUp('bob@example.com', 'secret456', 'Bob');
     expect(bob.bases).toEqual([]);
-    await expect(bob.signUp('ann@example.com', 'x123456', 'Ann2')).rejects.toThrow(/already has an account/);
+    await expect(bob.signUp('ann@example.com', 'xpass1234', 'Ann2')).rejects.toThrow(/already has an account/);
     expect(await backend.usernameAvailable('ann')).toBe(false); // names are unique ignoring case
   });
 });

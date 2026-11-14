@@ -76,7 +76,7 @@ describe('Villager Houses and gnome workers', () => {
     expect(w.phase).toBe('mining');
   });
 
-  it('a gnome sent home keeps what is in its sack', () => {
+  it('a gnome called away to repair keeps what is in its sack', () => {
     const s = play();
     addBuilding(s, 'house', 13, 11);
     const mine = addBuilding(s, 'mine', 9, 16);
@@ -84,7 +84,7 @@ describe('Villager Houses and gnome workers', () => {
     stepGnomeMining(s, 5, jobs);
     const id = [...jobs.values()].find((g) => g.task === 'mine').id;
     const sack = s._gnomeWork.get(id).sack;
-    s.clock = { phase: 'dusk', t: 1 };
+    s.wave.phase = 'active';
     stepGnomeMining(s, 5, assignGnomes(s));
     expect(s._gnomeWork.get(id).sack).toBe(sack);
   });
@@ -125,13 +125,12 @@ describe('Villager Houses and gnome workers', () => {
     expect(heal(5)).toBeGreaterThan(heal(1));
   });
 
-  it('nobody works in the evening before the wave (they are home)', () => {
-    const s = play({ clock: { phase: 'dusk', t: 1 } });
+  it('gnomes keep mining at night when no wave is on (the time of day changes nothing)', () => {
+    const s = play({ clock: { phase: 'night', t: 10 } });
     addBuilding(s, 'mine', 9, 16);
     addBuilding(s, 'house', 13, 11, 5);
-    s.wave.phase = 'countdown';
-    expect(villageMode(s)).toBe('home');
-    expect([...assignGnomes(s).values()].every((g) => g.task === 'inside')).toBe(true);
+    expect(villageMode(s)).toBe('work');
+    expect([...assignGnomes(s).values()].some((g) => g.task === 'mine')).toBe(true);
   });
 
   it('gnomes from a destroyed house stop working and shelter in the Village Hall', () => {

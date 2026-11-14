@@ -1,6 +1,6 @@
 // Player-facing descriptions shown on the building panel's Info tab. Names live in config.js.
 export const BUILDING_DESCRIPTIONS = {
-  townHall: 'The heart of your village. It holds some Bitcoin and unlocks new buildings as it levels up, but every upgrade makes the nightly attacks tougher. If it falls, the night is lost.',
+  townHall: 'The heart of your village. It holds some Bitcoin and unlocks new buildings as it levels up, but every upgrade makes the attacks tougher. If it falls, the wavht is lost.',
   mine: 'Mines Bitcoin around the clock. Click it when the coin appears to collect what it has stored. It stops when its stock is full. You can\'t collect during a wave.',
   house: "Home to a family of gnome workers. By day they mine extra gold and carry it to storage; during attacks they patch up buildings. If the house falls, they hide in the Village Hall until you rebuild it.",
   storage: 'A vault that raises how much Bitcoin you can hold. Enemies that hit it steal a share of the gold inside.',
@@ -13,5 +13,6 @@ export const BUILDING_DESCRIPTIONS = {
   mousetrap: "A hidden trap enemies can't see: they walk right over it. When a ground enemy steps on it, it snaps, hurting every ground enemy nearby and holding them in place. It works once per wave and resets after. Flyers don't trigger it.",
   ra: "The Tower of Rah stares down the toughest enemy in range and burns it with a beam from its head. The longer it holds the beam on one enemy, the hotter it gets: 3x damage after 2 seconds, 8x after 5. Hits ground and air.",
   flock: "A watchtower bristling with cameras. It never attacks, but every enemy in its range is marked and takes extra damage from all your defenses, and invisible enemies are revealed. Towers don't stack: a marked enemy takes the strongest bonus.",
+  rvlab: "A film crew's RV turned into a research lab. Inside, you research new abilities for your defenses: three paths for each one, five tiers each. Each RV Lab level unlocks the next tier. Once a tier is researched, every building of that type can buy it from its Abilities button.",
   wall: "A wall tile that joins every wall it touches: wooden posts at first, solid stone once upgraded. Ground enemies walk around walls, or smash through if that's faster. Flyers pass right over.",
 };

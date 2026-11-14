@@ -6,9 +6,18 @@ import { isWaveActive } from '../logic/util.js';
 import { buildingKey, buildingLevelKey, buildingDestroyedKey, TEX } from '../assetKeys.js';
 import { HealthBar, HP_TEAM } from './HealthBar.js';
 import { MAP } from '../mapTiles.js';
-import { textStyle } from '../theme.js';
+import { textStyle, COLORS } from '../theme.js';
+import { drawGlossy } from './uiDraw.js';
+import { darkness } from './DayNight.js';
+import { hasAbilities, picksOf, MAX_TIER, canResearchSomething } from '../logic/abilities.js';
+import { PATH_COLORS } from '../abilityConfig.js';
 
 const OVERLAY_DEPTH = 5000;
+// The label chip: level badge radius, ability pip radius and spacing.
+const CHIP_R = 10, PIP_R = 5, PIP_GAP = 12;
+// Outline of a building hidden behind others.
+const OUTLINE_COLOR = 0xbfefff, OUTLINE_ALPHA = 0.9, OUTLINE_PX = 2.5;
+const OUTLINE_OFFSETS = [[1, 0], [-1, 0], [0, 1], [0, -1], [0.7, 0.7], [-0.7, 0.7], [0.7, -0.7], [-0.7, -0.7]];
 const FLASH_MIN_GAP_MS = 400;
 
 // Night lighting: a pool of light on the ground around each standing building.
@@ -19,7 +28,7 @@ const LIGHT_SPREAD = 2.8;         // pool width in footprints
 const LIGHT_BLEND = 'SCREEN';
 const LIGHT_COLORS = {
   townHall: 0xffa23c, mine: 0x3cb8ff, storage: 0xffb43c, house: 0xffc86b, cannon: 0xff8a3c,
-  archer: 0xff9a3c, mortar: 0xff7a3c, wizard: 0xb066ff, firework: 0xff4d6d, catapult: 0xff5fa8, flock: 0x4cd6ff, mousetrap: 0xffc24a, ra: 0xff7a2a
+  archer: 0xff9a3c, mortar: 0xff7a3c, wizard: 0xb066ff, firework: 0xff4d6d, catapult: 0xff5fa8, flock: 0x4cd6ff, mousetrap: 0xffc24a, ra: 0xff7a2a, rvlab: 0xffd27a
 };
 
 // Shared rubble art for any building without its own bld_<type>_destroyed picture. Every variant that
@@ -40,12 +49,22 @@ export function genericRubbleKeys(scene) {
   return keys;
 }
 
+// Rubble art for destroyed walls, by level (the first entry whose maxLevel covers the wall's level).
+export const WALL_RUBBLE = [
+  { maxLevel: 1, key: 'bld_wall_rubble_wood' },   // the wooden post
+  { maxLevel: 5, key: 'bld_wall_rubble_stone' },  // the steel-banded post on a stone base, and the stone blocks
+  { maxLevel: 6, key: 'bld_wall_rubble_skull' },  // the skull fortress block
+  { maxLevel: 7, key: 'bld_wall_rubble_lava' }    // the lava block
+];
+
 // Each picture covers this many building levels: levels 1-2 use bld_<type>_lv1, 3-4 use _lv2 ... 9-10 use _lv5.
 export const LEVELS_PER_ART = 2;
+// Types with a picture for every level (the RV Lab: 5 levels, 5 pictures; walls: 7 levels, 7 pictures).
+const LEVELS_PER_ART_BY_TYPE = { rvlab: 1, wall: 1 };
 
 /** Which picture (1-based) a building level shows. */
-export function artTier(level) {
-  return Math.ceil(level / LEVELS_PER_ART);
+export function artTier(level, type = null) {
+  return Math.ceil(level / (LEVELS_PER_ART_BY_TYPE[type] ?? LEVELS_PER_ART));
 }
 
 /**
@@ -55,8 +74,8 @@ export function artTier(level) {
  */
 export function buildingTextureKey(scene, type, level, destroyed = false, rubbleRoll = 0) {
   if (destroyed && type === 'wall') {
-    // Walls: wooden rubble for levels 1-2, stone for 3-10 (see WALL_RUBBLE in WallView.js).
-    const k = level <= 2 ? 'bld_wall_rubble_wood' : 'bld_wall_rubble_stone';
+    // Walls: each level range has its own rubble picture (WALL_RUBBLE).
+    const k = (WALL_RUBBLE.find((r) => level <= r.maxLevel) || WALL_RUBBLE[WALL_RUBBLE.length - 1]).key;
     const placeholders = scene.registry.get('placeholderKeys');
     if (scene.textures.exists(k) && !(placeholders && placeholders.has(k))) return k;
   }
@@ -71,7 +90,7 @@ export function buildingTextureKey(scene, type, level, destroyed = false, rubble
   }
   // The Village Hall's starting ruin (level 0) has its own picture.
   if (level === 0 && scene.textures.exists(buildingLevelKey(type, 0))) return buildingLevelKey(type, 0);
-  for (let tier = artTier(level); tier >= 1; tier--) {
+  for (let tier = artTier(level, type); tier >= 1; tier--) {
     const k = buildingLevelKey(type, tier);
     if (scene.textures.exists(k)) return k;
   }
@@ -88,7 +107,8 @@ const DEFAULT_SPRITE_SCALE = 0.75;
 // size it had on a 2x2 footprint).
 // Mousetrap: a flat 1-tile trap, drawn a little wider than its tile.
 // Tower of Rah: a tall, slim tower, drawn narrower than its footprint (it starts small and grows a lot).
-const SPRITE_SCALE = { mortar: 0.65, cannon: 0.63, firework: 0.52, catapult: 0.66, flock: 1.28, mousetrap: 1.1, ra: 0.54 };
+// RV Lab: a long RV on its own paved pad; at 0.7 of its 2x2 footprint it sits in scale with the houses and towers.
+const SPRITE_SCALE = { mortar: 0.65, cannon: 0.63, firework: 0.52, catapult: 0.66, flock: 1.28, mousetrap: 1.1, ra: 0.54, rvlab: 0.7 };
 
 // Buildings grow as they level up: this share of their normal size at Level 1, up to LEVEL_SIZE.max at
 // their top level (Level 10, or Level 6 for the Catapult). They only grow on upgrades that keep the same
@@ -97,17 +117,17 @@ const SPRITE_SCALE = { mortar: 0.65, cannon: 0.63, firework: 0.52, catapult: 0.6
 export const LEVEL_SIZE = { min: 0.95, max: 1.1, maxLevel: 10 };
 
 /** How many levels from 2 up to `level` keep the previous level's picture (the levels that grow). */
-function growthSteps(level) {
+function growthSteps(level, type = null) {
   let n = 0;
-  for (let l = 2; l <= level; l++) if (artTier(l) === artTier(l - 1)) n++;
+  for (let l = 2; l <= level; l++) if (artTier(l, type) === artTier(l - 1, type)) n++;
   return n;
 }
 
 /** Size multiplier for a building level: equal steps on the levels that don't change picture. */
-export function levelSizeFactor(level, topLevel = LEVEL_SIZE.maxLevel) {
+export function levelSizeFactor(level, topLevel = LEVEL_SIZE.maxLevel, type = null) {
   const top = Math.max(1, topLevel);
-  const total = growthSteps(top);
-  const t = total ? growthSteps(Math.max(1, Math.min(top, level))) / total : 0;
+  const total = growthSteps(top, type);
+  const t = total ? growthSteps(Math.max(1, Math.min(top, level)), type) / total : 0;
   return LEVEL_SIZE.min + (LEVEL_SIZE.max - LEVEL_SIZE.min) * t;
 }
 
@@ -126,7 +146,7 @@ export function spriteScale(type) {
  * footprint's center and front corner. Returns that base point (bottom-center of the sprite).
  */
 export function placeBuildingSprite(sprite, col, row, size, type = null, level = 1) {
-  const k = spriteScale(type) * levelSizeFactor(level, topLevelOf(type));
+  const k = spriteScale(type) * levelSizeFactor(level, topLevelOf(type), type);
   const center = gridToScreen(col + size / 2, row + size / 2);
   const front = gridToScreen(col + size, row + size);
   const f = Math.min(1, k); // art wider than its footprint still stands inside it, not past the front corner
@@ -192,9 +212,24 @@ export class BuildingView {
     this.id = b.id;
     this.key = null;
     this.sprite = scene.add.image(0, 0, buildingKey(b.type)).setOrigin(0.5, 1);
-    this.badge = scene.add.text(0, 0, '', textStyle(16)).setOrigin(0.5, 1).setDepth(OVERLAY_DEPTH);
+    // One label chip over the building: a level badge plus its five ability-tier pips (once it has any). While
+    // the building is damaged, the health bar carries the level and the pips sit beside it on the same row.
+    this.chipGfx = scene.add.graphics();
+    this.chipText = scene.add.text(0, 0, '', textStyle(13)).setOrigin(0.5);
+    this.badge = scene.add.container(0, 0, [this.chipGfx, this.chipText]).setDepth(OVERLAY_DEPTH);
+    this.chipKey = '';
+    // A glowing outline drawn over everything while most of the building is hidden behind others (WebGL only).
+    this.outline = null;
+    this.occluded = false;
     this.hpBar = new HealthBar(scene, { width: b.size * 24, height: 12, depth: OVERLAY_DEPTH, color: HP_TEAM.player, badge: true });
     this.coin = b.type === 'mine' ? scene.add.image(0, 0, TEX.coin).setDepth(OVERLAY_DEPTH + 1).setVisible(false) : null;
+    // RV Lab: a research book bobbing over it while there's research you can do (and afford) right now
+    // (the RP token if the book art is missing).
+    const readyKey = [TEX.researchReady, TEX.researchPoint].find((k) => scene.textures.exists(k));
+    this.researchIcon = b.type === 'rvlab' && readyKey
+      ? scene.add.image(0, 0, readyKey).setDepth(OVERLAY_DEPTH + 1).setVisible(false) : null;
+    this.researchCheckAt = 0;
+    this.researchReady = false;
     this.flashUntil = 0;
     this.light = scene.add.image(0, 0, TEX.light).setBlendMode(LIGHT_BLEND).setDepth(LIGHT_DEPTH)
       .setTint(LIGHT_COLORS[b.type] || 0xffa23c).setVisible(false);
@@ -202,6 +237,8 @@ export class BuildingView {
     this.bx = 1; // click bounce multipliers (tweened by pop())
     this.by = 1;
     this.popTween = null;
+    this.baseAlpha = 1; // setAlpha (swap / move previews) ...
+    this.fade = 1;      // ... times setFade (see-through while in front of the hovered building)
     this.sync(b, 0);
   }
 
@@ -227,12 +264,44 @@ export class BuildingView {
     // Click bounce (bottom origin, so it squashes into the ground and springs up).
     if (this.bx !== 1 || this.by !== 1) this.sprite.setScale(this.sprite.scaleX * this.bx, this.sprite.scaleY * this.by);
 
-    this.badge.setText(`Lv ${b.level}`).setPosition(front.x, top - 2);
     const max = maxHp(b);
-    // While the bar shows, its badge carries the level, so the floating "Lv N" label steps aside.
+    // Labels only when they're wanted (hovered, selected, or edit mode), so a full village stays readable. The
+    // health bar shows whenever the building is damaged (with the level on its left end).
+    const labels = this.scene.showLabels ? this.scene.showLabels(b.id) : true;
     const damaged = !b.destroyed && b.hp < max;
-    this.badge.setVisible(!damaged);
-    this.hpBar.draw(front.x, top - 18, b.hp / max, damaged, b.level);
+    const picks = b.destroyed ? [] : picksOf(b);
+    const pipsW = picks.length ? PIP_GAP * MAX_TIER + 4 : 0;
+    const rowY = top - 12;
+    if (damaged) {
+      // [health bar][pips], centered together.
+      const barW = this.hpBar.width, gap = labels && pipsW ? 6 : 0, shown = labels ? pipsW : 0;
+      const left = front.x - (barW + gap + shown) / 2;
+      this.hpBar.draw(left + barW / 2, rowY - this.hpBar.height / 2, b.hp / max, true, b.level);
+      this.badge.setVisible(labels && pipsW > 0).setPosition(left + barW + gap, rowY);
+      if (labels && pipsW) this.drawChip(picks, null);
+    } else {
+      this.hpBar.draw(front.x, rowY, 1, false, b.level);
+      this.badge.setVisible(labels);
+      if (labels) {
+        const w = CHIP_R * 2 + (pipsW ? 4 + pipsW : 0);
+        this.badge.setPosition(front.x - w / 2, rowY);
+        this.drawChip(picks, b.level);
+      }
+    }
+
+    if (this.researchIcon) {
+      // Re-checked a few times a second (it looks through every defense's paths).
+      if (time >= this.researchCheckAt) {
+        this.researchCheckAt = time + 250;
+        this.researchReady = !b.destroyed && !!this.scene.gs && canResearchSomething(this.scene.gs);
+      }
+      this.researchIcon.setVisible(this.researchReady);
+      if (this.researchReady) {
+        const base = 40 / this.researchIcon.frame.height;
+        this.researchIcon.setScale(base * (1.1 + 0.12 * Math.sin(time * 0.008)));
+        this.researchIcon.setPosition(front.x, top - 46 + Math.sin(time * 0.004) * 4);
+      }
+    }
 
     if (this.coin) {
       const show = mineShowsCoin(b) && !isWaveActive(this.scene.gs); // no collecting while a wave attacks
@@ -246,11 +315,12 @@ export class BuildingView {
       }
     }
 
+    this.syncOutline(b);
     if (this.flashUntil && time > this.flashUntil) this.flashUntil = 0;
     if (!this.flashUntil) this.sprite.setTint(b.sprung ? 0x7a7a7a : this.scene.ambientTint ?? 0xffffff); // a sprung trap looks spent until it resets // moonlit at night
 
-    // Ground light pool, fading in with the night and gently flickering.
-    const night = this.scene.night || 0;
+    // Ground light pool, only once it's dark (fading in from there) and gently flickering.
+    const night = darkness(this.scene.night || 0);
     const lit = night > 0.01 && !b.destroyed;
     this.light.setVisible(lit);
     if (lit) {
@@ -259,6 +329,75 @@ export class BuildingView {
       const flicker = 0.9 + 0.06 * Math.sin(time * 0.007 + this.flickerPhase) + 0.04 * Math.sin(time * 0.019 + this.flickerPhase * 2);
       this.light.setPosition(c.x, c.y).setDisplaySize(w, w / 2).setAlpha(night * LIGHT_ALPHA * flicker);
     }
+  }
+
+  /**
+   * The label chip, drawn from its left-middle (the container's position): a glossy level badge (when `level`
+   * is given) and the ability pips, one diamond per tier colored by the path it has (A orange, B blue, C green;
+   * empty for tiers it doesn't have yet), on one dark pill. Redrawn only on change.
+   */
+  drawChip(picks, level) {
+    const key = `${picks.join('')}|${level}`;
+    if (key === this.chipKey) return;
+    this.chipKey = key;
+    const g = this.chipGfx;
+    g.clear();
+    const hasLevel = level !== null;
+    const pipsW = picks.length ? PIP_GAP * MAX_TIER + 4 : 0;
+    const w = (hasLevel ? CHIP_R * 2 : 0) + (hasLevel && pipsW ? 4 : 0) + pipsW;
+    if (!w) return;
+    g.fillStyle(0x000000, 0.45).fillRoundedRect(0, -PIP_R - 3, w, PIP_R * 2 + 6, PIP_R + 3);
+    let x = 0;
+    if (hasLevel) {
+      drawGlossy(g, 0, -CHIP_R, CHIP_R * 2, CHIP_R * 2, COLORS.buttonBlue, { circle: true, lip: 2, shadow: true });
+      this.chipText.setText(String(level)).setPosition(CHIP_R, -1).setVisible(true);
+      x = CHIP_R * 2 + 4;
+    } else {
+      this.chipText.setVisible(false);
+    }
+    for (let k = 0; k < (pipsW ? MAX_TIER : 0); k++) {
+      const cx = x + 2 + PIP_GAP / 2 + k * PIP_GAP;
+      const pts = [{ x: cx, y: -PIP_R }, { x: cx + PIP_R, y: 0 }, { x: cx, y: PIP_R }, { x: cx - PIP_R, y: 0 }];
+      if (picks[k]) g.fillStyle(PATH_COLORS[picks[k]], 1).fillPoints(pts, true);
+      g.lineStyle(1.5, picks[k] ? 0xffffff : 0x8a8a8a, picks[k] ? 0.9 : 0.7).strokePoints(pts, true);
+    }
+  }
+
+  /**
+   * Mostly hidden behind other buildings (GameScene.updateOcclusion): a thin glowing outline of this building is
+   * drawn over everything, so it can be spotted. The outline is the sprite's silhouette stamped in a ring of small
+   * offsets, masked by the sprite itself (inverted), so only the rim outside its own shape shows. WebGL only.
+   */
+  setOccluded(on) {
+    this.occluded = on;
+    if (!on || this.outline !== null) return;
+    if (!this.scene.game.renderer.gl) { this.outline = false; return; } // Canvas renderer: no masks
+    const key = this.sprite.texture.key;
+    const stamps = OUTLINE_OFFSETS.map(() => this.scene.add.image(0, 0, key).setTintFill(OUTLINE_COLOR));
+    const container = this.scene.add.container(0, 0, stamps).setDepth(OVERLAY_DEPTH - 10).setVisible(false);
+    const maskImage = this.scene.make.image({ x: 0, y: 0, key, add: false });
+    const mask = maskImage.createBitmapMask();
+    mask.invertAlpha = true;
+    container.setMask(mask);
+    this.outline = { container, stamps, maskImage, mask };
+  }
+
+  /** Keep the outline on the sprite (texture, place, size); hidden unless occluded. */
+  syncOutline(b) {
+    const o = this.outline;
+    if (!o) return;
+    const show = this.occluded && !b.destroyed && this.sprite.alpha > 0.9;
+    o.container.setVisible(show);
+    if (!show) return;
+    const s = this.sprite;
+    const px = OUTLINE_PX / (this.scene.cameras.main.zoom || 1); // the same thin rim at any zoom
+    const place = (img, dx, dy) => {
+      if (img.texture.key !== s.texture.key) img.setTexture(s.texture.key);
+      img.setOrigin(s.originX, s.originY).setPosition(s.x + dx, s.y + dy).setScale(s.scaleX, s.scaleY);
+    };
+    o.stamps.forEach((img, i) => place(img, OUTLINE_OFFSETS[i][0] * px, OUTLINE_OFFSETS[i][1] * px));
+    place(o.maskImage, 0, 0);
+    o.container.setAlpha(OUTLINE_ALPHA);
   }
 
   /** Hit flash: tint white for 80 ms. Throttled so a building under constant attack flickers instead of staying white. */
@@ -274,7 +413,7 @@ export class BuildingView {
   growPop(oldLevel, newLevel) {
     if (this.popTween) this.popTween.stop();
     const top = topLevelOf(this.b.type);
-    const ratio = levelSizeFactor(oldLevel, top) / levelSizeFactor(newLevel, top);
+    const ratio = levelSizeFactor(oldLevel, top, this.b.type) / levelSizeFactor(newLevel, top, this.b.type);
     this.bx = ratio;
     this.by = ratio;
     this.popTween = this.scene.tweens.chain({
@@ -293,9 +432,17 @@ export class BuildingView {
   }
 
   setAlpha(a) {
-    this.sprite.setAlpha(a);
+    this.baseAlpha = a;
+    this.sprite.setAlpha(a * this.fade);
     this.badge.setAlpha(a);
     this.hpBar.setAlpha(a);
+  }
+
+  /** See-through while it stands in front of the hovered / selected building (1 = solid). */
+  setFade(f) {
+    if (f === this.fade) return;
+    this.fade = f;
+    this.sprite.setAlpha(this.baseAlpha * f);
   }
 
   /** Top-center of the sprite in world pixels (for tutorial arrows and labels). */
@@ -312,8 +459,10 @@ export class BuildingView {
     if (this.popTween) this.popTween.stop();
     this.sprite.destroy();
     this.badge.destroy();
+    if (this.outline) { this.outline.container.destroy(); this.outline.maskImage.destroy(); this.outline.mask.destroy(); }
     this.hpBar.destroy();
     this.light.destroy();
     if (this.coin) this.coin.destroy();
+    if (this.researchIcon) this.researchIcon.destroy();
   }
 }

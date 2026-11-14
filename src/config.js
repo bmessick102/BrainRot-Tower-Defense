@@ -1,8 +1,9 @@
 // AUTO-GENERATED from Game_Balance_Sheet.xlsx. Edit the spreadsheet, then re-export.
 // Units: distances in tiles, times in seconds, money in gold.
 // levels[i] = level i+1. Building cost at level 1 = shop price; later levels = upgrade price.
-// waves[i] = scripted wave i+1; waves 5+ are computed from waves[3] in logic/waves.js.
-// Each night sends the wave matching the Town Hall level; at max Town Hall every night adds one.
+// waves[i] = the base wave for Village Hall i+1; Village Halls 5+ use the endless formula in logic/waves.js.
+// Waves start when the player presses Start Wave. Each wave is the Village Hall's base wave scaled up by
+// rules.waveRamp for every wave survived before it (so waves keep getting harder at any hall level).
 // Levels 6-10 extend the sheet's growth (costs x2, HP/damage x1.25, storage capacity x1.5);
 // they are NOT in Game_Balance_Sheet.xlsx yet: copy them in before the next re-export.
 // Map shape, image origin, town hall position, and spawn points live in src/mapTiles.js.
@@ -11,19 +12,29 @@ export const CONFIG = {
   startingGold: 250, // 100 rebuilds the ruined Village Hall (level 0 -> 1), 150 buys the first Mine
   rules: {
     sellRefund: 0.5,
-    // Destroyed buildings stay rubble after the night (walls excepted: they're back at dawn). Rebuilding
-    // costs this share of the building's current level cost, any time.
+    // Everything destroyed in a night is rebuilt for free when the wave is beaten. During a wave a destroyed
+    // building (not a wall) can be rebuilt early for this share of its current level's cost.
     rebuildCostShare: 0.3,
     // Safety net so a ruined economy can always recover: the Village Hall itself makes gold (base +
     // perLevel per level above 1; none while the starting hall is in ruins), paid in batches of `batch`.
     hallIncome: { base: 1, perLevel: 0.5, batch: 5 },
     storageDrainOnDestroy: 0.5,
-    waveCountdown: 30, // matches music_planning (30 s), which ends as the wave hits
-    // Gold per second skipped when the player calls the next wave early (not in the balance sheet yet).
-    earlyCallGoldPerSecond: 0.5,
+    // Waves start on the Start Wave button (no timer), at whatever time of day it is.
+    // Every wave survived makes the next ones bigger: +countPerWave enemies and +hpPerWave enemy HP
+    // (shares of the Village Hall's base wave, linear: wave 11 has 1 + 10 x 0.08 = 1.8x the enemies).
+    waveRamp: { countPerWave: 0.08, hpPerWave: 0.05 },
+    // Starting the next wave within this many seconds of clearing the last counts as a quick start
+    // (the "Bring It On" achievement).
+    quickStartSeconds: 10,
+    // Research points (RV Lab abilities): each enemy's own researchPoints when it's defeated, plus this
+    // many x the wave number for surviving a night (src/logic/researchPoints.js).
+    researchPointsPerWave: 10,
     spawnInterval: 0.8,
     // Anti-stall (src/logic/enrage.js): `after` s after a wave's last enemy spawns, enemies start to enrage.
     enrage: { after: 90, ramp: 30, maxDamage: 5, maxSpeed: 2 },
+    // Restless nights (src/logic/enrage.js): while it's dark, attacking enemies deal `damage`x damage and move
+    // `speed`x faster, and every kill (and the wave-cleared research points) pays +lootBonus gold and RP.
+    night: { damage: 1.25, speed: 1.15, lootBonus: 0.25 },
     endlessCountGrowth: 1.15,
     endlessHpGrowth: 1.1,
     maxTownHallLevel: 10,
@@ -43,10 +54,8 @@ export const CONFIG = {
     slinger: { speed: 10 },
     bomber: { dropTime: 0.4 }
   },
-  // Day/night clock in seconds. Dusk lasts rules.waveCountdown (the wave countdown happens at dusk).
-  // Night lasts until that night's wave is cleared, then dawn begins.
-  // graceSeconds: after losing a night, Retry rewinds to that dusk and gives this much daytime before night returns.
-  dayNight: { daySeconds: 120, dawnSeconds: 15, graceSeconds: 120 },
+  // Day/night clock in seconds: a cycle of its own (about 8 minutes), separate from the waves.
+  dayNight: { daySeconds: 240, duskSeconds: 30, nightSeconds: 180, dawnSeconds: 30 },
   camera: { startZoom: 0.75, minZoom: 0.5, maxZoom: 2.0, dragThresholdPx: 6 },
   townHall: {
     name: "Village Hall",
@@ -119,12 +128,26 @@ export const CONFIG = {
       { cost: 102400, hp: 2235, gnomes: 5, gnomeMine: 0.52, gnomeRepair: 0.0425 }
     ]
   },
+  // Research building (src/logic/abilities.js, src/abilityConfig.js): researches the defenses' ability
+  // paths. Its level is the highest tier that can be researched. Each level also needs a Village Hall
+  // level (`townHall`), on top of the usual "no higher than the Village Hall" rule.
+  rvlab: {
+    name: "RV Lab",
+    size: 2, // the usual 2x2 (it was 3x3: too big beside the rest of the village)
+    unlockTownHall: 4,
+    levels: [
+      { cost: 4000, hp: 1000, townHall: 4 },
+      { cost: 10000, hp: 1250, townHall: 5 },
+      { cost: 25000, hp: 1563, townHall: 6 },
+      { cost: 60000, hp: 1953, townHall: 7 },
+      { cost: 150000, hp: 2441, townHall: 8 }
+    ]
+  },
   // Gnome villagers all live in Villager Houses (house.levels[].gnomes; their stats come from the same
   // table). By day each works a mine (up to maxPerMine per mine), mining its own gold into a sack for
   // storage; during an attack they repair damaged buildings (up to maxRepairersPerBuilding each). A gnome
   // whose house is destroyed stops working and shelters in the Village Hall.
   villagers: {
-    homeLeadSeconds: 10,
     maxPerMine: 2,
     sackSeconds: 20,      // a gnome's sack is full after this long working (then it carries it to storage)
     walkSpeed: 0.7,       // tiles per second (gold trips are timed at this pace, tripDetour x the straight line)
@@ -136,21 +159,21 @@ export const CONFIG = {
   // Walls are single tiles (segmentLength 1) that join into a fence with every wall touching them. They
   // used to be 3-tile segments: per wall, the price is a third of a segment's (the same per tile), the HP is
   // a segment's, and 3x as many are allowed. (segmentLength > 1 brings back straight segments rotated with R.)
+  // Seven levels, one picture each (bld_wall_lv1..7, the lava wall on top). Wall levels unlock at Village
+  // Hall 1, 2, 3, 5, 7, 9 and 10 (townHall). Cheap on purpose, so a broken village can wall up again fast.
+  // Level 7 stays under the Wall Breaker's 3,000 blast.
   walls: {
     name: "Wall",
     segmentLength: 1,
     unlockTownHall: 1,
     levels: [
-      { cost: 17, hp: 400 },
-      { cost: 33, hp: 500 },
-      { cost: 67, hp: 625 },
-      { cost: 133, hp: 781 },
-      { cost: 267, hp: 977 },
-      { cost: 533, hp: 1221 },
-      { cost: 1067, hp: 1526 },
-      { cost: 2133, hp: 1908 },
-      { cost: 4267, hp: 2385 },
-      { cost: 8533, hp: 2981 }
+      { cost: 10, hp: 400, townHall: 1 },
+      { cost: 25, hp: 550, townHall: 2 },
+      { cost: 60, hp: 800, townHall: 3 },
+      { cost: 150, hp: 1150, townHall: 5 },
+      { cost: 350, hp: 1600, townHall: 7 },
+      { cost: 800, hp: 2200, townHall: 9 },
+      { cost: 1800, hp: 2980, townHall: 10 }
     ]
   },
   defenses: {
@@ -373,7 +396,8 @@ export const CONFIG = {
     catapult: [0, 0, 0, 0, 1, 1, 1, 1, 1, 1],
     flock: [0, 0, 1, 1, 1, 2, 2, 2, 3, 3],
     mousetrap: [0, 1, 2, 2, 3, 3, 4, 4, 5, 5],
-    ra: [0, 0, 0, 0, 0, 1, 1, 1, 2, 2]
+    ra: [0, 0, 0, 0, 0, 1, 1, 1, 2, 2],
+    rvlab: [0, 0, 0, 1, 1, 1, 1, 1, 1, 1]
   },
   // radius (tiles): body size; enemies push apart so they never stack on top of each other.
   // name: shown to players; role: the enemy's job, shown as subtext under the name.
@@ -388,7 +412,8 @@ export const CONFIG = {
       damage: 8,
       attackInterval: 1,
       attackRange: 0.5,
-      bounty: 3
+      bounty: 3,
+      researchPoints: 1
     },
     slinger: {
       name: "Cappuccino Assasino",
@@ -400,7 +425,8 @@ export const CONFIG = {
       damage: 15,
       attackInterval: 1.5,
       attackRange: 5,
-      bounty: 10
+      bounty: 10,
+      researchPoints: 2
     },
     bomber: {
       name: "Bombadillo Crocadillo",
@@ -412,7 +438,8 @@ export const CONFIG = {
       damage: 40,
       attackInterval: 2,
       attackRange: 0,
-      bounty: 15
+      bounty: 15,
+      researchPoints: 3
     },
     tank: {
       name: "Tripi Tropi Tropi Tripa",
@@ -424,7 +451,8 @@ export const CONFIG = {
       damage: 30,
       attackInterval: 2,
       attackRange: 0.5,
-      bounty: 25
+      bounty: 25,
+      researchPoints: 4
     },
     // Fast raider that leaps over walls (never attacks them). Other buildings still block it.
     shark: {
@@ -438,7 +466,8 @@ export const CONFIG = {
       damage: 18,
       attackInterval: 1,
       attackRange: 0.5,
-      bounty: 12
+      bounty: 12,
+      researchPoints: 2
     },
     // Gold raider: goes only for money buildings (prefers) until none are standing, hits them hard,
     // and barely scratches anything else (walls in its way included).
@@ -459,7 +488,8 @@ export const CONFIG = {
       damage: 10,
       attackInterval: 1,
       attackRange: 0.5,
-      bounty: 8
+      bounty: 8,
+      researchPoints: 1
     },
     // Runs for the nearest wall and blows itself up: x60 vs walls (breaks any wall in one blast), and the
     // blast also hits every building and wall within blastRadius. With no walls left it goes for
@@ -480,7 +510,8 @@ export const CONFIG = {
       damage: 50,
       attackInterval: 1,
       attackRange: 0.5,
-      bounty: 10
+      bounty: 10,
+      researchPoints: 2
     },
     // A slow flyer that never attacks itself. Targets: the nearest air defense (defenses that can shoot
     // flyers), else any defense, else any building. Over its target it drops `perDrop` Neegies after
@@ -505,7 +536,8 @@ export const CONFIG = {
       damage: 0,
       attackInterval: 1,
       attackRange: 0,
-      bounty: 30
+      bounty: 30,
+      researchPoints: 5
     },
     // Dropped by Neegy Balloons (never in a wave's queue). Hits air defenses twice as hard.
     neegy: {
@@ -523,7 +555,28 @@ export const CONFIG = {
       damage: 24,       // x2 = 48 per hit on air defenses
       attackInterval: 1,
       attackRange: 0.5,
-      bounty: 7
+      bounty: 7,
+      researchPoints: 1
+    }
+  },
+  // Special waves (src/logic/waves.js): every `every`th wave is one of these, rotating through `order`
+  // (skipping types whose `needs` kinds aren't in that Village Hall's base wave yet, so there's always a
+  // counter). A special wave has about the same strength as the normal wave it replaces (its total enemy
+  // HP x `strength`), split over `mix` (weights; null = every ground kind of the normal wave, in the same
+  // proportions). Above `maxEnemiesFactor` x the normal wave's enemy count the counts shrink and the HP
+  // grows to match. Clearing one pays
+  // `bonusBounty` x the wave's bounty on top.
+  specialWaves: {
+    every: 3,
+    bonusBounty: 0.5,
+    maxEnemiesFactor: 2,
+    order: ['swarm', 'air', 'ground', 'heist', 'siege'],
+    types: {
+      swarm: { name: 'Swarm', hint: 'Hordes of weak enemies', mix: { grunt: 0.6, thief: 0.4 }, needs: ['thief'], strength: 0.8 },
+      air: { name: 'Air Raid', hint: 'Flyers only: build anti-air', mix: { bomber: 0.8, balloon: 0.2 }, needs: ['bomber'], strength: 0.7 },
+      ground: { name: 'Ground Assault', hint: 'No flyers: more troops instead', mix: null, needs: ['bomber'], strength: 1 },
+      heist: { name: 'Heist', hint: 'Bitcoin Stealers after your gold', mix: { thief: 0.85, grunt: 0.15 }, needs: ['thief'], strength: 0.6 },
+      siege: { name: 'Siege', hint: 'Tanks and Wall Breakers', mix: { tank: 0.92, breaker: 0.08 }, needs: ['tank'], strength: 1 }
     }
   },
   waves: [

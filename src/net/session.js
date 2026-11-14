@@ -6,7 +6,6 @@
 // (kept in memory, mirrored to localStorage so nothing is lost if the tab closes, and uploaded to the
 // backend shortly after each change). Every other key (settings) goes straight to localStorage.
 // With no village open it behaves exactly like localStorage (offline play).
-import { CONFIG } from '../config.js';
 import { parseSave } from '../logic/save.js';
 import { COUNTERS, estimateBestWave } from '../logic/achievements.js';
 
@@ -14,12 +13,26 @@ export const MAX_BASES = 5;
 export const BASE_NAME_MAX = 20;
 export const USERNAME_RE = /^[A-Za-z0-9_]{3,16}$/;
 export const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+export const PASSWORD_MIN = 8;
+
+/** What's wrong with a new password (at least PASSWORD_MIN characters, with a letter and a number), or ''. */
+export function passwordProblem(pw) {
+  const p = String(pw || '');
+  if (p.length < PASSWORD_MIN) return `Password must be at least ${PASSWORD_MIN} characters.`;
+  if (!/[A-Za-z]/.test(p) || !/[0-9]/.test(p)) return 'Password needs at least one letter and one number.';
+  return '';
+}
 
 // Game save keys that belong to the open village.
 const GAME_KEYS = { 'ibtd.save': 'save', 'ibtd.checkpoint': 'checkpoint' };
+// Places this browser can hold a village from outside the account (see deviceVillages).
 const LEGACY_SAVE = 'ibtd.save';
 const LEGACY_CHECKPOINT = 'ibtd.checkpoint';
-const LEGACY_IMPORTED = 'ibtd.legacyImported'; // the device's old village was imported (by any account)
+const LEGACY_BACKUP = 'ibtd.save.backup';
+const LEGACY_CHECKPOINT_BACKUP = 'ibtd.checkpoint.backup';
+const DEV_DB = 'ibtd.dev.db'; // LocalBackend's browser-only accounts (dev server before Supabase keys)
+const MIRROR_PREFIX = 'ibtd.cloud.';
+const importedKey = (uid) => `ibtd.imported.${uid}`; // fingerprints of villages this account imported
 const UPLOAD_MS = 1500;  // a village uploads this long after its last change
 const STATS_MS = 4000;   // stats / achievements upload this long after their last change
 const RETRY_MS = [3000, 8000, 20000, 45000];
@@ -28,14 +41,19 @@ const lastBaseKey = (uid) => `ibtd.lastBase.${uid}`;
 const outboxKey = (uid) => `ibtd.outbox.${uid}`;
 const declinedKey = (uid) => `ibtd.legacyDeclined.${uid}`;
 
-/** The night's wave number a save is on (same rule as nightWaveNumber). */
+/** The next wave a save will fight (same rule as nightWaveNumber: waves cleared + 1). */
 export function saveWave(save) {
   if (!save) return 0;
-  const th = save.townHallLevel || 0, max = CONFIG.rules.maxTownHallLevel;
-  return th < max ? th : max + (save.nightsAtMaxTownHall || 0);
+  return (save.wavesCleared || 0) + 1;
 }
 
 const emptyStats = () => ({ bestWave: 0, bestTownHall: 0, counters: {} });
+
+/** Tells one saved village apart from another (and copies of the same one alike). */
+export function villageFingerprint(save) {
+  const bs = (save && save.buildings) || [];
+  return `${save && save.savedAt}|${save && save.townHallLevel}|${bs.length}|${save && save.gold}`;
+}
 
 export class Session {
   /**
@@ -187,15 +205,15 @@ export class Session {
     return this.user;
   }
 
-  async signIn(email, password) {
-    const r = await this.backend.signIn({ email: email.trim(), password });
+  async signIn(email, password, { captchaToken = null } = {}) {
+    const r = await this.backend.signIn({ email: email.trim(), password, captchaToken });
     await this.loadAccount(r.user);
     return r;
   }
 
   /** Returns { user } or { needsConfirm: true } (the project still requires email confirmation). */
-  async signUp(email, password, username) {
-    const r = await this.backend.signUp({ email: email.trim(), password, username: username.trim() });
+  async signUp(email, password, username, { captchaToken = null } = {}) {
+    const r = await this.backend.signUp({ email: email.trim(), password, username: username.trim(), captchaToken });
     if (r.user) await this.loadAccount(r.user);
     return r;
   }
@@ -265,6 +283,18 @@ export class Session {
     return b;
   }
 
+  /** Give a village a new name (trimmed, up to BASE_NAME_MAX characters). */
+  async renameBase(id, name) {
+    const b = this.baseById(id);
+    if (!b) throw new Error('That village no longer exists.');
+    const clean = String(name || '').trim().slice(0, BASE_NAME_MAX);
+    if (!clean) throw new Error('Type a name first.');
+    await this.backend.updateBase(id, { name: clean });
+    b.name = clean;
+    this.changed();
+    return b;
+  }
+
   async deleteBase(id) {
     await this.backend.deleteBase(id);
     const b = this.baseById(id);
@@ -282,29 +312,82 @@ export class Session {
   /** Close the open village (the game's Storage goes back to plain localStorage). */
   closeBase() { this.activeId = null; }
 
-  // ---------- the village saved on this device before accounts ----------
-  /** The device's old (pre-account) village, if it's valid and hasn't been imported: { save, checkpoint } or null. */
-  legacyVillage() {
-    if (this.lget(LEGACY_IMPORTED)) return null;
-    const read = (k) => {
-      const r = parseSave(this.lget(k)); // straight from the device, never the open village
+  // ---------- villages saved in this browser outside the account ----------
+  /**
+   * Every valid village this browser holds that this account hasn't imported yet, newest first:
+   * [{ key, source, name, save, checkpoint }]. It looks in the pre-account save slot, the backup New Game
+   * makes, accounts kept in the browser by the dev server before Supabase was set up, and device copies
+   * of other accounts' villages. Read straight from the device, never the open village.
+   */
+  deviceVillages() {
+    const parse = (v) => {
+      const r = parseSave(typeof v === 'string' || v === null || v === undefined ? v : JSON.stringify(v));
       return r.status === 'ok' ? r.data : null;
     };
-    const save = read(LEGACY_SAVE);
-    return save ? { save, checkpoint: read(LEGACY_CHECKPOINT) } : null;
+    const found = [];
+    const add = (key, source, name, save, checkpoint) => {
+      const s = parse(save);
+      if (s) found.push({ key, source, name, save: s, checkpoint: parse(checkpoint) });
+    };
+    add('save', 'Saved in this browser', 'My Village', this.lget(LEGACY_SAVE), this.lget(LEGACY_CHECKPOINT));
+    add('backup', 'Backup from a New Game', 'Old Village', this.lget(LEGACY_BACKUP), this.lget(LEGACY_CHECKPOINT_BACKUP));
+    const db = this.ljson(DEV_DB);
+    if (db && Array.isArray(db.bases)) {
+      for (const b of db.bases) {
+        if (this.baseById(b.id)) continue; // this account's own village (dev mode keeps them here)
+        const owner = Array.isArray(db.users) ? db.users.find((u) => u.id === b.userId) : null;
+        add(`dev:${b.id}`, `Browser-only account${owner ? ` “${owner.username}”` : ''}`, b.name || 'My Village', b.save, b.checkpoint);
+      }
+    }
+    for (const k of this.localKeys()) {
+      if (!k.startsWith(MIRROR_PREFIX)) continue;
+      const id = k.slice(MIRROR_PREFIX.length);
+      if (this.baseById(id)) continue; // one of this account's own villages
+      const m = this.ljson(k);
+      if (m) add(`mirror:${id}`, 'Copy kept from another account', 'My Village', m.save, m.checkpoint);
+    }
+    // Drop repeats and anything this account already imported.
+    const done = new Set(this.user ? this.ljson(importedKey(this.user.id)) || [] : []);
+    const seen = new Set();
+    return found.filter((v) => {
+      const fp = villageFingerprint(v.save);
+      if (seen.has(fp) || done.has(fp)) return false;
+      seen.add(fp);
+      return true;
+    }).sort((a, b) => String(b.save.savedAt || '').localeCompare(String(a.save.savedAt || '')));
+  }
+
+  /** Every key in the device storage (empty if it can't be listed). */
+  localKeys() {
+    try {
+      if (!this.local || typeof this.local.length !== 'number' || !this.local.key) return [];
+      const out = [];
+      for (let i = 0; i < this.local.length; i++) out.push(this.local.key(i));
+      return out;
+    } catch { return []; }
+  }
+
+  /** The newest village this browser holds that this account hasn't imported (for the first-login offer), or null. */
+  legacyVillage() {
+    return this.deviceVillages()[0] || null;
   }
 
   /** Has this account already said "start fresh" to the import offer? */
   get legacyDeclined() { return !!(this.user && this.lget(declinedKey(this.user.id))); }
   declineLegacy() { if (this.user) this.lset(declinedKey(this.user.id), '1'); }
 
-  /** Copy the device's old village into a new village on this account (the original stays on the device). */
-  async importLegacy(name = 'My Village') {
-    const v = this.legacyVillage();
-    if (!v) throw new Error('There is no village on this device to import.');
-    const bestWave = estimateBestWave(v.save, CONFIG.rules.maxTownHallLevel);
+  /**
+   * Copy a village from this browser (deviceVillages; `key` picks one, else the newest) into a new village on
+   * this account. The original stays where it was; this account won't be offered it again.
+   */
+  async importLegacy(name = 'My Village', key = null) {
+    const list = this.deviceVillages();
+    const v = key ? list.find((x) => x.key === key) : list[0];
+    if (!v) throw new Error('There is no village in this browser to import.');
+    const bestWave = estimateBestWave(v.save);
     const b = await this.createBase(name, { save: v.save, checkpoint: v.checkpoint, bestWave });
-    this.lset(LEGACY_IMPORTED, this.user.id);
+    const done = this.ljson(importedKey(this.user.id)) || [];
+    this.lset(importedKey(this.user.id), JSON.stringify([...done, villageFingerprint(v.save)]));
     this.recordTownHall(v.save.townHallLevel || 0);
     this.recordWave(bestWave);
     return b;
@@ -393,6 +476,7 @@ export class Session {
     const box = { stats: this.outbox.stats, earns: [...this.outbox.earns], claims: [...this.outbox.claims] };
     this.outbox = { stats: false, earns: [], claims: [] };
     try {
+      if (box.stats) await Promise.all(this.bases.filter((x) => x.dirty).map((x) => this.uploadBase(x)));
       if (box.earns.length) await this.backend.earnAchievements(box.earns);
       for (const id of box.claims) await this.backend.claimAchievement(id);
       if (box.stats) await this.backend.saveStats(this.stats);

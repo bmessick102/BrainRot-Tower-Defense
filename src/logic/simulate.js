@@ -7,6 +7,7 @@ import { stepDefenses, stepProjectiles, stepPools } from './combat.js';
 import { stepFlockTowers } from './flock.js';
 import { stepTraps } from './traps.js';
 import { stepBeams } from './beams.js';
+import { stepSpecials, stepStrikes, stepEnemyStatus, stepAbilityBuildings } from './abilityEffects.js';
 import { assignGnomes, stepGnomeRepairs, stepGnomeMining } from './villagers.js';
 
 export const MAX_STEP = 0.1; // seconds; long frames are capped so nothing tunnels
@@ -27,12 +28,16 @@ export function simulate(state, dt) {
   stepGnomeMining(state, dt, gnomes);
   stepWaveSpawning(state, dt);
   stepEnemies(state, dt);
-  if (!state.gameOver) stepTraps(state); // ground enemies stepping onto set Mousetraps spring them
+  if (!state.gameOver) stepTraps(state, dt); // ground enemies stepping onto set Mousetraps spring them (+ re-arm, lures)
   stepFlockTowers(state); // mark + reveal enemies in F.L.O.C.K Tower range before the defenses fire
   if (!state.gameOver) stepDefenses(state, dt);
+  if (!state.gameOver) stepSpecials(state, dt); // RV Lab specials on a timer (Arrow Storm, Meteor, Finale)
   if (!state.gameOver) stepBeams(state, dt); // Tower of Rah beams
   if (!state.gameOver) stepProjectiles(state, dt);
   if (!state.gameOver) stepPools(state, dt);
+  if (!state.gameOver) stepStrikes(state, dt); // Arrow Storms / Meteors landing
+  if (!state.gameOver) stepEnemyStatus(state, dt); // burning / poisoned enemies, vulnerability timers
+  if (!state.gameOver) stepAbilityBuildings(state, dt); // Self-Repair, Last Stand timers
   if (!state.gameOver) stepGnomeRepairs(state, dt, gnomes);
   removeDeadEnemies(state);
   checkWaveCleared(state);

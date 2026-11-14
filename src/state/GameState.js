@@ -5,15 +5,19 @@ import { CONFIG } from '../config.js';
 import { MAP } from '../mapTiles.js';
 import { canPlaceRect } from '../logic/grid.js';
 import {
-  checkBuy, checkUpgrade, planSwap, wallGroup, planWallGroupUpgrade, createBuilding, applyLevelUp, buildCost, footprintDims, getTownHall, townHallLevel
+  checkBuy, checkUpgrade, planSwap, maxHp, wallGroup, planWallGroupUpgrade, createBuilding, applyLevelUp, buildCost, footprintDims, getTownHall, townHallLevel
 } from '../logic/buildings.js';
 import { getCapacity, spendGold, addGold, setGold, collectMine, sellRefund, repairBuilding } from '../logic/economy.js';
 import { createIdleWave } from '../logic/waves.js';
 import { advanceTutorial, applyStarterBase, canSkipTutorial, TUTORIAL_DONE_STEP, TUTORIAL_NIGHT_STEP } from '../logic/tutorial.js';
-import { createClock, beginDusk, resumeClockOnLoad, startGrace, callWaveEarly } from '../logic/dayNight.js';
+import { createClock, startTutorialWave, resumeClockOnLoad, startGrace, startNextWave } from '../logic/dayNight.js';
 import { simulate } from '../logic/simulate.js';
 import { deserializeGame, writeGame, SAVE_KEYS } from '../logic/save.js';
 import { isWaveActive } from '../logic/util.js';
+import { applyLayout } from '../logic/layout.js';
+import { checkResearch, labPicks, syncAbilityPicks } from '../logic/abilities.js';
+import { addResearchPoints, spendResearchPoints } from '../logic/researchPoints.js';
+import { advanceLabGuide, startLabGuideIfDue, skipLabGuide } from '../logic/labGuide.js';
 
 // The Storage the game saves through. main.js sets it to the account session's storage (src/net/session.js),
 // which saves into the open village; without it (tests, blocked storage) it's plain localStorage.
@@ -28,6 +32,8 @@ export function getStorage() {
 
 // Logic events that move the tutorial forward.
 const TUTORIAL_EVENTS = ['mineCollected', 'buildingPlaced', 'townHallUpgraded', 'waveStarted'];
+// Events that move the RV Lab guide forward (the UI emits researchOpened).
+const LAB_GUIDE_EVENTS = ['buildingPlaced', 'researchOpened', 'abilityResearched'];
 
 export class GameState {
   constructor({ storage = getStorage(), rng = Math.random } = {}) {
@@ -58,6 +64,9 @@ export class GameState {
   emit(name, data) {
     for (const l of [...(this.listeners.get(name) || [])]) l.fn.call(l.ctx, data);
     if (TUTORIAL_EVENTS.includes(name)) this.tutorialEvent(name, data || {});
+    if (LAB_GUIDE_EVENTS.includes(name)) advanceLabGuide(this, name, data || {});
+    if (name === 'townHallUpgraded') startLabGuideIfDue(this); // Village Hall 4 unlocks the RV Lab
+    if (name === 'labGuideChanged') this.save();
     if (name === 'waveCleared') this.save();
     // Each night's wave: the checkpoint (for Retry) is the base as dusk falls.
     if (name === 'waveTriggered') { this.writeCheckpoint(); this.save(); }
@@ -70,6 +79,10 @@ export class GameState {
     this.enemies = [];
     this.projectiles = [];
     this.pools = [];
+    this.strikes = [];           // Arrow Storm / Meteor hits on their way down
+    this.research = {};          // RV Lab research: { type: ['a', 'b', ...] }, the pick at each tier
+    this.labGuideStep = 0;       // RV Lab guide (labGuide.js): 0 = not started
+    this.researchPoints = 0;     // RP: the currency for RV Lab abilities (researchPoints.js)
     this.wave = createIdleWave();
     this.wavesCleared = 0;       // nights survived
     this.nightsAtMaxTownHall = 0;
@@ -93,6 +106,9 @@ export class GameState {
     this.reset();
     const data = deserializeGame(obj);
     this.buildings = data.buildings;
+    this.research = data.research;
+    this.labGuideStep = data.labGuideStep;
+    this.researchPoints = data.researchPoints;
     this.wavesCleared = data.wavesCleared;
     this.nightsAtMaxTownHall = data.nightsAtMaxTownHall;
     this.clock = data.clock;
@@ -102,14 +118,26 @@ export class GameState {
     if (!this.tutorialDone && this.tutorialStep === 1 && this.buildings.some((b) => b.type === 'townHall' && b.level >= 1)) this.tutorialStep = 2;
     this.nextId = data.nextId;
     this.gold = Math.min(data.gold, getCapacity(this));
+    // Villages already at Village Hall 4+ that haven't researched anything get the RV Lab guide now.
+    startLabGuideIfDue(this);
   }
 
-  /** A save made at dusk (during the countdown) replays that night from the start of dusk. */
+  /** The RV Lab guide's Next button (its last step). */
+  labGuideNext() {
+    return advanceLabGuide(this, 'next');
+  }
+
+  /** The RV Lab guide's Skip button. */
+  skipLabGuide() {
+    return skipLabGuide(this);
+  }
+
+  /** After loading: the clock carries on from the saved time of day (a save mid-wave starts that wave again). */
   resumeClock() {
     resumeClockOnLoad(this);
   }
 
-  /** Retry after a lost night: daytime with a grace period before night returns (saved right away). */
+  /** Retry after a lost wave: back to before that wave to rebuild, then Start Wave again (saved right away). */
   startGrace() {
     startGrace(this);
     this.save();
@@ -173,6 +201,17 @@ export class GameState {
     return { ok: true, reason: '' };
   }
 
+  /** Save a layout drafted in edit mode (src/logic/layout.js): every building moves to its draft spot. */
+  applyLayout(draft) {
+    if (isWaveActive(this)) return { ok: false, reason: 'Not during a wave' };
+    const r = applyLayout(this, draft);
+    if (!r.ok) return r;
+    for (const id of r.moved) this.emit('buildingMoved', { id });
+    this.emit('layoutSaved', { moved: r.moved.length });
+    this.save();
+    return r;
+  }
+
   checkSell(b) {
     if (!b || b.type === 'townHall') return { ok: false, reason: "Can't sell" };
     if (isWaveActive(this)) return { ok: false, reason: 'Not during a wave' };
@@ -200,7 +239,9 @@ export class GameState {
     if (!check.ok) return check;
     spendGold(this, check.cost);
     applyLevelUp(b);
+    const ids = syncAbilityPicks(this); // a level can bring the next researched tier
     this.emit('buildingUpgraded', { id, type: b.type, level: b.level });
+    if (ids.length) this.emit('abilitiesApplied', { ids, type: b.type });
     this.emit('goldChanged', { gold: this.gold, capacity: this.capacity });
     if (b.type === 'townHall') this.emit('townHallUpgraded', { level: b.level });
     this.save();
@@ -229,6 +270,22 @@ export class GameState {
     return { ok: true, reason: '', upgraded: plan.ids.length, total: plan.total };
   }
 
+  /**
+   * RV Lab: pick path `path`'s option as a defense type's next tier (one pick per tier, final). Every building
+   * of that type gets it at once (as far as its level allows).
+   */
+  researchAbility(type, path, tier = undefined) {
+    const check = tier === undefined ? checkResearch(this, type, path) : checkResearch(this, type, path, tier);
+    if (!check.ok) return check;
+    spendResearchPoints(this, check.cost);
+    this.research[type] = [...labPicks(this, type), path];
+    const ids = syncAbilityPicks(this);
+    this.emit('abilityResearched', { type, path, tier: check.tier });
+    if (ids.length) this.emit('abilitiesApplied', { ids, type });
+    this.save();
+    return { ok: true, reason: '', tier: check.tier };
+  }
+
   collect(id) {
     const b = this.getBuilding(id);
     if (!b || b.type !== 'mine' || b.destroyed) return { ok: false, reason: '' };
@@ -254,14 +311,14 @@ export class GameState {
   /** Feed the tutorial an event (UI events like 'next', 'shopOpened', or logic events). Saves per step. */
   tutorialEvent(event, payload = {}) {
     if (!advanceTutorial(this, event, payload)) return;
-    // Night is introduced: dusk falls right away and wave 1 is on its way.
-    if (!this.tutorialDone && this.tutorialStep === TUTORIAL_NIGHT_STEP && this.clock.phase === 'day') beginDusk(this);
+    // The first wave: it comes right away (and the day/night clock starts running).
+    if (!this.tutorialDone && this.tutorialStep === TUTORIAL_NIGHT_STEP) startTutorialWave(this);
     this.save();
   }
 
-  /** Start the next wave early for a gold bonus (day/dawn -> countdown, countdown -> wave). */
-  callWaveEarly() {
-    return callWaveEarly(this); // the dusk checkpoint + autosave happen on 'waveTriggered'
+  /** The Start Wave button: the next wave starts now, at whatever time of day it is. */
+  startWave() {
+    return startNextWave(this); // the checkpoint + autosave happen on 'waveTriggered'
   }
 
   update(dt) {

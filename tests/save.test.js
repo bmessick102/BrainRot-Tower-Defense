@@ -100,6 +100,18 @@ describe('save.js', () => {
     expect(r.data).toBeNull();
   });
 
+  it('version 3 saves load with walls moved to the 6-level scale, keeping their picture', () => {
+    const s = makeStateWithTownHall({ gold: 0, tutorialStep: 11, tutorialDone: true }, 10);
+    const levels = [1, 2, 3, 4, 7, 9, 10];
+    levels.forEach((_, i) => addBuilding(s, 'wall', 4 + i, 22, 1));
+    const old = { ...serializeGame(s), version: 3 };
+    old.buildings.filter((b) => b.type === 'wall').forEach((b, i) => { b.level = levels[i]; }); // the old 10-level scale
+    const r = parseSave(JSON.stringify(old));
+    expect(r.status).toBe('ok');
+    expect(r.data.version).toBe(SAVE_VERSION);
+    expect(r.data.buildings.filter((b) => b.type === 'wall').map((b) => b.level)).toEqual([1, 1, 2, 2, 4, 5, 5]);
+  });
+
   it('rejects unknown types, bad levels, overlaps, and footprints off the grass', () => {
     const base = serializeGame(sampleState());
     const mutate = (fn) => { const o = JSON.parse(JSON.stringify(base)); fn(o); return validateSave(o); };

@@ -21,6 +21,7 @@ export class PreloadScene extends Phaser.Scene {
   }
 
   create() {
+    this.scene.launch('VersionScene'); // version label in the corner, above every screen
     this.scene.start('BootScene');
   }
 }

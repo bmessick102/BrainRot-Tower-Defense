@@ -2,7 +2,8 @@ import { describe, it, expect } from 'vitest';
 import { CONFIG } from '../src/config.js';
 import {
   waveComposition, choosePaths, buildSpawnQueues, triggerWave, stepWaveSpawning, checkWaveCleared,
-  enemiesLeft, nightWaveNumber, PATHS
+  enemiesLeft, nightWaveNumber, waveRamp, scaledWaveComposition, nextWaveComposition, nextWaveInfo,
+  specialTypesAt, specialWaveType, specialComposition, waveStrength, PATHS
 } from '../src/logic/waves.js';
 import { ENEMY_KINDS } from '../src/logic/enemies.js';
 import { makeStateWithTownHall, seededRng } from './helpers.js';
@@ -82,9 +83,7 @@ describe('waves.js', () => {
     expect(state.wave).toMatchObject({ phase: 'countdown', number: 1, paths: ['top'] });
     expect(enemiesLeft(state)).toBe(CONFIG.waves[0].grunt);
 
-    stepWaveSpawning(state, CONFIG.rules.waveCountdown - 0.01);
-    expect(state.wave.phase).toBe('countdown');
-    stepWaveSpawning(state, 0.02);
+    stepWaveSpawning(state, 0.02); // no countdown: it starts on the next step
     expect(state.wave.phase).toBe('active');
     expect(state.enemies).toHaveLength(1);
     stepWaveSpawning(state, CONFIG.rules.spawnInterval);
@@ -103,22 +102,50 @@ describe('waves.js', () => {
     expect(state.events.some((e) => e.name === 'waveCleared')).toBe(true);
   });
 
-  it("each night's wave matches the Town Hall level", () => {
-    for (let th = 1; th < CONFIG.rules.maxTownHallLevel; th++) {
-      expect(nightWaveNumber(makeStateWithTownHall({}, th))).toBe(th);
+  it('waves are numbered in the order they are fought, whatever the Village Hall level', () => {
+    for (let th = 1; th <= CONFIG.rules.maxTownHallLevel; th++) {
+      expect(nightWaveNumber(makeStateWithTownHall({}, th))).toBe(1);
+      expect(nightWaveNumber(makeStateWithTownHall({ wavesCleared: 6 }, th))).toBe(7);
     }
   });
 
-  it('at max Town Hall every night survived makes the next one harder', () => {
-    const max = CONFIG.rules.maxTownHallLevel;
-    const state = makeStateWithTownHall({}, max);
-    expect(nightWaveNumber(state)).toBe(max);
+  it('the Village Hall picks the base wave; the first wave is exactly that base', () => {
+    for (let th = 1; th <= 4; th++) expect(scaledWaveComposition(th, 1)).toEqual(CONFIG.waves[th - 1]);
+    expect(scaledWaveComposition(7, 1)).toEqual(waveComposition(7));
+    expect(scaledWaveComposition(12, 1)).toEqual(waveComposition(CONFIG.rules.maxTownHallLevel)); // capped
+  });
+
+  it('every wave survived ramps up enemies and HP, even at the same Village Hall', () => {
+    const r = CONFIG.rules.waveRamp;
+    expect(waveRamp(1)).toEqual({ count: 1, hp: 1 });
+    expect(waveRamp(11).count).toBeCloseTo(1 + 10 * r.countPerWave, 5);
+    expect(waveRamp(11).hp).toBeCloseTo(1 + 10 * r.hpPerWave, 5);
+    const base = CONFIG.waves[1]; // Village Hall 2
+    let prev = null;
+    for (const n of [1, 5, 10, 20]) {
+      const c = scaledWaveComposition(2, n);
+      expect(c.grunt).toBe(Math.round(base.grunt * waveRamp(n).count));
+      expect(c.hpMultiplier).toBeCloseTo(base.hpMultiplier * waveRamp(n).hp, 2);
+      expect(c.bomber).toBe(0); // kinds the hall's base wave doesn't have never show up
+      expect(c.spawnPaths).toBe(base.spawnPaths);
+      if (prev) { expect(c.grunt).toBeGreaterThan(prev.grunt); expect(c.hpMultiplier).toBeGreaterThan(prev.hpMultiplier); }
+      prev = c;
+    }
+  });
+
+  it('clearing waves at the same Village Hall makes the next one bigger', () => {
+    const state = makeStateWithTownHall({}, 3);
+    const total = (c) => ENEMY_KINDS.reduce((n, k) => n + (c[k] || 0), 0);
+    const normalNext = () => scaledWaveComposition(3, nightWaveNumber(state)); // (wave 3 is a special wave)
+    let before = total(normalNext());
     for (let night = 1; night <= 3; night++) {
       triggerWave(state);
+      expect(state.wave.number).toBe(night);
       state.wave.phase = 'active'; state.wave.queues = {}; state.enemies = [];
       checkWaveCleared(state);
-      expect(state.nightsAtMaxTownHall).toBe(night);
-      expect(nightWaveNumber(state)).toBe(max + night);
+      const after = total(normalNext());
+      expect(after).toBeGreaterThan(before);
+      before = after;
     }
     expect(state.wavesCleared).toBe(3);
   });
@@ -130,5 +157,68 @@ describe('waves.js', () => {
     checkWaveCleared(state);
     expect(state.nightsAtMaxTownHall || 0).toBe(0);
     expect(state.wavesCleared).toBe(1);
+  });
+
+  describe('special waves', () => {
+    const SW = CONFIG.specialWaves;
+    const kinds = (c) => ENEMY_KINDS.filter((k) => c[k] > 0);
+
+    it('come every Nth wave, rotating through the types the Village Hall has unlocked', () => {
+      expect(specialWaveType(4, 1)).toBeNull();
+      expect(specialWaveType(4, SW.every + 1)).toBeNull();
+      const seen = [];
+      for (let i = 1; i <= SW.order.length; i++) seen.push(specialWaveType(4, i * SW.every));
+      expect(seen).toEqual(SW.order); // every type once, in order
+      expect(specialWaveType(1, SW.every)).toBeNull(); // nothing unlocked yet at Village Hall 1
+    });
+
+    it('only show up once their enemies are in the normal waves (there is always a counter)', () => {
+      expect(specialTypesAt(1)).toEqual([]);
+      expect(specialTypesAt(2)).not.toContain('air');
+      expect(specialTypesAt(3)).toContain('air');
+      expect(specialTypesAt(3)).not.toContain('siege'); // no Tanks until Village Hall 4
+      expect(specialTypesAt(4)).toEqual(SW.order);
+    });
+
+    it('keep about the same strength as the normal wave, all of one kind', () => {
+      const normal = scaledWaveComposition(4, 9);
+      const air = specialComposition(normal, 'air');
+      expect(kinds(air).every((k) => CONFIG.enemies[k].type === 'air')).toBe(true);
+      const ground = specialComposition(normal, 'ground');
+      expect(kinds(ground).some((k) => CONFIG.enemies[k].type === 'air')).toBe(false);
+      expect(kinds(specialComposition(normal, 'siege')).sort()).toEqual(['breaker', 'tank']);
+      expect(kinds(specialComposition(normal, 'heist'))).toContain('thief');
+      for (const key of SW.order) {
+        const c = specialComposition(normal, key);
+        expect(c.special).toBe(key);
+        expect(c.spawnPaths).toBe(normal.spawnPaths);
+        const ratio = (waveStrength(c) * c.hpMultiplier) / (waveStrength(normal) * normal.hpMultiplier);
+        expect(ratio).toBeGreaterThan(SW.types[key].strength * 0.85);
+        expect(ratio).toBeLessThan(SW.types[key].strength * 1.15);
+      }
+    });
+
+    it('never have more than maxEnemiesFactor x the normal count (the rest goes into HP)', () => {
+      // A few big enemies: the same strength in Bitcoin Stealers would be far more than 2x the count.
+      const normal = { ...scaledWaveComposition(4, 1), grunt: 1, slinger: 0, bomber: 0, tank: 3, shark: 0, thief: 1, breaker: 0, balloon: 0 };
+      const c = specialComposition(normal, 'heist');
+      expect(kinds(c).reduce((n, k) => n + c[k], 0)).toBeLessThanOrEqual(Math.round(5 * SW.maxEnemiesFactor));
+      expect(c.hpMultiplier).toBeGreaterThan(normal.hpMultiplier);
+    });
+
+    it('the next wave is announced ahead, triggered as that type, and pays a bonus when cleared', () => {
+      const state = makeStateWithTownHall({ wavesCleared: SW.every - 1, gold: 0 }, 3);
+      const info = nextWaveInfo(state);
+      expect(info.special).toBe(SW.order[0]);
+      expect(info.specialInfo.name).toBe(SW.types[SW.order[0]].name);
+      triggerWave(state);
+      expect(state.wave.special).toBe(SW.order[0]);
+      state.wave.phase = 'active'; state.wave.queues = {}; state.enemies = []; state.wave.bountyEarned = 40;
+      checkWaveCleared(state);
+      const cleared = state.events.find((e) => e.name === 'waveCleared').data;
+      expect(cleared).toMatchObject({ special: SW.order[0], bonus: Math.floor(40 * SW.bonusBounty) });
+      expect(state.gold).toBe(cleared.bonus);
+      expect(nextWaveInfo(state).special).toBeNull(); // the wave after is normal again
+    });
   });
 });

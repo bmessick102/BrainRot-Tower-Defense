@@ -124,6 +124,7 @@ export function collectMine(state, mine) {
 
 /** Refund for selling: a share of everything spent (build + upgrades), rounded. */
 export function sellRefund(b) {
+  // Gold only: ability tiers (bought with RP) and research are never refunded.
   return Math.round(totalSpent(b.type, b.level) * CONFIG.rules.sellRefund);
 }
 
@@ -134,10 +135,13 @@ export function repairCost(b) {
   return Math.round(levelCost * CONFIG.rules.rebuildCostShare);
 }
 
-/** Rebuild a destroyed building, any time. Walls can't be: they come back on their own at dawn. */
+/**
+ * Rebuild a destroyed building early, for gold (rules.rebuildCostShare). Everything is rebuilt free once the
+ * wave is beaten (repairAll), so this is for getting a building back mid-fight. Walls can't be.
+ */
 export function checkRepair(state, b) {
   if (!b.destroyed) return { ok: false, reason: 'Not destroyed' };
-  if (b.type === 'wall') return { ok: false, reason: 'Walls rebuild at dawn' };
+  if (b.type === 'wall') return { ok: false, reason: 'Walls rebuild after the wave' };
   const cost = repairCost(b);
   if (state.gold < cost) return { ok: false, reason: `Need ${cost - state.gold} more gold` };
   return { ok: true, reason: '' };
@@ -149,18 +153,17 @@ export function repairBuilding(state, b) {
   spendGold(state, repairCost(b));
   b.destroyed = false;
   b.hp = maxHp(b);
-  emit(state, 'buildingRepaired', { id: b.id, paid: true }); // paid: the player rebuilt it (not dawn)
+  emit(state, 'buildingRepaired', { id: b.id, paid: true }); // paid: the player rebuilt it (not the free one after the wave)
   return true;
 }
 
 /**
- * Dawn: damaged buildings heal to full and broken walls are rebuilt, free. Destroyed buildings stay
- * rubble until the player pays to rebuild them. Returns how many are left in ruins.
+ * The wave is beaten: every building is rebuilt and healed to full, free (walls included). Returns how many
+ * are left in ruins (always 0 now; kept for the wave-cleared banner).
  */
 export function repairAll(state) {
-  let ruins = 0;
+  const ruins = 0;
   for (const b of state.buildings) {
-    if (b.destroyed && b.type !== 'wall') { ruins++; continue; }
     const wasDestroyed = b.destroyed;
     b.destroyed = false;
     b.hp = maxHp(b);

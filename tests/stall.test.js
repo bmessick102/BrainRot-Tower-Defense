@@ -8,7 +8,7 @@ import { makeStateWithTownHall, addBuilding, addEnemy } from './helpers.js';
 
 const E = CONFIG.rules.enrage;
 const attack = (extra = {}) => {
-  const s = makeStateWithTownHall({ tutorialDone: true, tutorialStep: 10, clock: { phase: 'night', t: 0 }, ...extra });
+  const s = makeStateWithTownHall({ tutorialDone: true, tutorialStep: 10, clock: { phase: 'day', t: 0 }, ...extra }); // by day: no restless-night bonus
   s.wave.phase = 'active';
   addBuilding(s, 'house', 21, 20, 5); // 3 gnomes to do the repairs
   return s;

@@ -70,14 +70,14 @@ describe('economy.js', () => {
     expect(sellRefund(cannon)).toBe(Math.round(spent / 2));
   });
 
-  it('rebuilding costs 30% of the building current level cost, any time, but never for walls', () => {
+  it('rebuilding early costs 30% of the building current level cost, but never for walls', () => {
     const state = makeStateWithTownHall({}, 3);
     const cannon = addBuilding(state, 'cannon', 13, 15, 3);
     expect(repairCost(cannon)).toBe(Math.round(CONFIG.defenses.cannon.levels[2].cost * 0.3));
     state.gold = repairCost(cannon) + 10;
     expect(checkRepair(state, cannon).ok).toBe(false);         // not destroyed
     cannon.destroyed = true; cannon.hp = 0;
-    expect(checkRepair(state, cannon).ok).toBe(true);          // daytime is fine
+    expect(checkRepair(state, cannon).ok).toBe(true);
     expect(repairBuilding(state, cannon)).toBe(true);
     expect(cannon.destroyed).toBe(false);
     expect(cannon.hp).toBe(CONFIG.defenses.cannon.levels[2].hp);
@@ -85,10 +85,10 @@ describe('economy.js', () => {
     const wall = createBuilding(state, 'wall', 6, 20, 1, null, 'x');
     state.buildings.push(wall);
     wall.destroyed = true;
-    expect(checkRepair(state, wall)).toEqual({ ok: false, reason: 'Walls rebuild at dawn' });
+    expect(checkRepair(state, wall)).toEqual({ ok: false, reason: 'Walls rebuild after the wave' });
   });
 
-  it('at dawn damaged buildings heal and walls come back, but ruins stay ruins', () => {
+  it('when the wave is beaten everything is rebuilt and healed, free', () => {
     const state = makeStateWithTownHall();
     const mine = addBuilding(state, 'mine', 13, 15);
     const cannon = addBuilding(state, 'cannon', 9, 16);
@@ -97,10 +97,13 @@ describe('economy.js', () => {
     mine.hp = 10;
     cannon.destroyed = true; cannon.hp = 0;
     wall.destroyed = true; wall.hp = 0;
-    expect(repairAll(state)).toBe(1);
+    const gold = state.gold;
+    expect(repairAll(state)).toBe(0);
     expect(mine.hp).toBe(CONFIG.mine.levels[0].hp);
     expect(wall.destroyed).toBe(false);
-    expect(cannon.destroyed).toBe(true);
+    expect(cannon.destroyed).toBe(false);
+    expect(cannon.hp).toBe(CONFIG.defenses.cannon.levels[0].hp);
+    expect(state.gold).toBe(gold); // free
   });
 
   it('storage damage drains gold by the charter formula', () => {

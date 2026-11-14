@@ -1,4 +1,4 @@
-// Tutorial step state machine: rebuild the hall -> mine -> storage -> cannon -> first night (wave 1) -> town hall tip.
+// Tutorial step state machine: rebuild the hall -> mine -> storage -> cannon -> first wave -> town hall tip.
 // tutorialStep holds the step number (1..9); 10 with tutorialDone = true means finished.
 import { MAP } from '../mapTiles.js';
 import { createBuilding, buildCost, upgradeCost } from './buildings.js';
@@ -42,18 +42,18 @@ export const TUTORIAL_STEPS = [
     goldGate: () => buildCost('cannon'), buyType: 'cannon',
     allow: { ...NONE, select: ['mine'], collect: true, shop: true, cards: ['cannon'] }
   },
-  // Reaching this step starts the day/night clock at dusk (GameState), so wave 1 comes right away.
+  // Reaching this step sends wave 1 right away (GameState) and starts the day/night clock.
   {
-    text: 'Night is falling, defend your base! Enemies attack every night, coming from the flashing path.',
+    text: 'Here they come, defend your base! Enemies are coming from the flashing path.',
     advanceOn: 'waveStarted', focus: 'spawnMarker', allow: { ...NONE, select: ['mine'], collect: true }
   },
   {
-    text: `You survived the night! Upgrade your Village Hall to unlock more buildings, but each night's attack grows with it.`,
+    text: `You beat the wave! From now on, press Start Wave when you're ready, day or night. Every wave is tougher than the last, and upgrading your Village Hall unlocks more buildings but brings bigger attacks.`,
     advanceOn: 'next', showNext: true, hiddenUntilWavesCleared: 1, allow: ALL
   }
 ];
 
-/** The step where night is introduced; the day/night clock starts running here. */
+/** The step with the first wave; the day/night clock starts running here. */
 export const TUTORIAL_NIGHT_STEP = 8;
 
 export function isTutorialActive(state) {

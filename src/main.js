@@ -9,6 +9,7 @@ import { GameScene } from './scenes/GameScene.js';
 import { UIScene } from './scenes/UIScene.js';
 import { PauseScene } from './scenes/PauseScene.js';
 import { GameOverScene } from './scenes/GameOverScene.js';
+import { VersionScene } from './scenes/VersionScene.js';
 import { setGameStorage } from './state/GameState.js';
 import { session } from './net/account.js';
 
@@ -28,7 +29,7 @@ const game = new Phaser.Game({
   banner: false,
   scale: { mode: Phaser.Scale.FIT, autoCenter: Phaser.Scale.CENTER_BOTH },
   dom: { createContainer: true }, // text boxes on the login screen and name dialogs
-  scene: [PreloadScene, BootScene, AuthScene, TitleScene, HowToPlayScene, GameScene, UIScene, PauseScene, GameOverScene]
+  scene: [PreloadScene, BootScene, AuthScene, TitleScene, HowToPlayScene, GameScene, UIScene, PauseScene, GameOverScene, VersionScene]
 });
 
 // Dev server only: lets automated checks and the browser console inspect the running game.

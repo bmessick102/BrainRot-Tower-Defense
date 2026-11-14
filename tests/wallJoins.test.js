@@ -12,11 +12,11 @@ const line = (s, c, r, n, dc, dr) => Array.from({ length: n }, (_, i) => wall(s,
 const partsOf = (s, walls) => { const t = wallTiles(s.buildings); return walls.flatMap((w) => wallParts(t, w)); };
 
 describe('single-tile walls', () => {
-  it('a wall is one tile; walls cost a third of an old 3-tile segment and 3x as many are allowed', () => {
+  it('a wall is one tile and cheap (10 gold); 24 allowed at Village Hall 1', () => {
     expect(CONFIG.walls.segmentLength).toBe(1);
     expect(footprintDims('wall', 'x')).toEqual({ w: 1, h: 1 });
     expect(footprintDims('wall', 'y')).toEqual({ w: 1, h: 1 });
-    expect(CONFIG.walls.levels[0].cost).toBe(17);
+    expect(CONFIG.walls.levels.map((l) => l.cost)).toEqual([10, 25, 60, 150, 350, 800, 1800]);
     expect(CONFIG.limits.wall[0]).toBe(24);
   });
 
@@ -92,25 +92,22 @@ describe('connected walls: pillars, with a connector between every two touching 
 });
 
 describe('wall size grows like buildings', () => {
-  it('starts small and grows only on levels that keep the same picture', () => {
+  it('starts small and grows a step with every level (each level is a new picture)', () => {
     expect(wallPillarWidth(1)).toBe(PILLAR_WIDTH.min);
-    expect(wallPillarWidth(10)).toBeCloseTo(PILLAR_WIDTH.max);
-    for (let l = 2; l <= 10; l++) {
-      if (l % 2 === 0) expect(wallPillarWidth(l)).toBeGreaterThan(wallPillarWidth(l - 1)); // same picture: grows
-      else expect(wallPillarWidth(l)).toBe(wallPillarWidth(l - 1));                         // new picture: same size
-    }
+    expect(wallPillarWidth(7)).toBeCloseTo(PILLAR_WIDTH.max);
+    for (let l = 2; l <= 7; l++) expect(wallPillarWidth(l)).toBeGreaterThan(wallPillarWidth(l - 1));
   });
 
   it('every level stays gap-free: connecting pillars always stand closer than a pillar is wide', () => {
     const step = Math.hypot(MAP.tileWidth / 2, MAP.tileHeight / 2);
-    for (let level = 1; level <= 10; level++) {
-      const key = `bld_wall_lv${Math.ceil(level / 2)}`;
+    for (let level = 1; level <= 7; level++) {
+      const key = `bld_wall_lv${level}`;
       const m = WALL_ART_META[key];
       const visW = MAP.tileWidth * wallPillarWidth(level) * ((m.visX1 - m.visX0) / m.width);
       const spacing = step / (wallLinksFor(key, level) + 1);
       expect(spacing).toBeLessThanOrEqual(0.65 * visW + 1e-9);
     }
-    expect(wallLinksFor('bld_wall_lv1', 1)).toBeGreaterThan(wallLinksFor('bld_wall_lv5', 10)); // thin posts need more
+    expect(wallLinksFor('bld_wall_lv1', 1)).toBeGreaterThan(wallLinksFor('bld_wall_lv7', 7)); // thin posts need more
   });
 
   it('several connectors per link are spread evenly and layered between the two walls', () => {

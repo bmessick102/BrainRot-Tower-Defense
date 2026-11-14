@@ -164,6 +164,52 @@ function fadeVolume(scene, s, to, ms, onDone) {
   fades.add(tween);
 }
 
+// ---------- ambience: day and night beds between waves ----------
+// Two looping tracks play together; their volumes follow the day/night clock (night 0 = all day bed, 1 = all
+// night bed), so they crossfade through dusk and dawn. While a wave attacks they fade out (the attack music
+// takes over) and fade back in when it's beaten. They follow the Music slider. updateAmbience runs every frame.
+const AMBIENCE_GAIN = 1;          // on top of MUSIC_MIX, like a music track
+const AMBIENCE_FADE_PER_S = 0.7;  // how fast they fade out for a wave / back in after (share of full per second)
+let ambience = null;              // { day, night, presence }
+
+/** Are the ambience files loaded? (Without them the village music plays between waves, as before.) */
+export function hasAmbience(scene, dayKey, nightKey) {
+  return scene.cache.audio.exists(dayKey) && scene.cache.audio.exists(nightKey);
+}
+
+/** Start both beds (silent; updateAmbience sets their volumes). Does nothing if they're already playing. */
+export function startAmbience(scene, dayKey, nightKey, { presence = 0 } = {}) {
+  if (ambience || !hasAmbience(scene, dayKey, nightKey)) return;
+  const day = scene.sound.add(dayKey, { loop: true, volume: 0 });
+  const night = scene.sound.add(nightKey, { loop: true, volume: 0 });
+  day.play();
+  night.play();
+  ambience = { day, night, presence };
+}
+
+/**
+ * Every frame: `night` is how dark it is (0..1), `on` whether the beds should be heard (no wave attacking).
+ * Presence eases toward `on`, so the beds fade out for a wave and back in after it.
+ */
+export function updateAmbience(night, on, dt) {
+  if (!ambience) return;
+  const a = ambience;
+  const target = on ? 1 : 0;
+  const step = AMBIENCE_FADE_PER_S * dt;
+  a.presence = a.presence < target ? Math.min(target, a.presence + step) : Math.max(target, a.presence - step);
+  const base = Math.min(1, MUSIC_MIX * AMBIENCE_GAIN) * musicLevel * a.presence;
+  const n = clamp01(night);
+  if (isAlive(a.day)) a.day.setVolume(base * (1 - n));
+  if (isAlive(a.night)) a.night.setVolume(base * n);
+}
+
+export function stopAmbience() {
+  if (!ambience) return;
+  destroySound(ambience.day);
+  destroySound(ambience.night);
+  ambience = null;
+}
+
 export function stopMusic() {
   for (const t of fades) t.stop();
   fades.clear();

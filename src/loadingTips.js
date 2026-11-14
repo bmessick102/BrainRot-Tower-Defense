@@ -9,9 +9,9 @@ export const LOADING_TIPS = [
   'Every enemy you defeat drops gold. Tougher enemies are worth more.',
 
   // Village Hall and building
-  'Upgrading your Village Hall unlocks new buildings and more of each, but every night\'s attack grows with it.',
+  'Upgrading your Village Hall unlocks new buildings and more of each, but brings bigger attacks with new enemy types.',
   'If your Village Hall falls, the night is lost. Build your defenses around it.',
-  'Use Edit mode to move buildings around for free between waves.',
+  'Edit mode can clear your whole village into the hotbar with Remove All, so you can lay it out from scratch between waves.',
   'Press R while placing a wall to rotate it.',
   "Destroyed buildings stay in ruins after the night. Click one to rebuild it for 30% of its level's cost, even mid-wave.",
   'Villager Houses add gnome workers: they speed up your mines by day and patch up buildings during attacks.',
@@ -34,8 +34,9 @@ export const LOADING_TIPS = [
   'Check How to Play to see every enemy\'s stats and which defenses can hit it.',
 
   // Day and night
-  'Night falls after each day. When the planning music starts, you have 30 seconds before the wave arrives.',
-  'Watch for the spawn markers at dusk: they show where tonight\'s enemies will come from.',
+  'There\'s no rush: the next wave only comes when you press Start Wave. Each wave is a little tougher than the last.',
+  'Every 3rd wave is a special wave, like an all-flyer Air Raid. The top bar turns red to warn you, and beating one pays bonus gold.',
+  'Watch for the flashing spawn markers when a wave starts: they show where the enemies are coming from.',
   'Your game saves automatically at dusk and after every cleared wave.',
   'Lost a night? Retry rewinds to that dusk and gives you some daytime to rebuild first.'
 ];

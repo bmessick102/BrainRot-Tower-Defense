@@ -15,7 +15,10 @@ export const TEX = {
   settingsButton: 'ui_settings_button',
   editButton: 'ui_edit_layout_button',
   startButton: 'ui_start_button',
-  titleBackground: 'ui_title_background'
+  titleBackground: 'ui_title_background',
+  achievementIcon: 'ui_achievement',
+  researchPoint: 'ui_research_point', // optional art (art-source/ui/ui_research_point.png); a flask is drawn without it
+  researchReady: 'ui_research_ready' // the book bobbing over the RV Lab when research is ready (falls back to the RP token)
 };
 
 /** Base (single-model) building texture. */
@@ -34,7 +37,12 @@ export const PROJECTILE_KEYS = {
   firework: 'proj_firework',
   catapult: 'proj_catapult',
   slinger: 'proj_slinger',
-  bomb: 'proj_bomb'
+  bomb: 'proj_bomb',
+  // RV Lab ability shots reuse existing pictures: Grapeshot pellets and Boulders are cannonballs,
+  // Cluster Shell bomblets are small mortar shells.
+  pellet: 'proj_cannon',
+  boulder: 'proj_cannon',
+  bomblet: 'proj_mortar'
 };
 
 /** Files whose name differs from the texture key they provide. */
@@ -91,7 +99,9 @@ export const SFX = {
 
 export const MUSIC = {
   title: 'music_title',
-  village: 'music_village', // daytime
+  village: 'music_village', // fallback between waves when the ambience files are missing
+  ambientDay: 'ambient_day',     // between waves by day: looping ambience (crossfades with the night one)
+  ambientNight: 'ambient_night', // between waves by night
   planning: 'music_planning', // the wave countdown at dusk: plays once, ending as the wave hits
   attack: 'music_attack'    // at night while enemies attack (add public/assets/audio/music_attack.mp3)
 };

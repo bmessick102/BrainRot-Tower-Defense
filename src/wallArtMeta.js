@@ -36,5 +36,19 @@ export const WALL_ART_META = {
     "visX0": 3,
     "visX1": 252,
     "bottom": 345
+  },
+  "bld_wall_lv6": {
+    "width": 256,
+    "height": 347,
+    "visX0": 3,
+    "visX1": 252,
+    "bottom": 345
+  },
+  "bld_wall_lv7": {
+    "width": 256,
+    "height": 347,
+    "visX0": 3,
+    "visX1": 252,
+    "bottom": 345
   }
 };
