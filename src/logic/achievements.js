@@ -37,6 +37,7 @@ export const ACHIEVEMENTS = [
   { id: 'meltdown', group: 'battle', name: 'Meltdown', desc: 'Heat a Tower of Rah beam all the way up', stat: 'rahMax', goal: 1, reward: 2000 },
   { id: 'flawless', group: 'battle', name: 'Flawless Defense', desc: 'Survive a wave without losing a building (walls don’t count)', stat: 'perfect', goal: 1, reward: 500 },
   { id: 'untouchable', group: 'battle', name: 'Untouchable', desc: 'Survive 10 waves without losing a building', stat: 'perfect', goal: 10, reward: 4000 },
+  { id: 'stars100', group: 'battle', name: 'Star Collector', desc: 'Earn 100 wave stars', stat: 'stars', goal: 100, reward: 3000 },
 
   // ---- Builder: your villages ----
   { id: 'early', group: 'builder', name: 'Bring It On', desc: 'Start a wave within 10 s of clearing the last one, 5 times', stat: 'early', goal: 5, reward: 500 },
@@ -48,7 +49,7 @@ export const ACHIEVEMENTS = [
 ];
 
 /** The counters AchievementTracker bumps (all start at 0). */
-export const COUNTERS = ['kills', 'bomberKills', 'balloonKills', 'traps', 'rahMax', 'perfect', 'early', 'mined'];
+export const COUNTERS = ['kills', 'bomberKills', 'balloonKills', 'traps', 'rahMax', 'perfect', 'early', 'mined', 'stars'];
 
 export function achievementById(id) {
   return ACHIEVEMENTS.find((a) => a.id === id) || null;

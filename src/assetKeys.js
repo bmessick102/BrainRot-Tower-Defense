@@ -4,6 +4,8 @@
 export const TEX = {
   map: 'map_background',
   mapNight: 'map_background_night',
+  mapDusk: 'map_background_dusk', // the warm sky between day and night
+  mapDawn: 'map_background_dawn', // the same going back, between night and day
   light: 'fx_light',
   fog: 'fx_fog', // soft cloud puff for the screen-corner fog
   villager: 'villager_gnome',
@@ -18,7 +20,8 @@ export const TEX = {
   titleBackground: 'ui_title_background',
   achievementIcon: 'ui_achievement',
   researchPoint: 'ui_research_point', // optional art (art-source/ui/ui_research_point.png); a flask is drawn without it
-  researchReady: 'ui_research_ready' // the book bobbing over the RV Lab when research is ready (falls back to the RP token)
+  researchReady: 'ui_research_ready', // the book bobbing over the RV Lab when research is ready (falls back to the RP token)
+  beatReady: 'ui_beat_ready'         // over DJ Babyface when Drop the Beat is ready (falls back to a "DROP!" label)
 };
 
 /** Base (single-model) building texture. */
@@ -46,7 +49,9 @@ export const PROJECTILE_KEYS = {
 };
 
 /** Files whose name differs from the texture key they provide. */
-export const FILE_KEY_ALIASES = { game_map_grid: TEX.map, game_map_grid_night: TEX.mapNight };
+export const FILE_KEY_ALIASES = {
+  game_map_grid: TEX.map, game_map_grid_night: TEX.mapNight, game_map_grid_dusk: TEX.mapDusk, game_map_grid_dawn: TEX.mapDawn
+};
 /** Files present in public/assets but not loaded (kept for the team). */
 export const UNLOADED_FILES = ['game_map'];
 
@@ -54,6 +59,8 @@ export const SFX = {
   uiClick: 'sfx_ui_click',
   place: 'sfx_place',
   upgrade: 'sfx_upgrade',
+  beatDrop: 'sfx_beat_drop',             // DJ Babyface drops the beat
+  abilityUnlocked: 'sfx_ability_unlocked', // a building gets a new ability tier (RV Lab research, or a level-up)
   sell: 'sfx_sell',
   coinCollect: 'sfx_coin_collect',
   cannonFire: 'sfx_cannon_fire',
@@ -87,10 +94,11 @@ export const SFX = {
   raBeam: 'sfx_ra_beam',                   // looping while a Tower of Rah beam burns
   raHeatUp: 'sfx_ra_heat_up',              // a Tower of Rah beam heats up to its next stage      // a Mousetrap springs                    // the player pays to rebuild a destroyed building       // an enemy enters an empty F.L.O.C.K Tower range
   buildingSelect: 'sfx_building_select', // clicking a building
+  heroSelect: 'sfx_hero_select',         // clicking the Brisket King himself (his voice; never talks over itself)
+  altarSelect: 'sfx_altar_select',       // clicking the Brisket King's altar
   invalid: 'sfx_invalid',               // placing/dropping a building on an invalid spot
   hit: 'sfx_hit',
   buildingDestroyed: 'sfx_building_destroyed',
-  waveCountdown: 'sfx_wave_countdown',
   waveStart: 'sfx_wave_start',
   waveClear: 'sfx_wave_clear',
   achievement: 'sfx_achievement',   // an achievement unlocks (optional: the wave-clear fanfare plays without it)
@@ -102,7 +110,6 @@ export const MUSIC = {
   village: 'music_village', // fallback between waves when the ambience files are missing
   ambientDay: 'ambient_day',     // between waves by day: looping ambience (crossfades with the night one)
   ambientNight: 'ambient_night', // between waves by night
-  planning: 'music_planning', // the wave countdown at dusk: plays once, ending as the wave hits
   attack: 'music_attack'    // at night while enemies attack (add public/assets/audio/music_attack.mp3)
 };
 
@@ -111,6 +118,7 @@ export const ENEMY_ATTACK_SFX = {
   grunt: SFX.enemyHitSmall,
   shark: SFX.enemyHitSmall,
   thief: SFX.enemyHitSmall,
+  toilet: SFX.enemyHitSmall,
   tank: SFX.enemyHitBig,
   neegy: SFX.neegyHit
 };

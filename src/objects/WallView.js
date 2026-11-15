@@ -1,7 +1,7 @@
 // Draws one wall (a single tile).
-// Wall art is one pillar per level (bld_wall_lv1..7: wooden post, banded post, stone block, riveted block,
-// gold-trimmed block, skull fortress block, lava block), all cropped to one shared box so every level keeps the
-// same scale and baseline.
+// Wall art is one pillar per level (bld_wall_lv1..8: wooden post, banded post, stone block, riveted block,
+// gold-trimmed block, skull fortress block, lava block, lava tower), all cropped to one shared box so every
+// level keeps the same scale and baseline.
 // Walls are drawn as one connected wall: every wall tile has a pillar standing on its center, and wherever
 // two walls are side by side (in any direction: lines, corners, T-junctions, walls running alongside each
 // other) connecting pillars stand evenly between them (more for thin wooden posts, fewer for thick stone;
@@ -9,7 +9,7 @@
 // Each wall draws its own pillar and the connectors leading forward (down-screen) from it, so every
 // connector is drawn once and everything is layered back to front.
 // A destroyed wall shows a rubble pile on its tile: broken wooden posts for level 1, broken stone for 2-5,
-// skull rubble for 6 and lava rubble for 7 (WALL_RUBBLE, in BuildingView.js). Without wall art it's one placeholder sprite per tile.
+// skull rubble for 6 and lava rubble for 7-8 (WALL_RUBBLE, in BuildingView.js). Without wall art it's one placeholder sprite per tile.
 // Ground enemies still layer correctly against it: depth.js treats each wall's tile as a building.
 // Same interface as BuildingView (sync, flash, pop, setAlpha, topCenter, hitTest, destroy, sprite).
 import { gridToScreen } from '../logic/iso.js';
@@ -24,10 +24,11 @@ export { WALL_RUBBLE };
 
 const FLASH_MIN_GAP_MS = 400;
 // On-screen width of the shared pillar box (the widest pillar, the stone blocks), as a share of a tile's
-// width. Walls start small and grow a little with each level (each level is a new picture), in equal steps
-// from min (Level 1) to max (Level 7). Pillars stand half a tile apart along a wall, so even the smallest
-// overlap into a solid wall.
-export const PILLAR_WIDTH = { min: 0.44, max: 0.6, maxLevel: 7 };
+// width. Walls start small and grow with each level (each level is a new picture), in equal steps from min
+// (Level 1, a thin post) to max (Level 8, a big tower), so a wall's level reads at a glance. About the same
+// average size as the earlier 0.396-0.54 range (10% under the original 0.44-0.6), spread wider. Pillars stand
+// half a tile apart along a wall, and wallLinksFor adds connectors so even the smallest form a solid wall.
+export const PILLAR_WIDTH = { min: 0.3, max: 0.58, maxLevel: 8 };
 
 /** Pillar box width (share of a tile) for a wall level. */
 export function wallPillarWidth(level) {

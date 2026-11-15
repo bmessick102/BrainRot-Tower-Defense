@@ -13,7 +13,7 @@ import { drawBadge } from './uiDraw.js';
 import { COLORS, bodyStyle, textStyle } from '../theme.js';
 import { PATH_COLORS, PATH_TEXT_COLORS } from '../abilityConfig.js';
 import {
-  ABILITY_TYPES, MAX_TIER, PATH_KEYS, tierInfo, pathName, pathTiers, levelReq, labLevel, labPicks, labTierCount,
+  ABILITY_TYPES, DEFENSE_ABILITY_TYPES, ECONOMY_ABILITY_TYPES, MAX_TIER, PATH_KEYS, tierInfo, pathName, pathTiers, levelReq, labLevel, labPicks, labTierCount,
   checkResearch, canResearchFor, researchCost
 } from '../logic/abilities.js';
 import { buildingName } from '../logic/buildings.js';
@@ -66,15 +66,15 @@ function balance(scene, m, gs, rp, x, y) {
 }
 
 /** The info line under the title: the RV Lab guide's hint while it has one for this window, else `text`. */
-function infoLine(scene, m, gs, kind, text, width) {
+function infoLine(scene, m, gs, kind, text, width, x = m.x + 24) {
   const hint = labGuideHint(gs, kind);
   if (hint) {
     const g = m.add(scene.add.graphics());
-    const t = scene.add.text(m.x + 36, m.y + 72, `Guide: ${hint}`, bodyStyle(15, '#5a3a00', { fontStyle: 'bold', wordWrap: { width: width - 24 } })).setOrigin(0, 0.5);
-    g.fillStyle(0xffd84a, 0.9).fillRoundedRect(m.x + 24, m.y + 72 - t.height / 2 - 6, Math.min(width, t.width + 24), t.height + 12, 10);
+    const t = scene.add.text(x + 12, m.y + 72, `Guide: ${hint}`, bodyStyle(15, '#5a3a00', { fontStyle: 'bold', wordWrap: { width: width - 24 } })).setOrigin(0, 0.5);
+    g.fillStyle(0xffd84a, 0.9).fillRoundedRect(x, m.y + 72 - t.height / 2 - 6, Math.min(width, t.width + 24), t.height + 12, 10);
     m.add(t);
   } else {
-    m.add(scene.add.text(m.x + 26, m.y + 72, text, bodyStyle(15, COLORS.inkDim, { wordWrap: { width } })).setOrigin(0, 0.5));
+    m.add(scene.add.text(x + 2, m.y + 72, text, bodyStyle(15, COLORS.inkDim, { wordWrap: { width } })).setOrigin(0, 0.5));
   }
 }
 
@@ -140,7 +140,7 @@ function drawTree(scene, m, x, y, colW, gap, type, nodeState, selected, onSelect
       ng.fillStyle(face, 1).fillRoundedRect(cx + 2, cy + 2, colW - 4, NODE_H - 5, 10);
       if (owned) ng.fillStyle(color, 1).fillRoundedRect(cx + 2, cy + 2, 6, NODE_H - 5, 3);
       gem(ng, cx + 22, cy + NODE_H / 2, 11, color, owned, dim);
-      const name = m.add(scene.add.text(cx + 40, cy + 10, tierInfo(type, p, t).name, bodyStyle(14.5, dim ? '#a89c88' : COLORS.ink, { fontStyle: 'bold' })));
+      const name = m.add(scene.add.text(cx + 40, cy + 10, st.hidden ? '? ? ?' : tierInfo(type, p, t).name, bodyStyle(14.5, dim || st.hidden ? '#a89c88' : COLORS.ink, { fontStyle: 'bold' })));
       if (name.width > colW - 48) name.setScale((colW - 48) / name.width);
       const lineInk = owned ? INK[p] : avail ? (st.short ? COLORS.inkBad : COLORS.inkGood) : dim ? '#b3a892' : COLORS.inkDim;
       m.add(scene.add.text(cx + 40, cy + 33, st.line || '', bodyStyle(12.5, lineInk, { fontStyle: owned || avail ? 'bold' : 'normal' })));
@@ -172,7 +172,9 @@ function drawDetails(scene, m, x, y, w, h, d) {
   g.fillStyle(COLORS.frame, 0.25).fillRoundedRect(x, y, w, h, 14);
   g.fillStyle(0xf6f1e6, 1).fillRoundedRect(x + 2, y + 2, w - 4, h - 5, 13);
   g.fillStyle(PATH_COLORS[d.path], 1).fillRoundedRect(x + 2, y + 2, w - 4, 10, { tl: 13, tr: 13, bl: 0, br: 0 });
-  const info = tierInfo(d.type, d.path, d.tier);
+  const info = d.hidden
+    ? { name: 'Locked tier', desc: `Level up your RV Lab to ${d.tier} to reveal this tier and research it.` }
+    : tierInfo(d.type, d.path, d.tier);
   let cy = y + 24;
   const title = m.add(scene.add.text(x + 20, cy, info.name, textStyle(26)));
   if (title.width > w - 40) title.setScale((w - 40) / title.width);
@@ -233,6 +235,9 @@ export function openResearchWindow(scene, gs, { onClose = null, startType = null
   const stateOf = (lab) => (p, t) => {
     const picks = labPicks(gs, type), count = picks.length;
     if (t <= count) return picks[t - 1] === p ? { state: 'owned', line: '✔ Researched' } : { state: 'taken', line: `Took Path ${picks[t - 1].toUpperCase()}` };
+    // Tiers past what the RV Lab can reach stay hidden (name and text) until it levels up, so a new player
+    // sees a few options at a time instead of the whole tree.
+    if (t > Math.max(1, lab)) return { state: t > count + 1 ? 'future' : 'locked', line: `Locked · RV Lab lv ${t}`, hidden: true };
     if (t > count + 1) return { state: 'future', line: `After tier ${t - 1}` };
     if (!lab) return { state: 'locked', line: gs.buildings.some((b) => b.type === 'rvlab') ? 'RV Lab destroyed' : 'Build an RV Lab' };
     if (t > lab) return { state: 'locked', line: `RV Lab level ${t}` };
@@ -246,8 +251,11 @@ export function openResearchWindow(scene, gs, { onClose = null, startType = null
     if (last) return { path: last, tier: next };
     return { path: PATH_KEYS.find((p) => st(p, next).state === 'available') || 'a', tier: next };
   };
-  // Open on the first defense with research ready, else the first one.
-  if (!type) type = ABILITY_TYPES.find((t) => canResearchFor(gs, t)) || ABILITY_TYPES[0];
+  // Two tabs: Defenses and Economy (the economy buildings' trees). Open on the given type's tab, else on the
+  // first building with research ready, else the first defense.
+  const TABS = [{ key: 'defenses', label: 'Defenses', types: DEFENSE_ABILITY_TYPES }, { key: 'economy', label: 'Economy', types: ECONOMY_ABILITY_TYPES }];
+  if (!type) type = ABILITY_TYPES.find((t) => canResearchFor(gs, t)) || DEFENSE_ABILITY_TYPES[0];
+  let tab = ECONOMY_ABILITY_TYPES.includes(type) ? 'economy' : 'defenses';
 
   /** "Applies to every Cannon at level 4+ (2 of your 3 now)." */
   const appliesText = (tier, owned) => {
@@ -264,16 +272,38 @@ export function openResearchWindow(scene, gs, { onClose = null, startType = null
     const lab = labLevel(gs);
     m.setTitle(lab ? `RV Lab · Research (level ${lab}: tiers 1-${lab})` : 'RV Lab · Research');
     infoLine(scene, m, gs, 'research', lab
-      ? 'One pick per tier (A, B or C, any mix; picks are final). It goes onto every building of that type.'
-      : 'Build or rebuild an RV Lab to research.', W - 420);
+      ? 'One pick per tier (A, B or C; final). It goes onto every building of that type.'
+      : 'Build or rebuild an RV Lab to research.', W - 420 - LIST_W, m.x + 22 + LIST_W + 14);
+    // The tabs, over the list: the selected one green, a red "!" on a tab with research ready.
+    TABS.forEach((tb, i) => {
+      const tw = (LIST_W - 6) / 2, tx = m.x + 22 + i * (tw + 6), ty = m.y + 61, on = tb.key === tab;
+      const g = m.add(scene.add.graphics());
+      g.fillStyle(COLORS.frame, 1).fillRoundedRect(tx, ty, tw, 30, 9);
+      g.fillStyle(on ? 0x6cbf2c : 0x4a4f5a, 1).fillRoundedRect(tx + 2, ty + 2, tw - 4, 25, 8);
+      g.fillStyle(0xffffff, 0.18).fillRoundedRect(tx + 5, ty + 4, tw - 10, 7, 4);
+      m.add(scene.add.text(tx + tw / 2, ty + 14, tb.label, textStyle(15)).setOrigin(0.5));
+      if (tb.types.some((t) => canResearchFor(gs, t))) {
+        drawBadge(g, tx + tw - 9, ty + 9, 8);
+        m.add(scene.add.text(tx + tw - 9, ty + 8, '!', textStyle(12)).setOrigin(0.5));
+      }
+      const zone = m.add(scene.add.zone(tx, ty, tw, 30).setOrigin(0).setInteractive({ useHandCursor: true }));
+      zone.on('pointerdown', () => {
+        if (tab === tb.key) return;
+        tab = tb.key;
+        type = tb.types.find((t) => canResearchFor(gs, t)) || tb.types[0];
+        selected = null;
+        refresh();
+      });
+    });
     // Top right: the selected defense's tiers as pips, then your RP.
     const pg = m.add(scene.add.graphics());
     drawPips(pg, m.x + W - 230, m.y + 72, labPicks(gs, type));
     balance(scene, m, gs, true, m.x + W - 22, m.y + 72);
 
-    // Defense list: picture, name, its five tiers as squares colored by pick, and "!" when research is ready.
-    const lx = m.x + 22, ly = m.y + TOP, itemH = Math.floor((GRID_H + 4) / ABILITY_TYPES.length);
-    ABILITY_TYPES.forEach((t, i) => {
+    // The tab's buildings: picture, name, its five tiers as squares colored by pick, "!" when research is ready.
+    const types = TABS.find((tb) => tb.key === tab).types;
+    const lx = m.x + 22, ly = m.y + TOP, itemH = Math.min(58, Math.floor((GRID_H + 4) / types.length));
+    types.forEach((t, i) => {
       const y = ly + i * itemH, sel = t === type;
       const g = m.add(scene.add.graphics());
       g.fillStyle(COLORS.frame, sel ? 1 : 0.2).fillRoundedRect(lx, y, LIST_W, itemH - 4, 9);
@@ -307,13 +337,14 @@ export function openResearchWindow(scene, gs, { onClose = null, startType = null
     const s = st(path, tier);
     const c = checkResearch(gs, type, path, tier);
     const count = labTierCount(gs, type);
-    const checks = s.state === 'owned' || s.state === 'taken' ? [] : [
+    const checks = s.state === 'owned' || s.state === 'taken' || s.hidden ? [] : [
       [lab >= tier, `RV Lab level ${tier}${lab ? ` (yours: ${lab})` : ''}`],
       ...(tier > 1 ? [[count >= tier - 1, `A tier ${tier - 1} pick first`]] : []),
       [!isWaveActive(gs), 'Not during a wave']
     ];
-    const detail = { type, path, tier, checks, applies: s.state === 'taken' ? '' : appliesText(tier, s.state === 'owned'), rp: true, button: null };
-    if (s.state === 'owned') { detail.note = '✔ Researched'; detail.noteGood = true; }
+    const detail = { type, path, tier, checks, hidden: !!s.hidden, applies: s.state === 'taken' || s.hidden ? '' : appliesText(tier, s.state === 'owned'), rp: true, button: null };
+    if (s.hidden) detail.note = `Unlocks at RV Lab level ${tier}`;
+    else if (s.state === 'owned') { detail.note = '✔ Researched'; detail.noteGood = true; }
     else if (s.state === 'taken') detail.note = `You took Path ${labPicks(gs, type)[tier - 1].toUpperCase()} at tier ${tier}. Picks are final.`;
     else if (s.state === 'future') detail.note = `Pick a tier ${count + 1} option first`;
     else detail.button = { label: c.cost === 0 ? 'Research (free)' : `Research · ${formatGold(c.cost ?? researchCost(tier))} RP`, ok: c.ok, sub: c.reason, onClick: () => { if (gs.researchAbility(type, path, tier).ok) { selected = { path, tier: Math.min(MAX_TIER, tier + 1) }; refresh(); } } };

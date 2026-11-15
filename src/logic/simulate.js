@@ -1,4 +1,8 @@
 // One simulation step. GameScene calls this every frame with dt in seconds (capped).
+import { stepHero } from './hero.js';
+import { stepDj } from './dj.js';
+import { stepEconomyPerks } from './econPerks.js';
+import { DEFENSE_TYPES } from './buildings.js';
 import { produceMines, produceHallIncome } from './economy.js';
 import { stepClock } from './dayNight.js';
 import { stepWaveSpawning, checkWaveCleared } from './waves.js';
@@ -28,8 +32,11 @@ export function simulate(state, dt) {
   stepGnomeMining(state, dt, gnomes);
   stepWaveSpawning(state, dt);
   stepEnemies(state, dt);
+  if (!state.gameOver) stepHero(state, dt); // the Brisket King guards his altar (hero.js)
   if (!state.gameOver) stepTraps(state, dt); // ground enemies stepping onto set Mousetraps spring them (+ re-arm, lures)
   stepFlockTowers(state); // mark + reveal enemies in F.L.O.C.K Tower range before the defenses fire
+  stepDj(state, dt, DEFENSE_TYPES); // DJ Babyface: boosts run down, light show, its perks (Auto-DJ, VIP Lounge...)
+  stepEconomyPerks(state, dt); // economy perks on a timer: mine Auto-Collect, house Garden and Militia
   if (!state.gameOver) stepDefenses(state, dt);
   if (!state.gameOver) stepSpecials(state, dt); // RV Lab specials on a timer (Arrow Storm, Meteor, Finale)
   if (!state.gameOver) stepBeams(state, dt); // Tower of Rah beams

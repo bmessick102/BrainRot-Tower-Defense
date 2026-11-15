@@ -3,12 +3,15 @@
 // that), and every wave survived ramps it up (waveRamp), so waves keep getting harder at any hall level.
 import { CONFIG } from '../config.js';
 import { ENEMY_KINDS, spawnEnemy } from './enemies.js';
-import { repairAll, salvageMine, addGold } from './economy.js';
+import { repairAll, salvageMine, addGold, getCapacity, storageCapacity } from './economy.js';
+import { abilityFx } from './abilities.js';
+import { isDark } from './clockLight.js';
 import { resetTraps } from './traps.js';
 import { addResearchPoints, waveResearchPoints } from './researchPoints.js';
 import { townHallLevel } from './buildings.js';
 import { emit, random, round2 } from './util.js';
 import { isRestless, nightLootMult } from './enrage.js';
+import { countedBuildings, starsFor, starBonus } from './waveStars.js';
 
 export const PATHS = ['top', 'right', 'bottom', 'left'];
 // Endless waves add one spawn corner every 2 waves (charter §10 said 3), so all 4 corners are in play
@@ -21,12 +24,29 @@ export function scriptedWaveCount() {
 
 /** Enemy counts, HP multiplier, and spawn path count for wave n (1-based). */
 export function waveComposition(n) {
+  return withLateKinds(baseComposition(n), n);
+}
+
+/**
+ * Enemy kinds that join the waves from a Village Hall level (fromTownHall on the enemy, e.g. the Skibidi
+ * Toilet): baseCount at that hall, growing by rules.endlessCountGrowth per hall after it.
+ */
+function withLateKinds(comp, n) {
+  for (const k of ENEMY_KINDS) {
+    const cfg = CONFIG.enemies[k];
+    if (!cfg.fromTownHall || !cfg.baseCount) continue;
+    comp[k] = n >= cfg.fromTownHall ? Math.round(cfg.baseCount * CONFIG.rules.endlessCountGrowth ** (n - cfg.fromTownHall)) : 0;
+  }
+  return comp;
+}
+
+function baseComposition(n) {
   const scripted = CONFIG.waves;
   if (n <= scripted.length) return { ...scripted[n - 1] };
   const last = scripted[scripted.length - 1];
   const k = n - scripted.length; // waves past the last scripted one
   const comp = {};
-  for (const kind of ENEMY_KINDS) comp[kind] = Math.round(last[kind] * CONFIG.rules.endlessCountGrowth ** k);
+  for (const kind of ENEMY_KINDS) comp[kind] = Math.round((last[kind] || 0) * CONFIG.rules.endlessCountGrowth ** k);
   comp.hpMultiplier = round2(last.hpMultiplier * CONFIG.rules.endlessHpGrowth ** k);
   comp.spawnPaths = Math.min(PATHS.length, last.spawnPaths + Math.floor((k - 1) / ENDLESS_WAVES_PER_EXTRA_PATH));
   return comp;
@@ -52,7 +72,7 @@ export function choosePaths(state, n, count) {
 export function buildSpawnQueues(comp, paths) {
   const share = Object.fromEntries(paths.map((p) => [p, Object.fromEntries(ENEMY_KINDS.map((k) => [k, 0]))]));
   let rotate = 0; // remainders rotate across paths so totals stay balanced
-  for (const kind of ['tank', 'breaker', 'grunt', 'slinger', 'thief', 'shark', 'bomber', 'balloon']) {
+  for (const kind of ['babycar', 'tank', 'breaker', 'grunt', 'slinger', 'thief', 'toilet', 'shark', 'bomber', 'balloon']) {
     const count = comp[kind] || 0;
     const base = Math.floor(count / paths.length);
     let rem = count % paths.length;
@@ -63,6 +83,7 @@ export function buildSpawnQueues(comp, paths) {
   for (const p of paths) {
     const s = share[p];
     const q = [];
+    for (let i = 0; i < s.babycar; i++) q.push('babycar'); // the Da Baby Car leads its path
     for (let i = 0; i < s.tank; i++) q.push('tank');
     for (let i = 0; i < s.breaker; i++) q.push('breaker');
     let g = s.grunt, sl = s.slinger;
@@ -71,6 +92,7 @@ export function buildSpawnQueues(comp, paths) {
       if (sl > 0) { q.push('slinger'); sl--; }
     }
     for (let i = 0; i < s.thief; i++) q.push('thief');
+    for (let i = 0; i < s.toilet; i++) q.push('toilet');
     for (let i = 0; i < s.shark; i++) q.push('shark');
     for (let i = 0; i < s.bomber; i++) q.push('bomber');
     for (let i = 0; i < s.balloon; i++) q.push('balloon');
@@ -170,14 +192,44 @@ export function specialComposition(normal, key) {
 export function nextWaveInfo(state) {
   const th = townHallLevel(state), n = nightWaveNumber(state);
   const special = specialWaveType(th, n);
-  return { number: n, th, special, specialInfo: special ? SW().types[special] : null };
+  return { number: n, th, special, specialInfo: special ? SW().types[special] : null, babyCars: special ? 0 : babyCarCount(th, n) };
 }
 
-/** The composition of the village's next wave (special waves included). */
+/**
+ * How many Da Baby Cars (raid bosses) normal wave n at Village Hall th brings (rules.babyCar): from
+ * fromTownHall, every `every`th wave; more from lateTownHall. Special waves never have them.
+ */
+export function babyCarCount(th, n) {
+  const B = CONFIG.rules.babyCar;
+  if (!B || th < B.fromTownHall || n % B.every !== 0) return 0;
+  return th >= B.lateTownHall ? B.countLate : B.count;
+}
+
+/**
+ * Crowd cap (CONFIG.rules.crowdCap): a wave with more than maxEnemies (bosses not counted) keeps the same mix
+ * at maxEnemies, and `pack` (its old total enemy HP / its new one) multiplies each enemy's health, damage,
+ * gold and RP, so it's as strong and pays as much, with far fewer enemies on screen. pack 1 = no cap.
+ */
+export function applyCrowdCap(comp) {
+  const cap = CONFIG.rules.crowdCap && CONFIG.rules.crowdCap.maxEnemies;
+  const kinds = ENEMY_KINDS.filter((k) => !CONFIG.enemies[k].boss);
+  const total = kinds.reduce((n, k) => n + (comp[k] || 0), 0);
+  if (!cap || total <= cap) return { ...comp, pack: 1 };
+  const before = kinds.reduce((s, k) => s + (comp[k] || 0) * CONFIG.enemies[k].hp, 0);
+  const out = { ...comp };
+  const f = cap / total;
+  for (const k of kinds) if ((comp[k] || 0) > 0) out[k] = Math.max(1, Math.round(comp[k] * f));
+  const after = kinds.reduce((s, k) => s + (out[k] || 0) * CONFIG.enemies[k].hp, 0);
+  out.pack = round2(before / after);
+  return out;
+}
+
+/** The composition of the village's next wave (special waves included), capped at the crowd limit. */
 export function nextWaveComposition(state) {
-  const { number, th, special } = nextWaveInfo(state);
-  const normal = scaledWaveComposition(th, number);
-  return special ? specialComposition(normal, special) : normal;
+  const { number, th, special, babyCars } = nextWaveInfo(state);
+  const normal = { ...scaledWaveComposition(th, number), babycar: 0 };
+  if (special) return applyCrowdCap(specialComposition(normal, special));
+  return applyCrowdCap({ ...normal, babycar: babyCars });
 }
 
 /** Trigger the next wave: paths chosen, queues built; it goes active on the next spawning step. */
@@ -193,8 +245,12 @@ export function triggerWave(state) {
     queues: buildSpawnQueues(comp, paths),
     spawnTimer: 0,
     hpMultiplier: comp.hpMultiplier,
+    pack: comp.pack || 1, // crowd cap: each (non-boss) enemy counts this many times over (applyCrowdCap)
     bountyEarned: 0,
-    special: comp.special || null
+    special: comp.special || null,
+    // Wave stars: buildings standing as it starts (not walls), and how many get destroyed during it.
+    startBuildings: countedBuildings(state),
+    lost: 0
   };
   emit(state, 'waveTriggered', { number: n, paths, special: state.wave.special });
   return state.wave;
@@ -226,9 +282,11 @@ export function stepWaveSpawning(state, dt) {
   while (w.spawnTimer <= 0 && queuedCount(state) > 0) {
     for (const path of w.paths) {
       const kind = w.queues[path].shift();
-      if (kind) spawnEnemy(state, kind, path, w.hpMultiplier);
+      if (kind) spawnEnemy(state, kind, path, w.hpMultiplier, w.pack || 1);
     }
-    w.spawnTimer += CONFIG.rules.spawnInterval;
+    // Crowd cap: packed enemies come proportionally further apart, so the wave arrives at the same strength
+    // per second as the uncapped one would (just fewer, tougher enemies).
+    w.spawnTimer += CONFIG.rules.spawnInterval * (w.pack || 1);
   }
   // Restless nights: tell the UI when the enemies turn restless (it got dark) or calm down (it got light).
   const restless = isRestless(state);
@@ -246,6 +304,24 @@ export function stepWaveSpawning(state, dt) {
   }
 }
 
+/** Gold that economy perks pay when a wave is beaten (added to the cleared banner's bonus). */
+function economyWavePayout(state, w) {
+  const cap = getCapacity(state);
+  const dark = isDark(state.clock);
+  let pay = 0;
+  for (const b of state.buildings) {
+    if (b.destroyed) continue;
+    const fx = abilityFx(b);
+    if (b.type === 'storage' && fx.interestPct && cap > 0) {
+      const storedHere = (state.gold * storageCapacity(b)) / cap;
+      pay += storedHere * fx.interestPct / 100 * (dark && fx.nightInterestMult ? fx.nightInterestMult : 1);
+    }
+    if (b.type === 'dj' && fx.afterPartyPct) pay += (w.bountyEarned || 0) * fx.afterPartyPct / 100;
+  }
+  pay += w.insured || 0;
+  return pay > 0 ? addGold(state, Math.round(pay)) : 0;
+}
+
 /** Active wave with nothing alive and nothing queued -> cleared. Returns true when it just cleared. */
 export function checkWaveCleared(state) {
   const w = state.wave;
@@ -254,6 +330,11 @@ export function checkWaveCleared(state) {
   state.wavesCleared += 1; // nights survived (the next wave is wavesCleared + 1)
   state.sinceWaveCleared = 0; // starting the next one soon counts as a quick start (dayNight.js)
   addResearchPoints(state, Math.round(waveResearchPoints(w.number) * nightLootMult(state))); // beating the wave pays research points (more at night)
+  // Wave stars: how much of the village came through, and the bonus on the wave's gold and RP.
+  const stars = starsFor(w.startBuildings || 0, w.lost || 0);
+  const share = starBonus(stars);
+  const starGold = share ? addGold(state, Math.round((w.bountyEarned || 0) * share)) : 0;
+  const starRp = share ? addResearchPoints(state, Math.round((w.rpEarned || 0) * share)) : 0;
   // Kept in saves for older versions; waves no longer depend on it.
   if (townHallLevel(state) >= CONFIG.rules.maxTownHallLevel) state.nightsAtMaxTownHall = (state.nightsAtMaxTownHall || 0) + 1;
   state.enemies = [];
@@ -263,13 +344,16 @@ export function checkWaveCleared(state) {
   let ruins = repairAll(state);
   resetTraps(state); // every Mousetrap is set again for the next wave
   // Once per night: Last Stand; Spellsteal and Ready Rack start over.
-  for (const b of state.buildings) { b.lastStandUsed = false; b.lastStandT = 0; b.stealStacks = 0; b.rack = 0; }
+  for (const b of state.buildings) { b.lastStandUsed = false; b.lastStandT = 0; b.stealStacks = 0; b.rack = 0; b.djBoostT = 0; }
   // No working mine and too broke to rebuild one: the gnomes salvage the cheapest for free.
   const salvaged = salvageMine(state);
   if (salvaged) ruins--;
   // A special wave pays a bonus on top of its bounty (up to storage capacity).
-  const bonus = w.special ? addGold(state, Math.floor((w.bountyEarned || 0) * SW().bonusBounty)) : 0;
-  const cleared = { number: w.number, bounty: w.bountyEarned, rp: w.rpEarned || 0, ruins, salvaged: salvaged ? salvaged.id : null, special: w.special || null, bonus };
+  let bonus = w.special ? addGold(state, Math.floor((w.bountyEarned || 0) * SW().bonusBounty)) : 0;
+  // Economy perks: Compound Interest / Night Dividend (Storage), Insurance (Storage), After Party (DJ Babyface).
+  bonus += economyWavePayout(state, w);
+  const cleared = { number: w.number, bounty: w.bountyEarned, rp: w.rpEarned || 0, ruins, salvaged: salvaged ? salvaged.id : null, special: w.special || null, bonus,
+    stars, starGold, starRp, lost: w.lost || 0 };
   state.wave = createIdleWave();
   emit(state, 'waveCleared', cleared);
   return true;

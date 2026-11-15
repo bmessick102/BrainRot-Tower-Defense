@@ -163,3 +163,20 @@ export function drawCross(g, cx, cy, size) {
   g.lineStyle(Math.max(3, size * 0.24), 0xffffff, 1);
   g.lineBetween(cx - s, cy - s, cx + s, cy + s).lineBetween(cx - s, cy + s, cx + s, cy - s);
 }
+
+/**
+ * Full screen icon: four corner brackets pointing out (or in, when `exit`), white on a dark outline.
+ */
+export function drawFullscreenIcon(g, cx, cy, size, exit = false) {
+  const s = size / 2, arm = size * 0.36;
+  const corners = [[-1, -1], [1, -1], [1, 1], [-1, 1]];
+  for (const [w, color] of [[Math.max(6, size * 0.3), COLORS.frame], [Math.max(3, size * 0.16), 0xffffff]]) {
+    g.lineStyle(w, color, 1);
+    for (const [dx, dy] of corners) {
+      // The bracket's corner sits at the box corner (enter) or pulled in toward the middle (exit).
+      const x = cx + dx * (exit ? s * 0.3 : s), y = cy + dy * (exit ? s * 0.3 : s);
+      const ax = exit ? dx * arm : -dx * arm, ay = exit ? dy * arm : -dy * arm;
+      g.beginPath().moveTo(x + ax, y).lineTo(x, y).lineTo(x, y + ay).strokePath();
+    }
+  }
+}

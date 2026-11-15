@@ -35,6 +35,20 @@ export const CONFIG = {
     // Restless nights (src/logic/enrage.js): while it's dark, attacking enemies deal `damage`x damage and move
     // `speed`x faster, and every kill (and the wave-cleared research points) pays +lootBonus gold and RP.
     night: { damage: 1.25, speed: 1.15, lootBonus: 0.25 },
+    // Da Baby Car raid boss (enemies.babycar): from Village Hall `fromTownHall`, every `every`th wave (normal
+    // waves only, not special ones) brings `count` of them, `countLate` from Village Hall `lateTownHall`.
+    babyCar: { fromTownHall: 6, every: 2, count: 1, lateTownHall: 9, countLate: 2 },
+    // Wave stars (src/logic/waveStars.js): each beaten wave is rated by how many of the buildings standing
+    // when it started (walls don't count) were lost: none = 3 stars, at least `twoStarShare` still standing =
+    // 2 stars, else 1. `bonus[stars - 1]` of the wave's gold and RP is paid on top.
+    waveStars: { twoStarShare: 0.75, bonus: [0, 0.2, 0.5] },
+    // Crowd cap (applyCrowdCap in src/logic/waves.js): a wave never sends more than maxEnemies (bosses not
+    // counted). Past that, there are fewer enemies and each one is "packed": its health, damage, gold and RP
+    // are multiplied by the wave's pack factor, so the wave is as strong (and pays as much) as before, with far
+    // fewer sprites to draw and move. Packed enemies are drawn a little bigger (up to maxSizeBoost).
+    // areaExponent: area damage (splash, pools, traps...) hits a packed enemy pack ** areaExponent times over
+    // (combat.js areaPack), tuned so a capped wave takes about as much damage as the uncapped crowd would.
+    crowdCap: { maxEnemies: 400, maxSizeBoost: 0.35, areaExponent: 0.66 },
     endlessCountGrowth: 1.15,
     endlessHpGrowth: 1.1,
     maxTownHallLevel: 10,
@@ -140,7 +154,50 @@ export const CONFIG = {
       { cost: 10000, hp: 1250, townHall: 5 },
       { cost: 25000, hp: 1563, townHall: 6 },
       { cost: 60000, hp: 1953, townHall: 7 },
-      { cost: 150000, hp: 2441, townHall: 8 }
+      { cost: 90000, hp: 2441, townHall: 8 }
+    ]
+  },
+  // DJ Babyface (src/logic/dj.js): a utility building. Gnomes working inside its range go gnomeBoostPct%
+  // faster; enemies defeated fill its hype meter (hypeNeeded), and a full meter lets the player Drop the Beat
+  // (click the booth during a wave): defenses in range fire beatPct% faster for beatSeconds. At night its
+  // light show calms enemies in range (not restless). Each level also needs a Village Hall level.
+  dj: {
+    name: "DJ Babyface",
+    size: 2,
+    unlockTownHall: 5,
+    levels: [
+      { cost: 3000, hp: 1200, townHall: 5, range: 4.5, gnomeBoostPct: 25, hypeNeeded: 40, beatSeconds: 6, beatPct: 60 },
+      { cost: 7000, hp: 1500, townHall: 6, range: 5, gnomeBoostPct: 35, hypeNeeded: 36, beatSeconds: 7, beatPct: 70 },
+      { cost: 15000, hp: 1875, townHall: 7, range: 5.5, gnomeBoostPct: 45, hypeNeeded: 32, beatSeconds: 8, beatPct: 80 },
+      { cost: 35000, hp: 2344, townHall: 8, range: 6, gnomeBoostPct: 55, hypeNeeded: 28, beatSeconds: 9, beatPct: 90 },
+      { cost: 70000, hp: 2930, townHall: 9, range: 6.5, gnomeBoostPct: 70, hypeNeeded: 24, beatSeconds: 10, beatPct: 100 }
+    ]
+  },
+  // The Brisket King's altar (src/logic/hero.js): the building the hero guards and levels up with (its level
+  // is his level; heroHp / heroDamage per level). He walks out to fight ground enemies inside guardRange
+  // (tiles from the altar), hits every attackInterval s, and goes back when it's clear. After a wave he
+  // sleeps to heal: the share of health he lost x maxSleepSeconds (knocked out: the full time), then takes
+  // wakeSeconds to get up. Brisket Feast (feast): clicked during a wave, once per wave.
+  altar: {
+    name: "Brisket King Altar",
+    heroName: "Brisket King",
+    size: 2,
+    unlockTownHall: 4,
+    hero: {
+      speed: 1.3, attackInterval: 1, attackRange: 0.75, guardRange: 6, maxSleepSeconds: 120, wakeSeconds: 1.5,
+      feast: { healPct: 40, boostSeconds: 6, damagePct: 50, speedPct: 40, slamRadius: 1.5, slamMult: 2, stunSeconds: 1 }
+    },
+    levels: [
+      { cost: 3000, hp: 900, heroHp: 1100, heroDamage: 80 },
+      { cost: 4500, hp: 1125, heroHp: 1320, heroDamage: 94 },
+      { cost: 6500, hp: 1406, heroHp: 1584, heroDamage: 111 },
+      { cost: 9000, hp: 1758, heroHp: 1901, heroDamage: 131 },
+      { cost: 14000, hp: 2197, heroHp: 2281, heroDamage: 155 },
+      { cost: 22000, hp: 2747, heroHp: 2737, heroDamage: 183 },
+      { cost: 35000, hp: 3433, heroHp: 3285, heroDamage: 216 },
+      { cost: 55000, hp: 4292, heroHp: 3941, heroDamage: 255 },
+      { cost: 85000, hp: 5364, heroHp: 4730, heroDamage: 301 },
+      { cost: 130000, hp: 6706, heroHp: 5676, heroDamage: 355 }
     ]
   },
   // Gnome villagers all live in Villager Houses (house.levels[].gnomes; their stats come from the same
@@ -159,9 +216,9 @@ export const CONFIG = {
   // Walls are single tiles (segmentLength 1) that join into a fence with every wall touching them. They
   // used to be 3-tile segments: per wall, the price is a third of a segment's (the same per tile), the HP is
   // a segment's, and 3x as many are allowed. (segmentLength > 1 brings back straight segments rotated with R.)
-  // Seven levels, one picture each (bld_wall_lv1..7, the lava wall on top). Wall levels unlock at Village
-  // Hall 1, 2, 3, 5, 7, 9 and 10 (townHall). Cheap on purpose, so a broken village can wall up again fast.
-  // Level 7 stays under the Wall Breaker's 3,000 blast.
+  // Eight levels, one picture each (bld_wall_lv1..8, the lava tower on top). Wall levels unlock at Village
+  // Hall 1, 2, 3, 5, 7, 8, 9 and 10 (townHall). Cheap on purpose, so a broken village can wall up again fast.
+  // Levels 1-6 break in one Wall Breaker blast (2,400); Levels 7-8 take two.
   walls: {
     name: "Wall",
     segmentLength: 1,
@@ -172,8 +229,9 @@ export const CONFIG = {
       { cost: 60, hp: 800, townHall: 3 },
       { cost: 150, hp: 1150, townHall: 5 },
       { cost: 350, hp: 1600, townHall: 7 },
-      { cost: 800, hp: 2200, townHall: 9 },
-      { cost: 1800, hp: 2980, townHall: 10 }
+      { cost: 800, hp: 2200, townHall: 8 },
+      { cost: 1800, hp: 2980, townHall: 9 },
+      { cost: 4000, hp: 3800, townHall: 10 }
     ]
   },
   defenses: {
@@ -314,7 +372,7 @@ export const CONFIG = {
         { cost: 44800, hp: 1526, range: 7.5, markBonus: 28 },
         { cost: 89600, hp: 1907, range: 7.75, markBonus: 30 },
         { cost: 179200, hp: 2384, range: 8, markBonus: 32 },
-        { cost: 358400, hp: 2981, range: 8.5, markBonus: 35 }
+        { cost: 260000, hp: 2981, range: 8.5, markBonus: 35 }
       ]
     },
     // Beam tower (src/logic/beams.js), like the Inferno Tower: locks onto the highest-HP enemy in range and
@@ -331,13 +389,13 @@ export const CONFIG = {
       unlockTownHall: 6,
       levels: [
         { cost: 5000, hp: 450, dps: 20 },
-        { cost: 10000, hp: 563, dps: 25 },
-        { cost: 20000, hp: 703, dps: 30 },
-        { cost: 40000, hp: 879, dps: 36 },
-        { cost: 80000, hp: 1099, dps: 43 },
-        { cost: 160000, hp: 1373, dps: 51 },
-        { cost: 320000, hp: 1717, dps: 60 },
-        { cost: 640000, hp: 2146, dps: 70 }
+        { cost: 8000, hp: 563, dps: 25 },
+        { cost: 12000, hp: 703, dps: 30 },
+        { cost: 18000, hp: 879, dps: 36 },
+        { cost: 24000, hp: 1099, dps: 43 },
+        { cost: 32000, hp: 1373, dps: 51 },
+        { cost: 60000, hp: 1717, dps: 60 },
+        { cost: 90000, hp: 2146, dps: 70 }
       ]
     },
     catapult: {
@@ -353,10 +411,10 @@ export const CONFIG = {
       levels: [
         { cost: 3000, hp: 600, damage: 20, poolDps: 8 },
         { cost: 6000, hp: 750, damage: 25, poolDps: 10 },
-        { cost: 12000, hp: 938, damage: 31, poolDps: 13 },
-        { cost: 24000, hp: 1172, damage: 39, poolDps: 16 },
-        { cost: 48000, hp: 1465, damage: 49, poolDps: 20 },
-        { cost: 96000, hp: 1831, damage: 61, poolDps: 24 }
+        { cost: 10000, hp: 938, damage: 31, poolDps: 13 },
+        { cost: 15000, hp: 1172, damage: 39, poolDps: 16 },
+        { cost: 21000, hp: 1465, damage: 49, poolDps: 20 },
+        { cost: 32000, hp: 1831, damage: 61, poolDps: 24 }
       ]
     },
     wizard: {
@@ -397,7 +455,9 @@ export const CONFIG = {
     flock: [0, 0, 1, 1, 1, 2, 2, 2, 3, 3],
     mousetrap: [0, 1, 2, 2, 3, 3, 4, 4, 5, 5],
     ra: [0, 0, 0, 0, 0, 1, 1, 1, 2, 2],
-    rvlab: [0, 0, 0, 1, 1, 1, 1, 1, 1, 1]
+    rvlab: [0, 0, 0, 1, 1, 1, 1, 1, 1, 1],
+    dj: [0, 0, 0, 0, 1, 1, 1, 1, 1, 1],
+    altar: [0, 0, 0, 1, 1, 1, 1, 1, 1, 1]
   },
   // radius (tiles): body size; enemies push apart so they never stack on top of each other.
   // name: shown to players; role: the enemy's job, shown as subtext under the name.
@@ -491,8 +551,8 @@ export const CONFIG = {
       bounty: 8,
       researchPoints: 1
     },
-    // Runs for the nearest wall and blows itself up: x60 vs walls (breaks any wall in one blast), and the
-    // blast also hits every building and wall within blastRadius. With no walls left it goes for
+    // Runs for the nearest wall and blows itself up: x48 vs walls (2,400: one blast breaks walls up to Level 6,
+    // Levels 7-8 take two), and the blast also hits every building and wall within blastRadius (1.75 tiles). With no walls left it goes for
     // defenses (thenPrefers), then anything. Dies in its own blast (no bounty for that).
     breaker: {
       name: "Boneca Ambalabu",
@@ -501,10 +561,10 @@ export const CONFIG = {
       type: "ground",
       prefers: ["wall"],
       thenPrefers: ["defense"],
-      preferredDamageMultiplier: 60,
+      preferredDamageMultiplier: 48, // was 60 (3,000 vs walls); nerfed with the blast radius
       otherDamageMultiplier: 1,
       explodes: true,
-      blastRadius: 2,
+      blastRadius: 1.75,             // was 2
       hp: 90,
       speed: 1.2,
       damage: 50,
@@ -512,6 +572,51 @@ export const CONFIG = {
       attackRange: 0.5,
       bounty: 10,
       researchPoints: 2
+    },
+    // Raid boss, mixed into normal waves from Village Hall 6 (rules.babyCar). It drives in a straight line
+    // from the map edge to the Village Hall (no path, no detours) and rams through everything in its way:
+    // a wall breaks in one hit, any other building takes ramDamage and stalls it ramPause s. At the hall it
+    // batters away (damage every attackInterval s). Destroyed, it bursts into a mix of the wave's ground
+    // troops (deathSpawn: base, +1 every perWaves waves after fromWave).
+    babycar: {
+      name: "Da Baby Car",
+      role: "Raid Boss",
+      radius: 0.5,
+      type: "ground",
+      boss: true,
+      prefers: ["townHall"],
+      ramsToHall: true,
+      ramDamage: 300,
+      ramPause: 0.6,
+      deathSpawn: { base: 6, perWaves: 5, fromWave: 10 },
+      hp: 5400,         // about 6 Tanks
+      speed: 0.55,
+      damage: 120,
+      attackInterval: 2,
+      attackRange: 0.6,
+      bounty: 150,
+      researchPoints: 25
+    },
+    // Burrower, in waves from Village Hall `fromTownHall` (baseCount at that hall, growing like the others).
+    // It tunnels underground, straight under walls and buildings, to the nearest building, surfaces next to it
+    // (surfaceSeconds, then it attacks) and, when that building falls, burrows to the next. Underground
+    // nothing can target or hurt it (splash, pools and traps included) unless a F.L.O.C.K Tower sees it.
+    toilet: {
+      name: "Skibidi Toilet",
+      role: "Burrower",
+      radius: 0.26,
+      type: "ground",
+      burrows: true,
+      surfaceSeconds: 0.5,
+      fromTownHall: 5,
+      baseCount: 4,
+      hp: 280,
+      speed: 1.15,
+      damage: 20,
+      attackInterval: 1,
+      attackRange: 0.5,
+      bounty: 12,
+      researchPoints: 3
     },
     // A slow flyer that never attacks itself. Targets: the nearest air defense (defenses that can shoot
     // flyers), else any defense, else any building. Over its target it drops `perDrop` Neegies after

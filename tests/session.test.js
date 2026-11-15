@@ -72,12 +72,31 @@ describe('Session (accounts, villages, sync)', () => {
     expect(session.activeBase.townHall).toBe(4);
     expect(session.activeBase.wave).toBe(saveWave(session.activeBase.save));
     expect(JSON.parse(device.getItem(`ibtd.cloud.${b.id}`)).dirty).toBe(true);
-    expect(timers.size).toBe(1);
+    expect(timers.size).toBe(2); // the village upload, and the account stats (its 1 wave cleared now counts)
     await timers.runAll();
     const [remote] = await backend.listBases();
     expect(remote.save.gold).toBe(777);
     expect(remote.townHall).toBe(4);
     expect(JSON.parse(device.getItem(`ibtd.cloud.${b.id}`)).dirty).toBe(false);
+  });
+
+  it("a village's own progress carries over to the account's furthest wave (league badge, leaderboard)", async () => {
+    const b = await session.createBase('Home');
+    expect(session.stats.bestWave).toBe(0);
+    // Played far without the account tracking it (offline, before tracking ...): 126 waves cleared.
+    writeGame(session.storage, makeStateWithTownHall({ wavesCleared: 126, tutorialStep: 11, tutorialDone: true }, 10));
+    expect(session.activeBase.bestWave).toBe(126);
+    expect(session.stats.bestWave).toBe(126);
+    // It never goes down.
+    writeGame(session.storage, makeStateWithTownHall({ wavesCleared: 3, tutorialStep: 11, tutorialDone: true }, 10));
+    expect(session.stats.bestWave).toBe(126);
+    await timers.runAll();
+    // On the next login, a village the server has but the stats don't reflect catches up too.
+    await backend.updateBase(b.id, { save: serializeGame(makeStateWithTownHall({ wavesCleared: 200, tutorialStep: 11, tutorialDone: true }, 10)) });
+    await session.signOut();
+    await session.signIn('ann@example.com', 'secret123');
+    expect(session.stats.bestWave).toBe(200);
+    expect(session.baseById(b.id).bestWave).toBe(200);
   });
 
   it('renames a village (trimmed, length-capped, saved on the server)', async () => {

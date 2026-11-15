@@ -15,6 +15,8 @@ import { CONFIG } from '../config.js';
 import { getTownHall, levelStats, maxHp } from './buildings.js';
 import { distanceToFootprint, footprintCenter } from './grid.js';
 import { emit, isWaveActive } from './util.js';
+import { gnomeBoost } from './dj.js';
+import { abilityFx } from './abilities.js';
 import { addGold } from './economy.js';
 
 const V = () => CONFIG.villagers;
@@ -45,7 +47,7 @@ export function gnomeRoster(state) {
   const list = [];
   for (const b of state.buildings) {
     if (b.type !== 'house') continue;
-    const n = levelStats('house', b.level).gnomes;
+    const n = levelStats('house', b.level).gnomes + (abilityFx(b).gnomesAdd || 0); // Bunk Beds, Gnome Union
     for (let i = 0; i < n; i++) list.push({ id: `${b.id}:${i}`, homeId: b.id, level: b.level });
   }
   return list;
@@ -67,8 +69,10 @@ export function isUnderFire(b) {
  * then ones under fire, where gnomes only wait nearby until the shooting stops.
  */
 function repairTargets(state) {
+  // Duct Tape (a Villager House perk): gnomes repair walls too.
+  const walls = state.buildings.some((h) => h.type === 'house' && !h.destroyed && abilityFx(h).repairWalls);
   return state.buildings
-    .filter((b) => !b.destroyed && b.type !== 'wall' && b.hp < maxHp(b))
+    .filter((b) => !b.destroyed && (walls || b.type !== 'wall') && b.hp < maxHp(b))
     .sort((a, b) => isUnderFire(a) - isUnderFire(b) || a.hp / maxHp(a) - b.hp / maxHp(b) || (a.id < b.id ? -1 : 1));
 }
 
@@ -159,7 +163,25 @@ export function nearestDropoff(state, mine) {
 /** Seconds for a gnome to walk between a mine and a drop-off (straight line x tripDetour, at walkSpeed). */
 export function tripTime(mine, drop) {
   const c = footprintCenter(mine);
-  return ((distanceToFootprint(drop, c.x, c.y) + 1) * V().tripDetour) / V().walkSpeed;
+  // Gnome Rail (mine) / Express Lane (storage) perks shorten the walk.
+  const faster = (abilityFx(mine).tripFasterPct || 0) + (abilityFx(drop).tripFasterPct || 0);
+  return (((distanceToFootprint(drop, c.x, c.y) + 1) * V().tripDetour) / V().walkSpeed) * Math.max(0.3, 1 - faster / 100);
+}
+
+/**
+ * How much faster a gnome mines with perks: its house's (Lunchboxes, Better Pickaxes) and a Storage near the
+ * mine (Payroll), as a multiplier (DJ Babyface's work playlist is applied separately).
+ */
+function gnomeMinePerk(state, a, mine) {
+  const home = state.buildings.find((h) => h.id === a.homeId);
+  let pct = home ? abilityFx(home).gnomeMinePct || 0 : 0;
+  const c = footprintCenter(mine);
+  for (const o of state.buildings) {
+    if (o.type !== 'storage' || o.destroyed) continue;
+    const fx = abilityFx(o);
+    if (fx.gnomeAuraPct && distanceToFootprint(o, c.x, c.y) <= fx.auraRadius) pct = pct + fx.gnomeAuraPct;
+  }
+  return 1 + pct / 100;
 }
 
 /**
@@ -178,8 +200,9 @@ export function stepGnomeMining(state, dt, assignments) {
     const mine = a.task === 'mine' ? byId.get(a.targetId) : null;
     if (!mine || mine.destroyed) { w.phase = 'mining'; w.timer = 0; w.mineId = null; w.dropId = null; continue; }
     if (w.mineId !== mine.id) { w.phase = 'mining'; w.timer = 0; w.mineId = mine.id; }
-    const rate = gnomeMiningRate(mine, a.level);
-    const full = rate * V().sackSeconds;
+    const rate = gnomeMiningRate(mine, a.level) * gnomeBoost(state, mine) * gnomeMinePerk(state, a, mine); // DJ + perks
+    const home = state.buildings.find((h) => h.id === a.homeId);
+    const full = rate * V().sackSeconds * (1 + (home ? abilityFx(home).sackPct || 0 : 0) / 100); // Bigger Sacks
     if (w.phase === 'mining') {
       w.sack = Math.min(full, w.sack + rate * dt);
       if (w.sack >= full - 1e-9) {
@@ -196,7 +219,8 @@ export function stepGnomeMining(state, dt, assignments) {
       w.timer -= dt;
       if (w.timer <= 0) {
         const amount = Math.floor(w.sack);
-        const added = addGold(state, amount);
+        // Loading Dock (a Storage perk): deliveries there are worth more.
+        const added = addGold(state, amount + Math.round(amount * (abilityFx(drop).dropBonusPct || 0) / 100));
         w.sack -= amount;
         emit(state, 'gnomeDelivered', { gnomeId: a.id, dropId: drop.id, amount, added });
         w.phase = 'returning';
@@ -217,17 +241,28 @@ export function stepGnomeMining(state, dt, assignments) {
 export function stepGnomeRepairs(state, dt, assignments) {
   for (const b of state.buildings) if (b.underFire > 0) b.underFire = Math.max(0, b.underFire - dt);
   // Each building's repair speed: the sum of its repairers' rates (higher-level gnomes repair faster).
-  const rates = new Map();
+  // Villager House perks: Toolbelts / Pit Crew (faster), Brave Gnomes (keep going under fire, slower),
+  // Field Medics (the building being repaired takes less damage: b._repairArmor, read by damageBuilding).
+  const rates = new Map(), brave = new Map();
+  for (const b of state.buildings) b._repairArmor = 0;
   for (const a of assignments.values()) {
-    if (a.task === 'repair') rates.set(a.targetId, (rates.get(a.targetId) || 0) + gnomeStats(a.level).repair);
+    if (a.task !== 'repair') continue;
+    const home = state.buildings.find((h) => h.id === a.homeId);
+    const fx = home ? abilityFx(home) : {};
+    rates.set(a.targetId, (rates.get(a.targetId) || 0) + gnomeStats(a.level).repair * (1 + (fx.gnomeRepairPct || 0) / 100));
+    if (fx.repairUnderFire) brave.set(a.targetId, Math.max(brave.get(a.targetId) || 0, fx.repairUnderFire));
+    const t = state.buildings.find((x) => x.id === a.targetId);
+    if (t && fx.repairArmorPct) t._repairArmor = Math.max(t._repairArmor || 0, fx.repairArmorPct);
   }
-  for (const [id, rate] of rates) {
+  for (const [id, base] of rates) {
     const b = state.buildings.find((x) => x.id === id);
-    if (!b || b.destroyed || isUnderFire(b)) continue;
+    if (!b || b.destroyed) continue;
+    let rate = base;
+    if (isUnderFire(b)) { if (!brave.get(id)) continue; rate *= brave.get(id); }
     const max = maxHp(b);
     if (b.hp >= max) continue;
     const before = Math.floor((b.hp / max) * 20);
-    b.hp = Math.min(max, b.hp + rate * max * dt);
+    b.hp = Math.min(max, b.hp + rate * gnomeBoost(state, b) * max * dt); // (faster near DJ Babyface)
     if (b.hp >= max || Math.floor((b.hp / max) * 20) !== before) emit(state, 'buildingHealed', { id: b.id, hp: b.hp });
   }
 }

@@ -1,6 +1,6 @@
 // Player-facing descriptions shown on the building panel's Info tab. Names live in config.js.
 export const BUILDING_DESCRIPTIONS = {
-  townHall: 'The heart of your village. It holds some Bitcoin and unlocks new buildings as it levels up, but every upgrade makes the attacks tougher. If it falls, the wavht is lost.',
+  townHall: 'The heart of your village. It holds some Bitcoin and unlocks new buildings as it levels up, but every upgrade makes the attacks tougher. If it falls, the wave is lost.',
   mine: 'Mines Bitcoin around the clock. Click it when the coin appears to collect what it has stored. It stops when its stock is full. You can\'t collect during a wave.',
   house: "Home to a family of gnome workers. By day they mine extra gold and carry it to storage; during attacks they patch up buildings. If the house falls, they hide in the Village Hall until you rebuild it.",
   storage: 'A vault that raises how much Bitcoin you can hold. Enemies that hit it steal a share of the gold inside.',
@@ -13,6 +13,8 @@ export const BUILDING_DESCRIPTIONS = {
   mousetrap: "A hidden trap enemies can't see: they walk right over it. When a ground enemy steps on it, it snaps, hurting every ground enemy nearby and holding them in place. It works once per wave and resets after. Flyers don't trigger it.",
   ra: "The Tower of Rah stares down the toughest enemy in range and burns it with a beam from its head. The longer it holds the beam on one enemy, the hotter it gets: 3x damage after 2 seconds, 8x after 5. Hits ground and air.",
   flock: "A watchtower bristling with cameras. It never attacks, but every enemy in its range is marked and takes extra damage from all your defenses, and invisible enemies are revealed. Towers don't stack: a marked enemy takes the strongest bonus.",
-  rvlab: "A film crew's RV turned into a research lab. Inside, you research new abilities for your defenses: three paths for each one, five tiers each. Each RV Lab level unlocks the next tier. Once a tier is researched, every building of that type can buy it from its Abilities button.",
+  altar: "The Brisket King's altar. The king guards it: during a wave he walks out to club ground enemies with his brisket, and heads back when it's clear. Enemies next to him fight back. After a wave he naps to heal (longer the more he was hurt), and if he's knocked out he sleeps it off. Click him during a wave for Brisket Feast: he heals, gets faster and stronger, and slams everyone around him. Upgrading the altar levels him up; his perks are in the RV Lab.",
+  dj: "DJ Babyface keeps the village moving. Gnomes working near the booth mine and repair faster. Every enemy you defeat hypes the crowd; with a full meter, click the booth during a wave to Drop the Beat and every defense in its range fires much faster for a few seconds. At night its light show keeps enemies in range calm (not restless).",
+  rvlab: "A film crew's RV turned into a research lab. Inside, you research new abilities for your defenses and economy buildings: three paths for each one, five tiers each. Each RV Lab level unlocks the next tier. Once a tier is researched, every building of that type can buy it from its Abilities button.",
   wall: "A wall tile that joins every wall it touches: wooden posts at first, solid stone once upgraded. Ground enemies walk around walls, or smash through if that's faster. Flyers pass right over.",
 };

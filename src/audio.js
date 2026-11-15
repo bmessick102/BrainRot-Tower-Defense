@@ -6,7 +6,6 @@
 const MUSIC_MIX = 0.45;
 // Per-track boost on top of MUSIC_MIX, for tracks mastered quieter than the rest.
 const TRACK_GAIN = {
-  music_planning: 2.2 // the 30 s wave-countdown track: full volume (0.45 x 2.2 = 1)
 };
 // Avoid stacking the same effect dozens of times in one frame (e.g. a big splash).
 const SFX_MIN_GAP_MS = 40;

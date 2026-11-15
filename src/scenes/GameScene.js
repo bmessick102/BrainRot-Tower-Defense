@@ -2,6 +2,7 @@
 // Draws state and routes input; every rule lives in src/logic/ (called through GameState).
 import Phaser from 'phaser';
 import { CONFIG } from '../config.js';
+import { IS_TOUCH } from '../device.js';
 import { MAP } from '../mapTiles.js';
 import { GameState } from '../state/GameState.js';
 import { loadGame } from '../logic/save.js';
@@ -17,6 +18,9 @@ import { mineShowsCoin } from '../logic/economy.js';
 import { MAX_STEP } from '../logic/simulate.js';
 import { BuildingView, buildingTextureKey, placeBuildingSprite } from '../objects/BuildingView.js';
 import { EnemyView } from '../objects/EnemyView.js';
+import { checkDropBeat, djStats, buildingsInDjRange } from '../logic/dj.js';
+import { HeroView } from '../objects/HeroView.js';
+import { checkFeast, getAltar, heroStats } from '../logic/hero.js';
 import { WallView, placeWallTile } from '../objects/WallView.js';
 import { ProjectileView } from '../objects/ProjectileView.js';
 import { PoolView, POOL_COLOR } from '../objects/PoolView.js';
@@ -27,7 +31,7 @@ import { AirHum } from '../objects/AirHum.js';
 import { BeamHum } from '../objects/BeamHum.js';
 import { floatText, splashRing, fireballImpact, fireworkBurst, breakerExplosion } from '../objects/Effects.js';
 import { TEX, SFX, MUSIC, FIRE_SFX, ENEMY_ATTACK_SFX, ENEMY_VOICE } from '../assetKeys.js';
-import { playSfx, playSfxCapped, playSfxEndingIn, playVoiceLine, playMusic, stopMusic, crossfadeMusic, fadeOutMusic, hasAmbience, startAmbience, updateAmbience, stopAmbience } from '../audio.js';
+import { playSfx, playSfxCapped, playSfxEndingIn, playVoiceLine, playMusic, stopMusic, crossfadeMusic, fadeOutMusic, hasAmbience, startAmbience, updateAmbience, stopAmbience, soundDuration } from '../audio.js';
 import { COLORS } from '../theme.js';
 import { abilityFx, towerRange, towerMinRange } from '../logic/abilities.js';
 import { chainLightningFx, arrowStormFx, meteorFx, solarFlareFx, sparklerFx, drawFireRing } from '../objects/AbilityFx.js';
@@ -56,10 +60,11 @@ const CHATTER_SECONDS = [6, 14]; // how often an enemy says its voice line while
 // that building's picture.
 const FADE_ALPHA = 0.35;
 const FADE_OVERLAP = 0.12;
-// A building whose picture is more than this share covered by buildings in front gets an outline.
-const OCCLUDED_SHARE = 0.45;
 // Ground plots under buildings.
 const PLOT_COLOR = 0x6b4a2b, PLOT_ALPHA = 0.22, PLOT_RIM = 0xf0dcae, PLOT_RIM_ALPHA = 0.28;
+
+// A level-up that reaches a new ability tier: the unlock sound starts this long before the upgrade sound ends.
+const UNLOCK_OVERLAP_MS = 150;
 
 export class GameScene extends Phaser.Scene {
   constructor() {
@@ -89,12 +94,17 @@ export class GameScene extends Phaser.Scene {
     this.airHum = new AirHum(this); // plane drone while Bombers fly
     this.beamHum = new BeamHum(this); // Tower of Rah beam loop while any beam burns
     this.views = { buildings: new Map(), enemies: new Map(), projectiles: new Map(), pools: new Map() };
+    this.heroView = new HeroView(this); // the Brisket King
     this.rangeCircle = new RangeCircle(this);
     this.selectionGfx = this.add.graphics().setDepth(-5000);
     // The building under the pointer: outlined on its tiles, shows its labels, and anything drawn in front of
     // it fades (updateHover / updateFocusFade).
     this.hoverGfx = this.add.graphics().setDepth(-5000);
     this.hoverId = null;
+    // Played by touch (the last press was a finger): no hover, the ghost of a building being placed stays put
+    // until dragged, and the UI shows Place / Cancel buttons. Follows each press, for touch laptops.
+    this.touchMode = IS_TOUCH;
+    this.pinch = null;
     // A soft dirt plot under every building's tiles, so you can see where each one stands even where the art
     // overlaps (drawPlots). Above the map, below lights and buildings.
     this.plotGfx = this.add.graphics().setDepth(-9000);
@@ -269,7 +279,7 @@ export class GameScene extends Phaser.Scene {
     this.drawBeams(time);
     this.enemyChatter(delta);
     // Follow the pointer every frame: a move that leaves a UI element can be consumed by UIScene.
-    if (this.placement) {
+    if (this.placement && !this.touchMode) {
       const p = this.input.activePointer;
       if (!this.lastGhostPtr || this.lastGhostPtr.x !== p.x || this.lastGhostPtr.y !== p.y || this.cameraMoved()) {
         this.updateGhost(p.x, p.y);
@@ -279,10 +289,36 @@ export class GameScene extends Phaser.Scene {
     this.syncViews(time);
     this.updateHover();
     this.updateFocusFade();
+    this.updateDjHighlight();
     this.updateLayoutExtras();
   }
 
-  /** Ground plots and hidden-building outlines: worked out again only when the layout changes. */
+  /**
+   * With DJ Babyface selected, every building in its range is tinted purple (BuildingView reads
+   * scene.djAffected), so it's obvious which ones it boosts. Worked out every frame (cheap), so it follows
+   * moves, upgrades and its range perks.
+   */
+  updateDjHighlight() {
+    const list = this.layoutList || [];
+    const sel = this.selectedId ? list.find((b) => b.id === this.selectedId) : null;
+    const affected = sel && sel.type === 'dj' && !sel.destroyed ? buildingsInDjRange(sel, list) : [];
+    this.djAffected = affected.length ? new Set(affected.map((b) => b.id)) : null;
+    // ...and a purple diamond on the ground under each one (clear even on dark pictures).
+    const key = affected.map((b) => `${b.id}:${b.col},${b.row}`).join('|');
+    if (key === this.djGroundKey) return;
+    this.djGroundKey = key;
+    if (!this.djGroundGfx) this.djGroundGfx = this.add.graphics().setDepth(-8990); // over the dirt plots
+    const g = this.djGroundGfx;
+    g.clear();
+    for (const b of affected) {
+      const w = fpW(b), h = fpH(b);
+      const pts = [gridToScreen(b.col, b.row), gridToScreen(b.col + w, b.row), gridToScreen(b.col + w, b.row + h), gridToScreen(b.col, b.row + h)];
+      g.fillStyle(0xb066ff, 0.32).fillPoints(pts, true);
+      g.lineStyle(2, 0xe2c2ff, 0.9).strokePoints(pts, true);
+    }
+  }
+
+  /** Ground plots: drawn again only when the layout changes. */
   updateLayoutExtras() {
     const list = this.layoutList || [];
     const key = list.map((b) => `${b.id}:${b.col},${b.row},${fpW(b)},${fpH(b)},${b.level},${b.destroyed ? 1 : 0}`).join('|')
@@ -290,7 +326,6 @@ export class GameScene extends Phaser.Scene {
     if (key === this.plotKey) return;
     this.plotKey = key;
     this.drawPlots(list);
-    this.updateOcclusion();
   }
 
   /** A dirt-colored diamond under each building (not walls), with a light rim. */
@@ -309,29 +344,6 @@ export class GameScene extends Phaser.Scene {
     }
   }
 
-  /**
-   * Which buildings are mostly hidden behind others? Covered share = the overlap of its picture with the
-   * pictures of buildings drawn in front of it (their bounds, so it slightly overestimates), capped at 1.
-   * Those get an outline (BuildingView.setOccluded). Walls are short and are never counted.
-   */
-  updateOcclusion() {
-    const views = [...this.views.buildings.values()].filter((v) => v.setOccluded);
-    const boxes = new Map(views.map((v) => [v, v.sprite.getBounds()]));
-    for (const v of views) {
-      const a = boxes.get(v);
-      const area = Math.max(1, a.width * a.height);
-      let covered = 0;
-      for (const o of views) {
-        if (o === v || o.sprite.depth <= v.sprite.depth) continue;
-        const ob = boxes.get(o);
-        const ix = Math.min(a.right, ob.right) - Math.max(a.x, ob.x);
-        const iy = Math.min(a.bottom, ob.bottom) - Math.max(a.y, ob.y);
-        if (ix > 0 && iy > 0) covered += ix * iy;
-      }
-      v.setOccluded(covered / area > OCCLUDED_SHARE);
-    }
-  }
-
   // ---------- hover, labels and fading (keep a crowded village readable) ----------
   /** The building under the pointer (tile first, like a click), re-checked when the pointer or camera moves. */
   updateHover() {
@@ -341,7 +353,7 @@ export class GameScene extends Phaser.Scene {
     const camMoved = camKey !== this.hoverCamKey;
     this.hoverCamKey = camKey;
     let id = null;
-    if (!this.placement && !this.endingGame && !(this.press && this.press.dragging) && !this.isOverUI(p)) {
+    if (!this.touchMode && !this.placement && !this.endingGame && !(this.press && this.press.dragging) && !this.isOverUI(p)) {
       if (this.lastHoverPtr && this.lastHoverPtr.x === p.x && this.lastHoverPtr.y === p.y && !camMoved && !this.hoverDirty) return;
       const w = this.screenToWorld(p.x, p.y);
       const b = this.pickBuilding(w.x, w.y);
@@ -448,13 +460,88 @@ export class GameScene extends Phaser.Scene {
   /** Scroll wheel zoom toward the cursor. */
   zoomAt(px, py, deltaY) {
     const cam = this.cameras.main;
-    const before = this.screenToWorld(px, py);
     const factor = deltaY > 0 ? 1 / ZOOM_STEP : ZOOM_STEP;
-    const zoom = clamp(cam.zoom * factor, this.minZoom(), CONFIG.camera.maxZoom);
+    this.zoomKeeping(this.screenToWorld(px, py), px, py, cam.zoom * factor);
+  }
+
+  /** Set the zoom (clamped) and scroll so the world point `w` sits at screen point (px, py). */
+  zoomKeeping(w, px, py, zoom) {
+    const cam = this.cameras.main;
+    zoom = clamp(zoom, this.minZoom(), CONFIG.camera.maxZoom);
     cam.setZoom(zoom);
-    cam.scrollX = before.x - cam.width / 2 - (px - cam.width / 2) / zoom;
-    cam.scrollY = before.y - cam.height / 2 - (py - cam.height / 2) / zoom;
+    cam.scrollX = w.x - cam.width / 2 - (px - cam.width / 2) / zoom;
+    cam.scrollY = w.y - cam.height / 2 - (py - cam.height / 2) / zoom;
     this.clampCamera();
+  }
+
+  /** The fingers on the screen (touch pointers held down). */
+  fingersDown() {
+    return [this.input.pointer1, this.input.pointer2].filter((p) => p && p.isDown);
+  }
+
+  /**
+   * Two fingers: pinch to zoom, and move both to pan. The map point first between the fingers stays between
+   * them. Lasts until every finger is lifted, so the last finger up doesn't count as a tap or a drag.
+   */
+  startPinch(a, b) {
+    const mid = { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 };
+    this.press = null;
+    this.pinch = { dist: Math.max(1, Phaser.Math.Distance.Between(a.x, a.y, b.x, b.y)), zoom: this.cameras.main.zoom, world: this.screenToWorld(mid.x, mid.y) };
+  }
+
+  updatePinch(a, b) {
+    const pi = this.pinch;
+    const dist = Math.max(1, Phaser.Math.Distance.Between(a.x, a.y, b.x, b.y));
+    this.zoomKeeping(pi.world, (a.x + b.x) / 2, (a.y + b.y) / 2, pi.zoom * (dist / pi.dist));
+  }
+
+  /** Is the screen point on (or within half a tile of) the ghost being placed? Fingers are wide. */
+  onGhost(px, py) {
+    const pl = this.placement;
+    if (!pl || !this.ghost) return false;
+    const w = this.screenToWorld(px, py);
+    const g = screenToGrid(w.x, w.y);
+    const m = 0.5;
+    return g.x >= pl.col - m && g.x < pl.col + pl.w + m && g.y >= pl.row - m && g.y < pl.row + pl.h + m;
+  }
+
+  /** The screen point at the center of the ghost's footprint (what updateGhost takes). */
+  ghostScreenCenter() {
+    const pl = this.placement;
+    const c = gridToScreen(pl.col + pl.w / 2, pl.row + pl.h / 2);
+    return this.worldToScreen(c.x, c.y);
+  }
+
+  /** Put the ghost on the tiles starting at (col, row). */
+  ghostToGrid(col, row) {
+    const pl = this.placement;
+    if (!pl) return;
+    const c = gridToScreen(col + pl.w / 2, row + pl.h / 2);
+    const sc = this.worldToScreen(c.x, c.y);
+    this.updateGhost(sc.x, sc.y);
+  }
+
+  /**
+   * Touch: where a new building's ghost first appears: the free spot nearest the middle of the screen (a
+   * little above it, clear of the bottom buttons), so it's on screen and ready to place.
+   */
+  startGhostForTouch() {
+    const pl = this.placement;
+    const cam = this.cameras.main;
+    const w = this.screenToWorld(cam.width / 2, cam.height * 0.45);
+    const g = screenToGrid(w.x, w.y);
+    const c0 = Math.round(g.x - pl.w / 2), r0 = Math.round(g.y - pl.h / 2);
+    if (pl.mode === 'buy') {
+      for (let rad = 0; rad <= 12; rad++) {
+        for (let dc = -rad; dc <= rad; dc++) {
+          for (let dr = -rad; dr <= rad; dr++) {
+            if (Math.max(Math.abs(dc), Math.abs(dr)) !== rad) continue;
+            if (canPlaceRect(this.gs.buildings, c0 + dc, r0 + dr, pl.w, pl.h).ok) { this.ghostToGrid(c0 + dc, r0 + dr); return; }
+          }
+        }
+      }
+    }
+    this.ghostToGrid(c0, r0);
   }
 
   // ---------- input ----------
@@ -464,6 +551,11 @@ export class GameScene extends Phaser.Scene {
 
     this.input.on('pointerdown', (p) => {
       this.press = null;
+      this.setTouchMode(!!p.wasTouch);
+      // A second finger: pinch zoom (whatever the first finger was doing is dropped).
+      const fingers = p.wasTouch ? this.fingersDown() : [];
+      if (fingers.length >= 2) { this.startPinch(fingers[0], fingers[1]); return; }
+      if (this.pinch) return;
       if (this.isOverUI(p)) return;
       if (p.rightButtonDown()) {
         if (this.placement) this.cancelPlacement();
@@ -471,14 +563,26 @@ export class GameScene extends Phaser.Scene {
         return;
       }
       this.press = { x: p.x, y: p.y, scrollX: cam.scrollX, scrollY: cam.scrollY, dragging: false };
+      // Touch: a press on the ghost drags the ghost (not the map), held where the finger grabbed it.
+      if (this.touchMode && this.placement && this.onGhost(p.x, p.y)) {
+        const c = this.ghostScreenCenter();
+        this.press.ghost = { dx: p.x - c.x, dy: p.y - c.y };
+      }
     });
 
     this.input.on('pointermove', (p) => {
-      if (this.placement) this.updateGhost(p.x, p.y);
+      if (this.pinch) {
+        const fingers = this.fingersDown();
+        if (fingers.length >= 2) this.updatePinch(fingers[0], fingers[1]);
+        return;
+      }
+      if (this.placement && !this.touchMode) this.updateGhost(p.x, p.y);
       const pr = this.press;
       if (!pr || !p.isDown) return;
       if (!pr.dragging && Phaser.Math.Distance.Between(p.x, p.y, pr.x, pr.y) >= CONFIG.camera.dragThresholdPx) pr.dragging = true;
-      if (pr.dragging) {
+      if (pr.dragging && pr.ghost && this.placement) {
+        this.updateGhost(p.x - pr.ghost.dx, p.y - pr.ghost.dy);
+      } else if (pr.dragging) {
         cam.scrollX = pr.scrollX - (p.x - pr.x) / cam.zoom;
         cam.scrollY = pr.scrollY - (p.y - pr.y) / cam.zoom;
         this.clampCamera();
@@ -486,10 +590,15 @@ export class GameScene extends Phaser.Scene {
     });
 
     this.input.on('pointerup', (p) => {
+      if (this.pinch) {
+        if (!this.fingersDown().length) this.pinch = null;
+        this.press = null;
+        return;
+      }
       const pr = this.press;
       this.press = null;
       if (!pr || pr.dragging || p.button !== 0) return;
-      this.handleClick(p.x, p.y);
+      this.handleClick(p.x, p.y, pr);
     });
 
     this.input.on('wheel', (p, over, dx, dy) => {
@@ -507,6 +616,14 @@ export class GameScene extends Phaser.Scene {
     });
   }
 
+  /** Switch between mouse and touch controls (the UI shows Place / Cancel buttons for touch). */
+  setTouchMode(on) {
+    if (on === this.touchMode) return;
+    this.touchMode = on;
+    if (on) { this.hoverId = null; this.drawHover(); }
+    if (this.placement) this.gs.emit('placementChanged', { active: true, type: this.placement.type });
+  }
+
   cameraMoved() {
     const cam = this.cameras.main;
     const key = `${cam.scrollX},${cam.scrollY},${cam.zoom}`;
@@ -520,8 +637,14 @@ export class GameScene extends Phaser.Scene {
     return !!ui && this.scene.isActive('UIScene') && ui.isPointerOverUI(p);
   }
 
-  handleClick(px, py) {
+  handleClick(px, py, press = null) {
     const w = this.screenToWorld(px, py);
+    if (this.placement && this.touchMode) {
+      // Touch: tapping the ghost places it; tapping elsewhere moves it there (or the Place button, UIScene).
+      if (press && press.ghost) this.confirmPlacement();
+      else this.updateGhost(px, py);
+      return;
+    }
     if (this.placement) {
       this.updateGhost(px, py);
       this.confirmPlacement();
@@ -531,6 +654,15 @@ export class GameScene extends Phaser.Scene {
     if (this.editMode) {
       // Edit mode: clicking a building picks it up to move; nothing else happens.
       if (b) { playSfx(this, SFX.buildingSelect); this.beginMove(b.id); }
+      return;
+    }
+    // The Brisket King (or his altar) clicked during a wave with Brisket Feast ready: he feasts.
+    const heroHit = this.heroView.hitTest(w.x, w.y);
+    if ((heroHit || (b && b.type === 'altar')) && checkFeast(this.gs).ok) { this.gs.useFeast(); return; }
+    // Clicking the hero himself (also while he stands on his altar) selects his altar, with his own sound.
+    if (heroHit && (!b || b.type === 'altar')) {
+      const altar = getAltar(this.gs);
+      if (altar) { playVoiceLine(this, [SFX.heroSelect], 'heroSelect'); this.select(altar.id); }
       return;
     }
     if (!b) { this.select(null); return; }
@@ -546,12 +678,18 @@ export class GameScene extends Phaser.Scene {
       this.scene.get('UIScene').openInfo();
       return;
     }
+    // DJ Babyface with a full meter during a wave: the click drops the beat (like collecting a mine).
+    if (b.type === 'dj' && checkDropBeat(this.gs, b).ok) {
+      this.views.buildings.get(b.id)?.pop();
+      this.gs.dropTheBeat(b.id);
+      return;
+    }
     let collected = false;
     if (coinShowing && tutorialAllows(this.gs, 'collect')) collected = this.gs.collect(b.id).ok;
     const canSelect = tutorialAllows(this.gs, 'select', b.type) && !collected;
     if (collected || canSelect) this.views.buildings.get(b.id)?.pop(); // click feedback
     if (canSelect) {
-      playSfx(this, SFX.buildingSelect);
+      playSfx(this, b.type === 'altar' && this.cache.audio.exists(SFX.altarSelect) ? SFX.altarSelect : SFX.buildingSelect);
       if (this.selectedId !== b.id) this.select(b.id); // already selected: stays as it is (Info opens the panel)
     }
   }
@@ -612,7 +750,15 @@ export class GameScene extends Phaser.Scene {
       ];
       this.selectionGfx.lineStyle(3, COLORS.panelEdge, 1).strokePoints(pts, true);
     }
-    if (isDefense(b.type)) {
+    if (b.type === 'dj') {
+      // DJ Babyface: its range (work playlist, Drop the Beat, light show).
+      const c = footprintCenter(b);
+      this.rangeCircle.show(c.x, c.y, djStats(b).range, 0);
+    } else if (b.type === 'altar') {
+      // The Brisket King's guard range: he fights ground enemies inside it.
+      const c = footprintCenter(b);
+      this.rangeCircle.show(c.x, c.y, heroStats(b).guardRange, 0);
+    } else if (isDefense(b.type)) {
       const cfg = typeConfig(b.type);
       const c = footprintCenter(b);
       this.rangeCircle.show(c.x, c.y, towerRange(b), cfg.minRange ? towerMinRange(b) : cfg.minRange); // with ability bonuses
@@ -746,6 +892,7 @@ export class GameScene extends Phaser.Scene {
     this.createGhost();
     this.gs.tutorialEvent('placementStarted', { type });
     this.gs.emit('placementChanged', { active: true, type });
+    if (this.touchMode) { this.startGhostForTouch(); return; }
     const p = this.input.activePointer;
     this.updateGhost(p.x, p.y);
   }
@@ -764,8 +911,21 @@ export class GameScene extends Phaser.Scene {
     this.createGhost();
     this.drawEditOutlines();
     this.gs.emit('placementChanged', { active: true, type: b.type });
+    if (this.touchMode) {
+      // Touch: the ghost starts on the building itself (or mid-screen, out of the hotbar), ready to drag.
+      if (fromHotbar) this.startGhostForTouch();
+      else this.ghostToGrid(d.col, d.row);
+      return;
+    }
     const p = this.input.activePointer;
     this.updateGhost(p.x, p.y);
+  }
+
+  /** Touch, laying walls in a row: the next segment's ghost starts right after the one just placed. */
+  continueWallRow(prev) {
+    if (!this.touchMode || !this.placement || this.placement.type !== 'wall') return;
+    const along = prev.orient === 'y' ? { col: prev.col, row: prev.row + prev.h } : { col: prev.col + prev.w, row: prev.row };
+    this.ghostToGrid(along.col, along.row);
   }
 
   createGhost() {
@@ -888,7 +1048,7 @@ export class GameScene extends Phaser.Scene {
       if (pl.fromHotbar && pl.type === 'wall') {
         this.wallOrient = pl.orient;
         this.pickFromHotbar(pl.type, pl.level);
-        if (this.placement) { this.placement.orient = pl.orient; Object.assign(this.placement, footprintDims('wall', pl.orient)); }
+        if (this.placement) { this.placement.orient = pl.orient; Object.assign(this.placement, footprintDims('wall', pl.orient)); this.continueWallRow(pl); }
       }
       return;
     }
@@ -901,7 +1061,7 @@ export class GameScene extends Phaser.Scene {
     this.endPlacement();
     this.syncViews(this.time.now);
     // Walls: keep laying segments in a row while you can afford them (Esc to stop).
-    if (pl.mode === 'buy' && pl.type === 'wall' && checkBuy(this.gs, 'wall').ok) this.beginPlacement('wall');
+    if (pl.mode === 'buy' && pl.type === 'wall' && checkBuy(this.gs, 'wall').ok) { this.beginPlacement('wall'); this.continueWallRow(pl); }
   }
 
   cancelPlacement() {
@@ -977,6 +1137,55 @@ export class GameScene extends Phaser.Scene {
       breakerExplosion(this, s.x, s.y, d.radius, TEX.light);
       this.cameras.main.shake(240, 0.006);
       playSfxCapped(this, SFX.breakerBlast, ENEMY_HIT_MAX);
+    });
+    // Da Baby Car (raid boss): a crunch and a jolt each time it rams through a building or wall.
+    on('babyCarRam', (d) => {
+      const s = gridToScreen(d.x, d.y);
+      splashRing(this, s.x, s.y, d.wall ? 0.5 : 0.8, 0xffb04a, { duration: 320, depth: 2710 });
+      floatText(this, s.x, s.y - 50, d.wall ? 'SMASH!' : 'CRASH!', '#ffcf5a', 18);
+      this.cameras.main.shake(d.wall ? 90 : 160, d.wall ? 0.003 : 0.005);
+      playSfxCapped(this, SFX.enemyHitBig, ENEMY_HIT_MAX);
+    });
+    // Skibidi Toilet: a puff of dirt where it pops up or dives back down.
+    on('enemySurfaced', (d) => { const s = gridToScreen(d.x, d.y); splashRing(this, s.x, s.y, 0.45, 0x8f673d, { duration: 320, depth: 2710 }); });
+    on('enemyBurrowed', (d) => { const s = gridToScreen(d.x, d.y); splashRing(this, s.x, s.y, 0.35, 0x6b4a2b, { duration: 260, depth: 2710 }); });
+    // DJ Babyface drops the beat: a party ring over its range, a big label, and the boosted defenses pop.
+    on('beatDropped', (d) => {
+      const dj = this.gs.getBuilding(d.id);
+      if (!dj) return;
+      const c = footprintCenter(dj), s = gridToScreen(c.x, c.y);
+      splashRing(this, s.x, s.y, djStats(dj).range, 0xc070ff, { duration: 700, depth: 2710 });
+      splashRing(this, s.x, s.y, djStats(dj).range * 0.6, 0x4cd6ff, { duration: 500, depth: 2710 });
+      const v = this.views.buildings.get(d.id);
+      if (v) { const t = v.topCenter(); floatText(this, t.x, t.y - 20, 'DROP THE BEAT!', '#ffe2ff', 22); }
+      for (const id of d.ids) this.views.buildings.get(id)?.pop();
+      this.cameras.main.shake(180, 0.004);
+      playSfx(this, this.cache.audio.exists(SFX.beatDrop) ? SFX.beatDrop : SFX.upgrade);
+    });
+    on('hypeFull', (d) => {
+      const v = this.views.buildings.get(d.id);
+      if (v) { const t = v.topCenter(); floatText(this, t.x, t.y - 30, 'Hype ready!', '#ffe2ff', 16); }
+    });
+    // The Brisket King: his swings, Brisket Feast, getting knocked out and back up.
+    const heroAt = () => { const h = this.gs.hero; return h ? gridToScreen(h.x, h.y) : null; };
+    on('heroHit', (d) => { this.heroView.attackPose(this.time.now); playSfxCapped(this, SFX.enemyHitBig, ENEMY_HIT_MAX); if (d.hog) { const s = gridToScreen(d.x, d.y); floatText(this, s.x, s.y - 40, 'WHOLE HOG!', '#ffb36b', 16); } });
+    on('heroFeast', (d) => {
+      const s = gridToScreen(d.x, d.y);
+      splashRing(this, s.x, s.y, d.radius, 0xffd34a, { duration: 520, depth: 2710 });
+      floatText(this, s.x, s.y - 90, 'BRISKET FEAST!', '#ffd34a', 22);
+      this.cameras.main.shake(160, 0.005);
+      playSfx(this, SFX.upgrade);
+    });
+    on('heroKnockedOut', () => { const s = heroAt(); if (s) floatText(this, s.x, s.y - 80, 'Knocked out! Zzz', '#d9e4ff', 18); playSfx(this, SFX.buildingDestroyed); });
+    on('heroSecondWind', (d) => { const s = gridToScreen(d.x, d.y); floatText(this, s.x, s.y - 80, 'Second Helping!', '#9bf07a', 18); });
+    on('heroReady', () => { const s = heroAt(); if (s) floatText(this, s.x, s.y - 80, 'Ready!', '#ffd34a', 16); });
+    // ...and when it's wrecked it bursts open and its troops pour out.
+    on('babyCarBurst', (d) => {
+      const s = gridToScreen(d.x, d.y);
+      splashRing(this, s.x, s.y, 1.4, 0xff7a3c, { duration: 520, depth: 2710 });
+      floatText(this, s.x, s.y - 60, `+${d.troops.length} troops!`, '#ff9a8a', 20);
+      this.cameras.main.shake(220, 0.006);
+      playSfx(this, SFX.buildingDestroyed);
     });
     // The "deployed" call plays once per wave, when its first Wall Breaker shows up.
     on('enemySpawned', (d) => {
@@ -1194,13 +1403,26 @@ export class GameScene extends Phaser.Scene {
     });
     // RV Lab research (or a level-up) gave buildings a new tier: each one pops with a label.
     on('abilitiesApplied', (d) => {
-      for (const id of d.ids.slice(0, 30)) {
-        const v = this.views.buildings.get(id);
-        if (v) { v.pop(); const top = v.topCenter(); floatText(this, top.x, top.y - 14, 'New ability!', '#ffe066', 18); }
-      }
       this.updateSelectionVisuals(); // range tiers change the range circle
+      // After an upgrade, the pop, label and sound wait for the upgrade sound to finish (unlockDelay).
+      const show = () => {
+        for (const id of d.ids.slice(0, 30)) {
+          const v = this.views.buildings.get(id);
+          if (v) { v.pop(); const top = v.topCenter(); floatText(this, top.x, top.y - 14, 'New ability!', '#ffe066', 18); }
+        }
+        playSfx(this, unlockSfx); // (once: the same sound within 40 ms is skipped, so research + applied play it once)
+      };
+      const wait = this.unlockDelay();
+      if (wait > 0) this.time.delayedCall(wait, show); else show();
     });
-    on('abilityResearched', () => playSfx(this, SFX.upgrade));
+    const unlockSfx = this.cache.audio.exists(SFX.abilityUnlocked) ? SFX.abilityUnlocked : SFX.upgrade;
+    on('abilityResearched', () => playSfx(this, unlockSfx));
+    // A level-up that reaches a new ability tier: wait until the upgrade sound has played (its length, minus a
+    // small overlap UNLOCK_OVERLAP_MS), then the unlock sound. 0 when there was no upgrade just now (research).
+    this.unlockDelay = () => {
+      if (this.time.now - (this.lastUpgradeSfxAt ?? -1e9) > 200) return 0;
+      return Math.max(0, soundDuration(this, SFX.upgrade) * 1000 - UNLOCK_OVERLAP_MS);
+    };
     // A Tower of Rah beam heats up a stage (x3, then x8).
     on('beamHeatUp', () => playSfxCapped(this, SFX.raHeatUp, 2));
     on('mineCollected', (d) => {
@@ -1210,6 +1432,7 @@ export class GameScene extends Phaser.Scene {
     });
     on('buildingUpgraded', (d) => {
       playSfx(this, SFX.upgrade);
+      this.lastUpgradeSfxAt = this.time.now;
       const view = d && this.views.buildings.get(d.id);
       if (view && view.growPop) view.growPop(d.level - 1, d.level); // walls just bounce (their size follows the level)
       this.updateSelectionVisuals();
@@ -1290,6 +1513,7 @@ export class GameScene extends Phaser.Scene {
     this.syncList(gs.enemies.filter((e) => e.alive), this.views.enemies, (e) => new EnemyView(this, e));
     this.syncList(gs.projectiles, this.views.projectiles, (p) => new ProjectileView(this, p));
     this.syncList(gs.pools || [], this.views.pools, (p) => new PoolView(this, p));
+    this.heroView.sync(gs, this.time.now);
     if (this.placement && this.placement.mode === 'move') {
       const v = this.views.buildings.get(this.placement.id);
       if (v) v.setAlpha(0.3);

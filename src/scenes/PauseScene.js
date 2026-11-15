@@ -6,6 +6,7 @@ import { getStorage } from '../state/GameState.js';
 import { addVolumeSlider } from '../objects/VolumeSlider.js';
 import { isWaveActive } from '../logic/util.js';
 import { Button } from '../objects/Button.js';
+import { addFullscreenButton } from '../objects/FullscreenButton.js';
 import { stopMusic, getMusicLevel, getSfxLevel, setMusicLevel, setSfxLevel } from '../audio.js';
 import { drawWindow } from '../objects/uiDraw.js';
 import { COLORS, textStyle } from '../theme.js';
@@ -27,6 +28,7 @@ export class PauseScene extends Phaser.Scene {
     drawWindow(g, px, py, pw, ph, { header });
     this.add.text(width / 2, py + 4 + header / 2, 'Paused', textStyle(38)).setOrigin(0.5);
     new Button(this, px + pw - 14, py + 14, 52, 50, '', () => this.resume(), { color: COLORS.buttonDanger, icon: 'x', radius: 10 });
+    addFullscreenButton(this, px + 14, py + 14); // top-left corner, mirroring the close button
 
     new Button(this, width / 2, py + 126, 290, 58, 'Resume', () => this.resume(), { color: COLORS.buttonGood, fontSize: 24 });
     new Button(this, width / 2, py + 196, 290, 58, 'Save', () => this.save(), { color: COLORS.buttonBlue, fontSize: 24 });

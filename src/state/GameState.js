@@ -1,6 +1,7 @@
 // The one game-state object plus a small event emitter.
 // Scenes call the action methods here; each action runs the pure rules in src/logic/,
 // feeds the tutorial, and autosaves. Logic emits events through state.emit(); views listen.
+import { heroWaveStarted, heroAfterWave, useFeast } from '../logic/hero.js';
 import { CONFIG } from '../config.js';
 import { MAP } from '../mapTiles.js';
 import { canPlaceRect } from '../logic/grid.js';
@@ -15,6 +16,9 @@ import { simulate } from '../logic/simulate.js';
 import { deserializeGame, writeGame, SAVE_KEYS } from '../logic/save.js';
 import { isWaveActive } from '../logic/util.js';
 import { applyLayout } from '../logic/layout.js';
+import { dropTheBeat } from '../logic/dj.js';
+import { DEFENSE_TYPES } from '../logic/buildings.js';
+import { tipEvent, dismissTip, hideAllTips } from '../logic/tips.js';
 import { checkResearch, labPicks, syncAbilityPicks } from '../logic/abilities.js';
 import { addResearchPoints, spendResearchPoints } from '../logic/researchPoints.js';
 import { advanceLabGuide, startLabGuideIfDue, skipLabGuide } from '../logic/labGuide.js';
@@ -63,11 +67,13 @@ export class GameState {
 
   emit(name, data) {
     for (const l of [...(this.listeners.get(name) || [])]) l.fn.call(l.ctx, data);
+    if (name !== 'tipsChanged') tipEvent(this, name, data || {}); // first-time tips (tips.js)
     if (TUTORIAL_EVENTS.includes(name)) this.tutorialEvent(name, data || {});
     if (LAB_GUIDE_EVENTS.includes(name)) advanceLabGuide(this, name, data || {});
     if (name === 'townHallUpgraded') startLabGuideIfDue(this); // Village Hall 4 unlocks the RV Lab
     if (name === 'labGuideChanged') this.save();
-    if (name === 'waveCleared') this.save();
+    if (name === 'waveStarted') heroWaveStarted(this);
+    if (name === 'waveCleared') { heroAfterWave(this); this.save(); } // the Brisket King naps before the save
     // Each night's wave: the checkpoint (for Retry) is the base as dusk falls.
     if (name === 'waveTriggered') { this.writeCheckpoint(); this.save(); }
   }
@@ -82,6 +88,9 @@ export class GameState {
     this.strikes = [];           // Arrow Storm / Meteor hits on their way down
     this.research = {};          // RV Lab research: { type: ['a', 'b', ...] }, the pick at each tier
     this.labGuideStep = 0;       // RV Lab guide (labGuide.js): 0 = not started
+    this.hero = null;            // the Brisket King (hero.js; rebuilt from his altar, not saved)
+    this.tipsSeen = [];          // first-time tips already shown (tips.js), saved
+    this.tipQueue = [];          // tips waiting to show (not saved: they come up again if still due)
     this.researchPoints = 0;     // RP: the currency for RV Lab abilities (researchPoints.js)
     this.wave = createIdleWave();
     this.wavesCleared = 0;       // nights survived
@@ -108,6 +117,7 @@ export class GameState {
     this.buildings = data.buildings;
     this.research = data.research;
     this.labGuideStep = data.labGuideStep;
+    this.tipsSeen = data.tipsSeen;
     this.researchPoints = data.researchPoints;
     this.wavesCleared = data.wavesCleared;
     this.nightsAtMaxTownHall = data.nightsAtMaxTownHall;
@@ -120,6 +130,28 @@ export class GameState {
     this.gold = Math.min(data.gold, getCapacity(this));
     // Villages already at Village Hall 4+ that haven't researched anything get the RV Lab guide now.
     startLabGuideIfDue(this);
+    tipEvent(this, 'tipsChecked'); // e.g. a special wave or Da Baby Car already next
+  }
+
+  /** DJ Babyface: Drop the Beat (a full hype meter, during a wave). */
+  /** The Brisket King's Brisket Feast (during a wave). */
+  useFeast() {
+    return useFeast(this);
+  }
+
+  dropTheBeat(id) {
+    return dropTheBeat(this, this.getBuilding(id), DEFENSE_TYPES);
+  }
+
+  /** The tip bubble's "Got it" (saved, so it won't show again in this village). */
+  dismissTip() {
+    if (dismissTip(this)) this.save();
+  }
+
+  /** The tip bubble's "No more tips". */
+  hideAllTips() {
+    hideAllTips(this);
+    this.save();
   }
 
   /** The RV Lab guide's Next button (its last step). */

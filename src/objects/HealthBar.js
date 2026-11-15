@@ -20,9 +20,12 @@ export class HealthBar {
    * @param {number} [opts.depth]
    * @param {number} [opts.color] fill color (use HP_TEAM)
    * @param {boolean} [opts.badge] draw a level badge on the left end
+   * @param {number} [opts.badgeColor] the badge's color (buildings: blue; enemies: dark red)
    */
-  constructor(scene, { width = 60, height = 12, depth = 5000, color = HP_TEAM.player, badge = false } = {}) {
+  constructor(scene, { width = 60, height = 12, depth = 5000, color = HP_TEAM.player, badge = false, badgeColor = COLORS.buttonBlue, badgeStyle = 'circle' } = {}) {
     this.scene = scene;
+    this.badgeColor = badgeColor;
+    this.badgeStyle = badgeStyle; // 'circle', or 'crown' (the Brisket King: a dark purple crown with his level)
     this.width = width;
     this.height = height;
     this.color = color;
@@ -39,6 +42,13 @@ export class HealthBar {
     this.holdUntil = 0;
     this.flashAt = -Infinity;
     this.lastTime = 0;
+    this.drawnKey = '';
+  }
+
+  /** Change the fill color (redrawn on the next draw). */
+  setColor(color) {
+    if (color === this.color) return;
+    this.color = color;
     this.drawnKey = '';
   }
 
@@ -102,9 +112,16 @@ export class HealthBar {
       if (fw > ih) g.fillStyle(0xffffff, 0.4).fillRect(ix + ir, iy + 1, fw - ih, Math.max(1, Math.round(ih * 0.28))); // shine
     }
 
-    if (this.badgeText) {
-      drawGlossy(g, bx - br, -br, br * 2, br * 2, COLORS.buttonBlue, { circle: true, lip: 2, shadow: true });
-      this.badgeText.setText(level == null ? '' : String(level)).setPosition(bx, -1);
+    if (this.badgeText && this.badgeStyle === 'crown') {
+      drawCrown(g, bx, br);
+      const label = level == null ? '' : String(level);
+      this.badgeText.setText(label).setPosition(bx, br * 0.12).setScale(label.length >= 2 ? 1 : 1.2)
+        .setStroke('#120a18', Math.max(3, Math.round(br * 0.4)));
+    } else if (this.badgeText) {
+      drawGlossy(g, bx - br, -br, br * 2, br * 2, this.badgeColor, { circle: true, lip: 2, shadow: true });
+      const label = level == null ? '' : String(level);
+      // Three digits or more (very late enemies): smaller, so the number stays inside the badge.
+      this.badgeText.setText(label).setPosition(bx, -1).setScale(label.length >= 3 ? 0.72 : 1);
     }
   }
 
@@ -119,4 +136,26 @@ export class HealthBar {
   destroy() {
     this.container.destroy();
   }
+}
+
+/**
+ * A hero's level badge: a dark purple crown (flared corner points, a flat raised middle) with a thin lavender
+ * rim, a slightly lighter top and a faint band near the bottom, wider than tall, centered on (cx, 0) with `r`
+ * the round badge's radius. The level number sits on it in big white figures.
+ */
+function drawCrown(g, cx, r) {
+  const w = r * 2.5, tip = -r * 1.08, side = -r * 0.3, notch = -r * 0.62, mid = -r * 0.86, bottom = r * 0.98;
+  const pts = (o) => [
+    { x: cx - w / 2 - o, y: bottom + o }, { x: cx - w / 2 - o, y: side },
+    { x: cx - w / 2 - r * 0.24 - o, y: tip - o }, { x: cx - w * 0.27, y: notch - o },
+    { x: cx - w * 0.16, y: mid - o }, { x: cx + w * 0.16, y: mid - o },
+    { x: cx + w * 0.27, y: notch - o }, { x: cx + w / 2 + r * 0.24 + o, y: tip - o },
+    { x: cx + w / 2 + o, y: side }, { x: cx + w / 2 + o, y: bottom + o }
+  ];
+  g.fillStyle(0x000000, 0.35).fillPoints(pts(0).map((p) => ({ x: p.x + 1, y: p.y + 2 })), true); // shadow
+  g.fillStyle(0x0c0610, 1).fillPoints(pts(2.2), true);                                         // dark outline
+  g.fillStyle(0x8f7ba6, 1).fillPoints(pts(1), true);                                           // lavender rim
+  g.fillStyle(0x2a1838, 1).fillPoints(pts(0), true);                                           // body
+  g.fillStyle(0x3d2652, 1).fillPoints(pts(0).map((p) => ({ x: p.x, y: Math.min(p.y, -r * 0.05) })), true); // lighter top
+  g.fillStyle(0x6e5888, 0.9).fillRect(cx - w / 2 + 2, bottom - r * 0.3, w - 4, Math.max(1.5, r * 0.12)); // band
 }

@@ -24,6 +24,7 @@ export function hasAbilities(type) {
 
 /** The defense types with ability paths, in shop order. */
 export const ABILITY_TYPES = Object.keys(ABILITIES);
+export { DEFENSE_ABILITY_TYPES, ECONOMY_ABILITY_TYPES } from '../abilityConfig.js';
 
 /** One tier's data: { name, desc, fx }. `tier` is 1-based. */
 export function tierInfo(type, path, tier) {
@@ -190,7 +191,8 @@ export function towerMinRange(b) {
 
 /** Damage multiplier from the tower's own tiers and a Commander aura (Rally). */
 export function towerDamageMult(b) {
-  return 1 + ((abilityFx(b).damagePct || 0) + (aura(b).damagePct || 0)) / 100;
+  // (+ DJ Babyface's Main Stage while Drop the Beat lasts)
+  return 1 + ((abilityFx(b).damagePct || 0) + (aura(b).damagePct || 0) + (b.djBoostT > 0 ? b.djDmgPct || 0 : 0)) / 100;
 }
 
 /** Seconds between shots (faster with fire-rate tiers and a Commander aura). */
@@ -201,7 +203,9 @@ export function towerFireInterval(b) {
   const pct = (fx.fireRatePct || 0) + (aura(b).fireRatePct || 0)
     + (fx.rampPct ? (b.rampStacks || 0) * fx.rampPct : 0)                 // Cannon Hot Barrel
     + (b.celebrateT > 0 ? b.celebratePct || 0 : 0)                         // a nearby Firework's Celebration
-    + (fx.groundFireRatePct && b._noFlyers ? fx.groundFireRatePct : 0);    // Firework Rapid Display
+    + (fx.groundFireRatePct && b._noFlyers ? fx.groundFireRatePct : 0)     // Firework Rapid Display
+    + (b.djBoostT > 0 ? b.djBoostPct || 0 : 0)                             // DJ Babyface's Drop the Beat
+    + (b._heroDecree || 0);                                                // the Brisket King's Royal Decree
   return cfg.fireInterval / (1 + pct / 100) / lastStand;
 }
 

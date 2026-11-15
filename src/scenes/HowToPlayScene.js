@@ -8,6 +8,7 @@
 // Arrow keys browse the Buildings / Enemies lists; 1-4 switch tabs; Esc goes back to the title.
 import Phaser from 'phaser';
 import { CONFIG } from '../config.js';
+import { IS_TOUCH } from '../device.js';
 import {
   DEFENSE_TYPES, buildingName, typeConfig, maxLevel, levelStats, limitFor, unlockTownHall, footprintDims, buildCost,
   totalSpent, isDefense, isSupport
@@ -41,7 +42,7 @@ const DESC_MAX_H = 66; // descriptions taller than ~3 lines drop to a smaller fo
 const STAT_COLS = 3, STAT_ROW = 40;
 
 // Buildings in the order a player meets them: the base, economy, walls, then defenses and traps.
-const BUILDING_ORDER = ['townHall', 'mine', 'storage', 'house', 'rvlab', 'wall', 'cannon', 'archer', 'mortar', 'wizard', 'firework', 'flock', 'catapult', 'ra', 'mousetrap'];
+const BUILDING_ORDER = ['townHall', 'mine', 'storage', 'house', 'rvlab', 'dj', 'wall', 'cannon', 'archer', 'mortar', 'wizard', 'firework', 'flock', 'catapult', 'ra', 'mousetrap', 'altar'];
 
 // Defenses that attack (support towers like the F.L.O.C.K Tower never hit anything).
 const ATTACKERS = DEFENSE_TYPES.filter((t) => !typeConfig(t).support);
@@ -58,7 +59,8 @@ function firstWave(kind) {
 }
 
 const round1 = (n) => Math.round(n * 10) / 10;
-const maxOf = (fn) => Math.max(...ENEMY_KINDS.map((k) => fn(CONFIG.enemies[k])));
+// Stat bars compare against the regular enemies; a raid boss's bars are simply full.
+const maxOf = (fn) => Math.max(...ENEMY_KINDS.filter((k) => !CONFIG.enemies[k].boss).map((k) => fn(CONFIG.enemies[k])));
 
 // ---------- enemy stats ----------
 function rangeText(cfg) {
@@ -145,6 +147,16 @@ function buildingStats(type) {
     out.push(grow(type, 'Gold capacity', 'capacity', 0xffc93c));
   } else if (type === 'house') {
     out.push(grow(type, 'Gnome workers', 'gnomes', 0xe85d4a));
+  } else if (type === 'altar') {
+    out.push(grow(type, 'Hero health', 'heroHp', 0x4cd137));
+    out.push(grow(type, 'Hero damage per hit', 'heroDamage', 0xff6b3d));
+    out.push(fixed('Guard range', `${CONFIG.altar.hero.guardRange} tiles`, CONFIG.altar.hero.guardRange / 10, 0x3cb8ff));
+    out.push(fixed('Longest nap', `${CONFIG.altar.hero.maxSleepSeconds} s`, 0.6, 0x9b59d0));
+  } else if (type === 'dj') {
+    out.push(grow(type, 'Range', 'range', 0x4cd6ff, ' tiles'));
+    out.push(grow(type, 'Gnome work speed', 'gnomeBoostPct', 0xffc93c, '%'));
+    out.push(grow(type, 'Drop the Beat fire rate', 'beatPct', 0xff6b3d, '%'));
+    out.push(grow(type, 'Drop the Beat length', 'beatSeconds', 0xc070ff, ' s'));
   } else if (type === 'rvlab') {
     out.push(fixed('Tiers it researches', `1 → ${top}`, 1, 0xff9a3c));
     out.push(fixed('Village Hall needed', `${levelStats('rvlab', 1).townHall} → ${levelStats('rvlab', top).townHall}`, 1, 0x3cb8ff));
@@ -185,6 +197,8 @@ function buildingTags(type) {
   if (type === 'townHall') tags.push(['Your base', 0xc98a12]);
   else if (type === 'wall') tags.push(['Wall', 0x8a6a46]);
   else if (type === 'rvlab') tags.push(['Research', 0x9b59d0]);
+  else if (type === 'dj') tags.push(['Utility', 0x9b59d0], ['Click to Drop the Beat', 0xc070ff]);
+  else if (type === 'altar') tags.push(['Hero', 0xc98a12], ['Melee', 0xd0583c], ['Sleeps to heal', 0x6c7a89]);
   else if (!isDefense(type)) tags.push(['Economy', COLORS.buttonGood]);
   else if (cfg.trap) tags.push(['Hidden trap', 0x6c7a89]);
   else if (isSupport(type)) tags.push(['Support', 0x23a99a]);
@@ -310,7 +324,14 @@ export class HowToPlayScene extends Phaser.Scene {
   buildBasics() {
     const gap = 20, w = (RIGHT - LEFT - gap * 2) / 3, h = CONTENT_BOTTOM - CONTENT_TOP;
     const cols = [
-      ['Controls', [
+      ['Controls', IS_TOUCH ? [
+        'Tap: select, collect, and press buttons.',
+        'Drag the map to pan; pinch with two fingers to zoom.',
+        'Placing: drag the see-through building where you want it (or tap a spot), then tap Place or tap it again.',
+        'Walls: each Place starts the next one right after it. Touching walls join up.',
+        'Edit button (bottom right): rearrange your village. Pick buildings up (or Remove All) into the hotbar, place them again, slide the whole layout with the Shift arrows, then Save.',
+        'Profile (top left): your league, rank, achievements and stats.'
+      ] : [
         'Left-click: select, collect, place, and press buttons.',
         'Drag the map to pan; scroll to zoom.',
         'Esc: cancel placing, close a window, or pause.',
@@ -322,7 +343,7 @@ export class HowToPlayScene extends Phaser.Scene {
         'Build between waves as long as you like. Start Wave sends enemies from the flashing paths right away.',
         `Day and night cycle on their own (~8 min; clock under your gold). Attacks in the dark are restless: enemies hit ${Math.round((CONFIG.rules.night.damage - 1) * 100)}% harder and move faster, but pay +${Math.round(CONFIG.rules.night.lootBonus * 100)}% gold and RP.`,
         'Each wave is tougher than the last. Every 3rd is special (Air Raid, Siege...): the top bar warns you, and it pays bonus gold.',
-        'Beat a wave and everything destroyed is rebuilt free. Mid-fight you can pay to Rebuild early.',
+        `Waves are rated 1-3 stars by how much of your village survives; 3 stars pays +${Math.round(CONFIG.rules.waveStars.bonus[2] * 100)}% gold and RP. Everything destroyed is rebuilt free after.`,
         'If the Village Hall falls, Retry rewinds to before that wave. Waves that drag on too long get enraged.'
       ]],
       ['Gold & research points', [
@@ -357,11 +378,11 @@ export class HowToPlayScene extends Phaser.Scene {
 
     // Right: the RV Lab and abilities, in three numbered steps plus an example.
     const rx = LEFT + lw + gap;
-    y = this.card(rx, CONTENT_TOP, rw, h, 'Defense abilities (RV Lab)');
+    y = this.card(rx, CONTENT_TOP, rw, h, 'Abilities (RV Lab)');
     const req = ABILITY_LEVEL_REQ.default.join(' / ');
     const steps = [
       ['Build the RV Lab', `Village Hall ${CONFIG.rvlab.unlockTownHall}, Shop → Economy. Each RV Lab level unlocks the next tier (level N needs Village Hall N+${levelStats('rvlab', 1).townHall - 1}).`],
-      ['Research one pick per tier (costs RP)', 'In the RV Lab (or a defense\'s Abilities button), pick Path A\'s, B\'s or C\'s option at each tier, in any mix (A1, B2, A3...). Picks are final.'],
+      ['Research one pick per tier (costs RP)', 'In the RV Lab (or a building\'s Abilities button), pick Path A\'s, B\'s or C\'s option at each tier, in any mix (A1, B2, A3...). Picks are final. Defenses and economy buildings (Mine, Storage, House, DJ) each have a tab.'],
       ['Every building gets it', `No buying: each pick goes straight onto every building of that type. Tiers 1-5 work on buildings at level ${req}; lower ones get them as they level up.`]
     ];
     steps.forEach(([title, text], i) => {
@@ -511,7 +532,7 @@ export class HowToPlayScene extends Phaser.Scene {
     });
 
     const cfg = typeConfig(type);
-    const sub = type === 'townHall' ? 'The heart of your village' : isDefense(type) ? (cfg.trap ? 'Trap' : isSupport(type) ? 'Support tower' : 'Defense') : type === 'wall' ? 'Wall' : type === 'rvlab' ? 'Research' : 'Economy';
+    const sub = type === 'townHall' ? 'The heart of your village' : isDefense(type) ? (cfg.trap ? 'Trap' : isSupport(type) ? 'Support tower' : 'Defense') : type === 'wall' ? 'Wall' : type === 'rvlab' ? 'Research' : type === 'altar' ? 'Hero' : type === 'dj' ? 'Utility' : 'Economy';
     let y = this.nameBlock(buildingName(type), sub);
     y = this.tagRow(p, RX, y + 6, buildingTags(type));
     y = this.description(BUILDING_DESCRIPTIONS[type], y + 4) + 10;
@@ -549,10 +570,14 @@ export class HowToPlayScene extends Phaser.Scene {
     if (cfg.jumpsWalls) tags.push(['Jumps walls', 0x23a99a]);
     if (cfg.invisibleUntilJump) tags.push(['Invisible', 0x6c7a89]);
     if (cfg.drops) tags.push(['Drops troops', 0xd0583c]);
+    if (cfg.boss) tags.push(['Raid boss', 0xb03a2e], ['Rams through walls', 0xc98a12], ['Bursts into troops', 0xd0583c]);
+    if (cfg.burrows) tags.push(['Tunnels underground', 0x8f673d], ['F.L.O.C.K sees it', 0x6c7a89]);
     if (cfg.prefers && cfg.preferredDamageMultiplier) tags.push([`${cfg.preferredDamageMultiplier}x vs ${cfg.prefers.includes('wall') ? 'walls' : cfg.prefers.includes('airDefense') ? 'air defenses' : 'gold buildings'}`, 0xc98a12]);
     const fw = firstWave(kind);
     const dropper = cfg.droppedBy && CONFIG.enemies[cfg.droppedBy];
-    tags.push([dropper ? `From ${dropper.name}s` : fw ? `From wave ${fw}` : 'Endless waves', COLORS.buttonDark]);
+    const bossFrom = cfg.boss && CONFIG.rules.babyCar ? `From Village Hall ${CONFIG.rules.babyCar.fromTownHall}`
+      : cfg.fromTownHall ? `From Village Hall ${cfg.fromTownHall}` : null;
+    tags.push([dropper ? `From ${dropper.name}s` : bossFrom || (fw ? `From wave ${fw}` : 'Endless waves'), COLORS.buttonDark]);
     y = this.tagRow(p, RX, y + 6, tags);
     y = this.description(ENEMY_DESCRIPTIONS[kind], y + 4) + 10;
 

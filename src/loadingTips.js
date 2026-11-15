@@ -12,7 +12,7 @@ export const LOADING_TIPS = [
   'Upgrading your Village Hall unlocks new buildings and more of each, but brings bigger attacks with new enemy types.',
   'If your Village Hall falls, the night is lost. Build your defenses around it.',
   'Edit mode can clear your whole village into the hotbar with Remove All, so you can lay it out from scratch between waves.',
-  'Press R while placing a wall to rotate it.',
+  'Press R (or the Rotate button) while placing a wall to rotate it.',
   "Destroyed buildings stay in ruins after the night. Click one to rebuild it for 30% of its level's cost, even mid-wave.",
   'Villager Houses add gnome workers: they speed up your mines by day and patch up buildings during attacks.',
 

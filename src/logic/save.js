@@ -1,10 +1,14 @@
 // Save format (versioned JSON), validation, and safe localStorage access.
 // `storage` is passed in (window.localStorage in the game, a fake in tests). Every access is try/catch.
+import { validHeroSleep } from './hero.js';
 import { CONFIG } from '../config.js';
 import { BUILDING_TYPES, WALL_ORIENTS, footprintDims, buildingSize, maxLevel, levelStats, isDefense, maxHp } from './buildings.js';
 import { isRectOnGrass, footprintsOverlap } from './grid.js';
 import { serializeResearch, validResearch, deserializeResearch, hasAbilities, convertOldResearch, picksForLevel } from './abilities.js';
 import { validLabGuide } from './labGuide.js';
+import { validHype } from './dj.js';
+import { mineStockCap } from './economy.js';
+import { serializeTips, validTips, deserializeTips } from './tips.js';
 import { validResearchPoints } from './researchPoints.js';
 
 // Version 2 adds the day/night clock and nightsAtMaxTownHall (waves come at night).
@@ -43,10 +47,13 @@ export function serializeGame(state, now = new Date()) {
     // building of that type has those tiers as far as its level allows, so buildings don't store them.
     research: serializeResearch(state.research),
     labGuide: state.labGuideStep || 0, // RV Lab guide step (labGuide.js); missing in older saves
+    tips: serializeTips(state),        // first-time tips already shown (tips.js); missing in older saves
     researchPoints: Math.floor(state.researchPoints || 0), // RP for RV Lab abilities; missing in older saves
     buildings: state.buildings.map((b) => {
       const out = { id: b.id, type: b.type, level: b.level, col: b.col, row: b.row };
       if (b.type === 'mine') out.stock = Math.round((b.stock || 0) * 100) / 100;
+      if (b.type === 'dj' && b.hype) out.hype = Math.floor(b.hype); // DJ Babyface's meter keeps its charge
+      if (b.type === 'altar' && b.heroSleep > 0) out.heroSleep = Math.round(b.heroSleep * 10) / 10; // the Brisket King's nap
       if (b.type === 'wall') out.orient = b.orient || 'x';
       // Ruins only exist mid-night (everything is rebuilt free when the wave is beaten).
       if (b.destroyed && b.type !== 'townHall') out.destroyed = true;
@@ -135,6 +142,7 @@ export function validateSave(obj) {
   if (!Array.isArray(obj.buildings)) return false;
   if (!validResearch(obj.research)) return false;
   if (!validLabGuide(obj.labGuide)) return false;
+  if (!validTips(obj.tips)) return false;
   if (!validResearchPoints(obj.researchPoints)) return false;
 
   const seen = new Set();
@@ -156,6 +164,8 @@ export function validateSave(obj) {
       if (b.level !== obj.townHallLevel) return false;
     }
     if (b.type === 'mine' && b.stock !== undefined && (typeof b.stock !== 'number' || !Number.isFinite(b.stock) || b.stock < 0)) return false;
+    if (b.hype !== undefined && (b.type !== 'dj' || !validHype(b.hype))) return false;
+    if (b.heroSleep !== undefined && (b.type !== 'altar' || !validHeroSleep(b.heroSleep))) return false;
     if (b.destroyed !== undefined && (b.destroyed !== true || b.type === 'townHall')) return false;
   }
   if (townHalls !== 1) return false;
@@ -173,10 +183,13 @@ export function deserializeGame(obj) {
     const b = { id: s.id, type: s.type, level: s.level, col: s.col, row: s.row, ...footprintDims(s.type, s.orient), hp: levelStats(s.type, s.level).hp, destroyed: false };
     if (s.type === 'wall') b.orient = s.orient;
     else b.size = buildingSize(s.type);
-    if (s.type === 'mine') b.stock = Math.min(s.stock || 0, levelStats('mine', s.level).stockCap);
+    if (s.type === 'mine') b.stock = s.stock || 0; // clamped below, once its perks (Deep Vault) are known
+    if (s.type === 'dj') b.hype = s.hype || 0;
+    if (s.type === 'altar') b.heroSleep = s.heroSleep || 0;
     if (isDefense(s.type)) { b.cooldown = 0; b.targetId = null; }
     if (hasAbilities(s.type)) b.picks = picksForLevel(research, s.type, s.level);
     b.hp = maxHp(b); // with any health tiers
+    if (s.type === 'mine') b.stock = Math.min(b.stock, mineStockCap(b));
     if (s.destroyed) { b.destroyed = true; b.hp = 0; }
     return b;
   });
@@ -189,6 +202,7 @@ export function deserializeGame(obj) {
     tutorialDone: obj.tutorialDone,
     research,
     labGuideStep: obj.labGuide || 0,
+    tipsSeen: deserializeTips(obj.tips),
     researchPoints: obj.researchPoints || 0,
     buildings,
     nextId: maxId + 1

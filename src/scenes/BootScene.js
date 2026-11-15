@@ -27,7 +27,9 @@ const BUILDING_LOOK = {
   flock: { color: 0x4a6a8a, label: 'FT' },
   mousetrap: { color: 0x8a6a3a, label: 'MT' },
   ra: { color: 0xd4a537, label: 'Ra' },
-  rvlab: { color: 0xe9d8b4, label: 'RV' }
+  rvlab: { color: 0xe9d8b4, label: 'RV' },
+  dj: { color: 0x6a3fa0, label: 'DJ' },
+  altar: { color: 0xb03a2e, label: 'BK' }
 };
 
 const TIP_MS = 4500; // how long each loading tip stays up
@@ -143,11 +145,11 @@ export class BootScene extends Phaser.Scene {
       this.isoBlock(buildingDestroyedKey(type), size, 8, 0x3a3a3a, '', true);
     }
 
-    // Walls: one tile per level (wood -> stone -> dark stone -> steel -> gold -> dark gold -> lava). Only drawn when no
+    // Walls: one tile per level (wood -> stone -> dark stone -> steel -> gold -> dark gold -> lava -> bright lava). Only drawn when no
     // wall art (bld_wall_lvN pillars) was loaded, so real art never mixes with placeholders.
     const wallArt = this.textures.getTextureKeys().some((k) => /^bld_wall_lv\d+$/.test(k));
     if (!wallArt) {
-      [0x9c7a4c, 0x9a9a92, 0x6f7480, 0x55708f, 0xd4a537, 0x6a5a3a, 0xd2501e].forEach((color, i) => this.isoBlock(`bld_wall_lv${i + 1}`, 1, 26, color, ''));
+      [0x9c7a4c, 0x9a9a92, 0x6f7480, 0x55708f, 0xd4a537, 0x6a5a3a, 0xd2501e, 0xff8a2a].forEach((color, i) => this.isoBlock(`bld_wall_lv${i + 1}`, 1, 26, color, ''));
     }
     this.isoBlock('bld_wall', 1, 26, 0x9c7a4c, '');
     this.isoBlock('bld_wall_destroyed', 1, 5, 0x3a3a3a, '', true);

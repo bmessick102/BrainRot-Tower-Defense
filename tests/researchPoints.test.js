@@ -27,7 +27,7 @@ describe('research points', () => {
 
   it('surviving a night gives researchPointsPerWave x the wave number, on top of the kills', () => {
     const s = makeStateWithTownHall({}, 3);
-    s.wave = { ...s.wave, phase: 'active', number: 4, queues: {}, paths: [], bountyEarned: 0 };
+    s.wave = { ...s.wave, phase: 'active', number: 4, queues: {}, paths: [], bountyEarned: 0, startBuildings: 1, lost: 1 }; // 1 star: no star bonus
     const g = addEnemy(s, 'grunt', 5, 5, { hp: 1, maxHp: 1 });
     damageEnemy(s, g, 5);
     expect(checkWaveCleared(s)).toBe(true);

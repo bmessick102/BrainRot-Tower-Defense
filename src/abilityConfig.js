@@ -27,7 +27,8 @@ export const ABILITY_COSTS = {
 export const ABILITY_LEVEL_REQ = {
   default: [2, 4, 6, 8, 10],
   catapult: [2, 3, 4, 5, 6], // 6 levels
-  ra: [2, 4, 5, 7, 8]        // 8 levels
+  ra: [2, 4, 5, 7, 8],       // 8 levels
+  dj: [1, 2, 3, 4, 5]        // DJ Babyface: 5 levels
 };
 
 export const MAX_TIER = 5;
@@ -289,4 +290,132 @@ const PATH_C = {
     t('Supernova', 'A target killed at full heat explodes for 4 s of beam damage within 2 tiles.', { supernova: 4, supernovaRadius: 2 })
   ] }
 };
+const DEFENSE_TREE_TYPES = Object.keys(ABILITIES);
 for (const [type, path] of Object.entries(PATH_C)) ABILITIES[type].c = path;
+// ---------- the Brisket King (his altar's tree; read by src/logic/hero.js) ----------
+ABILITIES.altar = {
+  a: { name: 'Pitmaster', tiers: [
+    t('Smoked Rub', 'The Brisket King hits 25% harder.', { heroDamagePct: 25 }),
+    t('Burnt Ends', 'His hits splash 50% of their damage onto enemies within 1 tile.', { heroSplashPct: 50, heroSplashRadius: 1 }),
+    t('Sauce Drip', 'Enemies he hits are slowed 30% for 2 s.', { heroSlow: 0.3, heroSlowSeconds: 2 }),
+    t('Meat Sweats', 'He attacks 35% faster.', { heroAttackSpeedPct: 35 }),
+    t('Whole Hog', 'Every 5th hit deals triple damage and knocks the enemy back 1 tile.', { wholeHogEvery: 5, wholeHogMult: 3, wholeHogKnock: 1 })
+  ] },
+  b: { name: 'Royal Guard', tiers: [
+    t('Bark Crust', 'The Brisket King has 30% more health.', { heroHpPct: 30 }),
+    t('Lifesteal Platter', 'He heals 15% of the damage he deals.', { heroLifesteal: 0.15 }),
+    t('Royal Taunt', 'Ground enemies within 2 tiles stop to fight him instead.', { heroTaunt: 2 }),
+    t('Iron Stomach', 'He takes 25% less damage.', { heroArmor: 0.25 }),
+    t('Second Helping', "Once per wave, when he's knocked out he gets back up with 40% health.", { heroSecondWind: 0.4 })
+  ] },
+  c: { name: 'Kingdom', tiers: [
+    t('Long Reach', 'He guards 2 tiles farther from his altar.', { guardRangeAdd: 2 }),
+    t('Power Nap', 'He sleeps 40% shorter after a wave.', { heroSleepFasterPct: 40 }),
+    t('Royal Banquet', 'Brisket Feast also heals buildings within his guard range by 15% of their health.', { feastHealBuildingsPct: 15 }),
+    t('Royal Decree', "While he's awake, defenses within his guard range fire 15% faster.", { heroDecreePct: 15 }),
+    t('Feast for Days', 'Brisket Feast can be used twice per wave.', { feastCharges: 2 })
+  ] }
+};
+/** The defense types with trees, and the Brisket King's altar (the Defenses tab of the research window). */
+export const DEFENSE_ABILITY_TYPES = [...DEFENSE_TREE_TYPES, 'altar'];
+
+// ---------- economy buildings (researched in the RV Lab like the defenses; their own tab in the window) ----------
+// Their fx keys are read by economy.js (mines, storage), villagers.js (gnomes), econPerks.js (house income,
+// militia, mine auto-collect) and dj.js (DJ Babyface). Same rules: one pick per tier, every tier works alone.
+export const ECONOMY_ABILITIES = {
+  mine: {
+    a: { name: 'Overclock', tiers: [
+      t('Overclocked Rig', 'Mines 25% more gold.', { productionPct: 25 }),
+      t('Deep Vault', 'Holds 75% more before it\'s full.', { stockCapPct: 75 }),
+      t('Night Shift', 'Mines 50% more gold while it\'s dark.', { nightProductionPct: 50 }),
+      t('Mining Pool', 'Mines 6% more for every other standing Bitcoin Mine.', { poolPct: 6 }),
+      t('Bull Run', 'Mines 60% more gold.', { productionPct: 60 })
+    ] },
+    b: { name: 'Automation', tiers: [
+      t('Gnome Rail', 'Gnomes carry its gold to storage 40% faster.', { tripFasterPct: 40 }),
+      t('Auto-Collect', 'Sends its gold to storage by itself every 40 s (between waves).', { autoCollectPerMin: 1.5 }),
+      t('Tip Jar', 'Collecting it (by hand or automatically) pays 15% extra.', { collectBonusPct: 15 }),
+      t('Smart Contract', 'Sends its gold to storage by itself every 20 s, even during waves.', { autoCollectPerMin: 3, autoInWaves: 1 }),
+      t('Compound Mining', 'Every collection makes it mine 2% more (up to +30%) until it\'s destroyed.', { compoundPct: 2, compoundMax: 30 })
+    ] },
+    c: { name: 'Security', tiers: [
+      t('Steel Casing', '+35% health.', { hpPct: 35 }),
+      t('Booby-Trapped Coins', 'Enemies that hit it take 40% of the damage back.', { thorns: 0.4 }),
+      t('Hidden Stash', 'Bitcoin Stealers deal 60% less damage to it.', { thiefResistPct: 60 }),
+      t('Panic Room', 'Below 30% health it takes 50% less damage.', { lowHpArmor: 0.5 }),
+      t('Bounty Vault', 'Enemies defeated within 3 tiles of it pay 50% more gold.', { nearBountyPct: 50, nearRadius: 3 })
+    ] }
+  },
+  storage: {
+    a: { name: 'Capacity', tiers: [
+      t('Extra Shelves', 'Holds 25% more gold.', { capacityPct: 25 }),
+      t('Compound Interest', 'Beating a wave pays 2% of the gold stored in it.', { interestPct: 2 }),
+      t('Expansion Wing', 'Holds 50% more gold.', { capacityPct: 50 }),
+      t('Night Dividend', 'Beating a wave pays 2% of the gold stored in it, doubled if it\'s dark.', { interestPct: 2, nightInterestMult: 2 }),
+      t('Mega Vault', 'Holds twice as much gold.', { capacityPct: 100 })
+    ] },
+    b: { name: 'Vault', tiers: [
+      t('Time Lock', 'Loses 30% less gold when it\'s hit.', { drainResistPct: 30 }),
+      t('Reinforced Door', '+40% health.', { hpPct: 40 }),
+      t('Dye Pack', 'Bitcoin Stealers that hit it are slowed 50% for 4 s.', { thiefSlow: 0.5 }),
+      t('Insurance', 'Half the gold it loses during a wave is paid back when you beat the wave.', { insurancePct: 50 }),
+      t('Fort Knox', 'Loses no gold at all while it\'s above half health.', { drainImmuneAbove: 0.5 })
+    ] },
+    c: { name: 'Logistics', tiers: [
+      t('Loading Dock', 'Gnomes delivering gold here deliver 15% more.', { dropBonusPct: 15 }),
+      t('Express Lane', 'Gnome trips to it are 30% faster.', { tripFasterPct: 30 }),
+      t('Gold Magnet', 'Bitcoin Mines within 4 tiles mine 15% more.', { mineAuraPct: 15, auraRadius: 4 }),
+      t('Payroll', 'Gnomes working at Bitcoin Mines within 4 tiles mine 25% faster.', { gnomeAuraPct: 25, auraRadius: 4 }),
+      t('Central Bank', 'Every enemy defeated pays 10% more gold.', { bountyPct: 10 })
+    ] }
+  },
+  house: {
+    a: { name: 'Miners', tiers: [
+      t('Lunchboxes', 'Its gnomes mine 20% faster.', { gnomeMinePct: 20 }),
+      t('Bunk Beds', '+1 gnome.', { gnomesAdd: 1 }),
+      t('Better Pickaxes', 'Its gnomes mine 40% faster.', { gnomeMinePct: 40 }),
+      t('Bigger Sacks', 'Its gnomes carry 50% more gold per trip.', { sackPct: 50 }),
+      t('Gnome Union', '+2 gnomes.', { gnomesAdd: 2 })
+    ] },
+    b: { name: 'Builders', tiers: [
+      t('Toolbelts', 'Its gnomes repair 25% faster.', { gnomeRepairPct: 25 }),
+      t('Brave Gnomes', 'Its gnomes keep repairing buildings under fire, at half speed.', { repairUnderFire: 0.5 }),
+      t('Duct Tape', 'Gnomes also repair damaged walls.', { repairWalls: 1 }),
+      t('Pit Crew', 'Its gnomes repair 60% faster.', { gnomeRepairPct: 60 }),
+      t('Field Medics', 'Buildings its gnomes are repairing take 20% less damage.', { repairArmorPct: 20 })
+    ] },
+    c: { name: 'Village Life', tiers: [
+      t('Cozy Home', '+40% health.', { hpPct: 40 }),
+      t('Vegetable Garden', 'Makes 1 gold per second on its own.', { houseIncome: 1 }),
+      t('Gnome Militia', 'Its gnomes pelt enemies within 2.5 tiles with pebbles (6 damage/s).', { militiaDps: 6, militiaRadius: 2.5 }),
+      t('Night Watch', 'Pebbles at enemies within 2.5 tiles (6 damage/s), double in the dark.', { militiaDps: 6, militiaRadius: 2.5, militiaNightMult: 2 }),
+      t('Town Pride', 'Every Bitcoin Mine mines 5% more.', { pridePct: 5 })
+    ] }
+  },
+  dj: {
+    a: { name: 'Hype', tiers: [
+      t('Hype Man', 'Needs 25% fewer enemies to fill the meter.', { hypeNeededPct: -25 }),
+      t('Encore', 'After a drop the meter starts 30% full.', { encorePct: 30 }),
+      t('Long Mix', 'Drop the Beat lasts 4 s longer.', { beatSecondsAdd: 4 }),
+      t('Auto-DJ', 'Drops the beat by itself as soon as the meter is full in a wave.', { autoDrop: 1 }),
+      t('Festival', 'Drop the Beat gives +50% more fire rate.', { beatPctAdd: 50 })
+    ] },
+    b: { name: 'Bass', tiers: [
+      t('Subwoofer', 'The drop stuns enemies in range for 1.5 s.', { dropStun: 1.5 }),
+      t('Bass Shake', 'The drop deals 150 damage to enemies in range.', { dropDamage: 150 }),
+      t('Strobe Lights', 'In the dark, enemies in range are also slowed 25%.', { calmSlow: 0.25 }),
+      t('Wall of Sound', '+1.5 tiles range.', { rangeAdd: 1.5 }),
+      t('Bass Drop', 'The drop knocks enemies in range 1.5 tiles away from the booth.', { dropKnockback: 1.5 })
+    ] },
+    c: { name: 'Party', tiers: [
+      t('Crowd Pleaser', 'Gnomes in range work 20% faster on top.', { gnomeBoostAdd: 20 }),
+      t('After Party', 'Beating a wave pays 10% more of its gold.', { afterPartyPct: 10 }),
+      t('VIP Lounge', 'During waves, buildings in range heal 1% of their health each second.', { partyHealPct: 1 }),
+      t('Dance Floor', 'Every 10 s, enemies in range stop to dance for 1 s.', { danceEvery: 10, danceSeconds: 1 }),
+      t('Main Stage', 'Drop the Beat also gives defenses in range +30% damage.', { beatDamagePct: 30 })
+    ] }
+  }
+};
+for (const [type, tree] of Object.entries(ECONOMY_ABILITIES)) ABILITIES[type] = tree;
+/** Ability types by tab: defenses, and the economy buildings (mine, storage, house, DJ Babyface). */
+export const ECONOMY_ABILITY_TYPES = Object.keys(ECONOMY_ABILITIES);

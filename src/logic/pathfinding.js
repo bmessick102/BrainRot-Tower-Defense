@@ -55,30 +55,51 @@ export function getNav(state) {
   return state._nav;
 }
 
-// Small binary heap keyed by distance.
+// Binary min-heap of (distance, tile) pairs in typed arrays: no per-entry allocation, so building a field
+// makes no garbage. One heap is reused for every field (fields are built one at a time).
 class Heap {
-  constructor() { this.a = []; }
-  get size() { return this.a.length; }
-  push(i, d) {
-    const a = this.a; a.push([d, i]);
-    let k = a.length - 1;
-    while (k > 0) { const p = (k - 1) >> 1; if (a[p][0] <= a[k][0]) break; [a[p], a[k]] = [a[k], a[p]]; k = p; }
+  constructor(capacity = 4096) {
+    this.d = new Float64Array(capacity);
+    this.i = new Int32Array(capacity);
+    this.size = 0;
   }
-  pop() {
-    const a = this.a; const top = a[0]; const last = a.pop();
-    if (a.length) {
-      a[0] = last; let k = 0;
-      for (;;) {
-        const l = 2 * k + 1, r = l + 1; let m = k;
-        if (l < a.length && a[l][0] < a[m][0]) m = l;
-        if (r < a.length && a[r][0] < a[m][0]) m = r;
-        if (m === k) break;
-        [a[m], a[k]] = [a[k], a[m]]; k = m;
-      }
+  clear() { this.size = 0; }
+  push(i, d) {
+    if (this.size === this.d.length) {
+      const nd = new Float64Array(this.d.length * 2); nd.set(this.d); this.d = nd;
+      const ni = new Int32Array(this.i.length * 2); ni.set(this.i); this.i = ni;
     }
-    return top;
+    const D = this.d, I = this.i;
+    let k = this.size++;
+    while (k > 0) {
+      const p = (k - 1) >> 1;
+      if (D[p] <= d) break;
+      D[k] = D[p]; I[k] = I[p]; k = p;
+    }
+    D[k] = d; I[k] = i;
+  }
+  /** Removes the smallest entry; its distance is left in this.topD and its tile is returned. */
+  pop() {
+    const D = this.d, I = this.i;
+    const topI = I[0];
+    this.topD = D[0];
+    const n = --this.size;
+    if (n > 0) {
+      const d = D[n], i = I[n];
+      let k = 0;
+      for (;;) {
+        const l = 2 * k + 1;
+        if (l >= n) break;
+        const m = l + 1 < n && D[l + 1] < D[l] ? l + 1 : l;
+        if (D[m] >= d) break;
+        D[k] = D[m]; I[k] = I[m]; k = m;
+      }
+      D[k] = d; I[k] = i;
+    }
+    return topI;
   }
 }
+const HEAP = new Heap();
 
 /** A diagonal step may not cut the corner of a blocked tile. */
 function diagonalClear(nav, c, r, dx, dy, jump = false) {
@@ -96,8 +117,13 @@ export function distanceField(nav, target, reach, jump = false) {
   const tileCost = jump ? nav.costJump : nav.cost;
   const cached = nav.fields.get(key);
   if (cached) return cached;
-  const dist = new Float32Array(COLS * ROWS).fill(Infinity);
-  const heap = new Heap();
+  // Distances are 64-bit: with 32-bit ones, a sum that rounded up on storage looked "cheaper" again next time,
+  // so tiles were re-expanded over and over (a single field took seconds in late waves, with tough walls and
+  // long detours). Each tile is expanded once (`done`).
+  const dist = new Float64Array(COLS * ROWS).fill(Infinity);
+  const done = new Uint8Array(COLS * ROWS);
+  const heap = HEAP;
+  heap.clear();
   for (let r = 0; r < ROWS; r++) {
     for (let c = 0; c < COLS; c++) {
       const i = idx(c, r);
@@ -106,17 +132,21 @@ export function distanceField(nav, target, reach, jump = false) {
     }
   }
   while (heap.size) {
-    const [d, m] = heap.pop();
-    if (d > dist[m]) continue;
+    const m = heap.pop();
+    if (done[m]) continue;
+    done[m] = 1;
+    const d = dist[m];
     const mc = m % COLS, mr = (m / COLS) | 0;
+    const stepCost = tileCost[m];
     // Relax every neighbor n that can step onto m (paying m's cost).
-    for (const [dx, dy, len] of DIRS) {
-      const nc = mc - dx, nr = mr - dy;
+    for (let k = 0; k < DIRS.length; k++) {
+      const dir = DIRS[k];
+      const nc = mc - dir[0], nr = mr - dir[1];
       if (!inGrid(nc, nr)) continue;
       const n = idx(nc, nr);
-      if (nav.occ[n] === target) continue;
-      if (len > 1 && !diagonalClear(nav, nc, nr, dx, dy, jump)) continue;
-      const nd = d + tileCost[m] * len;
+      if (done[n] || nav.occ[n] === target) continue;
+      if (dir[2] > 1 && !diagonalClear(nav, nc, nr, dir[0], dir[1], jump)) continue;
+      const nd = d + stepCost * dir[2];
       if (nd < dist[n]) { dist[n] = nd; heap.push(n, nd); }
     }
   }

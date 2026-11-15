@@ -7,6 +7,7 @@ import Phaser from 'phaser';
 import { loadGame, deleteGame } from '../logic/save.js';
 import { getStorage } from '../state/GameState.js';
 import { Button } from '../objects/Button.js';
+import { addFullscreenButton } from '../objects/FullscreenButton.js';
 import { TEX, MUSIC, SFX } from '../assetKeys.js';
 import { IMAGE_FILES } from '../assetManifest.js';
 import { playMusic, playSfx } from '../audio.js';
@@ -67,6 +68,7 @@ export class TitleScene extends Phaser.Scene {
     }
 
     this.buildStartButton(width / 2, 478);
+    addFullscreenButton(this, width - 36, 34);
     // Say what START GAME does (and where you are); a broken save gets a warning.
     let caption, bad = save.status === 'invalid';
     if (this.notice) { caption = this.notice; bad = true; }

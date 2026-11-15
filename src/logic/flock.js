@@ -55,6 +55,7 @@ export function stepFlockTowers(state) {
     if (best > 0 && linger > 0) { e.markLingerT = linger; e.lingerBonus = best; }
     if (best === 0 && e.markLingerT > 0) best = e.lingerBonus || 0;
     e.markBonus = best;
+    e.flockSeen = best > 0;               // a tunneling Skibidi Toilet can be targeted and hit while seen
     e.markExecute = execute;              // Weak Point Scan
     e.markBounty = best > 0 ? bounty : 0; // Bounty Hunter
     e.leechRp = leech;                    // Data Leech

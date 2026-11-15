@@ -12,7 +12,7 @@ const w4 = CONFIG.waves[3];
 
 describe('waves.js', () => {
   it('waves 1 to 4 match config', () => {
-    for (let n = 1; n <= 4; n++) expect(waveComposition(n)).toEqual(CONFIG.waves[n - 1]);
+    for (let n = 1; n <= 4; n++) expect(waveComposition(n)).toEqual({ ...CONFIG.waves[n - 1], toilet: 0 }); // (Skibidi Toilets join from Village Hall 5)
   });
 
   it('wave 1 always uses the top path', () => {
@@ -32,7 +32,8 @@ describe('waves.js', () => {
 
   it('wave 5 follows the endless formulas', () => {
     const c = waveComposition(5);
-    for (const k of ENEMY_KINDS) expect(c[k]).toBe(Math.round(w4[k] * 1.15 ** 1));
+    for (const k of ENEMY_KINDS) if (!CONFIG.enemies[k].fromTownHall) expect(c[k]).toBe(Math.round((w4[k] || 0) * 1.15 ** 1));
+    expect(c.toilet).toBe(CONFIG.enemies.toilet.baseCount); // joins at Village Hall 5
     expect(c.grunt).toBe(40);
     expect(c.hpMultiplier).toBe(Math.round(1.2 * 1.1 * 100) / 100);
     expect(c.hpMultiplier).toBe(1.32);
@@ -41,7 +42,8 @@ describe('waves.js', () => {
 
   it('wave 8 follows the endless formulas', () => {
     const c = waveComposition(8);
-    for (const k of ENEMY_KINDS) expect(c[k]).toBe(Math.round(w4[k] * 1.15 ** 4));
+    for (const k of ENEMY_KINDS) if (!CONFIG.enemies[k].fromTownHall) expect(c[k]).toBe(Math.round((w4[k] || 0) * 1.15 ** 4));
+    expect(c.toilet).toBe(Math.round(CONFIG.enemies.toilet.baseCount * 1.15 ** 3));
     expect(c.grunt).toBe(61);
     expect(c.hpMultiplier).toBe(1.76);
     expect(c.spawnPaths).toBe(3);
@@ -59,7 +61,7 @@ describe('waves.js', () => {
   it('splits enemies evenly and orders Tanks, Wall Breakers, Grunt/Slinger alternating, Bombers then Balloons last', () => {
     const q = buildSpawnQueues(w4, ['left', 'right']);
     const all = [...q.left, ...q.right];
-    for (const k of ENEMY_KINDS) expect(all.filter((x) => x === k)).toHaveLength(w4[k]);
+    for (const k of ENEMY_KINDS) expect(all.filter((x) => x === k)).toHaveLength(w4[k] || 0);
     expect(Math.abs(q.left.length - q.right.length)).toBeLessThanOrEqual(1);
     for (const path of ['left', 'right']) {
       const list = q[path];
@@ -110,7 +112,7 @@ describe('waves.js', () => {
   });
 
   it('the Village Hall picks the base wave; the first wave is exactly that base', () => {
-    for (let th = 1; th <= 4; th++) expect(scaledWaveComposition(th, 1)).toEqual(CONFIG.waves[th - 1]);
+    for (let th = 1; th <= 4; th++) expect(scaledWaveComposition(th, 1)).toEqual({ ...CONFIG.waves[th - 1], babycar: 0, toilet: 0 }); // (no Da Baby Cars or Skibidi Toilets in these base waves)
     expect(scaledWaveComposition(7, 1)).toEqual(waveComposition(7));
     expect(scaledWaveComposition(12, 1)).toEqual(waveComposition(CONFIG.rules.maxTownHallLevel)); // capped
   });
@@ -214,6 +216,7 @@ describe('waves.js', () => {
       triggerWave(state);
       expect(state.wave.special).toBe(SW.order[0]);
       state.wave.phase = 'active'; state.wave.queues = {}; state.enemies = []; state.wave.bountyEarned = 40;
+      state.wave.lost = state.wave.startBuildings; // 1 star: no star bonus, only the special wave's
       checkWaveCleared(state);
       const cleared = state.events.find((e) => e.name === 'waveCleared').data;
       expect(cleared).toMatchObject({ special: SW.order[0], bonus: Math.floor(40 * SW.bonusBounty) });

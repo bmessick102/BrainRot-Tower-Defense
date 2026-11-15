@@ -16,7 +16,7 @@ describe('single-tile walls', () => {
     expect(CONFIG.walls.segmentLength).toBe(1);
     expect(footprintDims('wall', 'x')).toEqual({ w: 1, h: 1 });
     expect(footprintDims('wall', 'y')).toEqual({ w: 1, h: 1 });
-    expect(CONFIG.walls.levels.map((l) => l.cost)).toEqual([10, 25, 60, 150, 350, 800, 1800]);
+    expect(CONFIG.walls.levels.map((l) => l.cost)).toEqual([10, 25, 60, 150, 350, 800, 1800, 4000]);
     expect(CONFIG.limits.wall[0]).toBe(24);
   });
 
@@ -94,20 +94,21 @@ describe('connected walls: pillars, with a connector between every two touching 
 describe('wall size grows like buildings', () => {
   it('starts small and grows a step with every level (each level is a new picture)', () => {
     expect(wallPillarWidth(1)).toBe(PILLAR_WIDTH.min);
-    expect(wallPillarWidth(7)).toBeCloseTo(PILLAR_WIDTH.max);
-    for (let l = 2; l <= 7; l++) expect(wallPillarWidth(l)).toBeGreaterThan(wallPillarWidth(l - 1));
+    expect(wallPillarWidth(8)).toBeCloseTo(PILLAR_WIDTH.max);
+    expect(PILLAR_WIDTH.max / PILLAR_WIDTH.min).toBeGreaterThan(1.8); // clearly bigger at the top
+    for (let l = 2; l <= 8; l++) expect(wallPillarWidth(l)).toBeGreaterThan(wallPillarWidth(l - 1));
   });
 
   it('every level stays gap-free: connecting pillars always stand closer than a pillar is wide', () => {
     const step = Math.hypot(MAP.tileWidth / 2, MAP.tileHeight / 2);
-    for (let level = 1; level <= 7; level++) {
+    for (let level = 1; level <= 8; level++) {
       const key = `bld_wall_lv${level}`;
       const m = WALL_ART_META[key];
       const visW = MAP.tileWidth * wallPillarWidth(level) * ((m.visX1 - m.visX0) / m.width);
       const spacing = step / (wallLinksFor(key, level) + 1);
       expect(spacing).toBeLessThanOrEqual(0.65 * visW + 1e-9);
     }
-    expect(wallLinksFor('bld_wall_lv1', 1)).toBeGreaterThan(wallLinksFor('bld_wall_lv7', 7)); // thin posts need more
+    expect(wallLinksFor('bld_wall_lv1', 1)).toBeGreaterThan(wallLinksFor('bld_wall_lv8', 8)); // thin posts need more
   });
 
   it('several connectors per link are spread evenly and layered between the two walls', () => {

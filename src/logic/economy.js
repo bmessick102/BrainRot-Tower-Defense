@@ -2,12 +2,49 @@
 import { CONFIG } from '../config.js';
 import { levelStats, buildCost, totalSpent, maxHp } from './buildings.js';
 import { emit, isWaveActive } from './util.js';
+import { abilityFx } from './abilities.js';
+import { isDark } from './clockLight.js';
+import { footprintCenter, distanceToFootprint } from './grid.js';
+
+// ---------- economy perks (RV Lab trees of the Mine, Storage and House; see abilityConfig.js) ----------
+/** A Storage's capacity with its perks (Extra Shelves, Expansion Wing, Mega Vault). */
+export function storageCapacity(b) {
+  return levelStats('storage', b.level).capacity * (1 + (abilityFx(b).capacityPct || 0) / 100);
+}
+
+/** A mine's stock cap with its perks (Deep Vault). */
+export function mineStockCap(b) {
+  return levelStats('mine', b.level).stockCap * (1 + (abilityFx(b).stockCapPct || 0) / 100);
+}
+
+/**
+ * Gold per second a mine makes with every perk that touches it: its own (Overclocked Rig, Bull Run, Night
+ * Shift, Mining Pool, Compound Mining), Storages nearby (Gold Magnet) and Houses anywhere (Town Pride).
+ */
+export function mineProduction(state, b) {
+  const fx = abilityFx(b);
+  let pct = (fx.productionPct || 0) + (b.compound || 0);
+  if (fx.nightProductionPct && isDark(state.clock)) pct += fx.nightProductionPct;
+  if (fx.poolPct) pct += fx.poolPct * state.buildings.filter((o) => o.type === 'mine' && o !== b && !o.destroyed).length;
+  const c = footprintCenter(b);
+  for (const o of state.buildings) {
+    if (o.destroyed) continue;
+    if (o.type === 'storage') {
+      const ofx = abilityFx(o);
+      if (ofx.mineAuraPct && distanceToFootprint(o, c.x, c.y) <= ofx.auraRadius) pct += ofx.mineAuraPct;
+    } else if (o.type === 'house') {
+      pct += abilityFx(o).pridePct || 0;
+    }
+  }
+  return levelStats('mine', b.level).production * (1 + pct / 100);
+}
 
 /** Town hall built-in capacity + every storage the player owns (destroyed or not). */
 export function getCapacity(state) {
   let cap = 0;
   for (const b of state.buildings) {
-    if (b.type === 'townHall' || b.type === 'storage') cap += levelStats(b.type, b.level).capacity;
+    if (b.type === 'townHall') cap += levelStats(b.type, b.level).capacity;
+    else if (b.type === 'storage') cap += storageCapacity(b);
   }
   return cap;
 }
@@ -84,8 +121,8 @@ export function salvageMine(state) {
 export function produceMines(state, dt) {
   for (const b of state.buildings) {
     if (b.type !== 'mine' || b.destroyed) continue;
-    const { production, stockCap } = levelStats('mine', b.level);
-    const rate = production;
+    const stockCap = mineStockCap(b);
+    const rate = mineProduction(state, b);
     const before = Math.floor(b.stock || 0);
     b.stock = Math.min(stockCap, (b.stock || 0) + rate * dt);
     if (Math.floor(b.stock) !== before) emit(state, 'mineStockChanged', { id: b.id, stock: b.stock });
@@ -94,7 +131,7 @@ export function produceMines(state, dt) {
 
 /** Mine stock as a fraction of its cap (0..1). */
 export function mineFill(b) {
-  return (b.stock || 0) / levelStats('mine', b.level).stockCap;
+  return (b.stock || 0) / mineStockCap(b);
 }
 
 export function mineShowsCoin(b) {
@@ -108,6 +145,14 @@ export function mineShowsCoin(b) {
  */
 export function collectMine(state, mine) {
   if (isWaveActive(state)) return { collected: 0, storageFull: false, waveActive: true };
+  return sendMineToStorage(state, mine);
+}
+
+/**
+ * Move a mine's stock into gold (up to capacity), with its collection perks: Tip Jar pays extra, and
+ * Compound Mining makes it mine a little more each time. Used by collecting and by Auto-Collect.
+ */
+export function sendMineToStorage(state, mine) {
   const whole = Math.floor(mine.stock || 0);
   if (whole <= 0) return { collected: 0, storageFull: false };
   const room = getCapacity(state) - state.gold;
@@ -117,9 +162,11 @@ export function collectMine(state, mine) {
   }
   const amount = Math.min(whole, room);
   mine.stock -= amount;
-  addGold(state, amount);
-  emit(state, 'mineCollected', { id: mine.id, amount });
-  return { collected: amount, storageFull: false };
+  const fx = abilityFx(mine);
+  const added = addGold(state, amount + Math.round(amount * (fx.collectBonusPct || 0) / 100));
+  if (fx.compoundPct) mine.compound = Math.min(fx.compoundMax || 0, (mine.compound || 0) + fx.compoundPct);
+  emit(state, 'mineCollected', { id: mine.id, amount: added });
+  return { collected: added, storageFull: false };
 }
 
 /** Refund for selling: a share of everything spent (build + upgrades), rounded. */
@@ -181,8 +228,11 @@ export function repairAll(state) {
 export function storageDrainAmount(state, storage, damage) {
   const totalCap = getCapacity(state);
   if (totalCap <= 0) return 0;
-  const storedHere = (state.gold * levelStats('storage', storage.level).capacity) / totalCap;
-  return Math.round((damage / maxHp(storage)) * CONFIG.rules.storageDrainOnDestroy * storedHere);
+  const fx = abilityFx(storage);
+  if (fx.drainImmuneAbove && storage.hp / maxHp(storage) > fx.drainImmuneAbove) return 0; // Fort Knox
+  const storedHere = (state.gold * storageCapacity(storage)) / totalCap;
+  const resist = 1 - (fx.drainResistPct || 0) / 100;                                        // Time Lock
+  return Math.round((damage / maxHp(storage)) * CONFIG.rules.storageDrainOnDestroy * storedHere * resist);
 }
 
 export function formatGold(n) {

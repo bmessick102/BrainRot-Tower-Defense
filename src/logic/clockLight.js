@@ -28,3 +28,27 @@ export const DARK_AT = 0.35;
 export function isDark(clock) {
   return nightAmount(clock) >= DARK_AT;
 }
+
+/**
+ * How the sky pictures are blended for a clock (all 0..1), the same way going in and out of night:
+ *   twilight  the dusk (or dawn) picture's strength: fades in as it starts getting dark and stays under the
+ *             night picture, so day -> dusk -> night and night -> dawn -> day pass through the same warm sky
+ *   dusk/dawn `twilight` for whichever phase it is now (the other is 0)
+ *   night     the night picture's strength: fades in once it is dark (nightAmount >= DARK_AT), exactly when
+ *             building lights and restless enemies switch on
+ *   warm      how warm the twilight tint on sprites is: strongest where the twilight picture is full and the
+ *             night picture is still fading in
+ */
+export function skyBlend(clock) {
+  const n = nightAmount(clock);
+  const twilight = Math.min(1, n / DARK_AT);
+  const night = Math.max(0, Math.min(1, (n - DARK_AT) / (1 - DARK_AT)));
+  const phase = clock && clock.phase;
+  return {
+    night,
+    twilight,
+    dusk: phase === 'dusk' ? twilight : 0,
+    dawn: phase === 'dawn' ? twilight : 0,
+    warm: phase === 'dusk' || phase === 'dawn' ? twilight * (1 - night) : 0
+  };
+}

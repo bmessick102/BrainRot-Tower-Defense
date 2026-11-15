@@ -2,12 +2,14 @@
 // Runs in parallel with GameScene. Text only changes in response to GameState events.
 import Phaser from 'phaser';
 import { CONFIG } from '../config.js';
+import { IS_TOUCH } from '../device.js';
 import {
   DEFENSE_TYPES, ECONOMY_TYPES, WALL_TYPES, buildableCount, buildCost, buildingName, checkBuy, checkUpgrade, countOwned, isDefense,
   levelStats, limitFor, maxHp, maxLevel, typeConfig, footprintDims, wallGroup, planWallGroupUpgrade
 } from '../logic/buildings.js';
-import { checkRepair, formatGold, repairCost, hallIncomeRate } from '../logic/economy.js';
+import { checkRepair, formatGold, repairCost, hallIncomeRate, mineStockCap } from '../logic/economy.js';
 import { enemiesLeft, nightWaveNumber, nextWaveInfo } from '../logic/waves.js';
+import { liveStars, starText } from '../logic/waveStars.js';
 import { isClockRunning, canStartWave, secondsToNextPhase, nightAmount, isDark } from '../logic/dayNight.js';
 import {
   canSkipTutorial, currentStep, goldNeeded, isGuideVisible, isWaitingForGold, tutorialAllows
@@ -25,10 +27,13 @@ import { playSfx } from '../audio.js';
 import { COLORS, bodyStyle, textStyle } from '../theme.js';
 import { achievementById } from '../logic/achievements.js';
 import { LEAGUES } from '../logic/leagues.js';
-import { RESEARCH_TYPES } from '../logic/buildings.js';
+import { RESEARCH_TYPES, UTILITY_TYPES, HERO_TYPES } from '../logic/buildings.js';
+import { heroStats } from '../logic/hero.js';
+import { djStats, hypeNeeded } from '../logic/dj.js';
 import { hotbarGroups } from '../logic/layout.js';
 import { hasAbilities, canResearchFor, labLevel, towerRange, towerMinRange, towerFireInterval } from '../logic/abilities.js';
 import { openResearchWindow, abilitySummary } from '../objects/AbilityWindow.js';
+import { currentTip } from '../logic/tips.js';
 import { isLabGuideVisible, labGuideStep, labGuideText } from '../logic/labGuide.js';
 import { Modal } from '../objects/Modal.js';
 import { ProfileWindow } from '../objects/ProfileWindow.js';
@@ -52,9 +57,9 @@ const FOG = { color: 0xe4ecf2, alpha: 0.5, puffsPerCorner: 3, scale: [1.9, 2.6],
 // Traps (hidden, like the Mousetrap) get their own tab; they're still defenses in the game rules.
 const TRAP_TYPES = DEFENSE_TYPES.filter((t) => CONFIG.defenses[t].trap);
 const SHOP_TABS = [
-  { key: 'defenses', label: 'Defenses', types: DEFENSE_TYPES.filter((t) => !TRAP_TYPES.includes(t)) },
+  { key: 'defenses', label: 'Defenses', types: [...DEFENSE_TYPES.filter((t) => !TRAP_TYPES.includes(t)), ...HERO_TYPES] }, // the Brisket King's altar too
   { key: 'traps', label: 'Traps', types: TRAP_TYPES },
-  { key: 'economy', label: 'Economy', types: [...ECONOMY_TYPES, ...RESEARCH_TYPES] }, // the RV Lab sits with the economy buildings
+  { key: 'economy', label: 'Economy', types: [...ECONOMY_TYPES, ...RESEARCH_TYPES, ...UTILITY_TYPES] }, // the RV Lab and DJ Babyface sit with the economy buildings
   { key: 'walls', label: 'Walls', types: WALL_TYPES }
 ];
 
@@ -135,6 +140,12 @@ export class UIScene extends Phaser.Scene {
   }
 
   update(time) {
+    // The Hero tab's status (nap timer, health) changes every second: redraw it now and then.
+    if (this.infoTab === 'hero' && this.infoPanel && this.infoPanel.visible && time >= (this.heroTabAt || 0)) {
+      this.heroTabAt = time + 500;
+      const b = this.selectedId && this.gs.getBuilding(this.selectedId);
+      if (b && b.type === 'altar') this.refreshInfo();
+    }
     this.drawFocus(time);
     this.refreshClock();
     if (this.selectedId && this.infoPanel.visible) this.syncInfoPic();
@@ -361,11 +372,13 @@ export class UIScene extends Phaser.Scene {
     let text = '', special = null;
     if (w.phase === 'countdown' || w.phase === 'active') {
       special = w.special ? CONFIG.specialWaves.types[w.special] : null;
-      text = `Wave ${w.number}${special ? ` · ${special.name}` : ''} · ${enemiesLeft(this.gs)} enemies left${w.enraged ? ' · Enraged!' : w.restless ? ' · Restless' : ''}`;
+      const live = liveStars(this.gs); // the rating this wave is on track for
+      text = `Wave ${w.number}${special ? ` · ${special.name}` : ''} · ${enemiesLeft(this.gs)} enemies left${w.enraged ? ' · Enraged!' : w.restless ? ' · Restless' : ''}${live ? `  ${starText(live)}` : ''}`;
     } else if (this.gs.tutorialDone && this.gs.townHall && this.gs.townHall.level === 0) text = 'Rebuild your Village Hall to begin';
     else if (isClockRunning(this.gs)) {
-      // Warn about a special wave all through the build time before it.
-      special = nextWaveInfo(this.gs).specialInfo;
+      // Warn about a special wave (or Da Baby Car, the raid boss) all through the build time before it.
+      const info = nextWaveInfo(this.gs);
+      special = info.specialInfo || (info.babyCars ? { name: info.babyCars > 1 ? `${info.babyCars} ${CONFIG.enemies.babycar.name}s` : CONFIG.enemies.babycar.name, hint: 'Raid boss: rams straight at your Village Hall' } : null);
       text = `Next: Wave ${nightWaveNumber(this.gs)}${special ? ` · ${special.name}!` : ''}`;
     }
     this.waveText.setText(text).setColor(special ? COLORS.textBad : COLORS.text);
@@ -456,16 +469,31 @@ export class UIScene extends Phaser.Scene {
   }
 
   // ---------- edit mode ----------
-  /** "Rotate (R)" button, shown while a wall is being placed or moved. */
+  /**
+   * Buttons shown while a building is being placed or moved: "Rotate (R)" for walls, and on touch screens
+   * Cancel and Place too (with a mouse: click to place, right-click / Esc to cancel).
+   */
   buildRotateButton() {
-    this.rotateBtn = new Button(this, 640, 628, 170, 46, 'Rotate (R)', () => this.world.rotatePlacement(), { fontSize: 18 });
-    this.rotateBtn.setDepth(650);
-    this.showRotate(false);
+    this.rotateBtn = new Button(this, 640, 628, 170, 52, IS_TOUCH ? 'Rotate' : 'Rotate (R)', () => this.world.rotatePlacement(), { fontSize: 19 });
+    this.placeBtn = new Button(this, 640, 628, 160, 52, 'Place', () => this.world.confirmPlacement(), { color: COLORS.buttonGood, fontSize: 21 });
+    this.cancelPlaceBtn = new Button(this, 640, 628, 160, 52, 'Cancel', () => this.world.cancelPlacement(), { color: COLORS.buttonDanger, fontSize: 21 });
+    for (const b of [this.rotateBtn, this.placeBtn, this.cancelPlaceBtn]) b.setDepth(650);
+    this.showPlacementButtons(null);
   }
 
-  showRotate(show) {
-    // Above the hotbar in edit mode.
-    this.rotateBtn.setVisible(show).setY(show ? (this.world.editMode ? HOTBAR.y - 90 : 628) : -500);
+  /** Lay out the placement buttons in a centered row: [Cancel] [Rotate] [Place]. `d`: placementChanged data. */
+  showPlacementButtons(d) {
+    const active = !!(d && d.active);
+    const rotate = active && d.type === 'wall' && CONFIG.walls.segmentLength > 1; // single-tile walls don't turn
+    const touch = active && this.world.touchMode;
+    if (this.world.touchMode) this.rotateBtn.setLabel('Rotate');
+    // Moving a building in edit mode, Cancel puts it back where it was.
+    this.cancelPlaceBtn.setLabel(this.world.placement && this.world.placement.mode === 'move' ? 'Put Back' : 'Cancel');
+    const row = [touch && this.cancelPlaceBtn, rotate && this.rotateBtn, touch && this.placeBtn].filter(Boolean);
+    for (const b of [this.rotateBtn, this.placeBtn, this.cancelPlaceBtn]) if (!row.includes(b)) b.setVisible(false).setY(-500);
+    const gap = 14, y = this.world.editMode ? HOTBAR.y - 90 : 628; // above the hotbar in edit mode
+    let x = 640 - (row.reduce((t, b) => t + b.btnW, 0) + gap * (row.length - 1)) / 2;
+    for (const b of row) { b.setVisible(true).setPosition(x + b.btnW / 2, y); x += b.btnW + gap; }
   }
 
   buildEditButton() {
@@ -660,7 +688,7 @@ export class UIScene extends Phaser.Scene {
 
     // Footer: hint on the left, gold / capacity in a dark pill in the middle.
     const fy = FOOTER.y + FOOTER.h / 2 - 2;
-    c.add(this.add.text(TRAY.x + 18, fy, 'Pick a building, then click the map to place it', textStyle(15)).setOrigin(0, 0.5));
+    c.add(this.add.text(TRAY.x + 18, fy, IS_TOUCH ? 'Tap a building, drag it where you want it, then tap Place' : 'Pick a building, then click the map to place it', textStyle(15)).setOrigin(0, 0.5));
     this.footerPill = this.add.graphics();
     this.footerGold = this.add.text(0, fy, '', textStyle(18)).setOrigin(1, 0.5);
     this.footerCoin = this.add.image(0, fy, TEX.coin);
@@ -766,6 +794,8 @@ export class UIScene extends Phaser.Scene {
     if (type === 'house') return `+${levelStats('house', 1).gnomes} gnome workers`;
     if (type === 'wall') return CONFIG.walls.segmentLength > 1 ? `${CONFIG.walls.segmentLength}-tile segment` : 'Joins any wall';
     if (type === 'rvlab') return 'Defense abilities';
+    if (type === 'dj') return 'Boosts gnomes and defenses';
+    if (type === 'altar') return 'Hero: the Brisket King';
     return '';
   }
 
@@ -902,7 +932,9 @@ export class UIScene extends Phaser.Scene {
     const tabW = (INFO_COL_W - 8) / 2;
     this.infoTabs = {
       info: new Button(this, INFO_COL + tabW / 2, INFO_TABS_Y, tabW, 32, 'Info', () => { this.infoTab = 'info'; this.refreshInfo(); }, { fontSize: 17, radius: 9 }),
-      stats: new Button(this, INFO_COL + tabW * 1.5 + 8, INFO_TABS_Y, tabW, 32, 'Stats', () => { this.infoTab = 'stats'; this.refreshInfo(); }, { fontSize: 17, radius: 9 })
+      stats: new Button(this, INFO_COL + tabW * 1.5 + 8, INFO_TABS_Y, tabW, 32, 'Stats', () => { this.infoTab = 'stats'; this.refreshInfo(); }, { fontSize: 17, radius: 9 }),
+      // The Brisket King's altar gets a third tab: the hero himself (layoutInfoTabs).
+      hero: new Button(this, 0, INFO_TABS_Y, tabW, 32, 'Hero', () => { this.infoTab = 'hero'; this.refreshInfo(); }, { fontSize: 17, radius: 9 })
     };
     const bw = INFO_W - 32;
     this.infoButtons = {
@@ -929,7 +961,12 @@ export class UIScene extends Phaser.Scene {
   syncInfoPic(b = this.gs.getBuilding(this.selectedId)) {
     if (!b) return;
     const view = this.world.views && this.world.views.buildings.get(b.id);
-    const picKey = view && view.sprite ? view.sprite.texture.key : buildingTextureKey(this, b.type, b.level, b.destroyed);
+    let picKey = view && view.sprite ? view.sprite.texture.key : buildingTextureKey(this, b.type, b.level, b.destroyed);
+    // The Hero tab shows the Brisket King himself (asleep when he is).
+    if (b.type === 'altar' && this.infoTab === 'hero') {
+      const k = this.gs.hero && this.gs.hero.status === 'asleep' ? 'hero_brisket_sleep' : 'hero_brisket';
+      if (this.textures.exists(k)) picKey = k;
+    }
     if (picKey === this.infoPicKey) return;
     this.infoPicKey = picKey;
     this.infoPicBg.clear();
@@ -1054,10 +1091,21 @@ export class UIScene extends Phaser.Scene {
     if (b.type === 'mine') {
       const crew = (this.gs._gnomes ? [...this.gs._gnomes.values()] : []).filter((g) => g.task === 'mine' && g.targetId === b.id);
       const extra = crew.reduce((sum, g) => sum + gnomeStats(g.level).mine, 0);
-      return [`Stock now ${formatGold(b.stock || 0)} / ${formatGold(levelStats('mine', b.level).stockCap)}`,
+      return [`Stock now ${formatGold(b.stock || 0)} / ${formatGold(Math.round(mineStockCap(b)))}`,
         `Gnome workers: ${crew.length} / ${V.maxPerMine} (+${pct(extra)} carried to storage)`];
     }
     if (b.type === 'wall') return [CONFIG.walls.segmentLength > 1 ? `Segment of ${CONFIG.walls.segmentLength} tiles` : 'Joins every wall it touches'];
+    if (b.type === 'altar') {
+      const st = heroStats(b), h = this.gs.hero;
+      const status = !h ? '' : h.status === 'asleep' ? `asleep (${Math.floor(Math.ceil(h.sleepT) / 60)}:${String(Math.ceil(h.sleepT) % 60).padStart(2, '0')})` : h.status === 'waking' ? 'waking up' : 'ready';
+      return [`Brisket King Lv ${b.level}: ${st.maxHp} HP, ${Math.round(st.damage)} per hit · ${status}`,
+        `Guards ${st.guardRange} tiles · Brisket Feast: click him in a wave (${st.feastCharges}x per wave)`];
+    }
+    if (b.type === 'dj') {
+      const s = djStats(b);
+      return [`Gnomes in range work +${s.gnomeBoostPct}% faster · range ${s.range} tiles`,
+        `Hype ${Math.floor(b.hype || 0)} / ${hypeNeeded(b)}: full, click it in a wave to Drop the Beat (+${s.beatPct}% fire rate, ${s.beatSeconds} s)`];
+    }
     if (b.type === 'rvlab') {
       const next = b.level < maxLevel('rvlab') ? levelStats('rvlab', b.level + 1) : null;
       return [`Researches ability tiers 1-${b.level}`, next ? `Level ${b.level + 1} (tier ${b.level + 1}) needs Village Hall ${next.townHall}` : 'Every tier unlocked'];
@@ -1070,10 +1118,61 @@ export class UIScene extends Phaser.Scene {
     return [];
   }
 
-  /** Draw the Info or Stats tab body starting at y; returns the y below it. */
+  /** Info / Stats tabs, plus Hero for the Brisket King's altar (three narrower tabs then). */
+  layoutInfoTabs(b) {
+    const hero = b.type === 'altar';
+    if (!hero && this.infoTab === 'hero') this.infoTab = 'info';
+    const keys = hero ? ['info', 'stats', 'hero'] : ['info', 'stats'];
+    const gap = 6, w = (INFO_COL_W - gap * (keys.length - 1)) / keys.length;
+    this.infoTabs.hero.setVisible(hero);
+    keys.forEach((k, i) => {
+      const t = this.infoTabs[k];
+      if (t.btnW !== w) t.resize(w);
+      t.setPosition(INFO_COL + w / 2 + i * (w + gap), INFO_TABS_Y);
+    });
+  }
+
+  /**
+   * The Hero tab: the Brisket King's level, health (now / max), damage, attack speed, guard range, what he's
+   * doing (ready, asleep with the time left, waking up), Brisket Feast, and what the next altar level adds.
+   */
+  drawHeroInfo(box, b, y) {
+    const st = heroStats(b), h = this.gs.hero;
+    const nxt = b.level < maxLevel('altar') ? heroStats({ ...b, level: b.level + 1 }) : null;
+    const name = this.add.text(INFO_COL, y, `${CONFIG.altar.heroName}`, textStyle(19));
+    box.add(name);
+    box.add(this.add.text(name.x + name.width + 8, y + 4, `Lv ${b.level}`, textStyle(15, COLORS.textGold)));
+    y += 30;
+    const fmt = (n) => formatGold(Math.round(n));
+    const left = h ? Math.ceil(h.sleepT) : 0;
+    const status = !h ? '-' : h.status === 'asleep' ? `Asleep · ${Math.floor(left / 60)}:${String(left % 60).padStart(2, '0')}`
+      : h.status === 'waking' ? 'Waking up' : 'Ready';
+    const feastLeft = h ? Math.max(0, st.feastCharges - (isWaveActive(this.gs) ? h.feastsUsed : 0)) : st.feastCharges;
+    const rows = [
+      ['Status', status, '', h && h.status === 'asleep' ? COLORS.inkBad : COLORS.inkGood],
+      ['Health', `${fmt(h ? Math.max(0, h.hp) : st.maxHp)} / ${fmt(st.maxHp)}`, nxt ? `+${fmt(nxt.maxHp - st.maxHp)}` : ''],
+      ['Damage', `${fmt(st.damage)} per hit`, nxt ? `+${fmt(nxt.damage - st.damage)}` : ''],
+      ['Attack speed', `${Math.round((1 / st.attackInterval) * 100) / 100} hits / s`, ''],
+      ['Guard range', `${st.guardRange} tiles`, ''],
+      ['Brisket Feast', isWaveActive(this.gs) ? `${feastLeft} of ${st.feastCharges} left` : `${st.feastCharges} per wave`, '']
+    ];
+    for (const [label, value, gain, ink] of rows) {
+      box.add(this.add.text(INFO_COL, y, label, bodyStyle(14, COLORS.inkDim)));
+      const v = this.add.text(INFO_COL + 104, y, value, bodyStyle(14, ink || COLORS.ink, { fontStyle: 'bold' }));
+      box.add(v);
+      if (gain) box.add(this.add.text(v.x + v.width + 6, y, gain, bodyStyle(13, COLORS.inkGood)));
+      y += 21;
+    }
+    const tip = this.add.text(INFO_COL, y + 4, 'Click him during a wave for Brisket Feast. He naps after a wave to heal.', bodyStyle(13, COLORS.inkDim, { wordWrap: { width: INFO_COL_W } }));
+    box.add(tip);
+    return y + 4 + tip.height + 10;
+  }
+
+  /** Draw the Info, Stats or Hero tab body starting at y; returns the y below it. */
   drawInfoContent(b, y) {
     const box = this.infoContent;
     box.removeAll(true);
+    if (this.infoTab === 'hero' && b.type === 'altar') return this.drawHeroInfo(box, b, y);
     if (this.infoTab === 'info') {
       const t = this.add.text(INFO_COL, y, BUILDING_DESCRIPTIONS[b.type] || '', bodyStyle(15, COLORS.ink, { wordWrap: { width: INFO_COL_W }, lineSpacing: 3 }));
       box.add(t);
@@ -1262,6 +1361,7 @@ export class UIScene extends Phaser.Scene {
     this.infoName.setText(grouped ? `Walls  x${group.length}` : buildingName(b.type));
     const ruin = b.type === 'townHall' && b.level === 0;
     this.infoLevel.setText(`Level ${b.level} / ${maxLevel(b.type)}${b.destroyed ? '  ·  Destroyed' : ruin ? '  ·  In ruins' : grouped ? '  ·  connected group' : ''}`);
+    this.layoutInfoTabs(b);
     for (const [tab, btn] of Object.entries(this.infoTabs)) {
       btn.color = tab === this.infoTab ? COLORS.buttonGood : COLORS.buttonDark;
       btn.redraw();
@@ -1404,8 +1504,17 @@ export class UIScene extends Phaser.Scene {
     this.guideText = this.add.text(146, 18, '', bodyStyle(18, COLORS.ink, { wordWrap: { width: 440 }, lineSpacing: 4 }));
     this.guideProgress = this.add.text(146, 92, '', bodyStyle(16, COLORS.inkAccent));
     // (The same bubble shows the RV Lab guide once the first tutorial is over.)
-    this.guideNext = new Button(this, 540, 124, 110, 40, 'Next', () => (this.labGuideShown() ? this.gs.labGuideNext() : this.gs.tutorialEvent('next')), { fontSize: 19, color: COLORS.buttonGood });
-    this.guideSkip = new Button(this, 400, 124, 150, 40, 'Skip tutorial', () => (this.labGuideShown() ? this.gs.skipLabGuide() : this.gs.skipTutorial()), { fontSize: 16, color: COLORS.buttonDark });
+    // (It also shows first-time tips (tips.js) when neither guide has anything to say: "Got it" / "No more tips".)
+    this.guideNext = new Button(this, 540, 124, 110, 40, 'Next', () => {
+      if (this.tipShown) this.gs.dismissTip();
+      else if (this.labGuideShown()) this.gs.labGuideNext();
+      else this.gs.tutorialEvent('next');
+    }, { fontSize: 19, color: COLORS.buttonGood });
+    this.guideSkip = new Button(this, 400, 124, 150, 40, 'Skip tutorial', () => {
+      if (this.tipShown) this.gs.hideAllTips();
+      else if (this.labGuideShown()) this.gs.skipLabGuide();
+      else this.gs.skipTutorial();
+    }, { fontSize: 16, color: COLORS.buttonDark });
     c.add([this.guideBlocker, this.guideBubble, portrait, this.guideText, this.guideProgress, this.guideNext, this.guideSkip]);
     this.guide = c;
   }
@@ -1418,10 +1527,22 @@ export class UIScene extends Phaser.Scene {
   refreshGuide() {
     const gs = this.gs;
     const lab = this.labGuideShown(); // the RV Lab guide (its in-window steps show inside the windows instead)
-    const visible = isGuideVisible(gs) || lab;
+    // First-time tips take the bubble when neither guide is using it (not behind a window).
+    const tip = !isGuideVisible(gs) && !lab && !Modal.isOpen(this) ? currentTip(gs) : null;
+    this.tipShown = !!tip;
+    const visible = isGuideVisible(gs) || lab || !!tip;
     this.guide.setVisible(visible);
     this.guide.setY(visible ? (this.shopOpen ? SHOP_OPEN_Y - 176 : 720 - 170) : 2000);
     if (!visible) return;
+    if (tip) {
+      this.guideText.setText(tip.text).setFontSize(16);
+      this.guideProgress.setText('');
+      this.guideNext.setLabel('Got it').setVisible(true).setY(124);
+      this.guideSkip.setLabel('No more tips').setVisible(true).setY(124);
+      this.drawGuideBubble();
+      return;
+    }
+    this.guideNext.setLabel('Next');
     const step = lab ? labGuideStep(gs) : currentStep(gs);
     this.guideText.setText(lab ? labGuideText(gs) : step.text).setFontSize(lab ? 16 : 18);
     const need = lab ? 0 : goldNeeded(gs);
@@ -1431,6 +1552,11 @@ export class UIScene extends Phaser.Scene {
     const skip = lab ? !step.showNext : canSkipTutorial(gs); // the guide's last step just has Next
     this.guideSkip.setLabel(lab ? 'Skip guide' : 'Skip tutorial');
     this.guideSkip.setVisible(skip).setY(skip ? 124 : -1000);
+    this.drawGuideBubble();
+  }
+
+  /** The guide's speech bubble, with its tail pointing at the guide. */
+  drawGuideBubble() {
     const g = this.guideBubble;
     g.clear();
     drawWindow(g, 124, 4, 486, 152, { radius: 16, flat: true });
@@ -1567,10 +1693,10 @@ export class UIScene extends Phaser.Scene {
     });
     on(['placementChanged'], (d) => {
       this.placementActive = d.active;
-      this.showRotate(!!d.active && d.type === 'wall' && CONFIG.walls.segmentLength > 1); // single-tile walls don't turn
+      this.showPlacementButtons(d);
       this.refreshGuide();
     });
-    on(['waveTriggered', 'enemyKilled', 'enemySpawned', 'clockPhase', 'townHallUpgraded', 'tutorialChanged'], () => this.refreshWave());
+    on(['waveTriggered', 'enemyKilled', 'enemySpawned', 'clockPhase', 'townHallUpgraded', 'tutorialChanged', 'buildingDestroyed'], () => this.refreshWave());
     on(['waveStarted'], () => {
       this.closeShop();
       this.refreshWave();
@@ -1581,8 +1707,9 @@ export class UIScene extends Phaser.Scene {
     on(['waveCleared'], (d) => {
       const ruins = d.ruins ? ` · ${d.ruins} to rebuild` : '';
       const sp = d.special ? CONFIG.specialWaves.types[d.special] : null;
-      const bonus = d.bonus ? ` (+${formatGold(d.bonus)} bonus)` : '';
-      this.showBanner(`${sp ? `${sp.name} (wave ${d.number})` : `Wave ${d.number}`} cleared! +${formatGold(d.bounty)} gold${bonus} · +${formatGold(d.rp || 0)} RP${ruins}`);
+      const bonus = (d.bonus || 0) + (d.starGold || 0) ? ` (+${formatGold((d.bonus || 0) + (d.starGold || 0))} bonus)` : '';
+      const stars = d.stars ? `${starText(d.stars)} ` : '';
+      this.showBanner(`${stars}${sp ? `${sp.name} (wave ${d.number})` : `Wave ${d.number}`} cleared! +${formatGold(d.bounty)} gold${bonus} · +${formatGold(d.rp || 0)} RP${ruins}`);
       // Then, if the gnomes rebuilt a mine for free, say so.
       if (d.salvaged) this.time.delayedCall(BANNER_MS + 200, () => this.showBanner('Your gnomes salvaged a Bitcoin Mine!'));
       this.refreshAll();
@@ -1593,6 +1720,12 @@ export class UIScene extends Phaser.Scene {
     on(['leaguePromoted'], (d) => {
       const l = LEAGUES.find((x) => x.key === d.key);
       if (l) this.queueToast({ title: 'New league!', name: `${l.name} League`, sub: `Furthest wave: ${d.wave}  ·  see the Leaderboard`, texture: l.texture });
+    });
+    // Da Baby Car (raid boss) rolls in: announce it (once per wave).
+    on(['enemySpawned'], (d) => {
+      if (d.kind !== 'babycar' || this.babyCarAnnounced === this.gs.wave.number) return;
+      this.babyCarAnnounced = this.gs.wave.number;
+      this.showBanner(`${CONFIG.enemies.babycar.name} is coming for your Village Hall!`);
     });
     on(['enemiesEnraged'], () => { this.showBanner('The enemies are enraged!'); this.refreshWave(); });
     // Restless nights: a wave that's attacking when it gets dark (or that starts in the dark), and dawn after.
@@ -1612,7 +1745,7 @@ export class UIScene extends Phaser.Scene {
     on(['layoutSaved'], () => this.showBanner('Layout saved!'));
     on(['tutorialChanged'], () => this.refreshAll());
     // The RV Lab guide's bubble: hidden during attacks, back when the wave is beaten.
-    on(['labGuideChanged', 'waveStarted', 'waveCleared'], () => this.refreshGuide());
+    on(['labGuideChanged', 'waveStarted', 'waveCleared', 'tipsChanged'], () => this.refreshGuide());
   }
 
   // ---------- achievement toasts ----------

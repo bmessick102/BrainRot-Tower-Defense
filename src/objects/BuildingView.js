@@ -1,5 +1,6 @@
 // Draws one building: sprite, level badge, HP bar (only when damaged), and a mine's coin icon.
 import { gridToScreen } from '../logic/iso.js';
+import { fpW, fpH } from '../logic/grid.js';
 import { maxHp, maxLevel, BUILDING_TYPES } from '../logic/buildings.js';
 import { mineShowsCoin, mineFill } from '../logic/economy.js';
 import { isWaveActive } from '../logic/util.js';
@@ -8,16 +9,18 @@ import { HealthBar, HP_TEAM } from './HealthBar.js';
 import { MAP } from '../mapTiles.js';
 import { textStyle, COLORS } from '../theme.js';
 import { drawGlossy } from './uiDraw.js';
-import { darkness } from './DayNight.js';
+import { darkness, lerpColor } from './DayNight.js';
+import { hypeFill } from '../logic/dj.js';
 import { hasAbilities, picksOf, MAX_TIER, canResearchSomething } from '../logic/abilities.js';
 import { PATH_COLORS } from '../abilityConfig.js';
 
 const OVERLAY_DEPTH = 5000;
+// DJ Babyface's hype pill: width, and how far above the label row it sits when that row is showing.
+const HYPE_W = 40, HYPE_STACK = 20;
+// Cannons and mortars with nothing to shoot turn to a new random facing every this many ms (min, max).
+const IDLE_TURN_MS = [2500, 7000];
 // The label chip: level badge radius, ability pip radius and spacing.
 const CHIP_R = 10, PIP_R = 5, PIP_GAP = 12;
-// Outline of a building hidden behind others.
-const OUTLINE_COLOR = 0xbfefff, OUTLINE_ALPHA = 0.9, OUTLINE_PX = 2.5;
-const OUTLINE_OFFSETS = [[1, 0], [-1, 0], [0, 1], [0, -1], [0.7, 0.7], [-0.7, 0.7], [0.7, -0.7], [-0.7, -0.7]];
 const FLASH_MIN_GAP_MS = 400;
 
 // Night lighting: a pool of light on the ground around each standing building.
@@ -26,9 +29,14 @@ const LIGHT_ALPHA = 0.85;         // strength at full night
 const LIGHT_SPREAD = 2.8;         // pool width in footprints
 // Screen blending brightens like light but can't blow out to white where pools overlap.
 const LIGHT_BLEND = 'SCREEN';
+// Buildings are lit by their own pool at night: the top of the picture gets this soft moonlight (much
+// lighter than the NIGHT_TINT everything else gets), the base a warm glow: white blended this far
+// toward the pool's color.
+const BUILDING_LIT_TOP = 0xe2e6f8;
+const BUILDING_LIT_WARMTH = 0.2;
 const LIGHT_COLORS = {
   townHall: 0xffa23c, mine: 0x3cb8ff, storage: 0xffb43c, house: 0xffc86b, cannon: 0xff8a3c,
-  archer: 0xff9a3c, mortar: 0xff7a3c, wizard: 0xb066ff, firework: 0xff4d6d, catapult: 0xff5fa8, flock: 0x4cd6ff, mousetrap: 0xffc24a, ra: 0xff7a2a, rvlab: 0xffd27a
+  archer: 0xff9a3c, mortar: 0xff7a3c, wizard: 0xb066ff, firework: 0xff4d6d, catapult: 0xff5fa8, flock: 0x4cd6ff, mousetrap: 0xffc24a, ra: 0xff7a2a, rvlab: 0xffd27a, dj: 0xc070ff, altar: 0xffb04a
 };
 
 // Shared rubble art for any building without its own bld_<type>_destroyed picture. Every variant that
@@ -54,13 +62,14 @@ export const WALL_RUBBLE = [
   { maxLevel: 1, key: 'bld_wall_rubble_wood' },   // the wooden post
   { maxLevel: 5, key: 'bld_wall_rubble_stone' },  // the steel-banded post on a stone base, and the stone blocks
   { maxLevel: 6, key: 'bld_wall_rubble_skull' },  // the skull fortress block
-  { maxLevel: 7, key: 'bld_wall_rubble_lava' }    // the lava block
+  { maxLevel: 8, key: 'bld_wall_rubble_lava' }    // the lava block and the lava tower
 ];
 
 // Each picture covers this many building levels: levels 1-2 use bld_<type>_lv1, 3-4 use _lv2 ... 9-10 use _lv5.
 export const LEVELS_PER_ART = 2;
-// Types with a picture for every level (the RV Lab: 5 levels, 5 pictures; walls: 7 levels, 7 pictures).
-const LEVELS_PER_ART_BY_TYPE = { rvlab: 1, wall: 1 };
+// Types with a picture for every level (the RV Lab: 5 levels, 5 pictures; walls: 8 levels, 8 pictures; DJ
+// Babyface: a picture per level, and a level without one yet shows the closest lower picture).
+const LEVELS_PER_ART_BY_TYPE = { rvlab: 1, wall: 1, dj: 1 };
 
 /** Which picture (1-based) a building level shows. */
 export function artTier(level, type = null) {
@@ -107,14 +116,14 @@ const DEFAULT_SPRITE_SCALE = 0.75;
 // size it had on a 2x2 footprint).
 // Mousetrap: a flat 1-tile trap, drawn a little wider than its tile.
 // Tower of Rah: a tall, slim tower, drawn narrower than its footprint (it starts small and grows a lot).
-// RV Lab: a long RV on its own paved pad; at 0.7 of its 2x2 footprint it sits in scale with the houses and towers.
-const SPRITE_SCALE = { mortar: 0.65, cannon: 0.63, firework: 0.52, catapult: 0.66, flock: 1.28, mousetrap: 1.1, ra: 0.54, rvlab: 0.7 };
+// RV Lab: a long RV on its own paved pad; 0.77 of its 2x2 footprint (10% bigger than the earlier 0.7).
+const SPRITE_SCALE = { mortar: 0.65, cannon: 0.63, firework: 0.52, catapult: 0.66, flock: 1.28, mousetrap: 1.1, ra: 0.54, rvlab: 0.77, dj: 0.77, altar: 0.66 };
 
 // Buildings grow as they level up: this share of their normal size at Level 1, up to LEVEL_SIZE.max at
 // their top level (Level 10, or Level 6 for the Catapult). They only grow on upgrades that keep the same
 // picture (the new picture already looks bigger), so with art every 2 levels: Level 2, 4, 6 ... grow and
 // Level 3, 5, 7 ... keep the size they had.
-export const LEVEL_SIZE = { min: 0.95, max: 1.1, maxLevel: 10 };
+export const LEVEL_SIZE = { min: 0.855, max: 0.99, maxLevel: 10 }; // 10% under the old 0.95 / 1.1
 
 /** How many levels from 2 up to `level` keep the previous level's picture (the levels that grow). */
 function growthSteps(level, type = null) {
@@ -136,6 +145,11 @@ function topLevelOf(type) {
   return type && BUILDING_TYPES.includes(type) ? maxLevel(type) : LEVEL_SIZE.maxLevel;
 }
 
+// Flat pads whose picture shows thick sides: the share of the picture's height (from its bottom) where its
+// side corners meet the ground. That point goes on the footprint's center, so the pad sits flush with its
+// tiles instead of floating above them. (The Brisket King's altar: about 0.44 in all 5 pictures.)
+const GROUND_SHARE = { altar: 0.44 };
+
 export function spriteScale(type) {
   return SPRITE_SCALE[type] ?? DEFAULT_SPRITE_SCALE;
 }
@@ -150,10 +164,13 @@ export function placeBuildingSprite(sprite, col, row, size, type = null, level =
   const center = gridToScreen(col + size / 2, row + size / 2);
   const front = gridToScreen(col + size, row + size);
   const f = Math.min(1, k); // art wider than its footprint still stands inside it, not past the front corner
-  const base = { x: center.x + (front.x - center.x) * f, y: center.y + (front.y - center.y) * f };
   const w = size * MAP.tileWidth * k;
   const frame = sprite.frame;
   sprite.setDisplaySize(w, (w * frame.height) / frame.width);
+  const ground = type ? GROUND_SHARE[type] : undefined;
+  const base = ground !== undefined
+    ? { x: center.x, y: center.y + sprite.displayHeight * ground }
+    : { x: center.x + (front.x - center.x) * f, y: center.y + (front.y - center.y) * f };
   sprite.setPosition(base.x, base.y);
   sprite.setDepth(col + row + 2 * size);
   return base;
@@ -218,13 +235,16 @@ export class BuildingView {
     this.chipText = scene.add.text(0, 0, '', textStyle(13)).setOrigin(0.5);
     this.badge = scene.add.container(0, 0, [this.chipGfx, this.chipText]).setDepth(OVERLAY_DEPTH);
     this.chipKey = '';
-    // A glowing outline drawn over everything while most of the building is hidden behind others (WebGL only).
-    this.outline = null;
-    this.occluded = false;
     this.hpBar = new HealthBar(scene, { width: b.size * 24, height: 12, depth: OVERLAY_DEPTH, color: HP_TEAM.player, badge: true });
     this.coin = b.type === 'mine' ? scene.add.image(0, 0, TEX.coin).setDepth(OVERLAY_DEPTH + 1).setVisible(false) : null;
-    // RV Lab: a research book bobbing over it while there's research you can do (and afford) right now
-    // (the RP token if the book art is missing).
+    // DJ Babyface: its hype meter (during waves, or while charged) and a bobbing "DROP!" once it's full.
+    this.hypeGfx = b.type === 'dj' ? scene.add.graphics().setDepth(OVERLAY_DEPTH) : null;
+    // (the beat-ready icon, or a "DROP!" label if its art is missing)
+    this.hypeReady = b.type !== 'dj' ? null : scene.textures.exists(TEX.beatReady)
+      ? scene.add.image(0, 0, TEX.beatReady).setDepth(OVERLAY_DEPTH + 1).setVisible(false)
+      : scene.add.text(0, 0, '♪ DROP! ♪', textStyle(16, '#ffe2ff')).setOrigin(0.5).setDepth(OVERLAY_DEPTH + 1).setVisible(false);
+    // RV Lab: a research book always bobbing over it, pulsing while there's research you can do (and
+    // afford) right now (the RP token if the book art is missing).
     const readyKey = [TEX.researchReady, TEX.researchPoint].find((k) => scene.textures.exists(k));
     this.researchIcon = b.type === 'rvlab' && readyKey
       ? scene.add.image(0, 0, readyKey).setDepth(OVERLAY_DEPTH + 1).setVisible(false) : null;
@@ -246,7 +266,7 @@ export class BuildingView {
     // Roll a rubble variant once each time the building is destroyed; clear it when it's repaired.
     if (b.destroyed && this.rubbleRoll === undefined) this.rubbleRoll = Math.random();
     if (!b.destroyed) this.rubbleRoll = undefined;
-    const key = buildingTextureKey(this.scene, b.type, b.level, b.destroyed, this.rubbleRoll);
+    const key = this.variantKey(b, buildingTextureKey(this.scene, b.type, b.level, b.destroyed, this.rubbleRoll), time);
     if (key !== this.key) {
       this.sprite.setTexture(key);
       this.key = key;
@@ -270,7 +290,9 @@ export class BuildingView {
     const labels = this.scene.showLabels ? this.scene.showLabels(b.id) : true;
     const damaged = !b.destroyed && b.hp < max;
     const picks = b.destroyed ? [] : picksOf(b);
-    const pipsW = picks.length ? PIP_GAP * MAX_TIER + 4 : 0;
+    // Every building with a perk tree shows its 5-slot perk bar (empty until perks are researched).
+    const hasPips = !b.destroyed && hasAbilities(b.type);
+    const pipsW = hasPips ? PIP_GAP * MAX_TIER + 4 : 0;
     const rowY = top - 12;
     if (damaged) {
       // [health bar][pips], centered together.
@@ -278,14 +300,14 @@ export class BuildingView {
       const left = front.x - (barW + gap + shown) / 2;
       this.hpBar.draw(left + barW / 2, rowY - this.hpBar.height / 2, b.hp / max, true, b.level);
       this.badge.setVisible(labels && pipsW > 0).setPosition(left + barW + gap, rowY);
-      if (labels && pipsW) this.drawChip(picks, null);
+      if (labels && pipsW) this.drawChip(picks, null, true);
     } else {
       this.hpBar.draw(front.x, rowY, 1, false, b.level);
       this.badge.setVisible(labels);
       if (labels) {
         const w = CHIP_R * 2 + (pipsW ? 4 + pipsW : 0);
         this.badge.setPosition(front.x - w / 2, rowY);
-        this.drawChip(picks, b.level);
+        this.drawChip(picks, b.level, hasPips);
       }
     }
 
@@ -295,13 +317,16 @@ export class BuildingView {
         this.researchCheckAt = time + 250;
         this.researchReady = !b.destroyed && !!this.scene.gs && canResearchSomething(this.scene.gs);
       }
-      this.researchIcon.setVisible(this.researchReady);
-      if (this.researchReady) {
+      // Always over a standing RV Lab; it also pulses while there's research you can do right now.
+      this.researchIcon.setVisible(!b.destroyed);
+      if (!b.destroyed) {
         const base = 40 / this.researchIcon.frame.height;
-        this.researchIcon.setScale(base * (1.1 + 0.12 * Math.sin(time * 0.008)));
+        this.researchIcon.setScale(base * (this.researchReady ? 1.1 + 0.12 * Math.sin(time * 0.008) : 1));
         this.researchIcon.setPosition(front.x, top - 46 + Math.sin(time * 0.004) * 4);
       }
     }
+
+    if (this.hypeGfx) this.drawHype(b, front.x, top - 12, time, labels || damaged, labels);
 
     if (this.coin) {
       const show = mineShowsCoin(b) && !isWaveActive(this.scene.gs); // no collecting while a wave attacks
@@ -315,12 +340,27 @@ export class BuildingView {
       }
     }
 
-    this.syncOutline(b);
     if (this.flashUntil && time > this.flashUntil) this.flashUntil = 0;
-    if (!this.flashUntil) this.sprite.setTint(b.sprung ? 0x7a7a7a : this.scene.ambientTint ?? 0xffffff); // a sprung trap looks spent until it resets // moonlit at night
-
     // Ground light pool, only once it's dark (fading in from there) and gently flickering.
     const night = darkness(this.scene.night || 0);
+    if (!this.flashUntil) {
+      const moon = this.scene.ambientTint ?? 0xffffff;
+      if (b.sprung) this.sprite.setTint(0x7a7a7a); // a sprung trap looks spent until it resets
+      // Boosted by DJ Babyface's Drop the Beat: the defense pulses between pink and cyan party lights.
+      else if (b.djBoostT > 0 && !b.destroyed) this.sprite.setTint(Math.sin(time * 0.02) > 0 ? 0xffc8f4 : 0xc8f4ff);
+      // In range of the selected DJ Babyface: a soft purple glow, gently pulsing, so it's clear what it reaches.
+      else if (this.scene.djAffected && this.scene.djAffected.has(b.id)) {
+        const k = 0.5 + 0.5 * Math.sin(time * 0.005);
+        this.sprite.setTint(lerpColor(0xd2a6ff, 0xb886ff, k));
+      }
+      else if (night > 0 && !b.destroyed) {
+        // Lit by its own light pool: a warm, bright base easing up to softer moonlight at the top, so
+        // buildings glow like the ground around them instead of sitting dark in it.
+        const top = lerpColor(moon, BUILDING_LIT_TOP, night);
+        const bottom = lerpColor(moon, lerpColor(0xffffff, LIGHT_COLORS[b.type] || 0xffa23c, BUILDING_LIT_WARMTH), night);
+        this.sprite.setTint(top, top, bottom, bottom);
+      } else this.sprite.setTint(moon); // moonlit at night (rubble has no light)
+    }
     const lit = night > 0.01 && !b.destroyed;
     this.light.setVisible(lit);
     if (lit) {
@@ -334,16 +374,17 @@ export class BuildingView {
   /**
    * The label chip, drawn from its left-middle (the container's position): a glossy level badge (when `level`
    * is given) and the ability pips, one diamond per tier colored by the path it has (A orange, B blue, C green;
-   * empty for tiers it doesn't have yet), on one dark pill. Redrawn only on change.
+   * empty for tiers it doesn't have yet; all empty before any research), on one dark pill. `pips` false: just
+   * the level badge (buildings without a perk tree). Redrawn only on change.
    */
-  drawChip(picks, level) {
-    const key = `${picks.join('')}|${level}`;
+  drawChip(picks, level, pips) {
+    const key = `${picks.join('')}|${level}|${pips}`;
     if (key === this.chipKey) return;
     this.chipKey = key;
     const g = this.chipGfx;
     g.clear();
     const hasLevel = level !== null;
-    const pipsW = picks.length ? PIP_GAP * MAX_TIER + 4 : 0;
+    const pipsW = pips ? PIP_GAP * MAX_TIER + 4 : 0;
     const w = (hasLevel ? CHIP_R * 2 : 0) + (hasLevel && pipsW ? 4 : 0) + pipsW;
     if (!w) return;
     g.fillStyle(0x000000, 0.45).fillRoundedRect(0, -PIP_R - 3, w, PIP_R * 2 + 6, PIP_R + 3);
@@ -364,40 +405,74 @@ export class BuildingView {
   }
 
   /**
-   * Mostly hidden behind other buildings (GameScene.updateOcclusion): a thin glowing outline of this building is
-   * drawn over everything, so it can be spotted. The outline is the sprite's silhouette stamped in a ring of small
-   * offsets, masked by the sprite itself (inverted), so only the rim outside its own shape shows. WebGL only.
+   * DJ Babyface's hype meter: a slim purple bar over the booth while a wave is on (or while it holds some
+   * charge), and a bobbing "DROP!" once it's full and a wave is on (click the booth to drop the beat).
    */
-  setOccluded(on) {
-    this.occluded = on;
-    if (!on || this.outline !== null) return;
-    if (!this.scene.game.renderer.gl) { this.outline = false; return; } // Canvas renderer: no masks
-    const key = this.sprite.texture.key;
-    const stamps = OUTLINE_OFFSETS.map(() => this.scene.add.image(0, 0, key).setTintFill(OUTLINE_COLOR));
-    const container = this.scene.add.container(0, 0, stamps).setDepth(OVERLAY_DEPTH - 10).setVisible(false);
-    const maskImage = this.scene.make.image({ x: 0, y: 0, key, add: false });
-    const mask = maskImage.createBitmapMask();
-    mask.invertAlpha = true;
-    container.setMask(mask);
-    this.outline = { container, stamps, maskImage, mask };
+  drawHype(b, x, rowY, time, rowBusy, labels) {
+    // One slim pill, stacked over the label row (level chip / health bar) when that's showing, or in its place
+    // when it isn't, so the two never overlap. During waves it always shows; between waves only on hover /
+    // selection. When the meter is full in a wave, the beat-ready icon takes the pill's place.
+    const g = this.hypeGfx;
+    g.clear();
+    const fill = b.destroyed ? 0 : hypeFill(b);
+    const wave = !!this.scene.gs && isWaveActive(this.scene.gs);
+    const show = !b.destroyed && (wave || labels);
+    const ready = show && wave && fill >= 1;
+    const y = rowBusy ? rowY - HYPE_STACK : rowY; // the pill's center line
+    this.hypeReady.setVisible(ready);
+    if (ready) {
+      const base = this.hypeReady.type === 'Image' ? 40 / this.hypeReady.frame.height : 1;
+      this.hypeReady.setPosition(x, y - 14 + Math.sin(time * 0.006) * 3).setScale(base * (1 + 0.06 * Math.sin(time * 0.012)));
+      return;
+    }
+    if (!show) return;
+    const w = HYPE_W, h = 6;
+    g.fillStyle(0x000000, 0.5).fillRoundedRect(x - w / 2 - 2, y - h / 2 - 2, w + 4, h + 4, (h + 4) / 2);
+    g.fillStyle(0x3a2250, 1).fillRoundedRect(x - w / 2, y - h / 2, w, h, h / 2);
+    if (fill > 0) g.fillStyle(0xc070ff, 1).fillRoundedRect(x - w / 2, y - h / 2, Math.max(h, w * fill), h, h / 2);
   }
 
-  /** Keep the outline on the sprite (texture, place, size); hidden unless occluded. */
-  syncOutline(b) {
-    const o = this.outline;
-    if (!o) return;
-    const show = this.occluded && !b.destroyed && this.sprite.alpha > 0.9;
-    o.container.setVisible(show);
-    if (!show) return;
-    const s = this.sprite;
-    const px = OUTLINE_PX / (this.scene.cameras.main.zoom || 1); // the same thin rim at any zoom
-    const place = (img, dx, dy) => {
-      if (img.texture.key !== s.texture.key) img.setTexture(s.texture.key);
-      img.setOrigin(s.originX, s.originY).setPosition(s.x + dx, s.y + dy).setScale(s.scaleX, s.scaleY);
-    };
-    o.stamps.forEach((img, i) => place(img, OUTLINE_OFFSETS[i][0] * px, OUTLINE_OFFSETS[i][1] * px));
-    place(o.maskImage, 0, 0);
-    o.container.setAlpha(OUTLINE_ALPHA);
+  /**
+   * Picture variants of a level's art: the Cannon in 4 facings (_dl / _dr / _ul / _ur), turned toward the enemy
+   * it's shooting and keeping its last facing between waves (new ones face down-left); the Storage in 3 fills
+   * (_fill1..3) by how full your gold is (below 1/3, from 1/3, from 2/3 of your max). Falls back to the plain
+   * level picture when a variant isn't loaded.
+   */
+  variantKey(b, key, time = 0) {
+    if (b.destroyed || !/_lv\d+$/.test(key)) return key;
+    let variant = null;
+    if (b.type === 'cannon' || b.type === 'mortar') {
+      // Cannon: 4 facings. Mortar: left (its plain picture) or right (_r). Turned toward the enemy it's shooting;
+      // with nothing to shoot (between waves too) it looks around now and then, at random (lookAround).
+      const gs = this.scene.gs;
+      const t = b.targetId && gs ? gs.enemies.find((e) => e.id === b.targetId && e.alive) : null;
+      const four = b.type === 'cannon';
+      if (t) {
+        const a = gridToScreen(b.col + fpW(b) / 2, b.row + fpH(b) / 2), p = gridToScreen(t.x, t.y);
+        const dx = p.x - a.x, dy = p.y - a.y;
+        this.facing = four ? (dy >= 0 ? (dx < 0 ? 'dl' : 'dr') : (dx < 0 ? 'ul' : 'ur')) : (dx < 0 ? 'l' : 'r');
+        this.lookAt = time + IDLE_TURN_MS[0] + Math.random() * (IDLE_TURN_MS[1] - IDLE_TURN_MS[0]);
+      } else {
+        this.lookAround(four ? ['dl', 'dr', 'ul', 'ur'] : ['l', 'r'], time);
+      }
+      const f = this.facing || (four ? 'dl' : 'l');
+      variant = four ? `${key}_${f}` : f === 'r' ? `${key}_r` : null;
+    } else if (b.type === 'storage') {
+      const gs = this.scene.gs;
+      const cap = gs ? gs.capacity : 0;
+      const f = cap > 0 ? gs.gold / cap : 0;
+      variant = `${key}_fill${f >= 2 / 3 ? 3 : f >= 1 / 3 ? 2 : 1}`;
+    }
+    return variant && this.scene.textures.exists(variant) ? variant : key;
+  }
+
+  /** Idle: every few seconds (IDLE_TURN_MS, random) turn to a different facing from `options`. */
+  lookAround(options, time) {
+    if (this.lookAt === undefined) this.lookAt = time + Math.random() * IDLE_TURN_MS[1]; // not all in step
+    if (time < this.lookAt) return;
+    this.lookAt = time + IDLE_TURN_MS[0] + Math.random() * (IDLE_TURN_MS[1] - IDLE_TURN_MS[0]);
+    const others = options.filter((o) => o !== (this.facing || options[0]));
+    this.facing = others[Math.floor(Math.random() * others.length)];
   }
 
   /** Hit flash: tint white for 80 ms. Throttled so a building under constant attack flickers instead of staying white. */
@@ -459,10 +534,10 @@ export class BuildingView {
     if (this.popTween) this.popTween.stop();
     this.sprite.destroy();
     this.badge.destroy();
-    if (this.outline) { this.outline.container.destroy(); this.outline.maskImage.destroy(); this.outline.mask.destroy(); }
     this.hpBar.destroy();
     this.light.destroy();
     if (this.coin) this.coin.destroy();
+    if (this.hypeGfx) { this.hypeGfx.destroy(); this.hypeReady.destroy(); }
     if (this.researchIcon) this.researchIcon.destroy();
   }
 }

@@ -1,13 +1,26 @@
 // A glossy, beveled UI button with an optional second line (used for prices and "why it's disabled").
 // Fires on pointerdown so panels that refresh between press and release never swallow a click.
-// opts: color, hoverColor, fontSize, radius, circle (round button), icon: 'x' | 'left' | 'right' (drawn instead of text).
+// opts: color, hoverColor, fontSize, radius, circle (round button), icon: 'x' | 'left' | 'right' | 'fullscreen' |
+// 'exitFullscreen' (drawn instead of text), onRelease (fire when the press ends instead: browsers only allow some
+// things, like full screen, from a finished tap or click).
 import Phaser from 'phaser';
 import { COLORS, shade, textStyle } from '../theme.js';
-import { drawGlossy, drawCross, drawArrow } from './uiDraw.js';
+import { drawGlossy, drawCross, drawArrow, drawFullscreenIcon } from './uiDraw.js';
 import { playSfx } from '../audio.js';
 import { SFX } from '../assetKeys.js';
+import { IS_TOUCH } from '../device.js';
 
 const LIP = 4;
+// Touch screens: small buttons (close X, info, arrows) also react a little outside their edges, so a finger
+// can hit them on a phone, where the whole game is drawn about half size.
+const TOUCH_MIN = 60, TOUCH_MAX_PAD = 14;
+
+/** The click area for a button of this size: its own box, grown on touch screens if it's small. */
+function hitRect(w, h, rect) {
+  const pad = (d) => (IS_TOUCH ? Math.min(TOUCH_MAX_PAD, Math.max(0, (TOUCH_MIN - d) / 2)) : 0);
+  const px = pad(w), py = pad(h);
+  return rect.setTo(-px, -py, w + px * 2, h + py * 2);
+}
 
 export class Button extends Phaser.GameObjects.Container {
   constructor(scene, x, y, width, height, label, onClick, opts = {}) {
@@ -30,10 +43,10 @@ export class Button extends Phaser.GameObjects.Container {
     this.sub = scene.add.text(0, 0, '', textStyle(Math.max(12, Math.round(this.fontSize * 0.7)), '#fff6d8')).setOrigin(0.5);
     this.add([this.bg, this.label, this.sub]);
     this.setSize(width, height);
-    this.setInteractive({ useHandCursor: true });
+    this.setInteractive({ hitArea: hitRect(width, height, new Phaser.Geom.Rectangle()), hitAreaCallback: Phaser.Geom.Rectangle.Contains, useHandCursor: true });
     this.on('pointerover', () => { this.hover = true; this.redraw(); });
     this.on('pointerout', () => { this.hover = false; this.redraw(); });
-    this.on('pointerdown', (pointer, lx, ly, event) => {
+    this.on(opts.onRelease ? 'pointerup' : 'pointerdown', (pointer, lx, ly, event) => {
       if (event) event.stopPropagation();
       if (!this.enabled || !this.onClick) return;
       playSfx(scene, SFX.uiClick);
@@ -59,6 +72,7 @@ export class Button extends Phaser.GameObjects.Container {
     g.clear();
     drawGlossy(g, -this.btnW / 2, -this.btnH / 2, this.btnW, this.btnH, fill, { radius: this.radius, lip: LIP, circle: this.circle });
     if (this.icon === 'x') drawCross(g, 0, -LIP / 2, Math.min(this.btnW, this.btnH) * 0.42);
+    if (this.icon === 'fullscreen' || this.icon === 'exitFullscreen') drawFullscreenIcon(g, 0, -LIP / 2, Math.min(this.btnW, this.btnH) * 0.5, this.icon === 'exitFullscreen');
     if (this.icon === 'left' || this.icon === 'right') drawArrow(g, 0, -LIP / 2, Math.min(this.btnW, this.btnH) * 0.4, this.icon === 'left' ? -1 : 1);
     const faceMid = -LIP / 2; // text sits on the face, above the lip
     const hasSub = this.sub.text.length > 0;
@@ -73,7 +87,7 @@ export class Button extends Phaser.GameObjects.Container {
     this.btnW = width;
     this.btnH = height;
     this.setSize(width, height);
-    if (this.input && this.input.hitArea) this.input.hitArea.setTo(0, 0, width, height);
+    if (this.input && this.input.hitArea) hitRect(width, height, this.input.hitArea);
     this.redraw();
     return this;
   }

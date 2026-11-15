@@ -2,6 +2,61 @@
 
 The version shows in the bottom-left corner of every screen (`package.json` `version` plus the commit). Details for everything below are in [README.md](README.md).
 
+## 0.4.0
+
+- **Perk bar on every perk building:** every building with a perk tree (defenses, the Brisket King's altar, mines, storages, houses, DJ Babyface) shows its 5-slot perk bar next to its level from the start, empty until perks are researched in the RV Lab.
+- **New hero: the Brisket King**, a melee hero who guards his altar (Defenses tab, from Village Hall 4, 10 levels).
+  - He roams his area when there's no enemy to fight, walking around buildings and hopping over walls. In a wave he charges ground enemies near his altar, and they fight back.
+  - The altar has five pictures as it levels up, one per 2 levels, and sits flush on its tiles.
+  - After a wave he naps to heal (longer the more he was hurt); knocked out, he sleeps 2 minutes. He sleeps through any wave you start meanwhile. While he naps, a blue sleep bar over him fills as he heals, with the time left above it.
+  - Click him during a wave for **Brisket Feast**: a heal, a speed and damage boost, and a slam.
+  - Upgrading the altar levels him up, and he has a 3-path perk tree in the RV Lab.
+  - His altar's info panel has a **Hero** tab: his portrait, health, damage, attack speed, guard range, status (with the nap timer) and Feast charges, plus what the next level adds.
+  - His health bar wears a dark purple crown badge with his level, so he stands out from buildings and enemies.
+  - He and his altar each have their own click sound.
+- **Sky:** dusk and dawn now have their own pictures. Day fades into the dusk sky, then into night, and dawn runs the same way back, with buildings and enemies tinted warm in between.
+- **DJ Babyface:** its level 2, 3 and 4 pictures now show as it is upgraded (level 5 shows the level 4 picture for now).
+
+- **Phones and tablets:** the game plays by touch, sideways.
+  - **Moving around:** drag to pan and pinch with two fingers to zoom.
+  - **Placing:** a new building's ghost appears on a free spot. Drag it, or tap where it should go, then tap **Place** (or the ghost itself). **Cancel** / **Put Back** stop. Walls continue the row after each Place.
+  - **Tapping:** small buttons are easier to hit by touch, and nothing stays highlighted after a tap.
+  - **Screen:** holding the phone upright shows "Turn your phone sideways" and pauses the game. A full screen button sits on the title, login and pause screens; on iPhone, Add to Home Screen opens the game full screen instead.
+  - **Browser:** the page no longer zooms, scrolls or pull-to-refreshes under your fingers, and How to Play shows touch controls.
+- **Economy perk trees:** the Bitcoin Mine, Storage, Villager House and DJ Babyface each get 3 paths x 5 tiers in the RV Lab (60 new perks, e.g. auto-collecting mines, interest-paying storages, a gnome militia, an auto-DJ). The research window now has Defenses / Economy tabs.
+- **New building: DJ Babyface**, a utility booth (Economy tab, from Village Hall 5, 5 levels).
+  - Gnomes nearby work faster.
+  - Defeating enemies fills its hype meter; when it's full, click the booth during a wave to Drop the Beat, and defenses in range fire much faster for a few seconds.
+  - At night its light show keeps enemies in range from being restless.
+  - Selecting it lights up every building in its range in purple, so you can see what it boosts.
+- **New enemy: Skibidi Toilet**, a burrower in waves from Village Hall 5.
+  - It tunnels underground, under your walls, to the nearest building, pops up to attack it, then tunnels on to the next.
+  - Underground nothing can hit it, unless a F.L.O.C.K Tower sees it.
+- **New enemy: Da Baby Car**, a raid boss mixed into every 2nd normal wave from Village Hall 6 (two from Village Hall 9).
+  - It drives in a straight line for your Village Hall, smashing walls in one hit and ramming through any other building.
+  - It has about 6 Tanks' health. When destroyed it bursts into a crowd of the wave's ground troops, and more of them in later waves.
+  - The top bar warns you before such a wave.
+- **Fixed: severe lag in late waves.** The enemies' path finder could re-check the same tiles over and over once walls got tough, so a single frame could freeze for many seconds around wave 100+. It's now exact and much faster: the worst frame at wave 128 went from about 16 s to under 30 ms.
+- **Crowd cap for huge waves:** a wave never sends more than 400 enemies. Past that, each enemy is tougher instead (health, damage and rewards scaled, and they come further apart), so late waves are as hard and pay as much, with far less to draw. Wave 128: 401 enemies at ×4.55 instead of ~1,800.
+  - Area damage (splash, pools, traps, quakes, Starfall, Ring of Fire, area poison and burns) hits a packed enemy about pack^0.66 times over, since it stands for a crowd. Without this, capped waves took 25-30% less damage than the crowds they replace. Tuned in simulations to within about 5% of the uncapped waves. Single-target shots are unchanged.
+- **Enemy levels:** enemies show a level badge on their health bar, like buildings (dark red). It's how many times a basic one's health they have: wave 1 enemies are level 1, a packed wave-128 Grunt is about level 71.
+- **Wall Breaker nerfed slightly:** its blast does 2,400 to walls (was 3,000), so Levels 7-8 take two blasts, and its radius is 1.75 tiles (was 2).
+- **Wall level 8:** a lava tower is the new top wall (Village Hall 10, 3,800 HP). Wall levels now unlock at Village Hall 1, 2, 3, 5, 7, 8, 9 and 10, and walls grow clearly with level, from a thin post to a big tower.
+- **Wave stars:** every wave is rated 1-3 stars by how much of your village survives (walls don't count). 3 stars pays +50% gold and RP, 2 stars +20%. The wave pill shows the rating live, and there's a new Star Collector achievement.
+- **First-time tips:** the guide explains research points, wave stars, special waves, Da Baby Car, restless nights and edit mode the first time each one comes up ("Got it" / "No more tips").
+- **Research tree:** tiers beyond your RV Lab's level stay hidden until it levels up.
+- **New art:**
+  - **Cannon:** four facings per level. It turns toward the enemy it's shooting, and looks around at random when there's nothing to shoot.
+  - **Litman Mortar:** a right-facing picture per level. It faces left or right toward its target, and turns at random when idle.
+  - **Storage:** three gold-fill pictures per level, switching at 1/3 and 2/3 of your max gold.
+  - **DJ Babyface:** pictures for levels 2-4.
+  - **Beat-ready icon:** shown over DJ Babyface when Drop the Beat is ready.
+- **New sounds:** a beat-drop sound for Drop the Beat, and an ability-unlocked sound when a building gets a new ability tier. When a level-up unlocks a tier, the sound (and the "New ability!" pop) waits until the upgrade sound has finished.
+- **DJ Babyface's overhead UI is cleaner:** the hype meter is a slim pill that stacks above the level chip or health bar instead of overlapping them. Between waves it only shows on hover or selection, and when it's full the beat-ready icon takes its place.
+- **Cleanup:** removed leftover files from the project folder, and two unused sounds (the old dusk countdown music and tick) that were still being downloaded.
+- **Docs:** [docs/PROJECT_OVERVIEW.md](docs/PROJECT_OVERVIEW.md), a one-document overview of the project for presentations (pitch, features, numbers, architecture, engineering highlights, demo script). The README is brought up to date: touch support, waves on demand, gnome behavior, wall numbers and open questions.
+- **Removed the outlines on hidden buildings:** in a packed village they covered everything. Fading and tile-first clicks still handle buildings behind others.
+
 ## 0.3.0
 
 ### RV Lab and defense abilities
@@ -31,7 +86,6 @@ The version shows in the bottom-left corner of every screen (`package.json` `ver
 ### A less cluttered village
 - **Clicks pick the building on the tile under the cursor first**, so tall buildings in front no longer steal clicks. A white outline shows what you're hovering.
 - **See-through buildings:** buildings in front of the hovered or selected one fade to see-through.
-- **Hidden building outlines:** buildings that are mostly covered get a thin light-blue outline.
 - **Labels only when needed:** the level and tier pips are one small chip, shown only on the hovered or selected building (and in edit mode). Damaged buildings always show their health bar.
 - **Ground plots:** a soft dirt plot under each building shows which tiles it uses.
 

@@ -2,10 +2,11 @@ import { describe, it, expect } from 'vitest';
 import { CONFIG } from '../src/config.js';
 import {
   stepClock, nightAmount, isClockRunning, resumeClockOnLoad, createClock, startGrace, startNextWave, cycleLength,
-  secondsToNextPhase, isDark
+  secondsToNextPhase, isDark, phaseLength
 } from '../src/logic/dayNight.js';
 import { checkWaveCleared, stepWaveSpawning } from '../src/logic/waves.js';
-import { lerpColor, darkness } from '../src/objects/DayNight.js';
+import { lerpColor, darkness, ambientTintFor, NIGHT_TINT } from '../src/objects/DayNight.js';
+import { skyBlend, DARK_AT } from '../src/logic/clockLight.js';
 import { TUTORIAL_NIGHT_STEP } from '../src/logic/tutorial.js';
 import { makeStateWithTownHall } from './helpers.js';
 
@@ -133,5 +134,54 @@ describe('day/night clock (a cycle of its own; waves come when the player starts
     expect(lerpColor(0xffffff, 0x000000, 0)).toBe(0xffffff);
     expect(lerpColor(0xffffff, 0x000000, 1)).toBe(0x000000);
     expect(lerpColor(0x000000, 0x204060, 0.5)).toBe(0x102030);
+  });
+});
+
+describe('sky pictures: day -> dusk -> night -> dawn -> day all blend the same way', () => {
+  const at = (phase, share) => skyBlend({ phase, t: phaseLength(phase) * share });
+
+  it('is plain day outside the twilights and plain night at night', () => {
+    expect(skyBlend({ phase: 'day', t: 50 })).toMatchObject({ night: 0, twilight: 0, dusk: 0, dawn: 0, warm: 0 });
+    expect(skyBlend({ phase: 'night', t: 50 })).toMatchObject({ night: 1, dusk: 0, dawn: 0, warm: 0 });
+  });
+
+  it('dusk fades the dusk picture in first, then the night picture over it', () => {
+    expect(at('dusk', 0)).toMatchObject({ dusk: 0, night: 0, dawn: 0 });
+    const early = at('dusk', 0.2), mid = at('dusk', 0.5), late = at('dusk', 0.85);
+    expect(early.dusk).toBeGreaterThan(0); expect(early.night).toBe(0);          // warming, still no night picture
+    expect(mid.dusk).toBe(1); expect(mid.night).toBeGreaterThan(0);              // dusk full, night starting
+    expect(late.night).toBeGreaterThan(mid.night);
+    expect(at('dusk', 1)).toMatchObject({ night: 1 });
+    for (const s of [0.1, 0.3, 0.6, 0.9]) expect(at('dusk', s).dawn).toBe(0);
+  });
+
+  it('dawn is dusk run backwards, through the dawn picture', () => {
+    for (const s of [0.1, 0.3, 0.5, 0.7, 0.9]) {
+      const dawn = at('dawn', s), dusk = at('dusk', 1 - s);
+      expect(dawn.dawn).toBeCloseTo(dusk.dusk, 9);
+      expect(dawn.night).toBeCloseTo(dusk.night, 9);
+      expect(dawn.warm).toBeCloseTo(dusk.warm, 9);
+      expect(dawn.dusk).toBe(0);
+    }
+    expect(at('dawn', 1).dawn).toBeCloseTo(0, 6);
+  });
+
+  it('turns the night picture on exactly when it counts as dark (lights, restless enemies)', () => {
+    for (const phase of ['dusk', 'dawn']) {
+      for (let s = 0; s <= 1; s += 0.05) {
+        const clock = { phase, t: phaseLength(phase) * s };
+        expect(skyBlend(clock).night > 0).toBe(nightAmount(clock) > DARK_AT);
+        expect(darkness(nightAmount(clock))).toBeCloseTo(skyBlend(clock).night, 9);
+      }
+    }
+  });
+
+  it('warms the sprite tint in the twilights only, moonlit at night, white by day', () => {
+    expect(ambientTintFor({ phase: 'day', t: 0 })).toBe(0xffffff);
+    expect(ambientTintFor({ phase: 'night', t: 0 })).toBe(NIGHT_TINT);
+    const warm = ambientTintFor({ phase: 'dusk', t: phaseLength('dusk') * 0.4 });
+    const r = (c) => (c >> 16) & 255, b = (c) => c & 255;
+    expect(r(warm) - b(warm)).toBeGreaterThan(r(NIGHT_TINT) - b(NIGHT_TINT) + 20); // redder than moonlight
+    expect(ambientTintFor({ phase: 'dawn', t: phaseLength('dawn') * 0.6 })).toBe(ambientTintFor({ phase: 'dusk', t: phaseLength('dusk') * 0.4 }));
   });
 });

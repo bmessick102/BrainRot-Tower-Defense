@@ -138,12 +138,27 @@ export class Session {
     else this.ldel(this.scopedKey(k));
   }
 
+  /**
+   * A village's own progress counts: the waves it has cleared are at least its (and the account's) furthest
+   * wave survived, so progress made offline, before tracking, or anywhere else carries over to the league
+   * badge and the leaderboard. Only ever raises the numbers.
+   */
+  catchUpBestWave(b) {
+    const n = estimateBestWave(b && b.save);
+    if (!(n > 0)) return false;
+    let changed = false;
+    if (n > (b.bestWave || 0)) { b.bestWave = n; changed = true; }
+    if (this.user && n > this.stats.bestWave) { this.stats.bestWave = n; this.statsChanged(); }
+    return changed;
+  }
+
   /** Change a village's save / checkpoint: mirror it on this device and upload it soon. */
   writeBase(b, fields) {
     Object.assign(b, fields);
     if (fields.save !== undefined && b.save) {
       b.townHall = b.save.townHallLevel || 0;
       b.wave = saveWave(b.save);
+      this.catchUpBestWave(b);
     }
     b.rev = (b.rev || 0) + 1;
     b.dirty = true;
@@ -257,6 +272,11 @@ export class Session {
       }
       if (box.stats) this.outbox.stats = true;
       this.queueOutbox();
+    }
+
+    // Villages further along than the account's records (played offline, before tracking ...): catch up.
+    for (const b of this.bases) {
+      if (this.catchUpBestWave(b)) { b.dirty = true; this.writeMirror(b); this.scheduleUpload(b); }
     }
 
     const last = this.lget(lastBaseKey(user.id));

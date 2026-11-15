@@ -38,17 +38,19 @@ describe('Wall Breaker', () => {
     expect(ensureTarget(s, e).id).toBe(mine.id);
   });
 
-  it('one blast destroys even a Level 7 (top level) wall', () => {
+  it('one blast destroys any wall up to Level 6; Levels 7 and 8 take two', () => {
     const s = makeStateWithTownHall();
-    const w = wall(s, 5, 5, 'x', 7);
-    expect(enemyDamageVs(cfg, w)).toBe(cfg.damage * 60);
-    expect(enemyDamageVs(cfg, w)).toBeGreaterThanOrEqual(CONFIG.walls.levels[6].hp);
+    const w = wall(s, 5, 5, 'x', 6);
+    expect(enemyDamageVs(cfg, w)).toBe(cfg.damage * 48);
+    expect(enemyDamageVs(cfg, w)).toBeGreaterThanOrEqual(CONFIG.walls.levels[5].hp);
+    expect(enemyDamageVs(cfg, w)).toBeLessThan(CONFIG.walls.levels[6].hp);
+    expect(cfg.blastRadius).toBe(1.75);
     const e = addEnemy(s, 'breaker', 6.5, 4.6);
     explode(s, e, cfg);
     expect(w.destroyed).toBe(true);
   });
 
-  it('the blast hits buildings and walls within 2 tiles, nothing farther, and kills the breaker', () => {
+  it('the blast hits buildings and walls within its radius, nothing farther, and kills the breaker', () => {
     const s = makeStateWithTownHall();
     const w = wall(s, 5, 5, 'x');
     const near = addBuilding(s, 'cannon', 6, 6);   // right behind the wall, 1.4 tiles from the blast
@@ -81,7 +83,7 @@ describe('Wall Breaker', () => {
     const w = wall(s, 5, 5, 'x', 6);
     const near = addBuilding(s, 'cannon', 6, 6);
     const far = addBuilding(s, 'mine', 11, 11);
-    const e = addEnemy(s, 'breaker', 6.5, 4.2, { hp: 10, maxHp: 10 });
+    const e = addEnemy(s, 'breaker', 6.5, 4.6, { hp: 10, maxHp: 10 }); // 1.4 tiles from the cannon (inside the 1.75 blast)
     const gold = s.gold, nearHp = near.hp, farHp = far.hp;
     damageEnemy(s, e, 50);
     expect(e.alive).toBe(false);

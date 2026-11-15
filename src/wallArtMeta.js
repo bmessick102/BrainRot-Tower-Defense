@@ -4,51 +4,58 @@
 export const WALL_ART_META = {
   "bld_wall_lv1": {
     "width": 256,
-    "height": 347,
+    "height": 349,
     "visX0": 47,
     "visX1": 208,
-    "bottom": 346
+    "bottom": 348
   },
   "bld_wall_lv2": {
     "width": 256,
-    "height": 347,
+    "height": 349,
     "visX0": 56,
     "visX1": 199,
-    "bottom": 346
+    "bottom": 348
   },
   "bld_wall_lv3": {
     "width": 256,
-    "height": 347,
+    "height": 349,
     "visX0": 0,
     "visX1": 255,
-    "bottom": 346
+    "bottom": 348
   },
   "bld_wall_lv4": {
     "width": 256,
-    "height": 347,
+    "height": 349,
     "visX0": 5,
     "visX1": 249,
-    "bottom": 346
+    "bottom": 348
   },
   "bld_wall_lv5": {
     "width": 256,
-    "height": 347,
+    "height": 349,
     "visX0": 3,
     "visX1": 252,
-    "bottom": 345
+    "bottom": 347
   },
   "bld_wall_lv6": {
     "width": 256,
-    "height": 347,
+    "height": 349,
     "visX0": 3,
     "visX1": 252,
-    "bottom": 345
+    "bottom": 347
   },
   "bld_wall_lv7": {
     "width": 256,
-    "height": 347,
+    "height": 349,
     "visX0": 3,
     "visX1": 252,
-    "bottom": 345
+    "bottom": 347
+  },
+  "bld_wall_lv8": {
+    "width": 256,
+    "height": 349,
+    "visX0": 4,
+    "visX1": 252,
+    "bottom": 347
   }
 };

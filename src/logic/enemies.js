@@ -1,5 +1,6 @@
 // Enemy creation, nearest-building targeting, movement (ground: pathfinding; air: straight), attacks,
 // and separation so enemies never stack on top of each other.
+import { heroAwake, damageHero } from './hero.js';
 import { CONFIG } from '../config.js';
 import { MAP } from '../mapTiles.js';
 import { closestPointOnFootprint, distanceToFootprint, footprintCenter, isInsideFootprint, fpW, fpH } from './grid.js';
@@ -11,10 +12,21 @@ import { emit, nextId, random } from './util.js';
 import { enrageFactor } from './enrage.js';
 import { walkToward } from './motion.js';
 
+/** A Village Hall's base wave (scripted for the first ones, the last scripted one grown after that). */
+function baseWaveFor(th) {
+  const scripted = CONFIG.waves;
+  if (th <= scripted.length) return scripted[th - 1];
+  const last = scripted[scripted.length - 1];
+  const k = th - scripted.length;
+  const out = {};
+  for (const kind of ENEMY_KINDS) out[kind] = Math.round((last[kind] || 0) * CONFIG.rules.endlessCountGrowth ** k);
+  return out;
+}
+
 // Re-exported: they live in combat.js so a Wall Breaker can blow up from any death (being shot included).
 export { matchesTypes, enemyDamageVs, explode };
 
-export const ENEMY_KINDS = ['grunt', 'slinger', 'bomber', 'tank', 'shark', 'thief', 'breaker', 'balloon', 'neegy'];
+export const ENEMY_KINDS = ['grunt', 'slinger', 'bomber', 'tank', 'shark', 'thief', 'breaker', 'balloon', 'neegy', 'babycar', 'toilet'];
 // A Neegy dropped by a balloon floats down for this long (no moving or attacking) before it lands.
 export const LANDING_SECONDS = 0.7;
 
@@ -64,6 +76,15 @@ export function isAirKind(kind) {
 }
 
 /** A new enemy near a spawn point (grid coords). HP is scaled by the wave's multiplier. */
+/**
+ * An enemy's level, shown on its health bar: how many times a basic one of its kind's health it has (the wave's
+ * health multiplier, times its crowd-cap pack), rounded, at least 1. Wave 1 enemies are level 1.
+ */
+export function enemyLevel(e) {
+  const base = enemyConfig(e.kind).hp;
+  return Math.max(1, Math.round((e.maxHp || base) / base));
+}
+
 export function createEnemy(state, kind, spawnX, spawnY, hpMultiplier = 1) {
   const cfg = enemyConfig(kind);
   // Uniform point in a disc of radius SPAWN_JITTER: never more than 0.75 tiles away on either axis.
@@ -83,6 +104,7 @@ export function createEnemy(state, kind, spawnX, spawnY, hpMultiplier = 1) {
     hit: false,
     attacking: false,
     ...(cfg.invisibleUntilJump ? { hidden: true } : {}),
+    ...(cfg.burrows ? { underground: true } : {}), // Skibidi Toilet: starts out tunneling
     ...(cfg.drops ? { dropTimer: null } : {})
   };
 }
@@ -94,13 +116,18 @@ export function revealEnemy(state, e) {
   emit(state, 'enemyRevealed', { id: e.id, kind: e.kind, x: e.x, y: e.y });
 }
 
-/** Spawn an enemy at a named path ('top' | 'right' | 'bottom' | 'left') and add it to state. */
-export function spawnEnemy(state, kind, path, hpMultiplier = 1) {
+/**
+ * Spawn an enemy at a named path ('top' | 'right' | 'bottom' | 'left') and add it to state. `pack` (crowd
+ * cap, waves.js applyCrowdCap) multiplies its health, damage, gold and RP; bosses are never packed.
+ */
+export function spawnEnemy(state, kind, path, hpMultiplier = 1, pack = 1) {
+  if (enemyConfig(kind).boss) pack = 1;
   // Enemies appear at the map edge where the dirt path runs off-screen. Ground troops first march down
   // the path to its entrance (e.entry), then pathfind to their target; flyers head straight in.
   const [sx, sy] = (MAP.edgeSpawnPoints || MAP.spawnPoints)[path];
-  const e = createEnemy(state, kind, sx, sy, hpMultiplier);
-  if (MAP.edgeSpawnPoints && !isAirKind(kind)) {
+  const e = createEnemy(state, kind, sx, sy, hpMultiplier * pack);
+  if (pack > 1) e.pack = pack;
+  if (MAP.edgeSpawnPoints && !isAirKind(kind) && !enemyConfig(kind).ramsToHall && !enemyConfig(kind).burrows) { // the Da Baby Car drives and the Toilet tunnels straight in
     const [ex, ey] = MAP.spawnPoints[path];
     // Keep a bit of the spawn spread so the column stays loose, but narrow it to fit the dirt path.
     const k = ENTRY_SPREAD / SPAWN_JITTER;
@@ -240,7 +267,7 @@ export function stepEnemy(state, e, dt, nav = null) {
   // Slowed (a Catapult pool): stepPools refreshes slowTimer while the enemy stands in one.
   const slowed = e.slowTimer > 0 ? 1 - (e.slow || 0) : 1;
   e.slowTimer = Math.max(0, (e.slowTimer || 0) - dt);
-  const rage = enrageFactor(state); // a stalled wave's enemies get faster and hit harder
+  const rage = enrageFactor(state, e); // a stalled wave's enemies get faster and hit harder (and restless at night)
   const step = cfg.speed * slowed * rage.speed * dt;
   // Firework Grounding Burst: a flyer knocked out of the sky lies stunned until it takes off again.
   if (e.grounded > 0) { e.grounded = Math.max(0, e.grounded - dt); e.attacking = false; return; }
@@ -267,6 +294,12 @@ export function stepEnemy(state, e, dt, nav = null) {
   if (e.landing > 0) { e.landing = Math.max(0, e.landing - dt); e.attacking = false; return; }
   // Caught in a Mousetrap: held in place, can't move or attack.
   if (e.held > 0) { e.held = Math.max(0, e.held - dt); e.attacking = false; return; }
+  // The Da Baby Car: straight at the Village Hall, ramming through whatever's in the way.
+  if (cfg.ramsToHall) { stepBabyCar(state, e, cfg, target, step, dt, rage); return; }
+  // The Skibidi Toilet: tunnels to its target and pops up to attack.
+  if (cfg.burrows) { stepBurrower(state, e, cfg, target, step, dt, rage); return; }
+  // The Brisket King in reach (or taunting it): fight him instead of going on.
+  if (fightHero(state, e, cfg, step, rage)) return;
   // Cheese Bait (a Mousetrap ability): lured straight onto the trap until it snaps. A building or wall in
   // the way breaks the spell for that trap.
   if (e.lureId) {
@@ -314,7 +347,7 @@ export function stepEnemy(state, e, dt, nav = null) {
     revealEnemy(state, e); // so does its first hit (a base with no walls in its way)
     if (cfg.type === 'ground') {
       // Jammed / melted enemies hit softer; Spiked Plating hits back.
-      const dealt = enemyDamageVs(cfg, attackTarget) * rage.damage * (1 - enemyWeaken(e));
+      const dealt = enemyDamageVs(cfg, attackTarget) * rage.damage * (e.pack || 1) * (1 - enemyWeaken(e));
       damageBuilding(state, attackTarget, dealt, e);
       const thorns = abilityFx(attackTarget).thorns;
       if (thorns && e.alive && !attackTarget.destroyed) damageEnemy(state, e, dealt * thorns, 'thorns');
@@ -322,6 +355,126 @@ export function stepEnemy(state, e, dt, nav = null) {
     else fireEnemyProjectile(state, e, attackTarget);
     emit(state, 'enemyAttack', { id: e.id, kind: e.kind, targetId: attackTarget.id });
   }
+}
+
+/**
+ * The Da Baby Car (raid boss): drives in a straight line at the Village Hall (its target). The first time it
+ * reaches any other building's tile it rams it: a wall breaks outright, anything else takes ramDamage and
+ * the car stalls for ramPause s before pushing on through. At the hall it batters it every attackInterval s.
+ */
+function stepBabyCar(state, e, cfg, hall, step, dt, rage) {
+  e.entry = null;
+  if (distanceToFootprint(hall, e.x, e.y) <= cfg.attackRange) {
+    e.attacking = true;
+    if (e.cooldown <= 0 && !(e.disarmT > 0)) {
+      e.cooldown = cfg.attackInterval;
+      damageBuilding(state, hall, cfg.damage * rage.damage * (1 - enemyWeaken(e)), e);
+      emit(state, 'enemyAttack', { id: e.id, kind: e.kind, targetId: hall.id });
+    }
+    return;
+  }
+  e.attacking = false;
+  if (e.ramPause > 0) { e.ramPause = Math.max(0, e.ramPause - dt); return; } // still crunching through
+  const c = footprintCenter(hall);
+  moveToward(e, c.x, c.y, step);
+  // Hit something new? (The building whose tile the car is on, or the one just ahead of it.)
+  const col = Math.floor(e.x), row = Math.floor(e.y);
+  const b = state.buildings.find((o) => !o.destroyed && o.id !== hall.id && isInsideFootprint(o, e.x, e.y));
+  if (!b || (e.rammed && e.rammed.includes(b.id))) return;
+  (e.rammed || (e.rammed = [])).push(b.id);
+  const wall = b.type === 'wall';
+  damageBuilding(state, b, wall ? b.hp + 1 : cfg.ramDamage * rage.damage, e);
+  if (!wall) e.ramPause = cfg.ramPause;
+  emit(state, 'babyCarRam', { id: e.id, targetId: b.id, x: e.x, y: e.y, wall, col, row });
+}
+
+/**
+ * Ground enemies fight the Brisket King when he's in their reach (melee: next to him; ranged: within their
+ * range). Picky raiders (Bitcoin Stealers, Neegies...) ignore him unless his Royal Taunt pulls them in, and
+ * Wall Breakers, flyers, bosses and tunnelers never stop for him. Returns true if it dealt with him this step.
+ */
+function fightHero(state, e, cfg, step, rage) {
+  if (!heroAwake(state) || cfg.type === 'air' || cfg.explodes || cfg.ramsToHall || cfg.burrows || e.entry || e.hackedT > 0) return false;
+  const h = state.hero;
+  const d = distance(e.x, e.y, h.x, h.y);
+  const reach = cfg.attackRange <= MELEE_REACH ? MELEE_REACH + 0.3 : cfg.attackRange;
+  const altar = state.buildings.find((b) => b.id === h.altarId);
+  const taunt = altar ? abilityFx(altar).heroTaunt || 0 : 0;
+  const taunted = taunt > 0 && d <= taunt;
+  if (cfg.prefers && !taunted) return false;
+  if (d > reach) {
+    if (!taunted) return false;
+    moveToward(e, h.x, h.y, step); // Royal Taunt: drawn to him
+    e.attacking = false;
+    return true;
+  }
+  e.attacking = true;
+  if (e.cooldown > 0 || e.disarmT > 0) return true;
+  e.cooldown = cfg.attackInterval;
+  damageHero(state, cfg.damage * rage.damage * (e.pack || 1) * (1 - enemyWeaken(e)));
+  emit(state, 'enemyAttack', { id: e.id, kind: e.kind, targetId: 'hero' });
+  return true;
+}
+
+/**
+ * The Skibidi Toilet (burrower): underground it tunnels in a straight line, under walls and buildings, to the
+ * closest edge of its target (the nearest building). There it surfaces: surfaceSeconds to climb out, then it
+ * attacks. When the target falls, ensureTarget picks the next one and it burrows again. While underground
+ * nothing can target or hurt it (combat.js isBurrowedUnseen) unless a F.L.O.C.K Tower sees it.
+ */
+function stepBurrower(state, e, cfg, target, step, dt, rage) {
+  e.entry = null;
+  const range = cfg.attackRange;
+  if (distanceToFootprint(target, e.x, e.y) > range + EPS) {
+    if (!e.underground) {
+      e.underground = true;
+      e.surfaceT = 0;
+      emit(state, 'enemyBurrowed', { id: e.id, x: e.x, y: e.y });
+    }
+    e.attacking = false;
+    const p = closestPointOnFootprint(target, e.x, e.y);
+    const d = distance(e.x, e.y, p.x, p.y);
+    moveToward(e, p.x, p.y, Math.min(step, Math.max(0, d - range * 0.8)));
+    return;
+  }
+  if (e.underground) {
+    e.underground = false;
+    e.surfaceT = cfg.surfaceSeconds;
+    emit(state, 'enemySurfaced', { id: e.id, x: e.x, y: e.y });
+  }
+  if (e.surfaceT > 0) { e.surfaceT = Math.max(0, e.surfaceT - dt); e.attacking = false; return; } // climbing out
+  e.attacking = true;
+  if (e.cooldown > 0 || e.disarmT > 0) return;
+  e.cooldown = cfg.attackInterval;
+  const dealt = enemyDamageVs(cfg, target) * rage.damage * (e.pack || 1) * (1 - enemyWeaken(e));
+  damageBuilding(state, target, dealt, e);
+  const thorns = abilityFx(target).thorns;
+  if (thorns && e.alive && !target.destroyed) damageEnemy(state, e, dealt * thorns, 'thorns');
+  emit(state, 'enemyAttack', { id: e.id, kind: e.kind, targetId: target.id });
+}
+
+/**
+ * The Da Baby Car's burst when it's destroyed: how many troops, and which. Count: deathSpawn.base, +1 every
+ * perWaves waves past fromWave. Kinds: the ground troops in the Village Hall's base wave (no flyers, no
+ * Neegies, no more Da Baby Cars), weighted by how many of each that wave has; Grunts if it has none.
+ */
+export function babyCarBurst(state, cfg, waveNumber, baseComp) {
+  const d = cfg.deathSpawn;
+  const count = d.base + Math.floor(Math.max(0, waveNumber - d.fromWave) / d.perWaves);
+  const weights = ENEMY_KINDS
+    .filter((k) => k !== 'babycar' && k !== 'neegy' && !isAirKind(k) && (baseComp[k] || 0) > 0)
+    .map((k) => [k, baseComp[k]]);
+  const total = weights.reduce((s, [, w]) => s + w, 0);
+  const out = {};
+  for (let i = 0; i < count; i++) {
+    let kind = 'grunt';
+    if (total > 0) {
+      let r = random(state) * total;
+      for (const [k, w] of weights) { r -= w; if (r <= 0) { kind = k; break; } }
+    }
+    out[kind] = (out[kind] || 0) + 1;
+  }
+  return out;
 }
 
 /** F.L.O.C.K Override: a hacked enemy stays put and hits the nearest other enemy within 2 tiles. */
@@ -414,6 +567,7 @@ export function dropTroops(state, e, kind, count, target) {
     }
     if (!placed) { t.x = e.x; t.y = e.y; }
     t.landing = LANDING_SECONDS;
+    if (e.pack > 1) t.pack = e.pack;
     t.targetId = pickTarget(state, t)?.id ?? null;
     state.enemies.push(t);
     emit(state, 'enemySpawned', { id: t.id, kind, path: null, droppedBy: e.id });
@@ -460,7 +614,8 @@ export function separateEnemies(state, nav = getNav(state)) {
   const list = state.enemies.filter((e) => e.alive);
   const n = list.length;
   if (n < 2) return;
-  const air = list.map((e) => isAirKind(e.kind));
+  // Layers that never push each other: on the ground, in the air, and tunneling (Skibidi Toilets).
+  const air = list.map((e) => (isAirKind(e.kind) ? 1 : e.underground ? 2 : 0));
   const rad = list.map((e) => enemyConfig(e.kind).radius ?? 0.25);
   const dx = new Float64Array(n), dy = new Float64Array(n);
   // Bucket enemies by tile (bodies are under a tile across) so each one only checks its neighbors.
@@ -500,7 +655,7 @@ export function separateEnemies(state, nav = getNav(state)) {
     if (len > MAX_PUSH) { px = (px / len) * MAX_PUSH; py = (py / len) * MAX_PUSH; }
     const e = list[i];
     const nx = e.x + px, ny = e.y + py;
-    if (air[i] || walkable(nav, nx, ny, jumpsWalls(e.kind))) { e.x = nx; e.y = ny; }
+    if (air[i] || walkable(nav, nx, ny, jumpsWalls(e.kind))) { e.x = nx; e.y = ny; } // (tunnelers go anywhere)
   }
 }
 
@@ -514,11 +669,29 @@ export function removeDeadEnemies(state) {
     const troops = dropTroopsAt(state, e, cfg.drops, cfg.deathDrop, e.x, e.y);
     emit(state, 'balloonDrop', { id: e.id, x: e.x, y: e.y, targetId: null, troops: troops.map((t) => t.id), onDeath: true });
   }
+  // A Da Baby Car destroyed by any means bursts into a mix of the wave's ground troops where it stopped.
+  for (const e of state.enemies) {
+    const cfg = enemyConfig(e.kind);
+    if (e.alive || !cfg.deathSpawn || e.deathDropped) continue;
+    e.deathDropped = true;
+    const w = state.wave || {};
+    const mix = babyCarBurst(state, cfg, w.number || 1, burstBase(state));
+    const troops = [];
+    for (const [kind, n] of Object.entries(mix)) troops.push(...dropTroopsAt(state, e, kind, n, e.x, e.y, { landing: 0.25 }));
+    emit(state, 'babyCarBurst', { id: e.id, x: e.x, y: e.y, troops: troops.map((t) => t.id) });
+  }
   state.enemies = state.enemies.filter((e) => e.alive);
 }
 
-/** Drop troops on open ground at (or near) a point, e.g. where a balloon was shot down. */
-export function dropTroopsAt(state, e, kind, count, x, y) {
+/** The Village Hall's base wave composition (which ground troops a Da Baby Car can burst into). */
+function burstBase(state) {
+  const th = state.buildings.find((b) => b.type === 'townHall');
+  const lvl = Math.max(1, Math.min(th ? th.level : 1, CONFIG.rules.maxTownHallLevel));
+  return baseWaveFor(lvl);
+}
+
+/** Drop troops on open ground at (or near) a point, e.g. where a balloon was shot down or a Da Baby Car burst. */
+export function dropTroopsAt(state, e, kind, count, x, y, { landing = LANDING_SECONDS } = {}) {
   const scale = e.maxHp / enemyConfig(e.kind).hp;
   const nav = getNav(state);
   const out = [];
@@ -531,7 +704,8 @@ export function dropTroopsAt(state, e, kind, count, x, y) {
       if (walkable(nav, px, py)) { t.x = px; t.y = py; placed = true; }
     }
     if (!placed) { t.x = x; t.y = y; }
-    t.landing = LANDING_SECONDS;
+    t.landing = landing;
+    if (e.pack > 1) t.pack = e.pack;
     t.targetId = pickTarget(state, t)?.id ?? null;
     state.enemies.push(t);
     emit(state, 'enemySpawned', { id: t.id, kind, path: null, droppedBy: e.id });

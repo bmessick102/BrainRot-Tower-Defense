@@ -10,7 +10,7 @@
 import { ABILITY_RULES } from '../abilityConfig.js';
 import { levelStats, maxHp } from './buildings.js';
 import { abilityFx, towerDamageMult, towerRange } from './abilities.js';
-import { applySplash, createPool, damageEnemy, fireDefense, isShooter, validTargets, createStrike, poisonEnemy, applySlow, applyStun, enemyIsAir, fireLine } from './combat.js';
+import { applySplash, areaDamage, areaPack, createPool, damageEnemy, fireDefense, isShooter, validTargets, createStrike, poisonEnemy, applySlow, applyStun, enemyIsAir, fireLine } from './combat.js';
 import { footprintCenter, distanceToFootprint } from './grid.js';
 import { knockback } from './motion.js';
 import { typeConfig } from './buildings.js';
@@ -129,7 +129,7 @@ export function stepSpecials(state, dt) {
       const targets = validTargets(state, b);
       if (targets.length) {
         b.cloudT = 0;
-        for (const e of targets) poisonEnemy(e, dmg * fx.poisonDps, fx.poisonSeconds || 3, fx.poisonSlow || 0, fx.poisonSpread || 0);
+        for (const e of targets) poisonEnemy(e, dmg * fx.poisonDps * areaPack(e), fx.poisonSeconds || 3, fx.poisonSlow || 0, fx.poisonSpread || 0);
         areaFx(state, b, 'toxicCloud', towerRange(b));
       }
     }
@@ -140,7 +140,7 @@ export function stepSpecials(state, dt) {
       if (hit.length) {
         b.quakeT = 0;
         areaFx(state, b, 'earthquake', range);
-        for (const e of hit) { applyStun(e, fx.quakeStun); damageEnemy(state, e, dmg * fx.quakeMult, 'quake'); }
+        for (const e of hit) { applyStun(e, fx.quakeStun); areaDamage(state, e, dmg * fx.quakeMult, 'quake'); }
         if (state.gameOver) return;
       }
     }
@@ -161,7 +161,7 @@ export function stepSpecials(state, dt) {
       if (hit.length) {
         b.starfallT = 0;
         areaFx(state, b, 'starfall', range);
-        for (const e of hit) damageEnemy(state, e, dmg * fx.starfallMult, 'starfall');
+        for (const e of hit) areaDamage(state, e, dmg * fx.starfallMult, 'starfall');
         if (state.gameOver) return;
       }
     }
@@ -227,7 +227,7 @@ function stepTowerSpecials(state, b, fx, dt) {
     if (flyers.length) {
       b.showT = 0;
       emit(state, 'grandDisplay', { id: b.id, points: flyers.map((e) => ({ x: e.x, y: e.y })) });
-      for (const e of flyers) damageEnemy(state, e, dmg * fx.showMult, 'show');
+      for (const e of flyers) areaDamage(state, e, dmg * fx.showMult, 'show');
       if (state.gameOver) return;
     }
   }

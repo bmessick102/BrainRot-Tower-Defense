@@ -36,14 +36,20 @@ export class AchievementTracker {
       const league = promotion(before, session.stats.bestWave);
       if (league) gs.emit('leaguePromoted', { key: league.key, wave: session.stats.bestWave });
       if (this.lostTonight === 0) session.bump('perfect');
+      if (d.stars) session.bump('stars', d.stars); // wave stars, for Star Collector
       this.lostTonight = 0;
       this.check();
     });
     on('townHallUpgraded', (d) => { session.recordTownHall(d.level); this.check(); });
     for (const name of ['buildingPlaced', 'buildingUpgraded', 'baseReset']) on(name, () => this.check());
 
-    // A village opened for the first time on this account (e.g. imported) counts what it already has.
+    // A village opened for the first time on this account (e.g. imported) counts what it already has:
+    // its Village Hall and the waves it has already survived (a new league is announced).
     session.recordTownHall(gs.townHallLevel);
+    const before = session.stats.bestWave;
+    session.recordWave(gs.wavesCleared || 0);
+    const league = promotion(before, session.stats.bestWave);
+    if (league) gs.emit('leaguePromoted', { key: league.key, wave: session.stats.bestWave });
     this.check();
   }
 

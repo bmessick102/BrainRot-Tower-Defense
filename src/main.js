@@ -29,8 +29,20 @@ const game = new Phaser.Game({
   banner: false,
   scale: { mode: Phaser.Scale.FIT, autoCenter: Phaser.Scale.CENTER_BOTH },
   dom: { createContainer: true }, // text boxes on the login screen and name dialogs
+  input: { activePointers: 2 },     // two fingers: pinch to zoom the map
   scene: [PreloadScene, BootScene, AuthScene, TitleScene, HowToPlayScene, GameScene, UIScene, PauseScene, GameOverScene, VersionScene]
 });
+
+// Phones turned upright mid-game: pause, since the "turn your phone sideways" message (index.html) covers it.
+if (typeof window !== 'undefined' && window.matchMedia) {
+  const upright = window.matchMedia('(orientation: portrait) and (pointer: coarse)');
+  const onTurn = () => {
+    if (!upright.matches || !game.scene.isActive('GameScene')) return;
+    const world = game.scene.getScene('GameScene');
+    if (world && world.openPause) world.openPause();
+  };
+  if (upright.addEventListener) upright.addEventListener('change', onTurn);
+}
 
 // Dev server only: lets automated checks and the browser console inspect the running game.
 if (import.meta.env.DEV) { window.__IBTD__ = game; window.__IBTD_SESSION__ = session; }

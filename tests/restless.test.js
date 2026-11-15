@@ -52,6 +52,7 @@ describe('restless nights', () => {
 
   it('beating a wave in the dark pays more research points too', () => {
     const s = attack('night');
+    s.wave.startBuildings = 1; s.wave.lost = 1; // 1 star: no star bonus
     expect(checkWaveCleared(s)).toBe(true);
     expect(s.researchPoints).toBe(Math.round(waveResearchPoints(4) * (1 + N.lootBonus)));
   });

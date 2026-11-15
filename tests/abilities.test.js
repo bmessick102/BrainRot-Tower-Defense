@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest';
 import { CONFIG } from '../src/config.js';
 import { ABILITIES, ABILITY_COSTS } from '../src/abilityConfig.js';
 import {
-  mergeFx, abilityFx, pathTier, tierUnlocked, canResearchSomething, canResearchFor, checkResearch, labLevel, labTierCount, syncAbilityPicks, towerRange, towerFireInterval, towerMinRange, ABILITY_TYPES
+  mergeFx, abilityFx, pathTier, tierUnlocked, canResearchSomething, canResearchFor, checkResearch, labLevel, labTierCount, syncAbilityPicks, towerRange, towerFireInterval, towerMinRange, ABILITY_TYPES, DEFENSE_ABILITY_TYPES, ECONOMY_ABILITY_TYPES
 } from '../src/logic/abilities.js';
 import { DEFENSE_TYPES, checkUpgrade, maxLevel, limitFor, footprintDims, createBuilding, maxHp } from '../src/logic/buildings.js';
 import { stepDefenses, stepProjectiles, stepPools, isValidTarget, fireDefense, applySplash } from '../src/logic/combat.js';
@@ -25,8 +25,13 @@ function memoryStorage() {
 }
 
 describe('ability trees', () => {
-  it('every defense has three paths (A, B, C) of five tiers, each with a name, text and effects', () => {
-    expect(ABILITY_TYPES.sort()).toEqual([...DEFENSE_TYPES].sort());
+  it('every defense and economy building has three paths (A, B, C) of five tiers, each with a name, text and effects', () => {
+    expect([...DEFENSE_ABILITY_TYPES].sort()).toEqual([...DEFENSE_TYPES, 'altar'].sort()); // (+ the Brisket King's altar)
+    expect([...ECONOMY_ABILITY_TYPES].sort()).toEqual(['dj', 'house', 'mine', 'storage']);
+    expect([...ABILITY_TYPES].sort()).toEqual([...DEFENSE_ABILITY_TYPES, ...ECONOMY_ABILITY_TYPES].sort());
+    // Every tier name is unique across the whole game (no repeats).
+    const names = ABILITY_TYPES.flatMap((t) => ['a', 'b', 'c'].flatMap((p) => ABILITIES[t][p].tiers.map((x) => x.name)));
+    expect(new Set(names).size).toBe(names.length);
     for (const type of ABILITY_TYPES) {
       for (const p of ['a', 'b', 'c']) {
         expect(ABILITIES[type][p].name).toBeTruthy();

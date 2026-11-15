@@ -2,15 +2,18 @@
 // exists) an attack pose on each hit and a death pose left where it falls.
 // Placeholder shapes draw at their own size. Real art (art-source/enemies/) is scaled to DISPLAY_HEIGHT,
 // flipped to face the way it's walking (draw it facing right), and flyers get a ground shadow.
+import { CONFIG } from '../config.js';
 import { darkness } from './DayNight.js';
 import { gridToScreen } from '../logic/iso.js';
-import { isAirKind, LANDING_SECONDS } from '../logic/enemies.js';
+import { isAirKind, LANDING_SECONDS, enemyLevel } from '../logic/enemies.js';
 import { enemyKey, TEX } from '../assetKeys.js';
 import { HealthBar, HP_TEAM } from './HealthBar.js';
 import { groundDepth } from './depth.js';
 
+const ENEMY_BADGE = 0x8e1f2a; // level badge on enemy health bars (buildings' is blue)
+
 // On-screen height in pixels for real enemy art at zoom 1 (a 2x2 building is 128 px wide).
-const DISPLAY_HEIGHT = { grunt: 40, slinger: 44, bomber: 46, tank: 62, shark: 50, thief: 42, breaker: 46, balloon: 84, neegy: 48 };
+const DISPLAY_HEIGHT = { grunt: 40, slinger: 44, bomber: 46, tank: 62, shark: 50, thief: 42, breaker: 46, balloon: 84, neegy: 48, babycar: 78, toilet: 50 };
 // A dropped Neegy starts this far up (px) and floats down over its landing time.
 const DROP_HEIGHT = 95;
 // Real flyer art floats this far above its shadow (the placeholder has the shadow built in).
@@ -20,7 +23,7 @@ const FLY_HEIGHT_BY_KIND = { balloon: 80 };
 // Pictures drawn facing left, by texture key (the rest face right or front). Each pose has its own
 // picture, so facing is per picture: enemies always face where they're going.
 const FACES_LEFT = new Set([
-  'enemy_bomber', 'enemy_shark', 'enemy_thief', 'enemy_balloon',
+  'enemy_bomber', 'enemy_shark', 'enemy_thief', 'enemy_balloon', 'enemy_babycar',
   'enemy_shark_attack', 'enemy_shark_death', 'enemy_tank_death', 'enemy_thief_death'
 ]);
 // Extra poses: enemy_<kind>_attack / enemy_<kind>_death in art-source/enemies/, used when present.
@@ -30,6 +33,7 @@ const DEATH_HOLD_MS = 650;           // the death picture stays this long...
 const DEATH_FADE_MS = 450;           // ...then fades out
 // Invisible enemies (a Money Stealer before it's revealed) are drawn see-through with a faint shimmer.
 const HIDDEN_ALPHA = 0.38;
+const UNDERGROUND_SEEN_ALPHA = 0.45; // a tunneling Skibidi Toilet seen by a F.L.O.C.K Tower
 const HIDDEN_SHIMMER = 0.07;
 // Enemies of a wave that has stalled too long (see src/logic/enrage.js) are tinted this red.
 const ENRAGED_TINT = 0xff7a6a;
@@ -51,6 +55,9 @@ export class EnemyView {
     this.id = e.id;
     this.kind = e.kind;
     this.air = isAirKind(e.kind);
+    // Crowd cap: a packed enemy (it stands for several) is drawn a little bigger: +12% per doubling.
+    const boost = CONFIG.rules.crowdCap ? CONFIG.rules.crowdCap.maxSizeBoost : 0;
+    this.packScale = e.pack > 1 ? 1 + Math.min(boost, 0.12 * Math.log2(e.pack)) : 1;
     const key = enemyKey(e.kind);
     const placeholders = scene.registry.get('placeholderKeys');
     this.realArt = !(placeholders && placeholders.has(key));
@@ -65,8 +72,11 @@ export class EnemyView {
       if (this.air) this.shadow = scene.add.ellipse(0, 0, this.sprite.displayWidth * 0.7, 10, 0x000000, 0.35);
     }
     this.lift = this.realArt && this.air ? (FLY_HEIGHT_BY_KIND[e.kind] ?? FLY_HEIGHT) : 0;
-    this.hpBar = new HealthBar(scene, { width: 32, height: 8, depth: 5000, color: HP_TEAM.enemy });
+    // Level badge on the left end, like buildings', in a dark enemy red (enemyLevel: how tough it is).
+    this.hpBar = new HealthBar(scene, { width: 40, height: 10, depth: 5000, color: HP_TEAM.enemy, badge: true, badgeColor: ENEMY_BADGE });
     this.eye = scene.add.image(0, 0, TEX.markEye).setDepth(5001).setVisible(false); // F.L.O.C.K mark
+    // Skibidi Toilet: a moving dirt mound while it tunnels.
+    this.mound = CONFIG.enemies[e.kind].burrows ? scene.add.graphics().setVisible(false) : null;
     this.glow = scene.add.image(0, 0, TEX.light).setBlendMode('SCREEN').setTint(NIGHT_GLOW_COLOR).setVisible(false);
     this.phase = Math.random() * Math.PI * 2; // so swarms don't bob in sync
     this.flashUntil = 0;
@@ -88,7 +98,21 @@ export class EnemyView {
     // Ground enemies use the shared draw-order rule so they never vanish behind a building they're in front of.
     const depth = this.air ? e.x + e.y + 1000 : groundDepth(this.scene.gs ? this.scene.gs.buildings : [], e.x, e.y);
     this.sprite.setDepth(depth);
-    const wantAlpha = e.hidden ? HIDDEN_ALPHA + Math.sin(time * 0.006 + this.phase) * HIDDEN_SHIMMER : 1;
+    // Tunneling: unseen it's just a dirt mound; seen by a F.L.O.C.K, a faint shape under the dirt.
+    const tunneling = !!e.underground && e.alive;
+    const wantAlpha = tunneling ? (e.flockSeen ? UNDERGROUND_SEEN_ALPHA : 0)
+      : e.hidden ? HIDDEN_ALPHA + Math.sin(time * 0.006 + this.phase) * HIDDEN_SHIMMER : 1;
+    if (this.mound) {
+      this.mound.setVisible(tunneling);
+      if (tunneling) {
+        const wob = Math.sin(time * 0.02 + this.phase) * 1.5;
+        this.mound.clear().setDepth(depth - 0.2);
+        this.mound.fillStyle(0x000000, 0.25).fillEllipse(s.x, s.y + 2, 30, 10);
+        this.mound.fillStyle(0x6b4a2b, 1).fillEllipse(s.x, s.y, 26, 10);
+        this.mound.fillStyle(0x8f673d, 1).fillEllipse(s.x - 3 + wob, s.y - 3, 15, 7);
+        this.mound.fillStyle(0xa98250, 1).fillCircle(s.x + 6 - wob, s.y - 4, 2.5).fillCircle(s.x - 8 + wob, s.y - 1, 2);
+      }
+    }
     this.alpha += (wantAlpha - this.alpha) * 0.2;
     this.sprite.setAlpha(this.alpha);
     if (this.shadow) this.shadow.setPosition(s.x, s.y).setDepth(depth - 0.5);
@@ -101,7 +125,7 @@ export class EnemyView {
       this.applyFacing();
     }
     this.lastX = s.x;
-    this.hpBar.draw(s.x, s.y - this.lift - this.sprite.displayHeight - 10, e.hp / e.maxHp, e.hit && e.alive);
+    this.hpBar.draw(s.x, s.y - this.lift - this.sprite.displayHeight - 10, e.hp / e.maxHp, e.hit && e.alive && !(tunneling && !e.flockSeen), enemyLevel(e));
     // Marked by a F.L.O.C.K Tower: an eye floats over its head (above the HP bar once it shows).
     const marked = (e.markBonus || 0) > 0 && e.alive;
     this.eye.setVisible(marked);
@@ -131,7 +155,7 @@ export class EnemyView {
   }
 
   poseHeight(pose) {
-    return (DISPLAY_HEIGHT[this.kind] || 40) * POSE_HEIGHT[pose];
+    return (DISPLAY_HEIGHT[this.kind] || 40) * POSE_HEIGHT[pose] * this.packScale;
   }
 
   setPose(pose) {
@@ -187,6 +211,7 @@ export class EnemyView {
     if (this.shadow) this.shadow.destroy();
     this.glow.destroy();
     this.eye.destroy();
+    if (this.mound) this.mound.destroy();
     this.hpBar.destroy();
   }
 }

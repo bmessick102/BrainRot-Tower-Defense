@@ -14,7 +14,7 @@ import { levelStats } from './buildings.js';
 import { abilityFx, towerDamageMult } from './abilities.js';
 import { footprintCenter, isInsideFootprint } from './grid.js';
 import { distance } from './iso.js';
-import { damageEnemy, createPool, burnEnemy, applySplash, fireLine } from './combat.js';
+import { damageEnemy, areaDamage, areaPack, createPool, burnEnemy, applySplash, fireLine } from './combat.js';
 import { emit, isWaveActive } from './util.js';
 
 /** Is this a trap type (hidden from enemies, sprung by walking onto it)? */
@@ -36,7 +36,8 @@ export function trapStatsFor(b) {
   return { damage: base.damage * towerDamageMult(b), hold: base.hold + (fx.holdAdd || 0), radius: base.radius + (fx.trapRadiusAdd || 0) };
 }
 
-const groundEnemy = (e) => e.alive && CONFIG.enemies[e.kind].type !== 'air' && !(e.landing > 0);
+// (A Skibidi Toilet tunneling unseen passes under traps.)
+const groundEnemy = (e) => e.alive && CONFIG.enemies[e.kind].type !== 'air' && !(e.landing > 0) && !(e.underground && !e.flockSeen);
 
 /** Spring any set trap a ground enemy is standing on; re-arm traps that can; set Cheese Bait lures. */
 export function stepTraps(state, dt = 0) {
@@ -90,8 +91,8 @@ export function springTrap(state, b, trigger = null) {
     }
     e.held = Math.max(e.held || 0, hold + (fx.triggerHoldAdd && e === trigger ? fx.triggerHoldAdd : 0)); // Snare
     if (fx.heldVuln) { e.vuln = Math.max(e.vulnTimer > 0 ? e.vuln || 0 : 0, fx.heldVuln); e.vulnTimer = Math.max(e.vulnTimer || 0, hold); }
-    damageEnemy(state, e, damage * (fx.jawLock && e.hp > (e.maxHp || 0) / 2 ? 2 : 1), 'trap'); // Jaw Lock
-    if (fx.bleed) burnEnemy(e, damage * fx.bleed, hold); // Barbed: bleeds while held
+    areaDamage(state, e, damage * (fx.jawLock && e.hp > (e.maxHp || 0) / 2 ? 2 : 1), 'trap'); // Jaw Lock
+    if (fx.bleed) burnEnemy(e, damage * fx.bleed * areaPack(e), hold); // Barbed: bleeds while held
   }
   // Spike Trap: spikes left where it snapped, and the Booby Trap blast (ground and air).
   if (fx.spikeDps) createPool(state, c.x, c.y, { radius: radius + (fx.spikeRadiusAdd || 0), duration: fx.spikeSeconds, dps: damage * fx.spikeDps, slow: 0 }, 'spikes');

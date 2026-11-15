@@ -13,7 +13,7 @@
 // [{ from, to, stage }] (enemy ids). b.beamTargetId / b.beamStage mirror the first beam.
 import { CONFIG } from '../config.js';
 import { ABILITY_RULES } from '../abilityConfig.js';
-import { isValidTarget, damageEnemy, findEnemy, applySlow, applySplash, burnEnemy } from './combat.js';
+import { isValidTarget, damageEnemy, areaDamage, findEnemy, applySlow, applySplash, burnEnemy } from './combat.js';
 import { levelStats, maxHp } from './buildings.js';
 import { abilityFx, towerDamageMult } from './abilities.js';
 import { footprintCenter, distanceToFootprint } from './grid.js';
@@ -150,7 +150,7 @@ function stepRing(state, b, fx, dt) {
   b.ringTick = (b.ringTick || 0) + dt;
   while (b.ringTick >= ABILITY_RULES.ringTick) {
     b.ringTick -= ABILITY_RULES.ringTick;
-    for (const e of inside) if (e.alive) damageEnemy(state, e, base * fx.ringDps * ABILITY_RULES.ringTick * ramp(e), 'ring');
+    for (const e of inside) if (e.alive) areaDamage(state, e, base * fx.ringDps * ABILITY_RULES.ringTick * ramp(e), 'ring');
     if (state.gameOver) return;
   }
   if (!fx.flareEvery) return;
@@ -159,5 +159,5 @@ function stepRing(state, b, fx, dt) {
   if (b.flareT < fx.flareEvery || !inside.some((e) => e.alive)) return;
   b.flareT = 0;
   emit(state, 'solarFlare', { id: b.id, x: c.x, y: c.y, radius: fx.ringRadius });
-  for (const e of inside) if (e.alive) damageEnemy(state, e, base * fx.flareMult, 'flare');
+  for (const e of inside) if (e.alive) areaDamage(state, e, base * fx.flareMult, 'flare');
 }

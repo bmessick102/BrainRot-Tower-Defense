@@ -9,6 +9,7 @@ import { session } from '../net/account.js';
 import { USERNAME_RE, EMAIL_RE, PASSWORD_MIN, passwordProblem } from '../net/session.js';
 import { TURNSTILE_SITE_KEY } from '../backendConfig.js';
 import { Button } from '../objects/Button.js';
+import { addFullscreenButton } from '../objects/FullscreenButton.js';
 import { addTextField } from '../objects/TextField.js';
 import { drawWindow, drawHudPill } from '../objects/uiDraw.js';
 import { TEX, MUSIC } from '../assetKeys.js';
@@ -65,6 +66,7 @@ export class AuthScene extends Phaser.Scene {
     this.add.rectangle(0, 0, width, height, 0x000000, 0.25).setOrigin(0);
     playMusic(this, MUSIC.title);
     this.ui = [];
+    addFullscreenButton(this, width - 36, 34);
 
     if (!session.configured) { this.showOffline(); return; }
     if (session.loggedIn) { this.scene.start('TitleScene'); return; }

@@ -11,7 +11,7 @@ import { leagueFor, nextLeague, LEAGUES } from '../logic/leagues.js';
 import { ACHIEVEMENTS } from '../logic/achievements.js';
 import { formatGold } from '../logic/economy.js';
 
-const W = 760, H = 548;
+const W = 760;
 // Lifetime stats: [label, value from session.stats].
 const STATS = [
   ['Enemies defeated', (s) => s.counters.kills],
@@ -19,10 +19,15 @@ const STATS = [
   ['Bombers shot down', (s) => s.counters.bomberKills],
   ['Balloons popped', (s) => s.counters.balloonKills],
   ['Perfect waves', (s) => s.counters.perfect],
+  ['Wave stars', (s) => s.counters.stars],
   ['Traps sprung', (s) => s.counters.traps],
   ['Waves called early', (s) => s.counters.early],
   ['Best Village Hall', (s) => s.bestTownHall]
 ];
+// The stats card is the last thing in the window: it starts STATS_TOP below the window top and has a row per
+// two stats, so the window's height follows the list (a new stat can't spill out of the bottom).
+const STATS_TOP = 362, STAT_ROW = 30, STATS_HEAD = 46, BOTTOM_PAD = 18;
+const H = STATS_TOP + STATS_HEAD + Math.ceil(STATS.length / 2) * STAT_ROW + BOTTOM_PAD;
 
 /** A light card with a title, for one section of the window. */
 function card(scene, m, x, y, w, h, title) {
@@ -125,9 +130,9 @@ export class ProfileWindow {
     }
 
     // ---- lifetime stats ----
-    y += 126;
-    const rows = Math.ceil(STATS.length / 2), statH = 30;
-    card(s, m, left, y, inner, 46 + rows * statH, 'Lifetime stats (all your villages)');
+    y = m.y + STATS_TOP;
+    const rows = Math.ceil(STATS.length / 2), statH = STAT_ROW;
+    card(s, m, left, y, inner, STATS_HEAD + rows * statH, 'Lifetime stats (all your villages)');
     STATS.forEach(([name, get], i) => {
       const col = i % 2, row = Math.floor(i / 2);
       const sx = left + 16 + col * (inner / 2), sy = y + 40 + row * statH, sw = inner / 2 - 32;

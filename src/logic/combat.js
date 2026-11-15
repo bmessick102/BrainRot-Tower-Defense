@@ -10,6 +10,7 @@ import { distance } from './iso.js';
 import { addGold, setGold, storageDrainAmount } from './economy.js';
 import { emit, nextId, random } from './util.js';
 import { enrageFactor, nightLootMult } from './enrage.js';
+import { addHype } from './dj.js';
 import { knockback, applySlow, applyStun } from './motion.js';
 import { addResearchPoints, killResearchPoints } from './researchPoints.js';
 
@@ -65,8 +66,17 @@ function aimOf(b) {
   };
 }
 
+/**
+ * A Skibidi Toilet tunneling where no F.L.O.C.K Tower sees it: nothing can target or hurt it (no aiming, and
+ * damageEnemy ignores it, so splash, pools, beams, burns and traps miss it too).
+ */
+export function isBurrowedUnseen(e) {
+  return !!e && !!e.underground && !e.flockSeen;
+}
+
 function validFor(aim, e) {
   if (!e || !e.alive) return false;
+  if (isBurrowedUnseen(e)) return false; // tunneling: out of reach unless a F.L.O.C.K sees it
   if (e.hidden && !aim.seeInvisible) return false; // invisible enemies can't be aimed at (splash still hits)
   if (!(enemyIsAir(e) ? aim.air : aim.ground)) return false;
   const d = distance(aim.c.x, aim.c.y, e.x, e.y);
@@ -287,6 +297,23 @@ export function applyVuln(e, v, seconds) {
 }
 
 /**
+ * Area damage on a packed enemy (crowd cap, waves.js applyCrowdCap): it stands for `pack` enemies, so area hits
+ * (splash, pools, traps, area abilities, and poison / burn spread by them) count several times over, as they'd
+ * have hit part of the crowd: pack ** crowdCap.areaExponent times (areaDamage()). Not the whole pack: a real
+ * crowd is spread out (packed enemies come `pack` times further apart), so a splash only ever caught some of it.
+ * The exponent is tuned so a capped wave takes about as much damage as the uncapped one did. 1 for everyone else;
+ * single-target hits stay as they are.
+ */
+export function areaPack(e) {
+  return e.pack > 1 ? e.pack ** CONFIG.rules.crowdCap.areaExponent : 1;
+}
+
+/** Damage from something that hits an area: counts once for every enemy a packed enemy stands for. */
+export function areaDamage(state, e, amount, source = null) {
+  damageEnemy(state, e, amount * areaPack(e), source);
+}
+
+/**
  * Locklair Venom: poison `dps` for `seconds` (the stronger poison wins). `slow` slows it while poisoned;
  * `spread` (tiles): when it dies poisoned, the poison jumps to every enemy that close.
  */
@@ -310,9 +337,22 @@ export function createStrike(state, strike) {
   return s;
 }
 
+/** Gold bounty multiplier from economy perks: Central Bank (any Storage) and Bounty Vault (a Mine within reach). */
+function economyBountyMult(state, e) {
+  let bank = 0, vault = 0;
+  for (const b of state.buildings) {
+    if (b.destroyed || (b.type !== 'storage' && b.type !== 'mine')) continue;
+    const fx = abilityFx(b);
+    if (fx.bountyPct) bank = Math.max(bank, fx.bountyPct);
+    if (fx.nearBountyPct && distanceToFootprint(b, e.x, e.y) <= fx.nearRadius) vault = Math.max(vault, fx.nearBountyPct);
+  }
+  return 1 + (bank + vault) / 100;
+}
+
 /** Damage one enemy; on death add its bounty (up to capacity). `source` tags the hit for the view (e.g. 'pool'). */
 export function damageEnemy(state, e, amount, source = null) {
   if (!e.alive) return;
+  if (isBurrowedUnseen(e)) return; // underground, unseen: nothing reaches it
   // Marked by a F.L.O.C.K Tower: takes extra damage from everything. Held by a Tenderizer trap: more still.
   // F.L.O.C.K Weak Point Scan: the mark counts double on an enemy under its health threshold.
   const mark = (e.markBonus || 0) * (e.markExecute && e.hp / (e.maxHp || e.hp || 1) < e.markExecute ? 2 : 1);
@@ -325,8 +365,10 @@ export function damageEnemy(state, e, amount, source = null) {
   if (e.hp <= 0) {
     e.hp = 0;
     e.alive = false;
-    const loot = nightLootMult(state); // restless nights pay more
-    const added = addGold(state, Math.round(CONFIG.enemies[e.kind].bounty * loot));
+    const loot = nightLootMult(state) * (e.pack || 1); // restless nights pay more; a packed enemy pays for all it stands for
+    const goldPerk = economyBountyMult(state, e); // Central Bank (Storage), Bounty Vault (Mine near it)
+    addHype(state, e.pack || 1); // DJ Babyface's meter
+    const added = addGold(state, Math.round(CONFIG.enemies[e.kind].bounty * loot * goldPerk));
     if (state.wave) state.wave.bountyEarned = (state.wave.bountyEarned || 0) + added;
     // F.L.O.C.K Bounty Hunter (marked enemies pay more gold) and Data Leech (+RP in range).
     const extraGold = e.markBounty > 0 ? addGold(state, Math.round(CONFIG.enemies[e.kind].bounty * e.markBounty)) : 0;
@@ -339,7 +381,8 @@ export function damageEnemy(state, e, amount, source = null) {
     // Spreading Plague: a poisoned enemy passes its poison on to everyone close by.
     if (e.poisonTime > 0 && e.poisonSpread > 0) {
       for (const o of state.enemies) {
-        if (o !== e && o.alive && distance(e.x, e.y, o.x, o.y) <= e.poisonSpread) poisonEnemy(o, e.poisonDps, e.poisonSeconds || 3, e.poisonSlow, e.poisonSpread);
+        // Spread to an area: per enemy it stood for, times the enemies each one it reaches stands for.
+        if (o !== e && o.alive && distance(e.x, e.y, o.x, o.y) <= e.poisonSpread) poisonEnemy(o, (e.poisonDps / areaPack(e)) * areaPack(o), e.poisonSeconds || 3, e.poisonSlow, e.poisonSpread);
       }
       emit(state, 'poisonSpread', { x: e.x, y: e.y, radius: e.poisonSpread });
     }
@@ -373,7 +416,7 @@ export function explode(state, e, cfg) {
   e.exploded = true;
   emit(state, 'enemyExploded', { id: e.id, kind: e.kind, x: e.x, y: e.y, radius: cfg.blastRadius, hit: hit.map((b) => b.id) });
   for (const b of hit) {
-    damageBuilding(state, b, enemyDamageVs(cfg, b));
+    damageBuilding(state, b, enemyDamageVs(cfg, b) * (e.pack || 1)); // a packed Wall Breaker blasts for several
     if (state.gameOver) return;
   }
 }
@@ -389,7 +432,7 @@ export function applySplash(state, x, y, radius, damage, hitsGround, hitsAir, ki
     const allowed = enemyIsAir(e) ? hitsAir : hitsGround;
     if (allowed && distance(x, y, e.x, e.y) <= radius) hit.push(e);
   }
-  for (const e of hit) damageEnemy(state, e, (enemyIsAir(e) ? damage : damage * groundMult) * (perEnemy ? perEnemy(e) : 1), source);
+  for (const e of hit) areaDamage(state, e, (enemyIsAir(e) ? damage : damage * groundMult) * (perEnemy ? perEnemy(e) : 1), source);
   emit(state, 'splash', { x, y, radius, kind });
   return hit;
 }
@@ -408,6 +451,12 @@ export function damageBuilding(state, b, amount, attacker = null) {
     if (enemyIsAir(attacker) ? hits.air : hits.ground) { b.counterT = fx.counterFire; fireDefense(state, b, attacker, { source: 'counter' }); }
   }
   if (fx.armor) amount *= 1 - fx.armor; // Cannon Armor Plating
+  // Economy perks: Hidden Stash (Bitcoin Stealers hit softer), Panic Room (less damage when low), Field
+  // Medics (a building gnomes are repairing), Dye Pack (Bitcoin Stealers that hit it are slowed).
+  if (fx.thiefResistPct && attacker && attacker.kind === 'thief') amount *= 1 - fx.thiefResistPct / 100;
+  if (fx.lowHpArmor && b.hp < maxHp(b) * 0.3) amount *= 1 - fx.lowHpArmor;
+  if (b._repairArmor) amount *= 1 - b._repairArmor / 100;
+  if (fx.thiefSlow && attacker && attacker.kind === 'thief' && attacker.alive) applySlow(attacker, fx.thiefSlow, 4);
   let dmg = Math.min(amount, b.hp);
   // Cannon Last Stand: the hit that takes it under 30% (even a fatal one) starts it, once per night;
   // while it lasts the cannon can't drop below 1 HP.
@@ -421,6 +470,8 @@ export function damageBuilding(state, b, amount, attacker = null) {
     const lost = storageDrainAmount(state, b, dmg);
     if (lost > 0) {
       setGold(state, state.gold - lost);
+      // Insurance (a Storage perk): part of it comes back when the wave is beaten.
+      if (fx.insurancePct && state.wave) state.wave.insured = (state.wave.insured || 0) + lost * fx.insurancePct / 100;
       emit(state, 'storageDrained', { id: b.id, amount: lost });
     }
   }
@@ -430,7 +481,10 @@ export function damageBuilding(state, b, amount, attacker = null) {
   if (b.hp <= 0) {
     b.hp = 0;
     b.destroyed = true;
+    b.compound = 0; // Compound Mining starts over
     if (isDefense(b.type)) b.targetId = null;
+    // Wave stars: every building (not wall) lost during a wave lowers its rating.
+    if (b.type !== 'wall' && state.wave && state.wave.phase === 'active') state.wave.lost = (state.wave.lost || 0) + 1;
     emit(state, 'buildingDestroyed', { id: b.id, type: b.type });
     if (b.type === 'townHall') {
       state.gameOver = true;
@@ -449,7 +503,7 @@ export function fireEnemyProjectile(state, e, building) {
     x: e.x, y: e.y,
     startX: e.x, startY: e.y,
     targetId: building.id,
-    damage: cfg.damage * enrageFactor(state).damage * (1 - enemyWeaken(e)),
+    damage: cfg.damage * enrageFactor(state, e).damage * (e.pack || 1) * (1 - enemyWeaken(e)),
     done: false
   };
   if (cfg.type === 'air') {
@@ -474,9 +528,13 @@ function dirFrom(x, y, e, fallback) {
   return Math.hypot(dx, dy) > 1e-6 ? { x: dx, y: dy } : fallback;
 }
 
-/** Per-enemy hit effects: knockback, stun, slow, air burn, air stun. `dir` is the push direction. */
-function hitEffects(state, p, e, dir) {
+/**
+ * Per-enemy hit effects: knockback, stun, slow, air burn, air stun. `dir` is the push direction. `area`: the
+ * hit was a splash, so poison / burn it leaves count for every enemy a packed one stands for (areaPack).
+ */
+function hitEffects(state, p, e, dir, area = false) {
   const fx = p.fx || {};
+  const n = area ? areaPack(e) : 1;
   if (!e.alive) return;
   if (fx.knockback && dir) {
     const moved = knockback(state, e, dir.x, dir.y, fx.knockback);
@@ -499,11 +557,11 @@ function hitEffects(state, p, e, dir) {
   if (fx.slowOnHit) applySlow(e, fx.slowOnHit, fx.slowSeconds || 1);
   if (enemyIsAir(e)) {
     if (fx.airStun) applyStun(e, fx.airStun);
-    if (fx.airBurnDps) burnEnemy(e, p.damage * fx.airBurnDps, fx.airBurnSeconds);
+    if (fx.airBurnDps) burnEnemy(e, p.damage * fx.airBurnDps * n, fx.airBurnSeconds);
   }
-  if (fx.poisonDps) poisonEnemy(e, p.damage * fx.poisonDps, fx.poisonSeconds || 3, fx.poisonSlow || 0, fx.poisonSpread || 0, fx.poisonRamp || 0);
+  if (fx.poisonDps) poisonEnemy(e, p.damage * fx.poisonDps * n, fx.poisonSeconds || 3, fx.poisonSlow || 0, fx.poisonSpread || 0, fx.poisonRamp || 0);
   if (fx.vulnOnHit) applyVuln(e, fx.vulnOnHit, fx.vulnSeconds || 3);
-  if (fx.bleedOnHit) burnEnemy(e, p.damage * fx.bleedOnHit, fx.bleedSeconds || 3);
+  if (fx.bleedOnHit) burnEnemy(e, p.damage * fx.bleedOnHit * n, fx.bleedSeconds || 3);
 }
 
 /** Set an enemy on fire: `dps` for `seconds` (the stronger burn wins; ticks in stepEnemyStatus). */
@@ -530,7 +588,7 @@ function landSplash(state, p, x, y, primary) {
   }
   const hit = applySplash(state, x, y, radius, p.damage, p.hitsGround, p.hitsAir, p.kind,
     { groundMult: p.groundMult ?? 1, source: p.source, perEnemy: (e) => hitMult(p, e, x, y) });
-  for (const e of hit) if (e.alive) hitEffects(state, p, e, dirFrom(x, y, e, travel));
+  for (const e of hit) if (e.alive) hitEffects(state, p, e, dirFrom(x, y, e, travel), true);
   if (state.gameOver) return;
   for (const e of hit) if (!e.alive) onTowerKill(state, p, e);
   if (state.gameOver) return;
@@ -848,7 +906,7 @@ export function stepPools(state, dt) {
       if (pool.stick && e.kind === 'neegy' && !e.stuck) { e.stuck = true; applyStun(e, pool.stick); } // held once it lands
       if (ticks > 0 && pool.dps > 0) {
         const share = air && !pool.air ? pool.airMult : 1;
-        damageEnemy(state, e, pool.dps * POOL_TICK * ticks * share, pool.kind === 'fire' ? 'burn' : pool.kind === 'spikes' || pool.kind === 'crack' ? 'bleed' : 'pool');
+        areaDamage(state, e, pool.dps * POOL_TICK * ticks * share, pool.kind === 'fire' ? 'burn' : pool.kind === 'spikes' || pool.kind === 'crack' ? 'bleed' : 'pool');
         if (!e.alive) {
           // Diddypult Spillover: the pool grows; Gandolf Phoenix Ash: a new patch where it fell.
           if (pool.grow && pool.grown < 1) { pool.radius += pool.grow; pool.grown += pool.grow; emit(state, 'poolGrew', { id: pool.id, radius: pool.radius }); }

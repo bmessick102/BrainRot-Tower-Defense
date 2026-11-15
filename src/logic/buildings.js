@@ -6,12 +6,16 @@ import { ABILITIES, picksForLevel } from '../abilityConfig.js';
 
 // Every building type (saves only accept these). New types must be added here too; a test checks that the
 // defense / economy / wall lists are all covered.
-export const BUILDING_TYPES = ['townHall', 'mine', 'storage', 'house', 'cannon', 'archer', 'mortar', 'wizard', 'firework', 'mousetrap', 'flock', 'catapult', 'ra', 'rvlab', 'wall'];
+export const BUILDING_TYPES = ['townHall', 'mine', 'storage', 'house', 'cannon', 'archer', 'mortar', 'wizard', 'firework', 'mousetrap', 'flock', 'catapult', 'ra', 'rvlab', 'dj', 'altar', 'wall'];
 export const DEFENSE_TYPES = ['cannon', 'archer', 'mortar', 'wizard', 'firework', 'mousetrap', 'flock', 'catapult', 'ra'];
 export const ECONOMY_TYPES = ['mine', 'storage', 'house'];
 export const WALL_TYPES = ['wall'];
 // Research buildings (the RV Lab: researches the defenses' ability paths, see abilities.js).
 export const RESEARCH_TYPES = ['rvlab'];
+// Utility buildings (DJ Babyface: boosts gnomes and defenses nearby, see dj.js).
+export const UTILITY_TYPES = ['dj'];
+// Hero altars (the Brisket King's: the hero guards it and levels up with it, see hero.js).
+export const HERO_TYPES = ['altar'];
 /** Wall orientations: 'x' runs along columns (N wide, 1 tall), 'y' along rows (1 wide, N tall). */
 export const WALL_ORIENTS = ['x', 'y'];
 
@@ -48,6 +52,8 @@ export function typeConfig(type) {
   if (type === 'house') return CONFIG.house;
   if (type === 'wall') return CONFIG.walls;
   if (type === 'rvlab') return CONFIG.rvlab;
+  if (type === 'dj') return CONFIG.dj;
+  if (type === 'altar') return CONFIG.altar;
   return CONFIG.defenses[type];
 }
 

@@ -30,13 +30,20 @@ const TARGETS = [
   // Cannon and Catapult tiers are drawn on one shared canvas, each bulkier than the last. Cropping them all with
   // the same box (instead of each to its own edges) keeps one scale and one ground point, so the
   // upgrades really look bigger in game.
-  { match: /^bld_cannon_lv[0-9]+$/, width: 384, trim: 'group', needsAlpha: true },
+  // Cannon: each level in 4 facings (_dl/_dr/_ul/_ur, plus the plain one = down-left for the shop), one shared box
+  // so it never jumps as it turns or levels up.
+  { match: /^bld_cannon_lv[0-9]+(_(dl|dr|ul|ur))?$/, width: 384, trim: 'group', needsAlpha: true },
+  // Storage: each picture in 3 fills (_fill1..3, by how full your gold is; the plain one = full, for the shop), one box.
+  { match: /^bld_storage_lv[0-9]+(_fill[0-9])?$/, width: 384, trim: 'group', needsAlpha: true },
   { match: /^bld_catapult_lv[0-9]+$/, width: 384, trim: 'group', needsAlpha: true },
   { match: /^bld_house_lv[0-9]+$/, width: 384, trim: 'group', needsAlpha: true },
   { match: /^bld_flock_lv[0-9]+$/, width: 384, trim: 'group', needsAlpha: true },
   { match: /^bld_mousetrap_lv[0-9]+$/, width: 384, trim: 'group', needsAlpha: true },
   { match: /^bld_ra_lv[0-9]+$/, width: 384, trim: true, needsAlpha: true },
+  { match: /^bld_dj_lv[0-9]+$/, width: 384, trim: true, needsAlpha: true },
   { match: /^bld_/, width: 384, trim: true, needsAlpha: true },
+  { match: /^hero_/, width: 192, trim: true, needsAlpha: true },          // the Brisket King's poses
+  { match: /^enemy_babycar$/, width: 256, trim: true, needsAlpha: true }, // the Baby Car raid boss is drawn bigger
   { match: /^enemy_/, width: 160, trim: true, needsAlpha: true },
   { match: /^villager_/, width: 128, trim: true, needsAlpha: true },
   { match: /^proj_(slinger|bomb)$/, width: 48, trim: true, needsAlpha: true },
@@ -46,6 +53,7 @@ const TARGETS = [
   { match: /^ui_coin$/, width: 96, trim: true, needsAlpha: true },
   { match: /^ui_research_point$/, width: 96, trim: true, needsAlpha: true }, // research points (RP) token
   { match: /^ui_research_ready$/, width: 128, trim: true, needsAlpha: true }, // book over the RV Lab: research ready
+  { match: /^ui_beat_ready$/, width: 128, trim: true, needsAlpha: true },     // over DJ Babyface: Drop the Beat ready
   { match: /^guide_portrait$/, width: 256, trim: true, needsAlpha: true },
   { match: /^ui_(shop|settings|edit_layout)_button$/, width: 160, trim: true, needsAlpha: true },
   { match: /^ui_start_button$/, width: 480, trim: true, needsAlpha: true },
