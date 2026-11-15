@@ -14,6 +14,7 @@ import { textStyle } from '../theme.js';
 
 const KEYS = { stand: 'hero_brisket', attack: 'hero_brisket_attack', sleep: 'hero_brisket_sleep', wake: 'hero_brisket_wake' };
 const HEIGHT = { stand: 72, attack: 66, sleep: 70, wake: 72 }; // on-screen height of each pose
+const TALLEST = Math.max(...Object.values(HEIGHT));            // his bar sits above this
 const ATTACK_POSE_MS = 340;     // the attack picture shows this long after each swing
 const ZZZ_EVERY_MS = 1400;
 const HOP_HEIGHT = 16;          // px he rises while hopping a wall
@@ -84,8 +85,10 @@ export class HeroView {
     }
     // His bar: green health while he's hurt and awake; blue while he naps, filling as he heals, with the
     // time left above it. Hidden when he's fine (his level is on the altar's own label).
+    // It rides along with his picture (hops over walls, bounce in his step) and sits above his tallest pose, so
+    // it never covers him and doesn't jump when he swings.
     const asleep = h.status === 'asleep';
-    const top = s.y - this.sprite.displayHeight;
+    const top = this.sprite.y - TALLEST;
     const barY = top - 13;
     this.hpBar.setColor(asleep ? SLEEP_COLOR : HP_TEAM.player);
     this.hpBar.draw(s.x, barY, Math.max(0, h.hp) / st.maxHp, asleep || (h.status === 'ready' && h.hp < st.maxHp), altar.level);

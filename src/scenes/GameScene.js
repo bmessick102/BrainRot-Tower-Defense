@@ -658,7 +658,16 @@ export class GameScene extends Phaser.Scene {
     }
     // The Brisket King (or his altar) clicked during a wave with Brisket Feast ready: he feasts.
     const heroHit = this.heroView.hitTest(w.x, w.y);
-    if ((heroHit || (b && b.type === 'altar')) && checkFeast(this.gs).ok) { this.gs.useFeast(); return; }
+    // If it can't be used right now (he's asleep, or already feasted this wave), the reason floats over him and
+    // the click goes on to select as usual.
+    if (heroHit || (b && b.type === 'altar')) {
+      const feast = checkFeast(this.gs);
+      if (feast.ok) { this.gs.useFeast(); return; }
+      if (isWaveActive(this.gs) && this.gs.hero) {
+        const s = this.heroView.sprite;
+        floatText(this, s.x, s.y - s.displayHeight - 30, `Brisket Feast: ${feast.reason}`, '#ffd34a', 15);
+      }
+    }
     // Clicking the hero himself (also while he stands on his altar) selects his altar, with his own sound.
     if (heroHit && (!b || b.type === 'altar')) {
       const altar = getAltar(this.gs);

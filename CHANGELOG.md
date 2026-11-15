@@ -2,6 +2,11 @@
 
 The version shows in the bottom-left corner of every screen (`package.json` `version` plus the commit). Details for everything below are in [README.md](README.md).
 
+## 0.4.1
+
+- **Brisket King's health bar** now rides along with him when he hops walls (and with the bounce in his step), and sits above his tallest pose, so it never covers him.
+- **Brisket Feast from the altar:** clicking his altar (or him) during a wave sets off Brisket Feast. When it can't be used right now, the reason floats over him ("Used this wave", "He's asleep") and the altar is selected as usual.
+
 ## 0.4.0
 
 - **Perk bar on every perk building:** every building with a perk tree (defenses, the Brisket King's altar, mines, storages, houses, DJ Babyface) shows its 5-slot perk bar next to its level from the start, empty until perks are researched in the RV Lab.
