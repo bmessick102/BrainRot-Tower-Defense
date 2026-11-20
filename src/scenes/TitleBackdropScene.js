@@ -12,14 +12,7 @@
 // the right facing left; the crocodile plane and the balloon up top; the bottom center kept clear for the bar
 // and tips. Draw order (back to front) is DEPTH below. Design size 1280x720.
 import Phaser from 'phaser';
-import { SFX } from '../assetKeys.js';
-import { playSfx, sfxVolume } from '../audio.js';
 import { isLowQuality, onQualityChange } from '../quality.js';
-
-/** Sounds the title mortar plays; PreloadScene loads these with the art. */
-export const TITLE_SOUND_KEYS = [SFX.mortarFire, SFX.mortarTravel];
-const FIRE_SOUND_VOLUME = 0.7;
-const TRAVEL_SOUND_VOLUME = 0.6;
 
 // ---------- art (texture keys; all loaded by PreloadScene) ----------
 const ART = {
@@ -188,10 +181,7 @@ export class TitleBackdropScene extends Phaser.Scene {
     if (this.registry.get(LOADED_FLAG)) this.onLoaded(true);
     else {
       this.game.events.on(LOADED_EVENT, this.onLoaded, this);
-      this.events.once('shutdown', () => {
-        this.game.events.off(LOADED_EVENT, this.onLoaded, this);
-        if (this.travelSound) { this.travelSound.destroy(); this.travelSound = null; } // the game started mid-flight
-      });
+      this.events.once('shutdown', () => this.game.events.off(LOADED_EVENT, this.onLoaded, this));
     }
   }
 
@@ -405,28 +395,8 @@ export class TitleBackdropScene extends Phaser.Scene {
       ]
     });
     this.cameras.main.shake(SHAKE.ms, SHAKE.intensity);
-    this.playMortarSounds(last ? HOVER.riseMs : FLIGHT.ms);
     if (last) this.flyToHover(x, y);
     else this.launchFlyer(x, y);
-  }
-
-  /**
-   * The mortar's boom, then its whistle through the air for the flight (cut off, with a short fade, as he
-   * lands or reaches his hover). Skipped while the browser still blocks audio (no click yet), so sounds
-   * never pile up and burst out on the first click.
-   */
-  playMortarSounds(flightMs) {
-    if (this.sound.locked) return;
-    playSfx(this, SFX.mortarFire, { volume: FIRE_SOUND_VOLUME });
-    if (!this.cache.audio.exists(SFX.mortarTravel) || sfxVolume() <= 0) return;
-    if (this.travelSound) this.travelSound.destroy();
-    const s = this.sound.add(SFX.mortarTravel, { volume: sfxVolume(TRAVEL_SOUND_VOLUME) });
-    this.travelSound = s;
-    s.play();
-    this.time.delayedCall(Math.max(0, flightMs - 150), () => {
-      if (this.travelSound !== s) return;
-      this.tweens.add({ targets: s, volume: 0, duration: 150, onComplete: () => { s.destroy(); if (this.travelSound === s) this.travelSound = null; } });
-    });
   }
 
   /** Tilt that follows the arc a little (heading in radians); no spin. */

@@ -220,9 +220,17 @@ describe('his upgrades cost Burgers (research points), building the altar costs 
     }
   });
 
-  it('selling refunds only the gold (Level 1); a rebuild is priced in gold', () => {
+  it('selling refunds only the gold (Level 1); a rebuild is priced in gold and grows with the level', () => {
     const altar = { type: 'altar', level: 7 };
     expect(sellRefund(altar)).toBe(Math.round(3000 * CONFIG.rules.sellRefund));
-    expect(repairCost(altar)).toBe(Math.round(3000 * CONFIG.rules.rebuildCostShare));
+    const burgers = levelStats('altar', 7).cost;
+    expect(repairCost(altar)).toBe(Math.round(Math.max(3000, burgers * CONFIG.rules.burgerGoldValue) * CONFIG.rules.rebuildCostShare));
+    expect(repairCost({ type: 'altar', level: 1 })).toBe(Math.round(3000 * CONFIG.rules.rebuildCostShare));
+    // Every Burger-priced building costs more to rebuild at a higher level (the Fuel Station used to be flat).
+    for (const type of ['fuelStation', 'rvlab', 'altar']) {
+      const n = CONFIG[type].levels.length;
+      for (let l = 2; l <= n; l++) expect(repairCost({ type, level: l })).toBeGreaterThanOrEqual(repairCost({ type, level: l - 1 }));
+      expect(repairCost({ type, level: n })).toBeGreaterThan(repairCost({ type, level: 1 }));
+    }
   });
 });

@@ -2,6 +2,13 @@
 
 The version shows in the bottom-left corner of every screen (`package.json` `version` plus the commit). Details for everything below are in [README.md](README.md).
 
+## 0.5.1
+
+- The wave's "!" warning now sits on each attacking path's corner marker, out at the back of the path, instead of floating over the village.
+- Rebuilding a destroyed Fuel Station, RV Lab or Brisket King altar mid-wave now costs more at higher levels (it was a flat price at every level). A level bought with Burgers counts as 15 gold per Burger (`rules.burgerGoldValue`), times the usual rebuild share.
+- "Storage full" shows once, and again only after your gold has dropped below capacity, instead of on every collect.
+- The title screen's mortar is silent now.
+
 ## 0.5.0
 
 A big feature release: everything since 0.4.1 (the 37-item fixes and features list, plus the QA rounds).

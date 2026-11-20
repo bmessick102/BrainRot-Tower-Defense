@@ -9,16 +9,49 @@
 // nothing here takes clicks.
 import { MARKER, markerLayout, markerRange, anchorAt, pickAlongPath, pathEnds, pathAngle } from '../logic/waveMarkers.js';
 import { drawAngledArrow, fitWidth, fitIcon } from './uiDraw.js';
-import { enemyKey } from '../assetKeys.js';
+import { enemyKey, TEX } from '../assetKeys.js';
 import { COLORS, textStyle } from '../theme.js';
 
 const DEPTH = 5500; // over buildings, enemies, labels (5000); under floating damage text (6000)
+// The wave's "!" warning (while a wave is coming / running): a badge on the disc's top-right, so it sits in the
+// corner with its marker instead of over the village. Local px at marker scale 1 (counter-scaled with zoom).
+const ALERT = { x: MARKER.disc * 0.55, y: -MARKER.disc * 0.55, scale: 0.5, pulse: 1.15, bobPx: 4 };
 
 export class WaveMarkers {
   constructor(scene) {
     this.scene = scene;
     this.items = [];
     this.sig = '';
+    this.alertPaths = new Set();
+  }
+
+  /** Show the "!" warning on these paths' markers (the running wave's), or none with []. */
+  setAlerts(paths) {
+    this.alertPaths = new Set(paths || []);
+    for (const it of this.items) this.syncAlert(it);
+  }
+
+  syncAlert(it) {
+    const want = this.alertPaths.has(it.path);
+    if (want && !it.alert && this.scene.textures.exists(TEX.spawnMarker)) {
+      const s = this.scene;
+      const a = s.add.image(ALERT.x, ALERT.y, TEX.spawnMarker).setScale(ALERT.scale);
+      it.c.add(a);
+      s.tweens.add({ targets: a, scale: ALERT.scale * ALERT.pulse, duration: 500, yoyo: true, repeat: -1, ease: 'Sine.easeInOut' });
+      s.tweens.add({ targets: a, y: ALERT.y - ALERT.bobPx, duration: 900, yoyo: true, repeat: -1, ease: 'Sine.easeInOut' });
+      it.alert = a;
+    } else if (!want && it.alert) {
+      this.scene.tweens.killTweensOf(it.alert);
+      it.alert.destroy();
+      it.alert = null;
+    }
+  }
+
+  /** World position of the first "!" warning (for the tutorial's pointer), or null. */
+  alertWorld() {
+    const it = this.items.find((x) => x.alert);
+    if (!it) return null;
+    return { x: it.c.x + ALERT.x * it.c.scaleX, y: it.c.y + ALERT.y * it.c.scaleY };
   }
 
   /** counts: { path: { kind: n } } (wavePlanCounts), or {} to clear. Rebuilds only when it changes. */
@@ -26,12 +59,14 @@ export class WaveMarkers {
     const sig = JSON.stringify(counts || {});
     if (sig === this.sig) return;
     this.sig = sig;
-    for (const it of this.items) it.c.destroy();
+    for (const it of this.items) { if (it.alert) this.scene.tweens.killTweensOf(it.alert); it.c.destroy(); }
     this.items = [];
     for (const [path, kinds] of Object.entries(counts || {})) {
       const entries = Object.entries(kinds || {}).filter(([, n]) => n > 0);
       if (!entries.length || !pathEnds(path)) continue;
-      this.items.push(this.build(path, entries));
+      const it = this.build(path, entries);
+      this.items.push(it);
+      this.syncAlert(it);
     }
     this.update();
   }
@@ -60,7 +95,7 @@ export class WaveMarkers {
       fitWidth(t, room);
       c.add([bg, img, t]);
     });
-    return { path, c, layout, places: new Map(), place: null };
+    return { path, c, layout, places: new Map(), place: null, alert: null };
   }
 
   /**
@@ -88,7 +123,7 @@ export class WaveMarkers {
   }
 
   destroy() {
-    for (const it of this.items) it.c.destroy();
+    for (const it of this.items) { if (it.alert) this.scene.tweens.killTweensOf(it.alert); it.c.destroy(); }
     this.items = [];
     this.sig = '';
   }

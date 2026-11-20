@@ -122,6 +122,7 @@ export class UIScene extends Phaser.Scene {
     // The scene object is reused for every game (maybe another village): nothing from the last one carries over.
     this.toastQueue = []; this.toastBusy = false; // a toast cut off mid-show would block every later one
     this.cornerRects = null; this.babyCarAnnounced = null; this.profileBadgeCount = undefined;
+    this.storageFullShown = false;
     this.tipShown = false; this.rpLostSum = 0; this.heroTabAt = 0;
     // HUD pieces the build steps below check for (the profile pill redraws the wave pill if it exists): the last
     // game's were destroyed with it. (A stale wave pill crashed the HUD when the player or league changed.)
@@ -1950,7 +1951,13 @@ export class UIScene extends Phaser.Scene {
       if (d.salvaged) this.time.delayedCall(BANNER_MS + 200, () => this.showBanner('Your gnomes salvaged a Bitcoin Mine!'));
       this.refreshAll();
     });
-    on(['storageFull'], () => this.showBanner('Storage full'));
+    // "Storage full" shows once; it can show again only after the gold has dropped below capacity.
+    on(['storageFull'], () => {
+      if (this.storageFullShown) return;
+      this.storageFullShown = true;
+      this.showBanner('Storage full');
+    });
+    on(['goldChanged'], (d) => { if (d && d.gold < d.capacity) this.storageFullShown = false; });
     on(['spellBrewed', 'spellDiscarded'], () => this.refreshInfo()); // the Fuel Station's Brew button counts them
     on(['achievementEarned'], (d) => { this.queueAchievementToast(d.id); this.refreshProfile(); });
     on(['leaguePromoted', 'waveCleared'], () => this.refreshProfile()); // new league badge / furthest wave

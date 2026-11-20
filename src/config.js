@@ -15,6 +15,9 @@ export const CONFIG = {
     // Everything destroyed in a night is rebuilt for free when the wave is beaten. During a wave a destroyed
     // building (not a wall) can be rebuilt early for this share of its current level's cost.
     rebuildCostShare: 0.3,
+    // Rebuilding is always paid in gold. A level bought with Burgers (RV Lab, Fuel Station, Brisket King) counts
+    // as this much gold per Burger, so its rebuild price grows with the level like every other building's.
+    burgerGoldValue: 15,
     // Safety net so a ruined economy can always recover: the Village Hall itself makes gold (base +
     // perLevel per level above 1; none while the starting hall is in ruins), paid in batches of `batch`.
     hallIncome: { base: 1, perLevel: 0.5, batch: 5 },

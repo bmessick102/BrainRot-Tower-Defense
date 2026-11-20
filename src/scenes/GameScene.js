@@ -41,7 +41,6 @@ import { WaveMarkers } from '../objects/WaveMarkers.js';
 import { SpawnFog } from '../objects/SpawnFog.js';
 import { checkCast, checkCastSpot, spellStats } from '../logic/spells.js';
 
-const MARKER_INSET = 6;        // tiles the wave's "!" markers sit in from the entrance
 const PLANNING_FADE_MS = 600; // the ambience / village music hands over to the planning track this fast
 const ZOOM_STEP = 1.1;
 const FIREWORK_IMPACT_MAX = 3; // copies of the 6 s firework crackle allowed at once
@@ -127,7 +126,6 @@ export class GameScene extends Phaser.Scene {
     this.selectedId = null;
     this.editMode = false;
     this.editGfx = this.add.graphics().setDepth(-4500);
-    this.markers = [];
     this.press = null;
     this.resumedAt = 0;
     this.endingGame = false;
@@ -1527,7 +1525,7 @@ export class GameScene extends Phaser.Scene {
     on('buildingMoved', () => this.updateSelectionVisuals());
     on('baseReset', () => this.select(null));
     on('waveTriggered', (d) => {
-      // The countdown: "!" markers over tonight's entrances, the countdown sound, and the planning music.
+      // The countdown: "!" badges on the attacking paths' corner markers, the countdown sound, and the planning music.
       this.showSpawnMarkers(d.paths);
       playSfx(this, SFX.waveCountdown);
       this.playPlanningMusic();
@@ -1552,25 +1550,13 @@ export class GameScene extends Phaser.Scene {
     on('gameOver', (d) => this.onGameOver(d));
   }
 
+  /** The wave's "!" warning on each attacking path: a badge on that path's wave marker, out in its corner. */
   showSpawnMarkers(paths) {
-    this.clearSpawnMarkers();
-    for (const path of paths) {
-      // A "!" warning floating over each entrance enemies will come from, a few tiles in from the map's edge so
-      // it's on screen and clear of the HUD (the top entrance sits right under the wave pill).
-      const [ex, ey] = MAP.spawnPoints[path];
-      const cx = MAP.cols / 2, cy = MAP.rows / 2, d = Math.hypot(cx - ex, cy - ey) || 1;
-      const x = ex + ((cx - ex) / d) * MARKER_INSET, y = ey + ((cy - ey) / d) * MARKER_INSET;
-      const s = gridToScreen(x, y);
-      const m = this.add.image(s.x, s.y - 18, TEX.spawnMarker).setDepth(2400);
-      this.tweens.add({ targets: m, scale: { from: 0.9, to: 1.12 }, duration: 500, yoyo: true, repeat: -1, ease: 'Sine.easeInOut' });
-      this.tweens.add({ targets: m, y: m.y - 8, duration: 900, yoyo: true, repeat: -1, ease: 'Sine.easeInOut' });
-      this.markers.push({ path, image: m });
-    }
+    this.waveMarkers.setAlerts(paths);
   }
 
   clearSpawnMarkers() {
-    for (const m of this.markers) m.image.destroy();
-    this.markers = [];
+    this.waveMarkers.setAlerts([]);
   }
 
   onGameOver(d) {
@@ -1628,8 +1614,8 @@ export class GameScene extends Phaser.Scene {
   }
 
   spawnMarkerScreen() {
-    const m = this.markers[0];
-    return m ? this.worldToScreen(m.image.x, m.image.y) : null;
+    const p = this.waveMarkers.alertWorld();
+    return p ? this.worldToScreen(p.x, p.y) : null;
   }
 }
 
