@@ -3,6 +3,7 @@
 // on a hit, and an optional level badge on the left end. Hidden until draw() is called with visible = true.
 import { COLORS, textStyle, shade, mix } from '../theme.js';
 import { drawGlossy } from './uiDraw.js';
+import { TEX } from '../assetKeys.js';
 
 export const HP_TEAM = { player: COLORS.buttonGood, enemy: COLORS.buttonDanger };
 
@@ -33,6 +34,11 @@ export class HealthBar {
     this.gfx = scene.add.graphics();
     this.container.add(this.gfx);
     if (badge) {
+      // The hero's crown is a picture (TEX.heroCrown) when it's loaded; the level number is drawn on top of it.
+      if (badgeStyle === 'crown' && scene.textures.exists(TEX.heroCrown)) {
+        this.crownImg = scene.add.image(0, 0, TEX.heroCrown);
+        this.container.add(this.crownImg);
+      }
       this.badgeR = Math.round(height * 0.85);
       this.badgeText = scene.add.text(0, 0, '', textStyle(Math.round(this.badgeR * 1.25))).setOrigin(0.5);
       this.container.add(this.badgeText);
@@ -79,7 +85,9 @@ export class HealthBar {
     const flash = Math.max(0, 1 - (now - this.flashAt) / FLASH_MS);
     this.container.setPosition(x, y + this.height / 2).setScale(1 + BUMP * flash * flash);
 
-    const key = `${f.toFixed(4)}|${this.trail.toFixed(4)}|${flash.toFixed(2)}|${level}`;
+    // Redrawn only when something moves by a pixel (or the flash by a tenth): a busy wave has hundreds of bars.
+    const px = (v) => (v > 0 ? Math.round(v * this.width) + 1 : 0); // (any health left still shows a sliver)
+    const key = `${px(f)}|${px(this.trail)}|${flash.toFixed(1)}|${level}`;
     if (key === this.drawnKey) return;
     this.drawnKey = key;
     this.redraw(f, flash, level);
@@ -113,7 +121,10 @@ export class HealthBar {
     }
 
     if (this.badgeText && this.badgeStyle === 'crown') {
-      drawCrown(g, bx, br);
+      if (this.crownImg) {
+        const cw = br * 2.9;
+        this.crownImg.setScale(cw / this.crownImg.frame.width).setPosition(bx, -br * 0.12);
+      } else drawCrown(g, bx, br);
       const label = level == null ? '' : String(level);
       this.badgeText.setText(label).setPosition(bx, br * 0.12).setScale(label.length >= 2 ? 1 : 1.2)
         .setStroke('#120a18', Math.max(3, Math.round(br * 0.4)));

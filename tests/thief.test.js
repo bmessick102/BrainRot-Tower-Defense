@@ -10,7 +10,7 @@ const run = (state, e, seconds, until = () => false) => {
   for (let t = 0; t < seconds && !until(); t += 0.05) stepEnemy(state, e, 0.05);
 };
 
-describe('Money Stealer', () => {
+describe('Mr. Least (thief)', () => {
   it('goes for a money building even when other buildings are closer', () => {
     const s = makeStateWithTownHall(); // Village Hall at cols 17-19, rows 15-17
     addBuilding(s, 'cannon', 12, 16);
@@ -138,6 +138,6 @@ describe('Money Stealer', () => {
   });
 
   it('joins the waves from wave 2', () => {
-    expect(CONFIG.waves.map((w) => w.thief)).toEqual([0, 3, 5, 6]);
+    expect(CONFIG.waves.map((w) => w.thief)).toEqual([0, 2, 4, 4, 8]); // v0.5 rebalance
   });
 });

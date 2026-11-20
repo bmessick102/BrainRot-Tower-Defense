@@ -10,17 +10,17 @@ import { session } from '../net/account.js';
 import { AchievementTracker } from '../net/AchievementTracker.js';
 import { gridToScreen, screenToGrid, rangeEllipse } from '../logic/iso.js';
 import { canPlaceRect, footprintCenter, fpW, fpH, rectTiles } from '../logic/grid.js';
-import { checkBuy, footprintDims, isDefense, typeConfig, defenseRange, wallGroup } from '../logic/buildings.js';
+import { checkBuy, footprintDims, isDefense, typeConfig, defenseRange, wallLevel } from '../logic/buildings.js';
 import { createLayoutDraft, draftBuildings, layoutChanged, isStored, storeAll, storeBuilding, hotbarGroups, checkDraftPlacement, placeInDraft, shiftLayout } from '../logic/layout.js';
 import { tutorialAllows } from '../logic/tutorial.js';
-import { isWaveActive, clamp } from '../logic/util.js';
+import { isWaveActive, isWaveInProgress, clamp } from '../logic/util.js';
 import { mineShowsCoin } from '../logic/economy.js';
 import { MAX_STEP } from '../logic/simulate.js';
 import { BuildingView, buildingTextureKey, placeBuildingSprite } from '../objects/BuildingView.js';
 import { EnemyView } from '../objects/EnemyView.js';
-import { checkDropBeat, djStats, buildingsInDjRange } from '../logic/dj.js';
+import { djStats, buildingsInDjRange } from '../logic/dj.js';
 import { HeroView } from '../objects/HeroView.js';
-import { checkFeast, getAltar, heroStats } from '../logic/hero.js';
+import { getAltar, heroStats } from '../logic/hero.js';
 import { WallView, placeWallTile } from '../objects/WallView.js';
 import { ProjectileView } from '../objects/ProjectileView.js';
 import { PoolView, POOL_COLOR } from '../objects/PoolView.js';
@@ -29,14 +29,20 @@ import { DayNight } from '../objects/DayNight.js';
 import { Villagers } from '../objects/Villagers.js';
 import { AirHum } from '../objects/AirHum.js';
 import { BeamHum } from '../objects/BeamHum.js';
-import { floatText, splashRing, fireballImpact, fireworkBurst, breakerExplosion } from '../objects/Effects.js';
+import { floatText, rpGainText, splashRing, fireballImpact, fireworkBurst, breakerExplosion } from '../objects/Effects.js';
 import { TEX, SFX, MUSIC, FIRE_SFX, ENEMY_ATTACK_SFX, ENEMY_VOICE } from '../assetKeys.js';
-import { playSfx, playSfxCapped, playSfxEndingIn, playVoiceLine, playMusic, stopMusic, crossfadeMusic, fadeOutMusic, hasAmbience, startAmbience, updateAmbience, stopAmbience, soundDuration } from '../audio.js';
+import { playSfx, playSfxCapped, playSfxEndingIn, playVoiceLine, playMusic, pauseMusic, resumeMusic, stopMusic, crossfadeMusic, fadeOutMusic, hasAmbience, startAmbience, updateAmbience, stopAmbience, soundDuration } from '../audio.js';
 import { COLORS } from '../theme.js';
 import { abilityFx, towerRange, towerMinRange } from '../logic/abilities.js';
 import { chainLightningFx, arrowStormFx, meteorFx, solarFlareFx, sparklerFx, drawFireRing } from '../objects/AbilityFx.js';
 import { Modal, confirmDialog } from '../objects/Modal.js';
+import { SpellFx } from '../objects/SpellFx.js';
+import { WaveMarkers } from '../objects/WaveMarkers.js';
+import { SpawnFog } from '../objects/SpawnFog.js';
+import { checkCast, checkCastSpot, spellStats } from '../logic/spells.js';
 
+const MARKER_INSET = 6;        // tiles the wave's "!" markers sit in from the entrance
+const PLANNING_FADE_MS = 600; // the ambience / village music hands over to the planning track this fast
 const ZOOM_STEP = 1.1;
 const FIREWORK_IMPACT_MAX = 3; // copies of the 6 s firework crackle allowed at once
 // Most copies of an enemy's hit / jump sound, and of the Bomber's long bomb rumble, playing at once.
@@ -96,6 +102,13 @@ export class GameScene extends Phaser.Scene {
     this.views = { buildings: new Map(), enemies: new Map(), projectiles: new Map(), pools: new Map() };
     this.heroView = new HeroView(this); // the Brisket King
     this.rangeCircle = new RangeCircle(this);
+    // Fuel Station spells: the aiming ring (while a hotbar spell waits for a spot on the map) and zones in play.
+    this.spellFx = new SpellFx(this, gs);
+    // The next wave's arrow + enemy counts at each entrance it attacks from (UIScene feeds the counts).
+    this.waveMarkers = new WaveMarkers(this);
+    // Fog over the back end of all four paths, where enemies come onto the map: always on, under those markers.
+    this.spawnFog = new SpawnFog(this);
+    this.spellAim = null;
     this.selectionGfx = this.add.graphics().setDepth(-5000);
     // The building under the pointer: outlined on its tiles, shows its labels, and anything drawn in front of
     // it fades (updateHover / updateFocusFade).
@@ -118,6 +131,12 @@ export class GameScene extends Phaser.Scene {
     this.press = null;
     this.resumedAt = 0;
     this.endingGame = false;
+    // The scene object is reused for every game: drop what the last one (maybe another village) left behind.
+    // Its graphics were destroyed with it, and a cached key would skip the first redraw.
+    this.beamGfx = null; this.ringGfx = null; this.beamGlows = [];
+    this.djGroundGfx = null; this.djGroundKey = null; this.djAffected = null;
+    this.swapPreview = null; this.layout = null; this.layoutList = null;
+    this.chatterIn = undefined; this.flockScanT = 0; this.breakerAnnounced = false; this.beamText = null;
 
     this.setupCamera();
     this.setupInput();
@@ -150,14 +169,31 @@ export class GameScene extends Phaser.Scene {
    */
   playPhaseMusic() {
     const phase = this.gs.wave && this.gs.wave.phase;
-    const attacking = phase === 'countdown' || phase === 'active';
     if (hasAmbience(this, MUSIC.ambientDay, MUSIC.ambientNight)) {
       startAmbience(this, MUSIC.ambientDay, MUSIC.ambientNight, { presence: 0 });
-      if (attacking) this.playAttackMusic();
+      if (phase === 'countdown') this.playPlanningMusic(true);
+      else if (phase === 'active') this.playAttackMusic();
       else fadeOutMusic(this, 800); // the title music fades as the ambience fades in
-    } else if (attacking) this.playAttackMusic();
+    } else if (phase === 'countdown') this.playPlanningMusic(true);
+    else if (phase === 'active') this.playAttackMusic();
     else playMusic(this, MUSIC.village);
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => stopAmbience());
+    // The planning track is timed to the countdown, so it pauses with the game.
+    this.events.on(Phaser.Scenes.Events.PAUSE, () => pauseMusic(MUSIC.planning));
+    this.events.on(Phaser.Scenes.Events.RESUME, () => resumeMusic(MUSIC.planning));
+  }
+
+  /**
+   * The planning track for the wave countdown. It's as long as the full countdown and plays once, so it ends
+   * as the wave hits: it starts at the point matching the time left (a shorter countdown, or `resume` when the
+   * scene starts mid-countdown). Without the file the current music just fades out.
+   */
+  playPlanningMusic(resume = false) {
+    if (!this.cache.audio.exists(MUSIC.planning)) { fadeOutMusic(this, PLANNING_FADE_MS); return; }
+    const left = Math.max(0, this.gs.wave.countdown);
+    const seek = Math.max(0, CONFIG.rules.waveCountdown - left);
+    if (resume || seek > 0.5) playMusic(this, MUSIC.planning, { loop: false, seek });
+    else crossfadeMusic(this, MUSIC.planning, PLANNING_FADE_MS, { loop: false });
   }
 
   /** Between waves: the village track (only used when the ambience files are missing). */
@@ -271,7 +307,7 @@ export class GameScene extends Phaser.Scene {
     if (!this.endingGame) this.gs.update(Math.min(delta / 1000, MAX_STEP));
     this.dayNight.update(this.gs.clock);
     // Day / night ambience: follows how dark it is, and steps aside for the attack music during a wave.
-    updateAmbience(this.night || 0, !isWaveActive(this.gs) && !this.endingGame, Math.min(delta / 1000, MAX_STEP));
+    updateAmbience(this.night || 0, !isWaveInProgress(this.gs) && !this.endingGame, Math.min(delta / 1000, MAX_STEP));
     this.villagers.update(Math.min(delta / 1000, MAX_STEP), time);
     this.airHum.update(this.endingGame ? [] : this.gs.enemies, delta / 1000);
     this.beamHum.update(this.endingGame ? [] : this.gs.buildings, delta / 1000);
@@ -291,6 +327,57 @@ export class GameScene extends Phaser.Scene {
     this.updateFocusFade();
     this.updateDjHighlight();
     this.updateLayoutExtras();
+    this.spellFx.update(time);
+    this.updateSpellAim();
+    this.waveMarkers.update();
+    this.spawnFog.update();
+  }
+
+  // ---------- spells (cast from the hotbar: click the spell, then the map) ----------
+  /** Start aiming a brewed spell (UIScene's hotbar): its radius ring follows the pointer until a click casts it. */
+  beginSpellAim(kind) {
+    if (!checkCast(this.gs, kind).ok) return false;
+    if (this.placement) this.cancelPlacement();
+    this.spellAim = { kind };
+    this.gs.emit('spellAimChanged', { kind });
+    this.updateSpellAim(true);
+    return true;
+  }
+
+  /** Stop aiming (right click, Esc, the slot again, or the wave ending). */
+  cancelSpellAim() {
+    if (!this.spellAim) return;
+    this.spellAim = null;
+    this.spellFx.hideAim();
+    this.gs.emit('spellAimChanged', { kind: null });
+  }
+
+  /** Every frame while aiming: the ring follows the pointer (hidden over the HUD); a spell that can't be cast ends it. */
+  updateSpellAim(force = false) {
+    const aim = this.spellAim;
+    if (!aim) return;
+    if (!checkCast(this.gs, aim.kind).ok) { this.cancelSpellAim(); return; }
+    const p = this.input.activePointer;
+    if (!force && !this.touchMode && this.isOverUI(p)) { this.spellFx.hideAim(); return; }
+    const w = this.screenToWorld(p.x, p.y), g = screenToGrid(w.x, w.y);
+    this.spellFx.showAim(aim.kind, g.x, g.y, spellStats(this.gs, aim.kind).radius);
+  }
+
+  /** Cast the aimed spell where the player clicked (screen point). */
+  castAimedSpell(px, py) {
+    const aim = this.spellAim;
+    const w = this.screenToWorld(px, py), g = screenToGrid(w.x, w.y);
+    const r = this.gs.castSpell(aim.kind, g.x, g.y);
+    if (!r.ok) {
+      playSfx(this, SFX.invalid);
+      // A spot it can't use (off the map, Lightning with no enemies there): the spell is kept, so keep aiming.
+      if (!checkCastSpot(this.gs, aim.kind, g.x, g.y).ok && checkCast(this.gs, aim.kind).ok) {
+        const ui = this.scene.get('UIScene');
+        if (ui && ui.showBanner) ui.showBanner(r.reason);
+        return;
+      }
+    }
+    this.cancelSpellAim();
   }
 
   /**
@@ -558,6 +645,7 @@ export class GameScene extends Phaser.Scene {
       if (this.pinch) return;
       if (this.isOverUI(p)) return;
       if (p.rightButtonDown()) {
+        if (this.spellAim) { this.cancelSpellAim(); return; } // right click cancels a spell being aimed
         if (this.placement) this.cancelPlacement();
         else if (this.editMode) this.leaveEdit();
         return;
@@ -610,6 +698,7 @@ export class GameScene extends Phaser.Scene {
     this.input.keyboard.on('keydown-ESC', () => {
       if (this.time.now - this.resumedAt < 250) return; // the Esc that closed the pause menu
       if (Modal.isOpen(this.scene.get('UIScene'))) return; // Esc closes the ability window instead
+      if (this.spellAim) { this.cancelSpellAim(); return; } // Esc cancels a spell being aimed
       if (this.placement) this.cancelPlacement();
       else if (this.editMode) this.leaveEdit();
       else this.openPause();
@@ -650,28 +739,20 @@ export class GameScene extends Phaser.Scene {
       this.confirmPlacement();
       return;
     }
+    // Aiming a spell from the hotbar: the click casts it there.
+    if (this.spellAim) { this.castAimedSpell(px, py); return; }
     const b = this.pickBuilding(w.x, w.y);
     if (this.editMode) {
       // Edit mode: clicking a building picks it up to move; nothing else happens.
       if (b) { playSfx(this, SFX.buildingSelect); this.beginMove(b.id); }
       return;
     }
-    // The Brisket King (or his altar) clicked during a wave with Brisket Feast ready: he feasts.
+    // Clicking the Brisket King or his altar only selects (Brisket Feast is the explicit button in the UI).
     const heroHit = this.heroView.hitTest(w.x, w.y);
-    // If it can't be used right now (he's asleep, or already feasted this wave), the reason floats over him and
-    // the click goes on to select as usual.
-    if (heroHit || (b && b.type === 'altar')) {
-      const feast = checkFeast(this.gs);
-      if (feast.ok) { this.gs.useFeast(); return; }
-      if (isWaveActive(this.gs) && this.gs.hero) {
-        const s = this.heroView.sprite;
-        floatText(this, s.x, s.y - s.displayHeight - 30, `Brisket Feast: ${feast.reason}`, '#ffd34a', 15);
-      }
-    }
     // Clicking the hero himself (also while he stands on his altar) selects his altar, with his own sound.
     if (heroHit && (!b || b.type === 'altar')) {
       const altar = getAltar(this.gs);
-      if (altar) { playVoiceLine(this, [SFX.heroSelect], 'heroSelect'); this.select(altar.id); }
+      if (altar) { playVoiceLine(this, [SFX.heroSelect], 'heroSelect'); this.heroView.selectPose(this.time.now); this.select(altar.id); }
       return;
     }
     if (!b) { this.select(null); return; }
@@ -687,12 +768,7 @@ export class GameScene extends Phaser.Scene {
       this.scene.get('UIScene').openInfo();
       return;
     }
-    // DJ Babyface with a full meter during a wave: the click drops the beat (like collecting a mine).
-    if (b.type === 'dj' && checkDropBeat(this.gs, b).ok) {
-      this.views.buildings.get(b.id)?.pop();
-      this.gs.dropTheBeat(b.id);
-      return;
-    }
+    // (DJ Babyface's Drop the Beat is only on the hotbar now: clicking the booth just selects it.)
     let collected = false;
     if (coinShowing && tutorialAllows(this.gs, 'collect')) collected = this.gs.collect(b.id).ok;
     const canSelect = tutorialAllows(this.gs, 'select', b.type) && !collected;
@@ -729,17 +805,8 @@ export class GameScene extends Phaser.Scene {
   // ---------- selection ----------
   select(id) {
     this.selectedId = id;
-    this.groupMode = false;
     this.updateSelectionVisuals();
-    this.gs.emit('selectionChanged', { id, group: false });
-  }
-
-  /** Wall panel: switch between the one selected wall and its whole connected group (same level). */
-  setGroupMode(on) {
-    const b = this.selectedId ? this.gs.getBuilding(this.selectedId) : null;
-    this.groupMode = !!on && !!b && b.type === 'wall';
-    this.updateSelectionVisuals();
-    this.gs.emit('selectionChanged', { id: this.selectedId, group: this.groupMode });
+    this.gs.emit('selectionChanged', { id });
   }
 
   updateSelectionVisuals() {
@@ -750,15 +817,11 @@ export class GameScene extends Phaser.Scene {
       if (!this.placement) this.rangeCircle.hide();
       return;
     }
-    // Group mode outlines every wall in the selected group (worked out live, so it follows upgrades).
-    const outlined = this.groupMode && b.type === 'wall' ? wallGroup(this.gs, b) : [b];
-    for (const o of outlined) {
-      const pts = [
-        gridToScreen(o.col, o.row), gridToScreen(o.col + fpW(o), o.row),
-        gridToScreen(o.col + fpW(o), o.row + fpH(o)), gridToScreen(o.col, o.row + fpH(o))
-      ];
-      this.selectionGfx.lineStyle(3, COLORS.panelEdge, 1).strokePoints(pts, true);
-    }
+    const pts = [
+      gridToScreen(b.col, b.row), gridToScreen(b.col + fpW(b), b.row),
+      gridToScreen(b.col + fpW(b), b.row + fpH(b)), gridToScreen(b.col, b.row + fpH(b))
+    ];
+    this.selectionGfx.lineStyle(3, COLORS.panelEdge, 1).strokePoints(pts, true);
     if (b.type === 'dj') {
       // DJ Babyface: its range (work playlist, Drop the Beat, light show).
       const c = footprintCenter(b);
@@ -897,7 +960,8 @@ export class GameScene extends Phaser.Scene {
     if (this.placement) this.endPlacement();
     this.select(null);
     const orient = type === 'wall' ? this.wallOrient || 'x' : undefined;
-    this.placement = { mode: 'buy', type, level: 1, orient, ...footprintDims(type, orient), col: 0, row: 0, valid: false };
+    // (New walls are placed at the village's wall level.)
+    this.placement = { mode: 'buy', type, level: type === 'wall' ? wallLevel(this.gs) : 1, orient, ...footprintDims(type, orient), col: 0, row: 0, valid: false };
     this.createGhost();
     this.gs.tutorialEvent('placementStarted', { type });
     this.gs.emit('placementChanged', { active: true, type });
@@ -1138,7 +1202,7 @@ export class GameScene extends Phaser.Scene {
       // Over the enemy's body (flyers float high), not on the ground beneath it.
       const lift = v && v.sprite ? v.sprite.y - v.sprite.originY * v.sprite.displayHeight + 0.35 * v.sprite.displayHeight - s.y : -20;
       floatText(this, s.x, s.y + lift, `${Math.round(d.amount)}`, '#ffffff', 14);
-      playSfx(this, SFX.hit);
+      playSfx(this, d.source === 'spear' ? SFX.spearHit : SFX.hit); // a Spear Thrower's spear has its own hit sound
     });
     // Wall Breaker: a big cartoon boom the size of its radius, a jolt, and its blast sound.
     on('enemyExploded', (d) => {
@@ -1183,10 +1247,10 @@ export class GameScene extends Phaser.Scene {
       splashRing(this, s.x, s.y, d.radius, 0xffd34a, { duration: 520, depth: 2710 });
       floatText(this, s.x, s.y - 90, 'BRISKET FEAST!', '#ffd34a', 22);
       this.cameras.main.shake(160, 0.005);
-      playSfx(this, SFX.upgrade);
+      playSfx(this, this.cache.audio.exists(SFX.heroFeast) ? SFX.heroFeast : SFX.upgrade);
     });
     on('heroKnockedOut', () => { const s = heroAt(); if (s) floatText(this, s.x, s.y - 80, 'Knocked out! Zzz', '#d9e4ff', 18); playSfx(this, SFX.buildingDestroyed); });
-    on('heroSecondWind', (d) => { const s = gridToScreen(d.x, d.y); floatText(this, s.x, s.y - 80, 'Second Helping!', '#9bf07a', 18); });
+    on('heroSecondWind', (d) => { const s = gridToScreen(d.x, d.y); floatText(this, s.x, s.y - 80, 'Second Wind!', '#9bf07a', 18); });
     on('heroReady', () => { const s = heroAt(); if (s) floatText(this, s.x, s.y - 80, 'Ready!', '#ffd34a', 16); });
     // ...and when it's wrecked it bursts open and its troops pour out.
     on('babyCarBurst', (d) => {
@@ -1211,9 +1275,9 @@ export class GameScene extends Phaser.Scene {
         floatText(this, s.x, s.y - 34, `+${d.bounty}`, COLORS.textGold, 16);
       }
       if (d.rp > 0) {
-        // Research points for the RV Lab: a small purple tag beside the gold.
+        // Burgers (research points): a small tag with the burger icon beside the gold.
         const s = enemyPos(d);
-        floatText(this, s.x + 26, s.y - 30, `+${d.rp} RP`, '#d3b0ff', 13);
+        rpGainText(this, s.x + 26, s.y - 30, d.rp);
       }
     });
     on('buildingDamaged', (d) => {
@@ -1284,7 +1348,7 @@ export class GameScene extends Phaser.Scene {
       if (key) playSfxCapped(this, key, ENEMY_HIT_MAX);
     });
     on('enemyJump', () => playSfxCapped(this, SFX.sharkJump, ENEMY_HIT_MAX));
-    // An invisible goblin gives itself away: a quick white puff where it pops into view.
+    // An invisible Mr. Least gives himself away: a quick white puff where it pops into view.
     // A F.L.O.C.K Tower spots the first enemy to enter its (empty) range: its alert sound.
     on('flockSpotted', () => playSfxCapped(this, SFX.flockSpotted, 2));
     on('enemyRevealed', (d) => {
@@ -1294,7 +1358,7 @@ export class GameScene extends Phaser.Scene {
       this.tweens.add({ targets: puff, scale: 0.55, alpha: 0, duration: 360, ease: 'Cubic.easeOut', onComplete: () => puff.destroy() });
     });
     on('projectileFired', (d) => {
-      playSfx(this, FIRE_SFX[d.kind]);
+      playSfx(this, d.kind === 'spear' ? SFX.spearFire[Math.floor(Math.random() * SFX.spearFire.length)] : FIRE_SFX[d.kind]);
       // Mortar: launch boom -> whistle through the air (ending as it lands) -> impact (on 'splash').
       if (d.kind === 'mortar') playSfxEndingIn(this, SFX.mortarTravel, CONFIG.projectiles.mortar.flightTime);
       // Gandolf says one of his lines as he throws (never over a line that's still playing).
@@ -1446,13 +1510,33 @@ export class GameScene extends Phaser.Scene {
       if (view && view.growPop) view.growPop(d.level - 1, d.level); // walls just bounce (their size follows the level)
       this.updateSelectionVisuals();
     });
+    // Upgrade Walls: every wall bounces, with one upgrade sound.
+    on('wallsUpgraded', (d) => {
+      playSfx(this, SFX.upgrade);
+      this.lastUpgradeSfxAt = this.time.now;
+      for (const id of d.ids) {
+        const view = this.views.buildings.get(id);
+        if (view && view.growPop) view.growPop(d.level - 1, d.level);
+      }
+      this.updateSelectionVisuals();
+    });
     on('buildingSold', (d) => {
       playSfx(this, SFX.sell);
       if (this.selectedId === d.id) this.select(null);
     });
     on('buildingMoved', () => this.updateSelectionVisuals());
     on('baseReset', () => this.select(null));
-    on('waveTriggered', (d) => this.showSpawnMarkers(d.paths)); // the wave starts on the next step
+    on('waveTriggered', (d) => {
+      // The countdown: "!" markers over tonight's entrances, the countdown sound, and the planning music.
+      this.showSpawnMarkers(d.paths);
+      playSfx(this, SFX.waveCountdown);
+      this.playPlanningMusic();
+    });
+    on('waveCancelled', () => {
+      // Cancelled during the countdown: the markers go and the planning music hands back to the ambience.
+      this.clearSpawnMarkers();
+      this.playCalmMusic();
+    });
     on('waveStarted', () => {
       if (this.placement) this.cancelPlacement();
       this.setEditMode(false);
@@ -1471,9 +1555,12 @@ export class GameScene extends Phaser.Scene {
   showSpawnMarkers(paths) {
     this.clearSpawnMarkers();
     for (const path of paths) {
-      const [x, y] = MAP.spawnPoints[path];
+      // A "!" warning floating over each entrance enemies will come from, a few tiles in from the map's edge so
+      // it's on screen and clear of the HUD (the top entrance sits right under the wave pill).
+      const [ex, ey] = MAP.spawnPoints[path];
+      const cx = MAP.cols / 2, cy = MAP.rows / 2, d = Math.hypot(cx - ex, cy - ey) || 1;
+      const x = ex + ((cx - ex) / d) * MARKER_INSET, y = ey + ((cy - ey) / d) * MARKER_INSET;
       const s = gridToScreen(x, y);
-      // A "!" warning floating over each entrance enemies will come from tonight.
       const m = this.add.image(s.x, s.y - 18, TEX.spawnMarker).setDepth(2400);
       this.tweens.add({ targets: m, scale: { from: 0.9, to: 1.12 }, duration: 500, yoyo: true, repeat: -1, ease: 'Sine.easeInOut' });
       this.tweens.add({ targets: m, y: m.y - 8, duration: 900, yoyo: true, repeat: -1, ease: 'Sine.easeInOut' });

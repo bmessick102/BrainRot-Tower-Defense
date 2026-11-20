@@ -178,7 +178,8 @@ export function sellRefund(b) {
 /** Rebuild price for a destroyed building: rules.rebuildCostShare of its current level's cost. */
 export function repairCost(b) {
   const stats = levelStats(b.type, b.level);
-  const levelCost = b.type === 'townHall' ? stats.upgradeCost : stats.cost;
+  // A level paid for in RP (costCurrency) is rebuilt for the building's gold price instead.
+  const levelCost = b.type === 'townHall' ? stats.upgradeCost : stats.costCurrency === 'rp' ? buildCost(b.type) : stats.cost;
   return Math.round(levelCost * CONFIG.rules.rebuildCostShare);
 }
 

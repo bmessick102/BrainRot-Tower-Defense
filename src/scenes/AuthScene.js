@@ -4,15 +4,20 @@
 // Passwords go straight to Supabase over HTTPS (stored there only as a bcrypt hash). New passwords need
 // PASSWORD_MIN characters with a letter and a number. With TURNSTILE_SITE_KEY set, a Cloudflare Turnstile
 // "are you human?" box sits beside the button and its token goes along with each log in / sign up.
+// When the server can't be reached (no connection, or it's down), Retry and Play Offline appear under the
+// window. Play Offline opens the last account that logged in on this device (its device copies, unsent until
+// it logs in again: session.startOffline), or this browser's own save if there is none. Whenever the server
+// answers, a login is still required.
 import Phaser from 'phaser';
 import { session } from '../net/account.js';
-import { USERNAME_RE, EMAIL_RE, PASSWORD_MIN, passwordProblem } from '../net/session.js';
+import { USERNAME_RE, EMAIL_RE, PASSWORD_MIN, passwordProblem, isNetworkError } from '../net/session.js';
 import { TURNSTILE_SITE_KEY } from '../backendConfig.js';
 import { Button } from '../objects/Button.js';
 import { addFullscreenButton } from '../objects/FullscreenButton.js';
 import { addTextField } from '../objects/TextField.js';
 import { drawWindow, drawHudPill } from '../objects/uiDraw.js';
-import { TEX, MUSIC } from '../assetKeys.js';
+import { MUSIC } from '../assetKeys.js';
+import { showTitleBackdrop } from './TitleBackdropScene.js';
 import { playMusic } from '../audio.js';
 import { COLORS, bodyStyle, textStyle } from '../theme.js';
 
@@ -24,6 +29,7 @@ const ROW_GAP = 54;
 const LABEL_W = 150;
 const LAST_EMAIL = 'ibtd.lastEmail';
 const CAPTCHA_ROW = 18;     // extra window height when the human check sits beside the button
+const OFFLINE_ROW = 66;     // room under the window for Retry / Play Offline
 
 /** Loads Cloudflare Turnstile once (only when a site key is set). */
 let turnstileLoading = null;
@@ -57,12 +63,13 @@ export class AuthScene extends Phaser.Scene {
     this.captchaToken = null;
     this.captchaId = null;
     this.canResend = false;
+    this.unreachable = false; // the server couldn't be reached: offer Retry / Play Offline
+    this.typedEmail = '';
   }
 
   create() {
     const { width, height } = this.scale;
-    const bg = this.add.image(width / 2, height / 2, TEX.titleBackground);
-    bg.setScale(Math.max(width / bg.frame.width, height / bg.frame.height));
+    showTitleBackdrop(this); // the animated title picture, drawn under this scene
     this.add.rectangle(0, 0, width, height, 0x000000, 0.25).setOrigin(0);
     playMusic(this, MUSIC.title);
     this.ui = [];
@@ -82,6 +89,7 @@ export class AuthScene extends Phaser.Scene {
       if (!this.sys.isActive()) return;
       wait.forEach((o) => o.destroy());
       this.message = e.message || 'Can’t reach the server.';
+      this.unreachable = isNetworkError(e);
       this.showForm();
     });
   }
@@ -153,7 +161,8 @@ export class AuthScene extends Phaser.Scene {
     const rows = signup ? 4 : 2;
     const msgY = ROW0 + (rows - 1) * ROW_GAP + 40;
     const h = msgY + 96 + (this.captchaOn ? CAPTCHA_ROW : 0);
-    const top = Math.min(TOP, this.scale.height - 12 - h);
+    const below = this.unreachable ? OFFLINE_ROW : 0; // Retry / Play Offline under the window
+    const top = Math.min(TOP, this.scale.height - 12 - h - below);
     const px = cx - W / 2;
 
     const g = this.keep(this.add.graphics());
@@ -185,7 +194,7 @@ export class AuthScene extends Phaser.Scene {
       row(2, 'password', 'Password', { type: 'password', placeholder: `${PASSWORD_MIN}+ characters, letters & numbers`, maxLength: 72, autocomplete: 'new-password' });
       row(3, 'confirm', 'Confirm', { type: 'password', placeholder: 'Type it again', maxLength: 72, autocomplete: 'new-password' });
     } else {
-      row(0, 'email', 'Email', { type: 'email', placeholder: 'you@example.com', maxLength: 120, autocomplete: 'email', value: lastEmail });
+      row(0, 'email', 'Email', { type: 'email', placeholder: 'you@example.com', maxLength: 120, autocomplete: 'email', value: this.typedEmail || lastEmail });
       row(1, 'password', 'Password', { type: 'password', maxLength: 72, autocomplete: 'current-password' });
     }
     this.fields = fields;
@@ -205,14 +214,43 @@ export class AuthScene extends Phaser.Scene {
       this.submitBtn = this.keep(new Button(this, cx, top + h - 46, 280, 56, label, () => this.submit(), { color: COLORS.buttonGood, fontSize: 23 }));
     }
 
+    if (this.unreachable) this.showOfflineRow(cx, top + h + OFFLINE_ROW / 2 + 2);
+
     if (session.backend.kind === 'local') {
-      const t = this.keep(this.add.text(16, this.scale.height - 28, 'Dev mode: accounts are kept in this browser only (no Supabase keys yet)', textStyle(15, COLORS.textGold)).setOrigin(0, 1));
+      const t = this.keep(this.add.text(16, this.scale.height - 28, 'Dev mode: accounts are kept in this browser only (local backend, no Supabase)', textStyle(15, COLORS.textGold)).setOrigin(0, 1));
       void t;
     }
     this.time.delayedCall(60, () => {
       const first = signup ? fields.username : (fields.email.value ? fields.password : fields.email);
       if (first && first.active) first.focus();
     });
+  }
+
+  /** The server can't be reached: try again, or play from this device. */
+  showOfflineRow(cx, y) {
+    const who = session.offlineAccount();
+    this.keep(new Button(this, cx - 130, y, 220, 54, 'Retry', () => {
+      if (!this.busy) this.scene.restart({ tab: this.tab });
+    }, { color: COLORS.buttonBlue, fontSize: 21 }));
+    this.keep(new Button(this, cx + 130, y, 260, 54, 'Play Offline', () => this.playOffline(), { color: COLORS.button, fontSize: 21 })
+      .setLabel('Play Offline', who ? `as ${who.username}, from this device` : 'with this browser’s save'));
+  }
+
+  /** The last account that logged in here plays its device copies (sent at its next login); else the browser's own save. */
+  playOffline() {
+    if (this.busy) return;
+    if (session.startOffline()) this.scene.start('TitleScene');
+    else this.scene.start('TitleScene', { offline: true });
+  }
+
+  /** A log in / sign up couldn't reach the server: say so and offer Retry / Play Offline. */
+  serverUnreachable(e) {
+    if (!isNetworkError(e)) return false;
+    this.typedEmail = this.fields && this.fields.email ? this.fields.email.value.trim() : '';
+    this.unreachable = true;
+    this.message = e.message || 'Can’t reach the server. Check your connection.';
+    this.showForm();
+    return true;
   }
 
   setBusy(busy, label = '') {
@@ -286,6 +324,7 @@ export class AuthScene extends Phaser.Scene {
       } catch (e) {
         this.setBusy(false);
         this.resetCaptcha();
+        if (this.serverUnreachable(e)) return;
         this.showMessage(e.message || String(e));
       }
       return;
@@ -301,6 +340,7 @@ export class AuthScene extends Phaser.Scene {
     } catch (e) {
       this.setBusy(false);
       this.resetCaptcha();
+      if (this.serverUnreachable(e)) return;
       this.showMessage(e.message || String(e));
     }
   }

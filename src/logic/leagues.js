@@ -1,15 +1,14 @@
 // Leagues: a badge for each player from their furthest wave survived (the leaderboard number).
-// Waves follow the Village Hall level up to 10, then count up one per night, so Crystal is about
-// "survived the top Village Hall's first night" and the last two leagues are for long runs after that.
-// A player who hasn't survived a wave yet has no league.
+// Waves are numbered in the order they're fought and every wave is 8% bigger than the last (waveRamp), so
+// these are long hauls: wave 50 has about 5x the enemies of wave 1. Below Bronze there is no league yet.
 
 export const LEAGUES = [
-  { key: 'bronze', name: 'Bronze', minWave: 1, texture: 'ui_league_bronze' },
-  { key: 'silver', name: 'Silver', minWave: 4, texture: 'ui_league_silver' },
-  { key: 'gold', name: 'Gold', minWave: 7, texture: 'ui_league_gold' },
-  { key: 'crystal', name: 'Crystal', minWave: 10, texture: 'ui_league_crystal' },
-  { key: 'champion', name: 'Champion', minWave: 15, texture: 'ui_league_champion' },
-  { key: 'warlord', name: 'WarLord', minWave: 25, texture: 'ui_league_warlord' }
+  { key: 'bronze', name: 'Bronze', minWave: 5, texture: 'ui_league_bronze' },
+  { key: 'silver', name: 'Silver', minWave: 20, texture: 'ui_league_silver' },
+  { key: 'gold', name: 'Gold', minWave: 40, texture: 'ui_league_gold' },
+  { key: 'crystal', name: 'Crystal', minWave: 70, texture: 'ui_league_crystal' },
+  { key: 'champion', name: 'Champion', minWave: 110, texture: 'ui_league_champion' },
+  { key: 'warlord', name: 'WarLord', minWave: 160, texture: 'ui_league_warlord' }
 ];
 
 /** The league for a furthest wave survived, or null below the first one. */

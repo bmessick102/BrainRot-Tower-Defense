@@ -5,7 +5,8 @@ import { Modal } from './Modal.js';
 import { Button } from './Button.js';
 import { AchievementsWindow } from './AchievementsWindow.js';
 import { LeaderboardWindow } from './LeaderboardWindow.js';
-import { drawBadge, drawTag } from './uiDraw.js';
+import { drawBadge, drawTag, fitIcon } from './uiDraw.js';
+import { addLeagueRow } from './LeagueRow.js';
 import { COLORS, bodyStyle, textStyle } from '../theme.js';
 import { leagueFor, nextLeague, LEAGUES } from '../logic/leagues.js';
 import { ACHIEVEMENTS } from '../logic/achievements.js';
@@ -24,10 +25,12 @@ const STATS = [
   ['Waves called early', (s) => s.counters.early],
   ['Best Village Hall', (s) => s.bestTownHall]
 ];
-// The stats card is the last thing in the window: it starts STATS_TOP below the window top and has a row per
-// two stats, so the window's height follows the list (a new stat can't spill out of the bottom).
-const STATS_TOP = 362, STAT_ROW = 30, STATS_HEAD = 46, BOTTOM_PAD = 18;
-const H = STATS_TOP + STATS_HEAD + Math.ceil(STATS.length / 2) * STAT_ROW + BOTTOM_PAD;
+// Below the rank / achievements cards: the leagues strip (every league's badge and what it takes), then the
+// stats card, the last thing in the window. The stats card starts STATS_TOP below the window top and has a row
+// per STAT_COLS stats, so the window's height follows the list (a new stat can't spill out of the bottom).
+const LEAGUES_TOP = 362, LEAGUES_H = 148;
+const STATS_TOP = LEAGUES_TOP + LEAGUES_H + 14, STAT_ROW = 30, STATS_HEAD = 46, BOTTOM_PAD = 18, STAT_COLS = 3;
+const H = STATS_TOP + STATS_HEAD + Math.ceil(STATS.length / STAT_COLS) * STAT_ROW + BOTTOM_PAD;
 
 /** A light card with a title, for one section of the window. */
 function card(scene, m, x, y, w, h, title) {
@@ -55,6 +58,7 @@ export class ProfileWindow {
 
   /** Your leaderboard rank (from the server; the board lists the top players plus you). */
   async loadRank() {
+    if (this.session.offline) { this.rank = 'error'; this.render(); return; } // shown as "Offline"
     try {
       await this.session.sendOutbox(); // your newest furthest wave first
       const rows = await this.session.backend.leaderboard(10);
@@ -81,7 +85,7 @@ export class ProfileWindow {
     const bx = left + 70, by = y + 75;
     if (league && s.textures.exists(league.texture)) {
       const img = m.add(s.add.image(bx, by, league.texture));
-      img.setScale(110 / Math.max(img.frame.width, img.frame.height));
+      fitIcon(img, 110);
     } else {
       const g = m.add(s.add.graphics());
       g.fillStyle(COLORS.frame, 1).fillCircle(bx, by, 46);
@@ -129,13 +133,17 @@ export class ProfileWindow {
       m.add(s.add.text(rx, ry - 1, String(unclaimed), textStyle(14)).setOrigin(0.5));
     }
 
+    // ---- every league, lined out ----
+    card(s, m, left, m.y + LEAGUES_TOP, inner, LEAGUES_H, 'Leagues (by furthest wave survived)');
+    addLeagueRow(s, (o) => m.add(o), { x: left + 14, y: m.y + LEAGUES_TOP + 38, w: inner - 28, h: LEAGUES_H - 50, best });
+
     // ---- lifetime stats ----
     y = m.y + STATS_TOP;
-    const rows = Math.ceil(STATS.length / 2), statH = STAT_ROW;
+    const rows = Math.ceil(STATS.length / STAT_COLS), statH = STAT_ROW;
     card(s, m, left, y, inner, STATS_HEAD + rows * statH, 'Lifetime stats (all your villages)');
     STATS.forEach(([name, get], i) => {
-      const col = i % 2, row = Math.floor(i / 2);
-      const sx = left + 16 + col * (inner / 2), sy = y + 40 + row * statH, sw = inner / 2 - 32;
+      const col = i % STAT_COLS, row = Math.floor(i / STAT_COLS);
+      const sx = left + 16 + col * (inner / STAT_COLS), sy = y + 40 + row * statH, sw = inner / STAT_COLS - 32;
       m.add(s.add.text(sx, sy, name, bodyStyle(15, COLORS.inkDim)));
       m.add(s.add.text(sx + sw, sy, formatGold(get(stats) || 0), bodyStyle(16, COLORS.ink, { fontStyle: 'bold' })).setOrigin(1, 0));
     });

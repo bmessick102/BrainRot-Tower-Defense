@@ -15,7 +15,7 @@ import { footprintCenter, distanceToFootprint } from './grid.js';
 import { knockback } from './motion.js';
 import { typeConfig } from './buildings.js';
 import { distance } from './iso.js';
-import { emit, isWaveActive, nextId, random } from './util.js';
+import { emit, isWaveActive, random } from './util.js';
 
 /** The valid target with the most other enemies within `radius` of it (ties: most HP), or null. */
 export function crowdTarget(state, b, radius) {
@@ -312,11 +312,5 @@ export function stepEnemyStatus(state, dt) {
       }
     }
   }
-}
-
-/** Tower types whose specials are on a timer (for the view's charge-up hints). */
-export function hasSpecial(b) {
-  const fx = abilityFx(b);
-  return !!(fx.stormEvery || fx.meteorEvery || fx.salvoEvery || fx.flareEvery || fx.cloudEvery || fx.quakeEvery || fx.warpEvery || fx.starfallEvery || fx.crashEvery);
 }
 

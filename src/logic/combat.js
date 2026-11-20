@@ -17,7 +17,7 @@ import { addResearchPoints, killResearchPoints } from './researchPoints.js';
 export { applySlow, applyStun };
 
 // Which projectile config each defense uses (CONFIG.projectiles keys).
-const DEFENSE_PROJECTILE = { cannon: 'cannon', archer: 'archer', mortar: 'mortar', wizard: 'wizard', firework: 'firework', catapult: 'catapult' };
+const DEFENSE_PROJECTILE = { cannon: 'cannon', archer: 'archer', mortar: 'mortar', wizard: 'wizard', firework: 'firework', catapult: 'catapult', spear: 'spear' };
 
 // Pools (Catapult): damage is dealt in ticks of this many seconds (poolDps x POOL_TICK per tick).
 export const POOL_TICK = 0.5;
@@ -34,11 +34,6 @@ const PIERCE_SPEED = 12;
 
 export function enemyIsAir(e) {
   return CONFIG.enemies[e.kind].type === 'air' && !(e.grounded > 0); // Grounding Burst: crashed flyers are ground
-}
-
-/** Can a defense of this config hit this enemy at all (ground/air)? */
-export function canHit(defCfg, e) {
-  return enemyIsAir(e) ? defCfg.hitsAir : defCfg.hitsGround;
 }
 
 /** Ground / air reach of a tower, including Firework Ground Show. */
@@ -128,6 +123,7 @@ export function fireDefense(state, b, target, opts = {}) {
   const lvl = cfg.levels[b.level - 1];
   const fx = abilityFx(b);
   const damage = lvl.damage * towerDamageMult(b) * (opts.damageMult ?? 1);
+  if (cfg.pierce) return fireSpear(state, b, target, damage, cfg, pcfg, opts);
   const pool = cfg.pool ? catapultPool(b, cfg, lvl, fx) : null;
   if (pool && opts.poolScale) pool.radius *= opts.poolScale; // Diddypult Big Jug
   const p = {
@@ -172,6 +168,42 @@ export function fireDefense(state, b, target, opts = {}) {
   state.projectiles.push(p);
   emit(state, 'projectileFired', { id: p.id, kind: p.kind, sourceId: b.id });
   return p;
+}
+
+/**
+ * Damage multiplier for the nth enemy (0 = the first) a piercing spear passes through: 100%, then `falloff` less for
+ * each further enemy (falloff 0.25: 100 / 75 / 50 / 25%), never below 0.
+ */
+export function pierceMultiplier(index, falloff) {
+  return Math.max(0, 1 - falloff * Math.max(0, index));
+}
+
+/**
+ * Spear Thrower: a straight-line spear through the target, aimed a little ahead of a moving one. It keeps flying
+ * cfg.pierce.length tiles past the target and hits up to cfg.pierce.max enemies on the way (the first at full
+ * damage, each next one pierceMultiplier() less). The line stays in its target's layer: a spear thrown at a ground
+ * enemy pierces ground enemies only, one thrown at a flyer pierces flyers only (it never mixes the two).
+ */
+function fireSpear(state, b, target, damage, cfg, pcfg, opts) {
+  const c = footprintCenter(b);
+  const speed = pcfg.speed;
+  let tx = target.x, ty = target.y;
+  if (target.vx || target.vy) {
+    const lead = Math.min(distance(c.x, c.y, tx, ty) / speed, 0.6); // seconds in the air (capped: no wild leads)
+    tx += (target.vx || 0) * lead; ty += (target.vy || 0) * lead;
+  }
+  let dx = tx - c.x, dy = ty - c.y;
+  const dist = Math.hypot(dx, dy);
+  if (dist < 1e-6) { dx = 1; dy = 0; }
+  const fx = abilityFx(b); // Spear Thrower perks: more enemies pierced, a longer line, less falloff
+  const air = enemyIsAir(target); // the line pierces the first target's layer only (ground or air)
+  return fireLine(state, c.x, c.y, dx, dy, {
+    kind: opts.kind || b.type, sourceId: b.id, tower: b.type, speed,
+    travel: dist + cfg.pierce.length + (fx.spearLengthAdd || 0), pierce: cfg.pierce.max + (fx.spearPierceAdd || 0),
+    falloff: Math.max(0, cfg.pierce.falloff + (fx.spearFalloffAdd || 0)),
+    hitRadius: 0.55, damage, hitsGround: !air && !!cfg.hitsGround, hitsAir: air && !!cfg.hitsAir, fx,
+    source: opts.source || 'spear'
+  });
 }
 
 /** A Catapult shot's pool with the Toxic path applied. */
@@ -444,6 +476,7 @@ export function applySplash(state, x, y, radius, damage, hitsGround, hitsAir, ki
 export function damageBuilding(state, b, amount, attacker = null) {
   if (b.destroyed || state.gameOver) return;
   if (CONFIG.defenses[b.type]?.trap) return; // hidden traps can't be hit
+  if (b.spellInvisT > 0) return;             // nor can buildings under an Invisibility spell (spells.js)
   const fx = abilityFx(b);
   // Firework Counter-Flare: a free rocket back at whoever hit it (if it can hit them).
   if (fx.counterFire && attacker && attacker.alive && !(b.counterT > 0)) {
@@ -451,8 +484,8 @@ export function damageBuilding(state, b, amount, attacker = null) {
     if (enemyIsAir(attacker) ? hits.air : hits.ground) { b.counterT = fx.counterFire; fireDefense(state, b, attacker, { source: 'counter' }); }
   }
   if (fx.armor) amount *= 1 - fx.armor; // Cannon Armor Plating
-  // Economy perks: Hidden Stash (Bitcoin Stealers hit softer), Panic Room (less damage when low), Field
-  // Medics (a building gnomes are repairing), Dye Pack (Bitcoin Stealers that hit it are slowed).
+  // Economy perks: Hidden Stash (Mr. Least hits softer), Panic Room (less damage when low), Field
+  // Medics (a building gnomes are repairing), Dye Pack (Mr. Least is slowed when he hits it).
   if (fx.thiefResistPct && attacker && attacker.kind === 'thief') amount *= 1 - fx.thiefResistPct / 100;
   if (fx.lowHpArmor && b.hp < maxHp(b) * 0.3) amount *= 1 - fx.lowHpArmor;
   if (b._repairArmor) amount *= 1 - b._repairArmor / 100;
@@ -732,6 +765,8 @@ export function fireLine(state, x, y, dx, dy, o) {
     travelLeft: o.travel, pierceLeft: o.pierce ?? Infinity, hitIds: [], hitRadius: o.hitRadius ?? ABILITY_RULES.lineHitRadius,
     damage: o.damage, hitsGround: o.hitsGround ?? true, hitsAir: o.hitsAir ?? false, fx: o.fx || {}, done: false
   };
+  if (o.falloff) p.falloff = o.falloff; // Spear Thrower: each enemy pierced takes this much less (pierceMultiplier)
+  if (o.source) p.source = o.source;
   state.projectiles.push(p);
   if (o.sourceId) emit(state, 'projectileFired', { id: p.id, kind: p.kind, sourceId: o.sourceId });
   return p;
@@ -810,9 +845,10 @@ function stepLineProjectile(state, p, dt) {
   hits.sort((a, b) => a.t - b.t);
   for (const { e } of hits) {
     if (p.pierceLeft <= 0) break;
+    const mult = p.falloff ? pierceMultiplier(p.hitIds.length, p.falloff) : 1;
     p.hitIds.push(e.id);
     p.pierceLeft--;
-    damageEnemy(state, e, p.damage, p.source);
+    damageEnemy(state, e, p.damage * mult, p.source);
     if (!e.alive) onTowerKill(state, p, e);
     else hitEffects(state, p, e, { x: p.dirX, y: p.dirY });
     if (state.gameOver) return;

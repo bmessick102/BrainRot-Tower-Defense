@@ -6,11 +6,6 @@
 export const IS_TOUCH = typeof window !== 'undefined' && !!window.matchMedia
   && window.matchMedia('(pointer: coarse)').matches;
 
-/** Held upright: the game asks to be turned sideways (index.html shows the message). */
-export function isPortraitPhone() {
-  return IS_TOUCH && typeof window !== 'undefined' && window.innerHeight > window.innerWidth;
-}
-
 /** Whether this browser can show the game full screen (iPhone Safari can't: Add to Home Screen instead). */
 export function canFullscreen(scene) {
   return !!(scene && scene.scale && scene.scale.fullscreen && scene.scale.fullscreen.available);

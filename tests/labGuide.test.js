@@ -57,7 +57,7 @@ describe('RV Lab guide', () => {
     expect(checkResearch(gs, 'archer', 'b').cost).toBe(ABILITY_COSTS.research[0]); // only the first
     expect(cannon.picks).toEqual(['a']); // no buying: the cannon already has it
     expect(key(gs)).toBe('done');
-    expect(labGuideHint(gs, 'research')).toMatch(/every Cannon at level 2\+/i);
+    expect(labGuideHint(gs, 'research')).toMatch(/every Cannon has it now, whatever its level/i);
     gs.labGuideNext();
     expect(gs.labGuideStep).toBe(LAB_GUIDE_DONE);
     expect(isLabGuideVisible(gs)).toBe(false);

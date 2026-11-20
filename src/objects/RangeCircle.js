@@ -3,8 +3,8 @@
 import { rangeEllipse, gridToScreen } from '../logic/iso.js';
 
 export class RangeCircle {
-  // Drawn on the ground (above the map, below buildings) so it never tints the buildings themselves.
-  constructor(scene, depth = -4000) {
+  // Drawn above the buildings (but under their labels and health bars) so the range is always visible.
+  constructor(scene, depth = 4900) {
     this.gfx = scene.add.graphics().setDepth(depth).setVisible(false);
   }
 

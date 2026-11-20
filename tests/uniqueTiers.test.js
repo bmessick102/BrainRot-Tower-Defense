@@ -1,9 +1,8 @@
 // The building-specific tiers that replaced the repeated ones (each covers a weakness or amplifies a strength).
 import { describe, it, expect } from 'vitest';
 import { CONFIG } from '../src/config.js';
-import { abilityFx, towerFireInterval, towerRange } from '../src/logic/abilities.js';
+import { towerFireInterval, towerRange } from '../src/logic/abilities.js';
 import { stepDefenses, stepProjectiles, stepPools, fireDefense, damageEnemy, damageBuilding, enemyIsAir, isValidTarget, createPool } from '../src/logic/combat.js';
-import { stepEnemy, stepEnemies } from '../src/logic/enemies.js';
 import { stepBeams } from '../src/logic/beams.js';
 import { stepFlockTowers } from '../src/logic/flock.js';
 import { stepTraps } from '../src/logic/traps.js';
@@ -306,7 +305,7 @@ describe('F.L.O.C.K Tower', () => {
 describe('The Diddypult', () => {
   it('Splash Zone hits pooled enemies harder; Pressure Cap pulls enemies in; Hangover makes them wander', () => {
     const s = attack();
-    const cat = addBuilding(s, 'catapult', 3, 3, 6);
+    const cat = addBuilding(s, 'catapult', 3, 3, 5);
     cat.picks = ['b', 'b', 'b', 'b'];
     const t = tank(s, 14, 4);
     t.inPoolT = 0.3;
@@ -315,7 +314,7 @@ describe('The Diddypult', () => {
     for (let i = 0; i < 60; i++) stepProjectiles(s, 0.05);
     expect(1e6 - t.hp).toBeGreaterThanOrEqual(p.damage * 2 - 1e-6);
     expect(side.x).toBeLessThan(15.5);
-    const h = addBuilding(s, 'catapult', 20, 20, 6);
+    const h = addBuilding(s, 'catapult', 20, 20, 5);
     h.picks = ['c', 'c'];
     const g = tank(s, 20, 9);
     fireDefense(s, h, g);
@@ -331,7 +330,7 @@ describe('The Diddypult', () => {
     stepPools(s, 0.5);
     expect(pool.radius).toBe(1.75);
     expect(1e6 - b.hp).toBeCloseTo(1000 * 0.5 * 0.5, 3);
-    const cat = addBuilding(s, 'catapult', 20, 20, 6);
+    const cat = addBuilding(s, 'catapult', 20, 20, 5);
     cat.picks = ['a', 'b'];
     const g = tank(s, 22, 21);
     stepAbilityBuildings(s, 0.05);

@@ -6,6 +6,7 @@
 const MUSIC_MIX = 0.45;
 // Per-track boost on top of MUSIC_MIX, for tracks mastered quieter than the rest.
 const TRACK_GAIN = {
+  music_planning: 2.2 // the 30 s wave-countdown track: full volume (0.45 x 2.2 = 1)
 };
 // Avoid stacking the same effect dozens of times in one frame (e.g. a big splash).
 const SFX_MIN_GAP_MS = 40;
@@ -38,8 +39,12 @@ export function sfxVolume(v = 1) {
   return v * sfxLevel;
 }
 
+// While the browser still blocks audio (no click or tap yet), Phaser queues every sound it's asked to play and
+// keeps it until then (and it never finishes, so it's never cleaned up): effects are skipped instead.
+const audioLocked = (scene) => !!(scene.sound && scene.sound.locked);
+
 export function playSfx(scene, key, config = undefined) {
-  if (!key || !scene.cache.audio.exists(key)) return;
+  if (!key || !scene.cache.audio.exists(key) || audioLocked(scene)) return;
   const now = performance.now();
   if (now - (lastPlayed.get(key) || 0) < SFX_MIN_GAP_MS) return;
   lastPlayed.set(key, now);
@@ -56,6 +61,7 @@ export function playVoiceLine(scene, keys, group = null) {
   const id = group || keys.join('|');
   const current = voices.get(id);
   if (current && current.isPlaying) return;
+  if (audioLocked(scene)) return;
   const loaded = keys.filter((k) => scene.cache.audio.exists(k));
   if (!loaded.length) return;
   const snd = scene.sound.add(loaded[Math.floor(Math.random() * loaded.length)], { volume: sfxVolume() });

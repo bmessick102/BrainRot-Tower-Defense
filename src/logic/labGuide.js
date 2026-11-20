@@ -5,7 +5,7 @@
 // state.labGuideStep: 0 = not started, 1..LAB_GUIDE_STEPS.length - 1 = on that step, LAB_GUIDE_DONE = finished
 // or skipped. Saved with the village.
 import { CONFIG } from '../config.js';
-import { LAB_GUIDE_DONE, ABILITY_TYPES, labTierCount, anyResearch, levelReq } from './abilities.js';
+import { LAB_GUIDE_DONE, ABILITY_TYPES, labTierCount, anyResearch } from './abilities.js';
 import { buildingName, townHallLevel } from './buildings.js';
 import { emit, isWaveActive } from './util.js';
 
@@ -47,7 +47,7 @@ export const LAB_GUIDE_STEPS = [
   },
   {
     key: 'done',
-    text: (s) => `Researched! Every ${buildingName(guideType(s))} at level ${levelReq(guideType(s), 1)}+ has it now: no need to buy it. Each diamond over a defense is one tier (orange A, blue B, green C). Each tier is one pick and picks are final; each RV Lab level unlocks the next tier.`,
+    text: (s) => `Researched! Every ${buildingName(guideType(s))} has it now, whatever its level. That pick locked the ${buildingName(guideType(s))} to its path, so its next tiers are that path's (the diamonds over a defense show them). Each RV Lab level unlocks the next tier.`,
     inWindow: 'research',
     advanceOn: 'next', showNext: true
   }

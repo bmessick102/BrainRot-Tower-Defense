@@ -2,7 +2,7 @@
 // red X to close (and ESC: only the top window closes). Content added with add() is cleared by clear().
 // Plus two ready-made dialogs: confirmDialog (yes / no) and promptDialog (type a name).
 import { Button } from './Button.js';
-import { drawWindow } from './uiDraw.js';
+import { drawWindow, fitWidth } from './uiDraw.js';
 import { addTextField } from './TextField.js';
 import { COLORS, bodyStyle, textStyle } from '../theme.js';
 
@@ -40,6 +40,7 @@ export class Modal {
     drawWindow(g, this.x, this.y, width, height, { header });
     this.titleText = scene.add.text(this.cx, this.y + 4 + header / 2, title, textStyle(Math.round(header * 0.53))).setOrigin(0.5);
     this.frame = [shade, g, this.titleText];
+    this.setTitle(title);
     if (closable) {
       this.frame.push(new Button(scene, this.x + width - 14, this.y + 14, 52, 50, '', () => this.close(), { color: COLORS.buttonDanger, icon: 'x', radius: 10 }));
     }
@@ -54,7 +55,12 @@ export class Modal {
     scene.events.once('shutdown', this.onShutdown = () => this.destroy());
   }
 
-  setTitle(text) { this.titleText.setText(text); return this; }
+  setTitle(text) {
+    this.titleText.setText(text).setScale(1);
+    const room = this.w - 150; // clear of the close button on the right (and balanced on the left)
+    fitWidth(this.titleText, room);
+    return this;
+  }
 
   /** Add content objects (drawn above the window). Returns the first one for chaining convenience. */
   add(...objs) {
@@ -70,11 +76,6 @@ export class Modal {
   clear() {
     this.content.forEach((o) => o.destroy());
     this.content = [];
-  }
-
-  /** Show or hide DOM text fields (they'd show through any dialog opened on top). */
-  setFieldsVisible(visible) {
-    for (const o of this.content) if (o.node && o.setVisible) o.setVisible(visible);
   }
 
   close() {

@@ -2,35 +2,29 @@
 import { CONFIG } from '../config.js';
 import { isWaveActive, nextId } from './util.js';
 import { canPlaceRect, footprintsOverlap, fpW, fpH } from './grid.js';
-import { ABILITIES, picksForLevel } from '../abilityConfig.js';
+import { ABILITIES, picksFor } from '../abilityConfig.js';
+import { researchPoints, needRpReason } from './researchPoints.js';
 
 // Every building type (saves only accept these). New types must be added here too; a test checks that the
 // defense / economy / wall lists are all covered.
-export const BUILDING_TYPES = ['townHall', 'mine', 'storage', 'house', 'cannon', 'archer', 'mortar', 'wizard', 'firework', 'mousetrap', 'flock', 'catapult', 'ra', 'rvlab', 'dj', 'altar', 'wall'];
-export const DEFENSE_TYPES = ['cannon', 'archer', 'mortar', 'wizard', 'firework', 'mousetrap', 'flock', 'catapult', 'ra'];
+export const BUILDING_TYPES = ['townHall', 'mine', 'storage', 'house', 'cannon', 'archer', 'mortar', 'wizard', 'firework', 'spear', 'mousetrap', 'flock', 'catapult', 'ra', 'rvlab', 'dj', 'altar', 'fuelStation', 'wall'];
+// Shop order = unlock order; the Diddypult (Village Hall 10) is always last.
+export const DEFENSE_TYPES = ['cannon', 'archer', 'mortar', 'wizard', 'firework', 'spear', 'mousetrap', 'flock', 'ra', 'catapult'];
 export const ECONOMY_TYPES = ['mine', 'storage', 'house'];
 export const WALL_TYPES = ['wall'];
 // Research buildings (the RV Lab: researches the defenses' ability paths, see abilities.js).
 export const RESEARCH_TYPES = ['rvlab'];
 // Utility buildings (DJ Babyface: boosts gnomes and defenses nearby, see dj.js).
 export const UTILITY_TYPES = ['dj'];
+// Spell buildings (the Fuel Station: brews spells for the hotbar with RP, see spells.js). In the shop's Economy tab.
+export const SPELL_TYPES = ['fuelStation'];
 // Hero altars (the Brisket King's: the hero guards it and levels up with it, see hero.js).
 export const HERO_TYPES = ['altar'];
 /** Wall orientations: 'x' runs along columns (N wide, 1 tall), 'y' along rows (1 wide, N tall). */
 export const WALL_ORIENTS = ['x', 'y'];
 
-export function isWall(typeOrBuilding) {
-  return (typeof typeOrBuilding === 'string' ? typeOrBuilding : typeOrBuilding && typeOrBuilding.type) === 'wall';
-}
-
 export function isDefense(type) {
   return DEFENSE_TYPES.includes(type);
-}
-
-/** Hidden traps (the Mousetrap): enemies never see, target, path around or damage them. */
-export function isHiddenTrap(type) {
-  const cfg = CONFIG.defenses[type];
-  return !!(cfg && cfg.trap);
 }
 
 /** Support defenses (the F.L.O.C.K Tower) count as defenses but never attack. */
@@ -54,6 +48,7 @@ export function typeConfig(type) {
   if (type === 'rvlab') return CONFIG.rvlab;
   if (type === 'dj') return CONFIG.dj;
   if (type === 'altar') return CONFIG.altar;
+  if (type === 'fuelStation') return CONFIG.fuelStation;
   return CONFIG.defenses[type];
 }
 
@@ -137,8 +132,12 @@ export function unlockTownHall(type) {
   return type === 'townHall' ? 1 : typeConfig(type).unlockTownHall;
 }
 
-/** Shop price = level 1 cost. */
-export function buildCost(type) {
+/**
+ * Shop price = level 1 cost. Walls, given the state, cost what one wall at the village's wall level has cost
+ * (wallBuildCost: they're placed at that level).
+ */
+export function buildCost(type, state = null) {
+  if (type === 'wall' && state) return wallBuildCost(state);
   return type === 'townHall' ? 0 : typeConfig(type).levels[0].cost;
 }
 
@@ -152,7 +151,13 @@ export function upgradeCost(type, level) {
 /** Everything spent on a building of this level: build cost plus every upgrade. */
 export function totalSpent(type, level) {
   if (type === 'townHall') return 0;
-  return typeConfig(type).levels.slice(0, level).reduce((sum, l) => sum + l.cost, 0);
+  return typeConfig(type).levels.slice(0, level).reduce((sum, l) => sum + (l.costCurrency === 'rp' ? 0 : l.cost), 0); // gold only
+}
+
+/** 'gold' or 'rp': what going from `level` to `level + 1` is paid with (a level's `costCurrency`). */
+export function upgradeCurrency(type, level) {
+  const next = typeConfig(type).levels[level];
+  return (next && next.costCurrency) || 'gold';
 }
 
 /** How many of a type are allowed at a town hall level. */
@@ -195,25 +200,33 @@ export function checkBuy(state, type) {
     return { ok: false, reason: 'Limit reached' };
   }
   if (isWaveActive(state)) return { ok: false, reason: 'Not during a wave' };
-  const cost = buildCost(type);
+  const cost = buildCost(type, state);
   if (state.gold < cost) return { ok: false, reason: needGoldReason(cost, state.gold) };
   return { ok: true, reason: '' };
 }
 
-/** Can this building be upgraded right now? Returns { ok, reason, cost }. */
+/** Can this building be upgraded right now? Returns { ok, reason, cost }. Walls: Upgrade Walls (all of them). */
 export function checkUpgrade(state, b) {
+  if (b.type === 'wall') return checkWallUpgrade(state);
   const cost = upgradeCost(b.type, b.level);
   if (cost === null) return { ok: false, reason: 'Max level', cost: null };
+  // Every answer names the currency, so a locked Burger-priced level still reads "600 Burgers", not "600".
+  const currency = upgradeCurrency(b.type, b.level);
   if (b.type !== 'townHall' && b.level >= townHallLevel(state)) {
-    return { ok: false, reason: `Requires VH${b.level + 1}`, cost };
+    return { ok: false, reason: `Requires VH${b.level + 1}`, cost, currency };
   }
   // Some levels need a higher Village Hall than that (the RV Lab: level N needs VH N+3).
   const needVH = levelStats(b.type, b.level + 1).townHall;
-  if (needVH && townHallLevel(state) < needVH) return { ok: false, reason: `Requires VH${needVH}`, cost };
-  if (isWaveActive(state)) return { ok: false, reason: 'Not during a wave', cost };
-  if (b.destroyed) return { ok: false, reason: 'Destroyed', cost };
-  if (state.gold < cost) return { ok: false, reason: needGoldReason(cost, state.gold), cost };
-  return { ok: true, reason: '', cost };
+  if (needVH && townHallLevel(state) < needVH) return { ok: false, reason: `Requires VH${needVH}`, cost, currency };
+  if (isWaveActive(state)) return { ok: false, reason: 'Not during a wave', cost, currency };
+  if (b.destroyed) return { ok: false, reason: 'Destroyed', cost, currency };
+  if (currency === 'rp') {
+    const have = researchPoints(state);
+    if (have < cost) return { ok: false, reason: needRpReason(cost, have), cost, currency };
+    return { ok: true, reason: '', cost, currency };
+  }
+  if (state.gold < cost) return { ok: false, reason: needGoldReason(cost, state.gold), cost, currency };
+  return { ok: true, reason: '', cost, currency };
 }
 
 /** Make a new building object (not yet added to state). */
@@ -234,8 +247,8 @@ export function createBuilding(state, type, col, row, level = 1, id = null, orie
   else b.size = buildingSize(type); // square buildings keep `size` too (w = h = size)
   if (type === 'mine') b.stock = 0;
   if (isDefense(type)) { b.cooldown = 0; b.targetId = null; }
-  // RV Lab abilities: every building of a type gets its picks (as far as its level allows).
-  if (ABILITIES[type]) b.picks = picksForLevel(state && state.research, type, level);
+  // RV Lab perks: every building of a type gets its type's picks (its level plays no part).
+  if (ABILITIES[type]) b.picks = picksFor(state && state.research, type);
   return b;
 }
 
@@ -247,41 +260,53 @@ export function applyLevelUp(b) {
   b.hp = b.destroyed ? 0 : Math.round((b.hp / oldMax) * newMax);
 }
 
-// ---------- wall groups (upgrade a whole stretch of wall at once) ----------
+// ---------- walls: one level for the whole village ----------
+// Walls are never upgraded one by one: "Upgrade Walls" raises every wall one level at once, for
+// (walls placed) x (the new level's price), and new walls are placed at the village's wall level
+// (state.wallLevel, saved). Each level still needs its Village Hall (`townHall` on CONFIG.walls.levels).
+
 /**
- * Every standing wall at the same level as `wall` that's connected to it through side-by-side walls of
- * that level, nearest first (breadth-first from `wall`). Diagonal neighbors aren't connected.
+ * The wall level a village without a saved one gets (older saves, see deserializeGame): the most common
+ * level among its walls, ties going to the higher level. 1 with no walls.
  */
-export function wallGroup(state, wall) {
-  if (!wall || wall.type !== 'wall' || wall.destroyed) return [];
-  const at = new Map();
-  for (const b of state.buildings) {
-    if (b.type === 'wall' && !b.destroyed && b.level === wall.level) at.set(`${b.col},${b.row}`, b);
-  }
-  const out = [wall], seen = new Set([wall.id]);
-  for (let i = 0; i < out.length; i++) {
-    const { col, row } = out[i];
-    for (const [dc, dr] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
-      const n = at.get(`${col + dc},${row + dr}`);
-      if (n && !seen.has(n.id)) { seen.add(n.id); out.push(n); }
-    }
-  }
-  return out;
+export function commonWallLevel(buildings) {
+  const counts = new Map();
+  for (const b of buildings || []) if (b && b.type === 'wall' && Number.isInteger(b.level)) counts.set(b.level, (counts.get(b.level) || 0) + 1);
+  let best = 1, most = 0;
+  for (const [level, n] of counts) if (n > most || (n === most && level > best)) { best = level; most = n; }
+  return Math.max(1, Math.min(maxLevel('wall'), best));
+}
+
+/** The village's wall level: every wall is at it, and new walls are placed at it. */
+export function wallLevel(state) {
+  const l = state && state.wallLevel;
+  return Number.isInteger(l) && l >= 1 ? Math.min(l, maxLevel('wall')) : commonWallLevel(state && state.buildings);
 }
 
 /**
- * What upgrading a group of walls would do: the walls that can be upgraded with the gold there is (in
- * order, nearest first), their total cost, and the full group's size. reason explains when none can be.
+ * A new wall's price: what one wall at the village's wall level has cost (level 1 + every upgrade), so a wall
+ * bought late costs the same as one bought early and upgraded (and selling it can't make gold).
  */
-export function planWallGroupUpgrade(state, walls) {
-  let gold = state.gold, cost = 0;
-  const ids = [];
-  let reason = '';
-  for (const b of walls) {
-    const check = checkUpgrade({ ...state, gold }, b);
-    if (!check.ok) { reason = reason || check.reason; break; }
-    gold -= check.cost; cost += check.cost; ids.push(b.id);
-  }
-  const each = walls.length ? upgradeCost('wall', walls[0].level) : null;
-  return { ids, cost, total: walls.length, each, reason: ids.length ? '' : reason };
+export function wallBuildCost(state) {
+  return totalSpent('wall', wallLevel(state));
+}
+
+/**
+ * Upgrade Walls: can every wall go up one level now? { ok, reason, cost, currency, count, each, level }:
+ * cost = count (walls placed) x each (the new level's price); level = the level they'd go to.
+ */
+export function checkWallUpgrade(state) {
+  const from = wallLevel(state);
+  const count = countOwned(state.buildings, 'wall');
+  const base = { count, level: from + 1, currency: 'gold' };
+  if (from >= maxLevel('wall')) return { ok: false, reason: 'Max level', cost: null, each: null, ...base, level: from };
+  const each = upgradeCost('wall', from);
+  const cost = count * each;
+  const out = { ...base, cost, each };
+  const needVH = levelStats('wall', from + 1).townHall || from + 1;
+  if (townHallLevel(state) < needVH) return { ...out, ok: false, reason: `Requires VH${needVH}` };
+  if (isWaveActive(state)) return { ...out, ok: false, reason: 'Not during a wave' };
+  if (count === 0) return { ...out, ok: false, reason: 'No walls yet' };
+  if (state.gold < cost) return { ...out, ok: false, reason: needGoldReason(cost, state.gold) };
+  return { ...out, ok: true, reason: '' };
 }

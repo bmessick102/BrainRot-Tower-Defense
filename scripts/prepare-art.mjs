@@ -19,7 +19,7 @@ const OUT_IMAGES = path.join(ROOT, 'public', 'assets', 'images');
 const OUT_AUDIO = path.join(ROOT, 'public', 'assets', 'audio');
 const MANIFEST = path.join(ROOT, 'src', 'assetManifest.js');
 
-// Output width in pixels per key pattern. Buildings are 2x their 192/256 px in-game width so they stay sharp at 2x zoom.
+// Output width in pixels per key pattern (`fit: 'box'`: the longer side instead). Buildings are 2x their 192/256 px in-game width so they stay sharp at 2x zoom.
 const TARGETS = [
   { match: /^bld_townHall_/, width: 512, trim: true, needsAlpha: true },
   // Wall pillars (one per 2 levels): one shared crop box so every level keeps the same scale and baseline.
@@ -36,30 +36,52 @@ const TARGETS = [
   // Storage: each picture in 3 fills (_fill1..3, by how full your gold is; the plain one = full, for the shop), one box.
   { match: /^bld_storage_lv[0-9]+(_fill[0-9])?$/, width: 384, trim: 'group', needsAlpha: true },
   { match: /^bld_catapult_lv[0-9]+$/, width: 384, trim: 'group', needsAlpha: true },
+  // Spear Thrower: 5 levels x 4 facings (_dl/_dr/_ul/_ur, plus the plain one = down-left for the shop), one shared box.
+  { match: /^bld_spear_lv[0-9]+(_(dl|dr|ul|ur))?$/, width: 384, trim: 'group', needsAlpha: true },
   { match: /^bld_house_lv[0-9]+$/, width: 384, trim: 'group', needsAlpha: true },
   { match: /^bld_flock_lv[0-9]+$/, width: 384, trim: 'group', needsAlpha: true },
   { match: /^bld_mousetrap_lv[0-9]+$/, width: 384, trim: 'group', needsAlpha: true },
   { match: /^bld_ra_lv[0-9]+$/, width: 384, trim: true, needsAlpha: true },
   { match: /^bld_dj_lv[0-9]+$/, width: 384, trim: true, needsAlpha: true },
+  // Fuel Station: 4 levels drawn on one canvas, one shared box (so each level keeps its scale and ground point).
+  { match: /^bld_fuelStation_lv[0-9]+$/, width: 384, trim: 'group', needsAlpha: true },
   { match: /^bld_/, width: 384, trim: true, needsAlpha: true },
   { match: /^hero_/, width: 192, trim: true, needsAlpha: true },          // the Brisket King's poses
   { match: /^enemy_babycar$/, width: 256, trim: true, needsAlpha: true }, // the Baby Car raid boss is drawn bigger
+  // The fish giant's walking picture is also the biggest figure on the title screen (TitleBackdropScene), so it's
+  // exported at twice the usual width to stay sharp there; in game it's scaled to the same height as before.
+  { match: /^enemy_tank$/, width: 320, trim: true, needsAlpha: true },
   { match: /^enemy_/, width: 160, trim: true, needsAlpha: true },
+  // The gnome's working pose (busy at a building: mining, repairing, building). Wider than the standing gnome (an arm
+  // out), so it's exported wider to keep the same detail; the game sizes both to the same height.
+  { match: /^villager_gnome_work$/, width: 200, trim: true, needsAlpha: true },
   { match: /^villager_/, width: 128, trim: true, needsAlpha: true },
   { match: /^proj_(slinger|bomb)$/, width: 48, trim: true, needsAlpha: true },
   { match: /^proj_cannon$/, width: 48, trim: true, needsAlpha: true },
   { match: /^proj_mortar$/, width: 64, trim: true, needsAlpha: true },
-  { match: /^proj_(arrow|wizard)$/, width: 96, trim: true, needsAlpha: true },
+  { match: /^proj_(arrow|wizard|spear)$/, width: 96, trim: true, needsAlpha: true },
   { match: /^ui_coin$/, width: 96, trim: true, needsAlpha: true },
-  { match: /^ui_research_point$/, width: 96, trim: true, needsAlpha: true }, // research points (RP) token
+  { match: /^ui_research_point$/, width: 128, trim: true, needsAlpha: true }, // the Burger (research points, shown as Burgers)
   { match: /^ui_research_ready$/, width: 128, trim: true, needsAlpha: true }, // book over the RV Lab: research ready
   { match: /^ui_beat_ready$/, width: 128, trim: true, needsAlpha: true },     // over DJ Babyface: Drop the Beat ready
+  { match: /^ui_feast_ready$/, width: 192, trim: true, needsAlpha: true },    // the Brisket Feast HUD button / ready icon
+  { match: /^ui_hero_crown$/, width: 128, trim: true, needsAlpha: true },     // the hero level crown beside his health bar
   { match: /^guide_portrait$/, width: 256, trim: true, needsAlpha: true },
   { match: /^ui_(shop|settings|edit_layout)_button$/, width: 160, trim: true, needsAlpha: true },
   { match: /^ui_start_button$/, width: 480, trim: true, needsAlpha: true },
   { match: /^ui_league_[a-z]+$/, width: 160, trim: true, needsAlpha: true }, // leaderboard league badges
   { match: /^ui_achievement$/, width: 160, trim: true, needsAlpha: true }, // achievement cards, header and unlock toast
-  { match: /^ui_title_background$/, width: 1280, trim: false, needsAlpha: false }
+  // Fuel Station spell icons (art-source/spells): hotbar, Fuel Station window, How to Play and the cast on the map.
+  // Some are tall (a carton, a can), so they fit a 256 px box by their longer side instead of by width.
+  { match: /^ui_spell_[a-z]+$/, width: 256, fit: 'box', trim: true, needsAlpha: true },
+  // Animated title / loading screen (art-source/title, see src/objects/TitleBackdrop.js). PreloadScene loads these
+  // before anything else, so they're sized close to how big they show on the 1280x720 screen to keep that first load small.
+  { match: /^title_bg$/, width: 1280, trim: false, needsAlpha: false },    // the painted landscape with no characters
+  { match: /^title_logo$/, width: 560, trim: true, needsAlpha: true },
+  { match: /^title_(wizard|archer)$/, width: 420, fit: 'box', trim: true, needsAlpha: true },
+  { match: /^title_mortar_fire$/, width: 340, trim: true, needsAlpha: true }, // the mortar firing (idle is bld_mortar_lv4_r)
+  { match: /^title_flyer$/, width: 220, fit: 'box', trim: true, needsAlpha: true }, // the man shot out of the mortar
+  { match: /^title_flyer_pose$/, width: 260, fit: 'box', trim: true, needsAlpha: true } // ...arms out, hovering once loading is done
 ];
 
 // ---------- PNG decode ----------
@@ -271,7 +293,9 @@ for (const file of sources) {
   }
   if (target.trim === 'group' && groupBoxes.has(target)) img = crop(img, groupBoxes.get(target));
   else if (target.trim) img = trim(img);
-  img = resize(img, target.width);
+  // fit 'box': the longer side becomes `width` (a tall picture is scaled by its height).
+  const outW = target.fit === 'box' && img.height > img.width ? Math.max(1, Math.round(target.width * img.width / img.height)) : target.width;
+  img = resize(img, outW);
   fs.mkdirSync(path.dirname(outFile), { recursive: true });
   fs.writeFileSync(outFile, encodePng(img));
   console.log(`  ok     ${category}/${key}.png  ${img.width}x${img.height}`);

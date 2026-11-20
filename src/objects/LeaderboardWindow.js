@@ -5,6 +5,7 @@ import { Modal } from './Modal.js';
 import { Button } from './Button.js';
 import { COLORS, bodyStyle, textStyle } from '../theme.js';
 import { leagueFor, nextLeague } from '../logic/leagues.js';
+import { fitIcon } from './uiDraw.js';
 
 const W = 640, H = 640, TOP = 40, TOP_N = 10, ROW_H = 38, ROW_GAP = 4;
 const MEDALS = [0xffc83a, 0xc9d1da, 0xd08a4a];
@@ -18,6 +19,8 @@ export class LeaderboardWindow {
   }
 
   async load() {
+    // Offline, nothing is sent: your waves reach the board when you log in again.
+    if (this.session.offline) { this.show('You’re playing offline.\nThe leaderboard needs a connection: your progress is sent when you log in again.'); return; }
     this.show('Loading…');
     try {
       await this.session.sendOutbox(); // your newest best wave first
@@ -72,7 +75,7 @@ export class LeaderboardWindow {
     const ft = m.add(s.add.text(m.cx, fy, foot, bodyStyle(17, COLORS.inkDim)).setOrigin(0.5));
     if (myLeague && s.textures.exists(myLeague.texture)) {
       const img = m.add(s.add.image(ft.x - ft.width / 2 - 22, fy, myLeague.texture));
-      img.setScale(34 / Math.max(img.frame.width, img.frame.height));
+      fitIcon(img, 34);
     }
   }
 
@@ -89,14 +92,17 @@ export class LeaderboardWindow {
     } else {
       m.add(s.add.text(cols.rank, cy, String(r.rank), bodyStyle(17, COLORS.inkDim)).setOrigin(0.5));
     }
-    const league = leagueFor(r.bestWave);
+    // Your own row shows the wave your profile does (the server only counts waves it has verified, so it can be a
+    // little behind for a while after a long offline stretch).
+    const wave = r.isMe ? Math.max(r.bestWave, this.session.stats.bestWave || 0) : r.bestWave;
+    const league = leagueFor(wave);
     if (league && s.textures.exists(league.texture)) {
       const img = m.add(s.add.image(cols.badge, cy, league.texture));
-      img.setScale(32 / Math.max(img.frame.width, img.frame.height));
+      fitIcon(img, 32);
     }
     const name = m.add(s.add.text(cols.name, cy, r.username, bodyStyle(18)).setOrigin(0, 0.5));
     if (r.isMe) m.add(s.add.text(cols.name + name.width + 8, cy, '(you)', bodyStyle(15, COLORS.inkAccent)).setOrigin(0, 0.5));
     m.add(s.add.text(cols.hall, cy, String(r.bestTownHall || '-'), bodyStyle(18, COLORS.ink)).setOrigin(0.5));
-    m.add(s.add.text(cols.wave, cy, String(r.bestWave), textStyle(22, COLORS.textGold)).setOrigin(0.5));
+    m.add(s.add.text(cols.wave, cy, String(wave), textStyle(22, COLORS.textGold)).setOrigin(0.5));
   }
 }

@@ -3,6 +3,8 @@
 // Villages (pick, make, delete), Achievements, Leaderboard, How to Play, Settings; your name and Log Out
 // sit top-left. Offline (no server set up): START GAME continues the browser's save or starts fresh, and
 // the row is New Game (only with a save; asks before overwriting), How to Play, Settings.
+// Playing offline as an account (the server couldn't be reached; session.offline): the logged-in layout, on
+// that account's device copies, with a Reconnect button and a note that progress is sent at the next login.
 import Phaser from 'phaser';
 import { loadGame, deleteGame } from '../logic/save.js';
 import { getStorage } from '../state/GameState.js';
@@ -11,7 +13,7 @@ import { addFullscreenButton } from '../objects/FullscreenButton.js';
 import { TEX, MUSIC, SFX } from '../assetKeys.js';
 import { IMAGE_FILES } from '../assetManifest.js';
 import { playMusic, playSfx } from '../audio.js';
-import { drawWindow, drawHudPill } from '../objects/uiDraw.js';
+import { drawWindow, drawHudPill, fitIcon } from '../objects/uiDraw.js';
 import { SettingsWindow } from '../objects/SettingsWindow.js';
 import { nightWaveNumber } from '../logic/waves.js';
 import { COLORS, bodyStyle, textStyle } from '../theme.js';
@@ -23,6 +25,8 @@ import { LeaderboardWindow } from '../objects/LeaderboardWindow.js';
 import { confirmDialog, promptDialog } from '../objects/Modal.js';
 import { drawBadge } from '../objects/uiDraw.js';
 import { leagueFor } from '../logic/leagues.js';
+import { showTitleBackdrop } from './TitleBackdropScene.js';
+import { takeTakeover } from '../objects/LockOverlay.js';
 
 export class TitleScene extends Phaser.Scene {
   constructor() {
@@ -31,6 +35,7 @@ export class TitleScene extends Phaser.Scene {
 
   init(data) {
     this.loggingOut = false;
+    this.opening = false;
     this.windowOpen = false;
     this.offline = !!(data && data.offline) || !session.configured; // no server set up: always offline
     this.justLoggedIn = !!(data && data.justLoggedIn);
@@ -53,17 +58,17 @@ export class TitleScene extends Phaser.Scene {
     this.settings = null;
     this.windowOpen = false;
 
-    // Background, scaled to cover the screen, with a soft shade toward the bottom behind the buttons.
-    const bg = this.add.image(width / 2, height / 2, TEX.titleBackground);
-    bg.setScale(Math.max(width / bg.frame.width, height / bg.frame.height));
+    // Background: the animated title picture (its own scene, drawn under this one), with a soft shade toward
+    // the bottom behind the buttons.
+    showTitleBackdrop(this);
     const shadeH = 240, steps = 24, shadeG = this.add.graphics();
     for (let i = 0; i < steps; i++) { // whole-pixel strips that never overlap (overlaps show as lines)
       const y0 = Math.round((i * shadeH) / steps), y1 = Math.round(((i + 1) * shadeH) / steps);
       shadeG.fillStyle(0x000000, 0.5 * ((i + 1) / steps) ** 1.6).fillRect(0, height - shadeH + y0, width, y1 - y0);
     }
 
-    // The painted title screen already shows the game name; the placeholder needs it written.
-    if (!IMAGE_FILES.some((f) => f.key === TEX.titleBackground)) {
+    // The title picture's logo already shows the game name; without the logo art it's written out.
+    if (!IMAGE_FILES.some((f) => f.key === 'title_logo')) {
       this.add.text(width / 2, 150, 'Italian Brainrot\nTower Defense', textStyle(64, COLORS.textGold, { align: 'center' })).setOrigin(0.5);
     }
 
@@ -110,8 +115,14 @@ export class TitleScene extends Phaser.Scene {
     if (this.online) {
       this.buildAccountPill();
       this.drawClaimBadge();
+      // "Reload here and take over" (LockOverlay.js): straight back into that village, taking it from the other tab.
+      const takeover = takeTakeover();
+      if (takeover && session.baseById(takeover)) { this.playVillage(session.baseById(takeover)); return; }
       // First login on a device that has a village from before accounts: offer to bring it along.
       if (this.justLoggedIn && !session.bases.length && session.legacyVillage() && !session.legacyDeclined) this.offerImport();
+    } else if (session.configured) {
+      // Playing this browser's own save because the server couldn't be reached: a way back to the login.
+      new Button(this, 90, 32, 150, 42, 'Log In', () => { if (!this.windowOpen) this.scene.start('AuthScene'); }, { color: COLORS.buttonBlue, fontSize: 18, radius: 10 });
     }
 
     playMusic(this, MUSIC.title);
@@ -126,14 +137,22 @@ export class TitleScene extends Phaser.Scene {
     const tx = hasBadge ? 70 : 30;
     if (hasBadge) {
       const img = this.add.image(40, 32, league.texture).setDepth(2);
-      img.setScale(54 / Math.max(img.frame.width, img.frame.height));
+      fitIcon(img, 54);
     }
     const name = this.add.text(tx, 40, session.user.username, textStyle(22)).setOrigin(0, 0.5).setDepth(1);
     const small = this.add.text(tx, 18, hasBadge ? `${league.name} League` : 'Signed in as', textStyle(13, hasBadge ? COLORS.textGold : COLORS.textDim)).setOrigin(0, 0.5).setDepth(1);
     const w = Math.max(name.width, small.width) + tx + 4 - 14;
     drawHudPill(this.add.graphics(), 14, 6, w, 52);
     new Button(this, 14 + w + 70, 32, 120, 42, 'Log Out', () => this.logOut(), { color: COLORS.buttonDark, fontSize: 18, radius: 10 });
-    if (session.syncState === 'offline') {
+    if (session.offline) {
+      // Played from this device's copies (the server couldn't be reached): Reconnect tries the login again.
+      new Button(this, 14 + w + 70 + 130, 32, 130, 42, 'Reconnect', () => {
+        if (this.windowOpen || this.loggingOut) return;
+        session.endOffline();
+        this.scene.start('AuthScene');
+      }, { color: COLORS.buttonBlue, fontSize: 18, radius: 10 });
+      this.add.text(16, 72, 'Playing offline: progress stays on this device and is sent when you log in again', textStyle(14, COLORS.textBad)).setOrigin(0, 0.5);
+    } else if (session.syncState === 'offline') {
       this.add.text(16, 72, 'Not connected: progress is kept on this device for now', textStyle(14, COLORS.textBad)).setOrigin(0, 0.5);
     }
   }
@@ -191,9 +210,25 @@ export class TitleScene extends Phaser.Scene {
     });
   }
 
-  playVillage(b) {
-    session.selectBase(b.id);
-    this.scene.start('GameScene', { mode: b.save ? 'continue' : 'new' });
+  /**
+   * Open the village here (any other tab of this browser playing it is told and stops saving it, then it is
+   * read again so this tab starts from its newest copy) and play it.
+   */
+  async playVillage(b) {
+    if (this.opening) return;
+    this.opening = true;
+    this.windowOpen = true;
+    const t = this.add.text(this.scale.width / 2, 540, 'Opening…', textStyle(22)).setOrigin(0.5).setDepth(50);
+    const ok = await session.openBase(b.id);
+    if (!this.sys.isActive()) return;
+    const nb = session.activeBase;
+    if (!ok || !nb || nb.id !== b.id) {
+      this.opening = false;
+      t.destroy();
+      if (!session.lock) this.scene.restart({ notice: 'That village isn’t available any more.' });
+      return;
+    }
+    this.scene.start('GameScene', { mode: nb.save ? 'continue' : 'new' });
   }
 
   offerImport() {
@@ -221,7 +256,7 @@ export class TitleScene extends Phaser.Scene {
   /** Start Game: gentle idle wobble; on hover it grows, glows gold, and stops wobbling; it squashes when pressed. */
   buildStartButton(x, y) {
     const start = this.add.image(x, y, TEX.startButton);
-    const base = 330 / start.frame.width;
+    const base = 290 / start.frame.width;
     start.setScale(base).setInteractive({ useHandCursor: true, pixelPerfect: true, alphaTolerance: 40 });
 
     // Gold glow (WebGL only; canvas renderer just gets the scale effect).

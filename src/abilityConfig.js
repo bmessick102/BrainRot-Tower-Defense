@@ -1,11 +1,13 @@
 // RV Lab ability trees: every defense has three upgrade paths (A, B and C) of five tiers each.
 //
-// How a tier is earned: research it in the RV Lab, ONE PICK PER TIER per defense type (path A's, B's or C's
-// option; any mix, e.g. A1, B2, A3; picks are final; the RV Lab's level caps the tier). The pick then applies
-// to every building of that type at once, as soon as the building's level reaches the tier's requirement
-// (ABILITY_LEVEL_REQ). Nothing is bought per building.
-// Because a tier can be owned without the tier before it on the same path, every tier's fx works on its own:
-// a tier that strengthens an earlier one (Forked Lightning, Heat Haze...) also brings that earlier effect.
+// How a tier is earned: research it in the RV Lab with RP. The FIRST pick for a building type commits the type to
+// that path (A, B or C) for good; the later tiers can only be that path's. (A paid respec in the RV Lab resets a
+// type's path: see respecCost in logic/abilities.js.) The RV Lab's level caps the tier (tier N needs lab level N).
+// A pick applies to EVERY building of the type at once, whatever its level. Nothing is bought per building.
+// Tiers of a path are bought in order, so a tier can lean on the earlier ones of its path, but every tier's fx
+// still lists what it needs on its own (older mixed saves were converted).
+//
+// ADDING A TREE: see docs/PERKS.md. In short, call registerPerkTree(type, tree, group) at the bottom of this file.
 //
 // Each tier's `fx` holds what it changes. A building's effects are all its owned tiers' fx merged:
 //   - keys ending in "Pct" or "Add" are summed (damagePct: 15 then 25 = +40% damage),
@@ -23,35 +25,20 @@ export const ABILITY_COSTS = {
   research: [80, 240, 600, 1400, 3000]
 };
 
-/** Building level needed for each tier (index 0 = tier 1). Types with fewer levels have their own list. */
-export const ABILITY_LEVEL_REQ = {
-  default: [2, 4, 6, 8, 10],
-  catapult: [2, 3, 4, 5, 6], // 6 levels
-  ra: [2, 4, 5, 7, 8],       // 8 levels
-  dj: [1, 2, 3, 4, 5]        // DJ Babyface: 5 levels
-};
-
 export const MAX_TIER = 5;
 export const PATH_KEYS = ['a', 'b', 'c'];
 /** Path colors: the pips over a building and the ability windows. */
 export const PATH_COLORS = { a: 0xff9a3c, b: 0x4cb8ff, c: 0x5ad35a };
 export const PATH_TEXT_COLORS = { a: '#ffb36b', b: '#7fd0ff', c: '#8fe88f' };
 
-/** Building level a tier needs (1-based tier). */
-export function levelReq(type, tier) {
-  return (ABILITY_LEVEL_REQ[type] || ABILITY_LEVEL_REQ.default)[tier - 1];
-}
-
 /**
- * The tiers a building of this type and level has: the RV Lab's picks for the type (research[type], e.g.
- * ['a', 'b', 'a']), up to the first tier the building's level is too low for. Here (not in abilities.js) so
- * buildings.js can use it without an import loop.
+ * The tiers every building of this type has: the RV Lab's picks for the type (research[type], e.g.
+ * ['a', 'a', 'a']: one path, locked by the first pick). A building's own level does not matter. Here (not in
+ * abilities.js) so buildings.js can use it without an import loop.
  */
-export function picksForLevel(research, type, level) {
+export function picksFor(research, type) {
   const picks = (research && research[type]) || [];
-  let n = 0;
-  while (n < picks.length && level >= levelReq(type, n + 1)) n++;
-  return picks.slice(0, n);
+  return picks.slice();
 }
 
 // Shared timings for the effects (seconds unless noted).
@@ -103,7 +90,7 @@ export const ABILITIES = {
     ] },
     b: { name: 'Sharpshooter', tiers: [
       t('Bullseye', '+40% damage to enemies in the outer third of its range.', { farPct: 40 }),
-      t('Keen Sight', 'Can see and shoot invisible enemies (Goyum Goblins).', { seeInvisible: 1 }),
+      t('Keen Sight', 'Can see and shoot invisible enemies (Mr. Least).', { seeInvisible: 1 }),
       t('Critical Hits', '20% of arrows deal 3x damage.', { critChance: 0.2, critMult: 3 }),
       t('Ambush', '+1.5 tile range, and the first arrow at each new target deals double.', { rangeAdd: 1.5, firstShotMult: 2 }),
       t('Headshot', 'Every 5th arrow goes to the toughest enemy in range for 8x damage.', { headshotEvery: 5, headshotMult: 8 })
@@ -122,7 +109,7 @@ export const ABILITIES = {
       t('Spillover', 'Every enemy that dies in a pool makes that pool 0.25 tile bigger (up to +1).', { poolGrow: 0.25 }),
       t('Shell Shock', 'Enemies hit are stunned for 0.5 s.', { stunOnHit: 0.5 }),
       t('Spotter Link', 'Can shell enemies up to 4 tiles beyond its range if a F.L.O.C.K Tower has marked them.', { markRangeAdd: 4 }),
-      t('Barrage', 'Fires 3 shells in quick succession.', { burst: 3 })
+      t('Barrage', 'Fires 2 shells in quick succession.', { burst: 2 }) // v0.5: was 3 (with Path C, the strongest tier-5 path in the balance runs)
     ] }
   },
   wizard: {
@@ -215,9 +202,10 @@ export const ABILITIES = {
     ] },
     b: { name: 'Prism', tiers: [
       t('Heat Memory', 'Switching to a new target within 1 s keeps the heat the beam had.', { heatCarry: 1 }),
+      // (chainPct ends in Pct, so it adds up over the path's tiers: 0.4 + 0.1 = 50%. It used to add up to 130%.)
       t('Split Beam', 'The beam chains to 1 more enemy nearby for 40% damage.', { chains: 1, chainPct: 0.4 }),
-      t('Refraction', 'Chains to 2 more enemies for 50% damage.', { chains: 2, chainPct: 0.5 }),
-      t('Spreading Heat', 'The beam chains to 1 more enemy (40%), and chained enemies take its heat bonus (x3, x8).', { chains: 1, chainPct: 0.4, chainHeat: 1 }),
+      t('Refraction', 'Chains to 2 more enemies, for 50% damage.', { chains: 2, chainPct: 0.1 }),
+      t('Spreading Heat', 'The beam chains to 1 more enemy (3 in all), and chained enemies take its heat bonus (x3, x8).', { chains: 3, chainHeat: 1 }),
       t('Prism', '3 separate beams, each locked onto its own enemy and heating up on its own.', { beams: 3 })
     ] }
   }
@@ -227,8 +215,8 @@ export const ABILITIES = {
 // Added after A and B; merged into ABILITIES below so every defense has three paths.
 const PATH_C = {
   cannon: { name: 'Fortress', tiers: [
-    t('Thick Walls', '+25% health.', { hpPct: 25 }),
-    t('Armor Plating', 'Takes 15% less damage.', { armor: 0.15 }),
+    t('Thick Walls', '+40% health.', { hpPct: 40 }), // v0.5: Fortress was the weakest path (was +25% / 15%)
+    t('Armor Plating', 'Takes 20% less damage.', { armor: 0.2 }),
     t('Spiked Plating', 'Melee attackers take 50% of each hit they deal back.', { thorns: 0.5 }),
     t('Self-Repair', 'Heals 2% of its health every second during attacks.', { regen: 0.02 }),
     t('Last Stand', 'Below 30% health it fires twice as fast and can\'t fall for 5 s (once per night).', { lastStand: 1 })
@@ -245,7 +233,7 @@ const PATH_C = {
     t('Fault Line', 'Blasts crack the ground back toward the mortar: enemies on the crack take 20% of the damage per second for 4 s.', { crack: 0.2, crackSeconds: 4 }),
     t('Aftershock', 'A second blast hits the same spot 0.5 s later (40% damage).', { aftershock: 0.4 }),
     t('Ground Zero', 'Enemies killed by a blast burst too, hitting everything within 1 tile for 30% of the damage.', { deathBurst: 0.3 }),
-    t('Earthquake', 'Every 15 s, stuns every ground enemy in range for 1.5 s and hits it for 2x damage.', { quakeEvery: 15, quakeStun: 1.5, quakeMult: 2 })
+    t('Earthquake', 'Every 20 s, stuns every ground enemy in range for 1.5 s and hits it for 1.5x damage.', { quakeEvery: 20, quakeStun: 1.5, quakeMult: 1.5 }) // v0.5: was every 15 s, 2x
   ] },
   wizard: { name: 'Arcane', tiers: [
     t('Mana Surge', 'After 4 s without casting, the next fireball deals 3x damage.', { surgeIdle: 4, surgeMult: 3 }),
@@ -270,7 +258,7 @@ const PATH_C = {
   ] },
   flock: { name: 'Hacker', tiers: [
     t('Jammer', 'Enemies in range deal 10% less damage.', { jam: 0.1 }),
-    t('Data Leech', 'Every enemy defeated in range gives +1 research point.', { leechRp: 1 }),
+    t('Data Leech', 'Every enemy defeated in range gives +1 Burger.', { leechRp: 1 }),
     t('Frequency Jam', 'Bombers and Neegy Balloons in range can\'t drop bombs or troops.', { airJam: 1 }),
     t('Full Jam', 'Enemies in range deal 25% less damage.', { jam: 0.25 }),
     t('Override', 'Every 15 s, hacks the toughest enemy in range: for 5 s it stops attacking you and attacks enemies next to it.', { overrideEvery: 15, overrideSeconds: 5 })
@@ -306,7 +294,7 @@ ABILITIES.altar = {
     t('Lifesteal Platter', 'He heals 15% of the damage he deals.', { heroLifesteal: 0.15 }),
     t('Royal Taunt', 'Ground enemies within 2 tiles stop to fight him instead.', { heroTaunt: 2 }),
     t('Iron Stomach', 'He takes 25% less damage.', { heroArmor: 0.25 }),
-    t('Second Helping', "Once per wave, when he's knocked out he gets back up with 40% health.", { heroSecondWind: 0.4 })
+    t('Second Wind', "When he's knocked out in a raid, he gets back up after 20 s with 40% health (instead of staying down until the raid ends).", { heroReviveSeconds: 20, heroReviveHpPct: 0.4 })
   ] },
   c: { name: 'Kingdom', tiers: [
     t('Long Reach', 'He guards 2 tiles farther from his altar.', { guardRangeAdd: 2 }),
@@ -341,7 +329,7 @@ export const ECONOMY_ABILITIES = {
     c: { name: 'Security', tiers: [
       t('Steel Casing', '+35% health.', { hpPct: 35 }),
       t('Booby-Trapped Coins', 'Enemies that hit it take 40% of the damage back.', { thorns: 0.4 }),
-      t('Hidden Stash', 'Bitcoin Stealers deal 60% less damage to it.', { thiefResistPct: 60 }),
+      t('Hidden Stash', 'Mr. Least deals 60% less damage to it.', { thiefResistPct: 60 }),
       t('Panic Room', 'Below 30% health it takes 50% less damage.', { lowHpArmor: 0.5 }),
       t('Bounty Vault', 'Enemies defeated within 3 tiles of it pay 50% more gold.', { nearBountyPct: 50, nearRadius: 3 })
     ] }
@@ -357,7 +345,7 @@ export const ECONOMY_ABILITIES = {
     b: { name: 'Vault', tiers: [
       t('Time Lock', 'Loses 30% less gold when it\'s hit.', { drainResistPct: 30 }),
       t('Reinforced Door', '+40% health.', { hpPct: 40 }),
-      t('Dye Pack', 'Bitcoin Stealers that hit it are slowed 50% for 4 s.', { thiefSlow: 0.5 }),
+      t('Dye Pack', 'Mr. Least is slowed 50% for 4 s when he hits it.', { thiefSlow: 0.5 }),
       t('Insurance', 'Half the gold it loses during a wave is paid back when you beat the wave.', { insurancePct: 50 }),
       t('Fort Knox', 'Loses no gold at all while it\'s above half health.', { drainImmuneAbove: 0.5 })
     ] },
@@ -419,3 +407,75 @@ export const ECONOMY_ABILITIES = {
 for (const [type, tree] of Object.entries(ECONOMY_ABILITIES)) ABILITIES[type] = tree;
 /** Ability types by tab: defenses, and the economy buildings (mine, storage, house, DJ Babyface). */
 export const ECONOMY_ABILITY_TYPES = Object.keys(ECONOMY_ABILITIES);
+
+/**
+ * Register a perk tree for a building type (the one data-driven entry point; see docs/PERKS.md).
+ * `tree` = { a: { name, tiers: [5 x t(name, desc, fx)] }, b: {...}, c: {...} }; `group` is the research window's
+ * tab: 'defense' or 'economy'. Throws on a malformed tree so a typo fails the tests, not the game.
+ */
+export function registerPerkTree(type, tree, group = 'defense') {
+  for (const p of PATH_KEYS) {
+    const path = tree && tree[p];
+    if (!path || !path.name || !Array.isArray(path.tiers) || path.tiers.length !== MAX_TIER) throw new Error(`perk tree ${type}: path ${p} needs a name and ${MAX_TIER} tiers`);
+    for (const tier of path.tiers) if (!tier.name || !tier.desc || !tier.fx) throw new Error(`perk tree ${type}: every tier needs name, desc and fx`);
+  }
+  ABILITIES[type] = tree;
+  const list = group === 'economy' ? ECONOMY_ABILITY_TYPES : DEFENSE_ABILITY_TYPES;
+  if (!list.includes(type)) list.push(type);
+}
+
+// ---------- Spear Thrower (piercing sniper; fx read by combat.js fireSpear / hitEffects) ----------
+// spearPierceAdd / spearLengthAdd / spearFalloffAdd change the spear's line (falloff is the share lost per enemy
+// pierced: 0.25 = 100/75/50/25%); the rest are the usual hit effects.
+registerPerkTree('spear', {
+  a: { name: 'Impaler', tiers: [
+    t('Long Haft', 'The spear pierces 1 more enemy.', { spearPierceAdd: 1 }),
+    t('Deep Reach', 'The spear flies 2 tiles further past its target.', { spearLengthAdd: 2 }),
+    t('Honed Point', 'Each enemy pierced takes 10% less damage loss (falloff 25% becomes 15%).', { spearFalloffAdd: -0.1 }),
+    t('Skewer', 'The spear pierces 2 more enemies.', { spearPierceAdd: 2 }),
+    t('Impale All', 'No damage is lost along the line, and it flies 3 tiles further.', { spearFalloffAdd: -0.25, spearLengthAdd: 3 })
+  ] },
+  b: { name: 'Hunter', tiers: [
+    t('Barbed Head', 'Enemies hit bleed for 15% of the hit every second for 4 s.', { bleedOnHit: 0.15, bleedSeconds: 4 }),
+    t('Armor Piercer', 'Enemies hit take 20% more damage for 4 s.', { vulnOnHit: 0.2, vulnSeconds: 4 }),
+    t('Hamstring', 'Enemies hit are slowed 40% for 3 s.', { slowOnHit: 0.4, slowSeconds: 3 }),
+    t('Serrated Edge', 'Bleeding hits harder: 30% of the hit every second for 5 s.', { bleedOnHit: 0.3, bleedSeconds: 5 }),
+    t("Hunter's Mark", 'Enemies hit take 40% more damage for 6 s.', { vulnOnHit: 0.4, vulnSeconds: 6 })
+  ] },
+  c: { name: 'Throwing Arm', tiers: [
+    t('Strong Arm', '+1 tile range.', { rangeAdd: 1 }),
+    t('Quick Draw', 'Throws 20% faster.', { fireRatePct: 20 }),
+    t('Heavy Spear', '+30% damage.', { damagePct: 30 }),
+    t('Shock Throw', 'Enemies hit are stunned for 0.5 s.', { stunOnHit: 0.5 }),
+    t('Master Thrower', '+40% damage and 15% faster throws.', { damagePct: 40, fireRatePct: 15 })
+  ] }
+});
+
+// ---------- Fuel Station (spells; fx read by src/logic/spells.js through the station's abilityFx) ----------
+// spellPowerPct: stronger effects (Rage boost, heal, Heat Field and Lightning damage); spellDurationPct: zones last
+// longer; spellRadiusPct: bigger circles; lightningTargetsAdd: Lightning Strike hits more enemies; heatSlow /
+// freezeVuln: extra effects for Heat Field / Freeze; brewCostPct: cheaper brewing; spellRefundPct: RP back on a
+// cast; spellSlotsAdd: more spells carried into a raid.
+registerPerkTree('fuelStation', {
+  a: { name: 'Potency', tiers: [
+    t('High Octane', 'Spells are 15% stronger.', { spellPowerPct: 15 }),
+    t('Slow Burn', 'Spell zones last 25% longer.', { spellDurationPct: 25 }),
+    t('Supercharged', 'Spells are 25% stronger.', { spellPowerPct: 25 }),
+    t('Forked Bolt', 'Energy Drink (Lightning Strike) hits 2 more enemies.', { lightningTargetsAdd: 2 }),
+    t('Nitro Blend', 'Spells are 40% stronger and their zones last 25% longer.', { spellPowerPct: 40, spellDurationPct: 25 })
+  ] },
+  b: { name: 'Spread', tiers: [
+    t('Wide Nozzle', 'Spells cover a 15% bigger radius.', { spellRadiusPct: 15 }),
+    t('Hot Exhaust', 'Spicy Tornado (Heat Field) also slows enemies in it by 30%.', { heatSlow: 0.3 }),
+    t('Wide Spray', 'Spells cover a 25% bigger radius.', { spellRadiusPct: 25 }),
+    t('Deep Freeze', 'Enemies frozen by an Ice Bag (Freeze) take 25% more damage from everything.', { freezeVuln: 0.25 }),
+    t('Blanket Coverage', 'Spells cover a 40% bigger radius.', { spellRadiusPct: 40 })
+  ] },
+  c: { name: 'Refinery', tiers: [
+    t('Bulk Discount', 'Brewing costs 15% fewer Burgers.', { brewCostPct: -15 }),
+    t('Spare Tank', '+1 spell slot.', { spellSlotsAdd: 1 }),
+    t('Recycler', 'Casting a spell refunds 25% of its brewing cost in Burgers.', { spellRefundPct: 25 }),
+    t('Wholesale', 'Brewing costs 25% fewer Burgers.', { brewCostPct: -25 }),
+    t('Fuel Depot', '+1 spell slot, and brewing costs 10% fewer Burgers.', { spellSlotsAdd: 1, brewCostPct: -10 })
+  ] }
+}, 'economy');

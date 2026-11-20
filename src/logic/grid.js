@@ -33,11 +33,6 @@ export function buildingTiles(b) {
   return rectTiles(b.col, b.row, fpW(b), fpH(b));
 }
 
-/** Square-footprint helper (kept for callers that think in sizes). */
-export function footprintTiles(col, row, size) {
-  return rectTiles(col, row, size, size);
-}
-
 export function isRectOnGrass(col, row, w, h, map = MAP) {
   return rectTiles(col, row, w, h).every((t) => isGrass(t.col, t.row, map));
 }
@@ -55,10 +50,6 @@ export function footprintsOverlap(a, b) {
 export function findOverlapRect(buildings, col, row, w, h, ignoreId = null) {
   const fp = { col, row, w, h };
   return buildings.find((b) => b.id !== ignoreId && footprintsOverlap(fp, b)) || null;
-}
-
-export function findOverlap(buildings, col, row, size, ignoreId = null) {
-  return findOverlapRect(buildings, col, row, size, size, ignoreId);
 }
 
 /** First building (other than ignoreId) within `gap` tiles of the rectangle, or null. */

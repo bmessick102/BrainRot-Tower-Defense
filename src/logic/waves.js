@@ -14,13 +14,9 @@ import { isRestless, nightLootMult } from './enrage.js';
 import { countedBuildings, starsFor, starBonus } from './waveStars.js';
 
 export const PATHS = ['top', 'right', 'bottom', 'left'];
-// Endless waves add one spawn corner every 2 waves (charter §10 said 3), so all 4 corners are in play
-// by wave 9, inside the 10 Village Hall levels. TODO(design): move to the sheet's Global tab.
+// Endless waves add one spawn corner every 2 Village Hall levels (charter §10 said 3), so all 4 corners are in
+// play by Village Hall 9, inside the 10 Village Hall levels. TODO(design): move to the sheet's Global tab.
 export const ENDLESS_WAVES_PER_EXTRA_PATH = 2;
-
-export function scriptedWaveCount() {
-  return CONFIG.waves.length;
-}
 
 /** Enemy counts, HP multiplier, and spawn path count for wave n (1-based). */
 export function waveComposition(n) {
@@ -48,7 +44,8 @@ function baseComposition(n) {
   const comp = {};
   for (const kind of ENEMY_KINDS) comp[kind] = Math.round((last[kind] || 0) * CONFIG.rules.endlessCountGrowth ** k);
   comp.hpMultiplier = round2(last.hpMultiplier * CONFIG.rules.endlessHpGrowth ** k);
-  comp.spawnPaths = Math.min(PATHS.length, last.spawnPaths + Math.floor((k - 1) / ENDLESS_WAVES_PER_EXTRA_PATH));
+  // (Village Halls 6-10 come from 2, 3, 3, 4, 4 corners, as they did before Village Hall 5 got a scripted wave.)
+  comp.spawnPaths = Math.min(PATHS.length, last.spawnPaths + Math.floor(k / ENDLESS_WAVES_PER_EXTRA_PATH));
   return comp;
 }
 
@@ -67,7 +64,51 @@ export function choosePaths(state, n, count) {
 /**
  * Split enemies as evenly as possible across paths, then order each path's queue:
  * Tanks first, then Wall Breakers (so they reach the walls first), then Grunts and Slingers alternating,
- * then Money Stealers, Sneaker Sharks, Bombers, Neegy Balloons last. (Neegies only come from balloons.)
+ * then Mr. Leasts, Sneaker Sharks, Bombers, Neegy Balloons last. (Neegies only come from balloons.)
+ */
+/**
+ * The corners wave n attacks from (1-4), random every wave at every level. Wave 1 is always ['top'].
+ * `maxCount` is the wave's own corner count (its base wave's spawnPaths): early villages stay modest
+ * (up to one more than that), later ones can be anything from 1 to all 4.
+ */
+export function planPaths(state, n, maxCount) {
+  if (n === 1) return ['top'];
+  const most = Math.min(PATHS.length, Math.max(1, (maxCount || 1) + 1));
+  return choosePaths(state, n, 1 + Math.floor(random(state) * most));
+}
+
+/**
+ * The plan for the village's next wave ({ number, paths }), made ahead of time so the HUD can show it.
+ * Saved with the game; a plan for an older wave number is replaced. triggerWave uses it.
+ */
+export function getWavePlan(state) {
+  const n = nightWaveNumber(state);
+  const p = state.wavePlan;
+  const valid = p && p.number === n && Array.isArray(p.paths) && p.paths.length >= 1 && p.paths.every((x) => PATHS.includes(x));
+  if (!valid) state.wavePlan = { number: n, paths: planPaths(state, n, scaledWaveComposition(townHallLevel(state), n).spawnPaths) };
+  return state.wavePlan;
+}
+
+/** Per corner, how many of each enemy kind: { top: { grunt: 4, ... } } for the plan (or the running wave). */
+export function wavePlanCounts(state) {
+  const w = state.wave;
+  if (w && w.phase !== 'idle' && w.counts) return w.counts;
+  return countQueues(buildSpawnQueues(nextWaveComposition(state), getWavePlan(state).paths));
+}
+
+function countQueues(queues) {
+  const out = {};
+  for (const [p, q] of Object.entries(queues)) {
+    out[p] = {};
+    for (const k of q) out[p][k] = (out[p][k] || 0) + 1;
+  }
+  return out;
+}
+
+/**
+ * Split enemies as evenly as possible across paths, then order each path's queue. Da Baby Cars (bosses)
+ * lead; the rest are interleaved in proportion to their numbers, so several troop types attack at once
+ * instead of one type arriving back-to-back.
  */
 export function buildSpawnQueues(comp, paths) {
   const share = Object.fromEntries(paths.map((p) => [p, Object.fromEntries(ENEMY_KINDS.map((k) => [k, 0]))]));
@@ -84,18 +125,21 @@ export function buildSpawnQueues(comp, paths) {
     const s = share[p];
     const q = [];
     for (let i = 0; i < s.babycar; i++) q.push('babycar'); // the Da Baby Car leads its path
-    for (let i = 0; i < s.tank; i++) q.push('tank');
-    for (let i = 0; i < s.breaker; i++) q.push('breaker');
-    let g = s.grunt, sl = s.slinger;
-    while (g > 0 || sl > 0) {
-      if (g > 0) { q.push('grunt'); g--; }
-      if (sl > 0) { q.push('slinger'); sl--; }
+    // Smooth proportional interleave: each step takes the kind that is furthest behind its fair share.
+    const kinds = ['tank', 'breaker', 'grunt', 'slinger', 'thief', 'toilet', 'shark', 'bomber', 'balloon'].filter((k) => s[k] > 0);
+    const total = kinds.reduce((n, k) => n + s[k], 0);
+    const left = Object.fromEntries(kinds.map((k) => [k, s[k]]));
+    const credit = Object.fromEntries(kinds.map((k) => [k, 0]));
+    for (let i = 0; i < total; i++) {
+      let best = null;
+      for (const k of kinds) {
+        credit[k] += s[k];
+        if (left[k] > 0 && (best === null || credit[k] > credit[best])) best = k;
+      }
+      credit[best] -= total;
+      left[best]--;
+      q.push(best);
     }
-    for (let i = 0; i < s.thief; i++) q.push('thief');
-    for (let i = 0; i < s.toilet; i++) q.push('toilet');
-    for (let i = 0; i < s.shark; i++) q.push('shark');
-    for (let i = 0; i < s.bomber; i++) q.push('bomber');
-    for (let i = 0; i < s.balloon; i++) q.push('balloon');
     queues[p] = q;
   }
   return queues;
@@ -232,17 +276,23 @@ export function nextWaveComposition(state) {
   return applyCrowdCap({ ...normal, babycar: babyCars });
 }
 
-/** Trigger the next wave: paths chosen, queues built; it goes active on the next spawning step. */
-export function triggerWave(state) {
+/**
+ * Trigger the next wave: paths chosen, queues built, and a `countdown` (s) before it attacks; the "!"
+ * markers show the paths meanwhile. It goes active when the countdown runs out (or skipCountdown).
+ */
+export function triggerWave(state, countdown = CONFIG.rules.waveCountdown) {
   const n = nightWaveNumber(state);
   const comp = nextWaveComposition(state);
-  const paths = choosePaths(state, n, comp.spawnPaths);
+  const paths = [...getWavePlan(state).paths];
+  const queues = buildSpawnQueues(comp, paths);
   state.wave = {
-    phase: 'countdown', // only for one step: stepWaveSpawning starts it right away
+    phase: 'countdown',
     number: n,
-    countdown: 0,
+    countdown: Math.max(0, countdown),
+    lastTick: Math.ceil(Math.max(0, countdown)),
     paths,
-    queues: buildSpawnQueues(comp, paths),
+    queues,
+    counts: countQueues(queues), // what the HUD shows for this wave (stays as planned)
     spawnTimer: 0,
     hpMultiplier: comp.hpMultiplier,
     pack: comp.pack || 1, // crowd cap: each (non-boss) enemy counts this many times over (applyCrowdCap)
@@ -266,12 +316,37 @@ export function enemiesLeft(state) {
   return state.enemies.filter((e) => e.alive).length + queuedCount(state);
 }
 
-/** A triggered wave starts on the next step; then one enemy per path every spawnInterval seconds. */
+/**
+ * Cancel during the countdown: the wave goes back to waiting for Start Wave (same wave number; its paths are
+ * picked again next time). A cancelled call never counts as a quick start, so cancelling and starting again
+ * can't farm the "Bring It On" achievement.
+ */
+export function cancelCountdown(state) {
+  const w = state.wave;
+  if (!w || w.phase !== 'countdown') return false;
+  const number = w.number;
+  state.wave = createIdleWave();
+  state.sinceWaveCleared = Infinity;
+  emit(state, 'waveCancelled', { number });
+  return true;
+}
+
+/** Start Now: a counting-down wave attacks on the next step. */
+export function skipCountdown(state) {
+  const w = state.wave;
+  if (!w || w.phase !== 'countdown') return false;
+  w.countdown = 0;
+  return true;
+}
+
+/** The countdown ('waveTick' each second), then one enemy per path every spawnInterval seconds. */
 export function stepWaveSpawning(state, dt) {
   const w = state.wave;
   if (!w || w.phase === 'idle') return;
   if (w.phase === 'countdown') {
     w.countdown -= dt;
+    const tick = Math.max(0, Math.ceil(w.countdown));
+    if (tick !== w.lastTick) { w.lastTick = tick; emit(state, 'waveTick', { number: w.number, seconds: tick }); }
     if (w.countdown > 0) return;
     w.phase = 'active';
     w.spawnTimer = 0; // first enemies spawn the moment the countdown ends
@@ -355,6 +430,7 @@ export function checkWaveCleared(state) {
   const cleared = { number: w.number, bounty: w.bountyEarned, rp: w.rpEarned || 0, ruins, salvaged: salvaged ? salvaged.id : null, special: w.special || null, bonus,
     stars, starGold, starRp, lost: w.lost || 0 };
   state.wave = createIdleWave();
+  state.wavePlan = null; // the next wave's corners are planned fresh
   emit(state, 'waveCleared', cleared);
   return true;
 }

@@ -13,6 +13,7 @@ export const LOADING_TIPS = [
   'If your Village Hall falls, the night is lost. Build your defenses around it.',
   'Edit mode can clear your whole village into the hotbar with Remove All, so you can lay it out from scratch between waves.',
   'Press R (or the Rotate button) while placing a wall to rotate it.',
+  'Walls upgrade all together: click any wall and press Upgrade Walls. New walls are built at your current wall level.',
   "Destroyed buildings stay in ruins after the night. Click one to rebuild it for 30% of its level's cost, even mid-wave.",
   'Villager Houses add gnome workers: they speed up your mines by day and patch up buildings during attacks.',
 
@@ -30,7 +31,7 @@ export const LOADING_TIPS = [
   'Bombadillo Crocadillo flies over everything. Only defenses that hit air can bring it down.',
   'Cappuccino Assasino attacks from a distance. Make sure your defenses can outrange it.',
   'Tripi Tropi Tropi Tripa soaks up a huge amount of damage. Focus fire to bring it down fast.',
-  'The Money Stealer runs straight for your Mines and Storages and hits them three times as hard.',
+  'Mr. Least sneaks in unseen, heads straight for your Mines and Storages and hits them three times as hard.',
   'Check How to Play to see every enemy\'s stats and which defenses can hit it.',
 
   // Day and night

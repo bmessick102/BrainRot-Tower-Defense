@@ -1,6 +1,6 @@
 // F.L.O.C.K Tower: a support defense that never attacks. Every enemy within a standing tower's range is
 //   - marked: it takes +markBonus% damage from every defense (projectiles, splash, Diddypult pools), and
-//   - revealed: an invisible enemy (Goyum Goblin) shows up for good, so defenses can target it.
+//   - revealed: an invisible enemy (Mr. Least) shows up for good, so defenses can target it.
 // Several towers don't stack: a marked enemy takes the strongest bonus among the towers covering it.
 // Range and bonus grow with level (CONFIG.defenses.flock.levels).
 // 'flockSpotted' fires when an enemy enters a tower's range while no other enemy was in it (its alert sound).

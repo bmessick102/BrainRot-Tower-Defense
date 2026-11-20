@@ -1,11 +1,14 @@
 // "Your Villages": the account's villages (up to MAX_BASES), each with its Village Hall picture, level and
 // waves, a Rename button beside its name, a Play button and a Delete button (asks first). Below: New Village, and Import from this device
-// when the browser still has a village saved from before accounts.
+// when the browser still has a village saved from before accounts, or a backup of one of this account's villages
+// (a device copy that lost to a newer server copy: Restore puts it back into its village). Other accounts'
+// device copies are never offered. Offline (session.offline), only backups can be restored.
 import { Modal, confirmDialog, promptDialog } from './Modal.js';
 import { Button } from './Button.js';
 import { buildingTextureKey } from './BuildingView.js';
 import { MAX_BASES, BASE_NAME_MAX } from '../net/session.js';
 import { COLORS, bodyStyle, textStyle } from '../theme.js';
+import { fitWidth, fitIcon } from './uiDraw.js';
 
 const W = 720, H = 600, ROW_H = 74, ROW_GAP = 8;
 
@@ -57,14 +60,19 @@ export class VillagesWindow {
 
     this.msg = m.add(s.add.text(m.cx, m.y + H - 98, this.message, bodyStyle(16, COLORS.inkBad, { align: 'center', wordWrap: { width: W - 60 } })).setOrigin(0.5));
 
-    const found = n < MAX_BASES ? ses.deviceVillages() : [];
+    // Backups of this account's own villages (baseId) restore into their village, so they're offered even with
+    // no room for a new village, and offline; anything else becomes a new village.
+    const all = ses.deviceVillages();
+    const found = n < MAX_BASES && !ses.offline ? all : all.filter((v) => v.baseId);
     const legacy = found[0] || null;
     const by = m.y + H - 50;
     const newBtn = new Button(s, legacy ? m.cx - 160 : m.cx, by, 260, 56, 'New Village', () => this.newVillage(), { color: COLORS.button, fontSize: 22 });
-    if (n >= MAX_BASES) newBtn.setLabel('New Village', `Limit ${MAX_BASES}: delete one first`).setEnabled(false);
+    if (ses.offline) newBtn.setLabel('New Village', 'Needs a connection').setEnabled(false);
+    else if (n >= MAX_BASES) newBtn.setLabel('New Village', `Limit ${MAX_BASES}: delete one first`).setEnabled(false);
     m.add(newBtn);
     if (legacy) {
-      const sub = found.length > 1 ? `${found.length} villages found in this browser` : `Village Hall ${legacy.save.townHallLevel} village in this browser`;
+      const sub = found.length > 1 ? `${found.length} villages found in this browser`
+        : legacy.baseId ? `Backup of “${legacy.name}”` : `Village Hall ${legacy.save.townHallLevel} village in this browser`;
       m.add(new Button(s, m.cx + 160, by, 300, 56, 'Import from this device', () => this.importLegacy(found), { color: COLORS.buttonBlue, fontSize: 20 })
         .setLabel('Import from this device', sub));
     }
@@ -86,23 +94,30 @@ export class VillagesWindow {
       const key = buildingTextureKey(s, 'townHall', th);
       if (key && s.textures.exists(key)) {
         const img = s.add.image(x + 44, y + ROW_H / 2, key);
-        const f = img.frame;
-        img.setScale(Math.min(60 / f.width, 60 / f.height));
+        fitIcon(img, 60);
         m.add(img);
       }
     } catch { /* no picture */ }
 
     const name = m.add(s.add.text(x + 84, y + 24, b.name, textStyle(22)).setOrigin(0, 0.5));
+    // The name, its Rename button and the Play button all share the row: a long name shrinks to leave room.
+    const maxName = w - 230 - 84 - 12 - 78 - 8;
+    fitWidth(name, maxName);
     const detail = b.save
       ? `Village Hall ${th}  ·  Wave ${Math.max(1, b.wave || 0)}  ·  Best wave survived: ${b.bestWave || 0}`
       : 'New village · not started yet';
-    m.add(s.add.text(x + 84, y + 52, detail, bodyStyle(15, COLORS.inkDim)).setOrigin(0, 0.5));
+    // It has to end before the Play button (x + w - 230): shorter wording, then a smaller font, if it doesn't fit.
+    const room = w - 84 - 230;
+    const line = s.add.text(x + 84, y + 52, detail, bodyStyle(15, COLORS.inkDim)).setOrigin(0, 0.5);
+    if (b.save && line.width > room) line.setText(`Village Hall ${th}  ·  Wave ${Math.max(1, b.wave || 0)}  ·  Best: ${b.bestWave || 0}`);
+    fitWidth(line, room);
+    m.add(line);
     // Rename, just right of the name; then "Last played" if it still fits before the Play button.
-    const rx = x + 84 + name.width + 12, rw = 78;
+    const rx = x + 84 + name.displayWidth + 12, rw = 78;
     m.add(new Button(s, rx + rw / 2, y + 24, rw, 28, 'Rename', () => this.rename(b), { color: COLORS.buttonDark, fontSize: 14, radius: 8 }));
     if (active) {
       const tag = s.add.text(rx + rw + 12, y + 24, 'Last played', bodyStyle(14, COLORS.inkAccent)).setOrigin(0, 0.5);
-      if (tag.x + tag.width > x + w - 240) tag.destroy();
+      if (tag.x + tag.displayWidth > x + w - 240) tag.destroy();
       else m.add(tag);
     }
 
@@ -177,7 +192,7 @@ export class VillagesWindow {
   /** One village found: name it. Several: pick one first (newest at the top). */
   importLegacy(all) {
     const found = all.slice(0, 6); // the newest few fit the window
-    if (found.length === 1) { this.nameImport(found[0]); return; }
+    if (found.length === 1) { this.pickDevice(found[0]); return; }
     const s = this.scene, rowH = 64, w = 640;
     const pick = new Modal(s, { width: w, height: 130 + found.length * (rowH + 8) + 20, title: 'Villages in This Browser', header: 56 });
     pick.add(s.add.text(pick.cx, pick.y + 82, 'Pick the village to copy into your account', bodyStyle(17, COLORS.inkDim)).setOrigin(0.5));
@@ -188,7 +203,37 @@ export class VillagesWindow {
       g.fillStyle(0xe6e0d2, 1).fillRoundedRect(x + 3, y + 3, rw - 6, rowH - 6, 8);
       pick.add(s.add.text(x + 16, y + 20, describeVillage(v.save), bodyStyle(17)).setOrigin(0, 0.5));
       pick.add(s.add.text(x + 16, y + 44, `${v.source}  ·  ${savedWhen(v.save)}`, bodyStyle(14, COLORS.inkDim)).setOrigin(0, 0.5));
-      pick.add(new Button(s, x + rw - 70, y + rowH / 2 - 1, 110, 44, 'Import', () => { pick.destroy(); this.nameImport(v); }, { color: COLORS.buttonBlue, fontSize: 19 }));
+      pick.add(new Button(s, x + rw - 70, y + rowH / 2 - 1, 110, 44, v.baseId ? 'Restore' : 'Import', () => { pick.destroy(); this.pickDevice(v); }, { color: COLORS.buttonBlue, fontSize: 19 }));
+    });
+  }
+
+  /** A backup goes back into its own village; anything else becomes a new one. */
+  pickDevice(v) {
+    if (v.baseId) this.confirmRestore(v);
+    else this.nameImport(v);
+  }
+
+  /** Put a backup back into its village (what the village has now is kept as a backup in turn). */
+  confirmRestore(v) {
+    const b = this.session.baseById(v.baseId);
+    if (!b) return;
+    confirmDialog(this.scene, {
+      title: 'Restore Backup',
+      lines: [`Put this copy back into “${b.name}”?`, `${describeVillage(v.save)}  ·  ${savedWhen(v.save)}`,
+        'What the village has now is kept as a backup, so nothing is lost.'],
+      confirmLabel: 'Restore',
+      confirmColor: COLORS.buttonGood,
+      width: 620,
+      onConfirm: async () => {
+        this.setMessage('Restoring…');
+        try {
+          await this.session.restoreBackup(v.key);
+          this.message = '';
+        } catch (e) {
+          this.message = e.message || String(e);
+        }
+        this.render();
+      }
     });
   }
 

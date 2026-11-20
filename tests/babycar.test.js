@@ -29,7 +29,7 @@ describe('Da Baby Car (raid boss)', () => {
     expect(CAR.type).toBe('ground');
     expect(CAR.hp).toBe(CONFIG.enemies.tank.hp * 6);
     expect(CAR.bounty).toBe(150);
-    expect(CAR.researchPoints).toBe(25);
+    expect(CAR.researchPoints).toBe(40); // v0.5 rebalance (was 25)
   });
 
   it('comes in every 2nd normal wave from Village Hall 6 (2 cars from Village Hall 9), never in special waves', () => {

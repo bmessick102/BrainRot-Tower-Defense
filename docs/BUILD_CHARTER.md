@@ -83,7 +83,7 @@ TowerDefense/
 │   └── deploy.yml         build and publish dist/ to GitHub Pages on push to main
 ├── public/
 │   └── assets/
-│       ├── images/        game_map.png, game_map_grid.png, and Cole's other art
+│       ├── images/        map/game_map_grid.png (+ dusk/night/dawn) and Cole's other art
 │       └── audio/         Cole's sound effects
 ├── src/
 │   ├── main.js            Phaser game config + scene list
@@ -142,7 +142,7 @@ The map is Cole's painted forest clearing (`game_map.png`, 2102 × 1182 px) with
 - Distance = Euclidean distance in grid space, in tiles. Ranges, speeds, and splash radii all use this.
 - Depth sorting: each building's depth = `col + row` of its front corner (`anchorCol + size + anchorRow + size`); each enemy's depth = `x + y`. Air enemies get +1000 so they draw over everything.
 - **Background:** `game_map_grid.png`, drawn once at (0, 0) in world space. Every grass tile is shaded in a light/dark checkerboard that lines up exactly with the game's tiles: tile `(col, row)` is light when `col + row` is even and dark when it's odd, with a soft line around the edge of the placeable area. The code draws no grid lines of its own.
-- `game_map.png` is the same image without the checkerboard, kept in case the team later wants to draw tile shading in code (for example, only while placing a building).
+- `game_map.png` is the same image without the checkerboard, kept in case the team later wants to draw tile shading in code (for example, only while placing a building). It is no longer in `public/`: the original is `docs/archive/game_map_v1.png`.
 
 **Footprints and placement**
 

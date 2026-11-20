@@ -8,7 +8,7 @@ import { PROJECTILE_KEYS, TEX } from '../assetKeys.js';
 import { attachFireballFx, attachRocketFx } from './Effects.js';
 
 // On-screen width in pixels for each projectile kind.
-const DISPLAY_WIDTH = { cannon: 14, archer: 34, mortar: 34, wizard: 34, firework: 28, catapult: 16, slinger: 18, bomb: 18, pellet: 8, boulder: 26, bomblet: 18 };
+const DISPLAY_WIDTH = { cannon: 14, archer: 34, mortar: 34, wizard: 34, firework: 28, catapult: 16, spear: 52, slinger: 18, bomb: 18, pellet: 8, boulder: 26, bomblet: 18 };
 const SHURIKEN_SPIN = 0.35; // radians per frame the Slinger's shuriken turns in flight
 // The bomb picture's nose points left (180°): turn it so the nose leads the way down.
 const BOMB_NOSE_ANGLE = Math.PI;
@@ -20,11 +20,11 @@ const CATAPULT_ARC = 230; // the Catapult lobs higher and farther
 const LOBBED = { mortar: MORTAR_ARC, catapult: CATAPULT_ARC, bomblet: 45 };
 // Shots that travel in a straight line along the ground (a cannonball that punched through, a boulder):
 // drawn this far above the ground spot when they have no earlier height to keep.
-const LINE_LIFT = { boulder: 11, cannon: 20 };
+const LINE_LIFT = { boulder: 11, cannon: 20, spear: 30 };
 const MORTAR_LAUNCH = 40;
 const BOMBER_HEIGHT = 24;
 // Where each tower's shot leaves from: this share of the tower picture's height above its base.
-const MUZZLE = { cannon: 0.5, archer: 0.85, mortar: 0.6, wizard: 0.88, firework: 0.75, catapult: 0.62 };
+const MUZZLE = { cannon: 0.5, archer: 0.85, mortar: 0.6, wizard: 0.88, firework: 0.75, catapult: 0.62, spear: 0.7 };
 // Where shots hit a building: this share of its picture's height above its base.
 const BUILDING_HIT = 0.45;
 const MIN_BLEND = 1; // tiles
@@ -146,6 +146,10 @@ export class ProjectileView {
     }
     const x = s.x, y = s.y + this.lineLift;
     if (p.kind === 'boulder') this.image.rotation += 0.25 * Math.sign(p.dirX - p.dirY || 1);
+    if (p.kind === 'spear') { // point along the flight (its picture points right)
+      const n = gridToScreen(p.x + p.dirX, p.y + p.dirY);
+      this.image.setRotation(Math.atan2(n.y - s.y, n.x - s.x));
+    }
     this.image.setPosition(x, y).setDepth(2000 + p.x + p.y);
     if (this.fx) this.fx.update(x, y, 2000 + p.x + p.y, this.scene.time.now);
     else this.image.setTint(this.scene.ambientTint ?? 0xffffff);

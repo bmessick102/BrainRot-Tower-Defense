@@ -1,20 +1,21 @@
 // The RV Lab's research window, drawn as a Modal over the game (UIScene), laid out as a skill tree. A list of
-// every defense on the left; pick one to research its tree. ONE pick per tier per defense type (path A's, B's
-// or C's option; any mix; picks are final), paid in research points (RP). A pick applies at once to every
-// building of that type whose level is high enough. A defense's Abilities button opens this window on its type.
+// every defense on the left; pick one to research its tree. The first pick for a type locks it to that path
+// (A, B or C); a paid "Reset path" button clears it. Picks are paid in research points (RP) and apply at once to
+// every building of that type, whatever its level. A defense's Abilities button opens this window on its type.
 // The tree is a grid: three path columns (A orange, B blue, C green) by five tier rows. Each node is a small
 // card with the tier's name and state; clicking one shows it in the details panel on the right (what it does,
 // who gets it, what it needs, what it costs, and the Research button). It redraws whenever research, research
 // points or the buildings change, keeping the selected node.
-import { Modal } from './Modal.js';
+import { Modal, confirmDialog } from './Modal.js';
 import { Button } from './Button.js';
 import { buildingTextureKey } from './BuildingView.js';
-import { drawBadge } from './uiDraw.js';
-import { COLORS, bodyStyle, textStyle } from '../theme.js';
+import { drawBadge, fitWidth, fitIcon } from './uiDraw.js';
+import { COLORS, bodyStyle, textStyle, mix, RP_TEXT_COLOR } from '../theme.js';
+import { rpText } from '../logic/researchPoints.js';
 import { PATH_COLORS, PATH_TEXT_COLORS } from '../abilityConfig.js';
 import {
-  ABILITY_TYPES, DEFENSE_ABILITY_TYPES, ECONOMY_ABILITY_TYPES, MAX_TIER, PATH_KEYS, tierInfo, pathName, pathTiers, levelReq, labLevel, labPicks, labTierCount,
-  checkResearch, canResearchFor, researchCost
+  ABILITY_TYPES, DEFENSE_ABILITY_TYPES, ECONOMY_ABILITY_TYPES, MAX_TIER, PATH_KEYS, tierInfo, pathName, pathTiers, labLevel, labPicks, labTierCount,
+  checkResearch, canResearchFor, researchCost, lockedPath, checkRespec
 } from '../logic/abilities.js';
 import { buildingName } from '../logic/buildings.js';
 import { formatGold } from '../logic/economy.js';
@@ -26,9 +27,11 @@ import { TEX } from '../assetKeys.js';
 const GUTTER = 46;
 const COL_HEAD = 36;
 const NODE_H = 60, ROW_STEP = 70;
-const TOP = 104;                                      // grid / panel top, below the title and the info line
+const TOP = 112;                                      // grid / panel top, below the title and the info line
+const INFO_Y = 84;                                    // the info line / tabs / balance row: clear of the title bar (ends at 60)
 const GRID_H = COL_HEAD + 8 + ROW_STEP * (MAX_TIER - 1) + NODE_H;
-const WIN_H = TOP + GRID_H + 26;
+const RESPEC_H = 46;                                  // the "Reset path" row under the tree
+const WIN_H = TOP + GRID_H + RESPEC_H + 24;
 const INK = { a: '#b8640a', b: '#2a6fb0', c: '#2f8a2f' }; // path colors that read on the light body
 // Events that can change what the windows show.
 const REFRESH_ON = ['goldChanged', 'abilityResearched', 'abilitiesApplied', 'buildingPlaced', 'buildingUpgraded', 'buildingDestroyed',
@@ -44,17 +47,11 @@ function follow(scene, gs, refresh) {
   return () => handlers.forEach(([name, fn]) => gs.off(name, fn));
 }
 
-const mix = (a, b, t) => {
-  const ch = (s) => [(s >> 16) & 255, (s >> 8) & 255, s & 255];
-  const [ar, ag, ab] = ch(a), [br, bg, bb] = ch(b);
-  return (Math.round(ar + (br - ar) * t) << 16) | (Math.round(ag + (bg - ag) * t) << 8) | Math.round(ab + (bb - ab) * t);
-};
-
-/** "123 RP" / "4,500 gold" with its icon in a dark pill, right-aligned at (x, y). */
-function balance(scene, m, gs, rp, x, y) {
+/** "123 Burgers" / "4,500 gold" with its icon in a dark pill, right-aligned at (x, y). */
+export function balance(scene, m, gs, rp, x, y) { // (also the Fuel Station window's Burgers pill)
   const pill = m.add(scene.add.graphics());
-  const text = rp ? `${formatGold(gs.researchPoints || 0)} RP` : `${formatGold(Math.floor(gs.gold))} gold`;
-  const t = m.add(scene.add.text(x - 14, y, text, textStyle(18, rp ? '#e2c8ff' : COLORS.textGold)).setOrigin(1, 0.5));
+  const text = rp ? rpText(gs.researchPoints || 0) : `${formatGold(Math.floor(gs.gold))} gold`;
+  const t = m.add(scene.add.text(x - 14, y, text, textStyle(18, rp ? RP_TEXT_COLOR : COLORS.textGold)).setOrigin(1, 0.5));
   const key = rp ? TEX.researchPoint : TEX.coin;
   let left = t.x - t.width - 12;
   if (scene.textures.exists(key)) {
@@ -63,6 +60,7 @@ function balance(scene, m, gs, rp, x, y) {
     left = icon.x - 20;
   }
   pill.fillStyle(0x000000, 0.45).fillRoundedRect(left, y - 17, x - left, 34, 17);
+  return left;
 }
 
 /** The info line under the title: the RV Lab guide's hint while it has one for this window, else `text`. */
@@ -70,11 +68,13 @@ function infoLine(scene, m, gs, kind, text, width, x = m.x + 24) {
   const hint = labGuideHint(gs, kind);
   if (hint) {
     const g = m.add(scene.add.graphics());
-    const t = scene.add.text(x + 12, m.y + 72, `Guide: ${hint}`, bodyStyle(15, '#5a3a00', { fontStyle: 'bold', wordWrap: { width: width - 24 } })).setOrigin(0, 0.5);
-    g.fillStyle(0xffd84a, 0.9).fillRoundedRect(x, m.y + 72 - t.height / 2 - 6, Math.min(width, t.width + 24), t.height + 12, 10);
+    const t = scene.add.text(x + 12, m.y + INFO_Y, `Guide: ${hint}`, bodyStyle(15, '#5a3a00', { fontStyle: 'bold', wordWrap: { width: width - 24 } })).setOrigin(0, 0.5);
+    // At most three lines: a long hint steps its font down so the note stays clear of the title bar and the grid.
+    for (let size = 14; t.height > 58 && size >= 11; size--) t.setFontSize(size);
+    g.fillStyle(0xffd84a, 0.9).fillRoundedRect(x, m.y + INFO_Y - t.height / 2 - 6, Math.min(width, t.width + 24), t.height + 12, 10);
     m.add(t);
   } else {
-    m.add(scene.add.text(x + 2, m.y + 72, text, bodyStyle(15, COLORS.inkDim, { wordWrap: { width } })).setOrigin(0, 0.5));
+    m.add(scene.add.text(x + 2, m.y + INFO_Y, text, bodyStyle(15, COLORS.inkDim, { wordWrap: { width } })).setOrigin(0, 0.5));
   }
 }
 
@@ -109,7 +109,7 @@ function drawTree(scene, m, x, y, colW, gap, type, nodeState, selected, onSelect
     g.fillStyle(color, 1).fillRoundedRect(cx + 2, y + 2, colW - 4, COL_HEAD - 6, 9);
     g.fillStyle(0xffffff, 0.22).fillRoundedRect(cx + 6, y + 4, colW - 12, 7, 4);
     const head = m.add(scene.add.text(cx + colW / 2, y + (COL_HEAD - 2) / 2, `${p.toUpperCase()} · ${pathName(type, p)}`, textStyle(16)).setOrigin(0.5));
-    if (head.width > colW - 16) head.setScale((colW - 16) / head.width);
+    fitWidth(head, colW - 16);
     // Connectors down the column: solid in the path's color once the tier above is owned / researched.
     for (let t = 1; t < MAX_TIER; t++) {
       const done = nodeState(p, t).state === 'owned';
@@ -141,7 +141,7 @@ function drawTree(scene, m, x, y, colW, gap, type, nodeState, selected, onSelect
       if (owned) ng.fillStyle(color, 1).fillRoundedRect(cx + 2, cy + 2, 6, NODE_H - 5, 3);
       gem(ng, cx + 22, cy + NODE_H / 2, 11, color, owned, dim);
       const name = m.add(scene.add.text(cx + 40, cy + 10, st.hidden ? '? ? ?' : tierInfo(type, p, t).name, bodyStyle(14.5, dim || st.hidden ? '#a89c88' : COLORS.ink, { fontStyle: 'bold' })));
-      if (name.width > colW - 48) name.setScale((colW - 48) / name.width);
+      fitWidth(name, colW - 48);
       const lineInk = owned ? INK[p] : avail ? (st.short ? COLORS.inkBad : COLORS.inkGood) : dim ? '#b3a892' : COLORS.inkDim;
       m.add(scene.add.text(cx + 40, cy + 33, st.line || '', bodyStyle(12.5, lineInk, { fontStyle: owned || avail ? 'bold' : 'normal' })));
       if (isSel) {
@@ -177,7 +177,7 @@ function drawDetails(scene, m, x, y, w, h, d) {
     : tierInfo(d.type, d.path, d.tier);
   let cy = y + 24;
   const title = m.add(scene.add.text(x + 20, cy, info.name, textStyle(26)));
-  if (title.width > w - 40) title.setScale((w - 40) / title.width);
+  fitWidth(title, w - 40);
   cy += 38;
   m.add(scene.add.text(x + 20, cy, `Path ${d.path.toUpperCase()} · ${pathName(d.type, d.path)} · Tier ${d.tier}`, bodyStyle(14, INK[d.path], { fontStyle: 'bold' })));
   cy += 30;
@@ -234,7 +234,9 @@ export function openResearchWindow(scene, gs, { onClose = null, startType = null
 
   const stateOf = (lab) => (p, t) => {
     const picks = labPicks(gs, type), count = picks.length;
-    if (t <= count) return picks[t - 1] === p ? { state: 'owned', line: '✔ Researched' } : { state: 'taken', line: `Took Path ${picks[t - 1].toUpperCase()}` };
+    const locked = picks[0] || null;
+    if (t <= count && picks[t - 1] === p) return { state: 'owned', line: '✔ Researched' };
+    if (locked && locked !== p) return { state: 'taken', line: `Locked to Path ${locked.toUpperCase()}` };
     // Tiers past what the RV Lab can reach stay hidden (name and text) until it levels up, so a new player
     // sees a few options at a time instead of the whole tree.
     if (t > Math.max(1, lab)) return { state: t > count + 1 ? 'future' : 'locked', line: `Locked · RV Lab lv ${t}`, hidden: true };
@@ -242,7 +244,7 @@ export function openResearchWindow(scene, gs, { onClose = null, startType = null
     if (!lab) return { state: 'locked', line: gs.buildings.some((b) => b.type === 'rvlab') ? 'RV Lab destroyed' : 'Build an RV Lab' };
     if (t > lab) return { state: 'locked', line: `RV Lab level ${t}` };
     const cost = checkResearch(gs, type, p, t).cost;
-    return { state: 'available', line: cost === 0 ? 'Research · Free' : `Research · ${formatGold(researchCost(t))} RP`, short: (gs.researchPoints || 0) < cost };
+    return { state: 'available', line: cost === 0 ? 'Research · Free' : `Research · ${rpText(researchCost(t))}`, short: (gs.researchPoints || 0) < cost };
   };
   /** The node to show: the next tier, on the path picked last (so climbing a path keeps going down it). */
   const firstPick = (st) => {
@@ -257,13 +259,10 @@ export function openResearchWindow(scene, gs, { onClose = null, startType = null
   if (!type) type = ABILITY_TYPES.find((t) => canResearchFor(gs, t)) || DEFENSE_ABILITY_TYPES[0];
   let tab = ECONOMY_ABILITY_TYPES.includes(type) ? 'economy' : 'defenses';
 
-  /** "Applies to every Cannon at level 4+ (2 of your 3 now)." */
-  const appliesText = (tier, owned) => {
-    const lvl = levelReq(type, tier);
-    const mine = gs.buildings.filter((b) => b.type === type);
-    const ok = mine.filter((b) => b.level >= lvl).length;
-    const yours = mine.length ? ` (${ok} of your ${mine.length} now)` : '';
-    return `${owned ? 'On' : 'Applies to'} every ${buildingName(type)} at level ${lvl}+${yours}, automatically.`;
+  /** "Applies to every Cannon (3 now), whatever its level." */
+  const appliesText = (owned) => {
+    const n = gs.buildings.filter((b) => b.type === type).length;
+    return `${owned ? 'On' : 'Applies to'} every ${buildingName(type)}${n ? ` (${n} now)` : ''}, whatever its level.`;
   };
 
   const refresh = () => {
@@ -272,19 +271,19 @@ export function openResearchWindow(scene, gs, { onClose = null, startType = null
     const lab = labLevel(gs);
     m.setTitle(lab ? `RV Lab · Research (level ${lab}: tiers 1-${lab})` : 'RV Lab · Research');
     infoLine(scene, m, gs, 'research', lab
-      ? 'One pick per tier (A, B or C; final). It goes onto every building of that type.'
+      ? 'Your first pick locks the path (A, B or C). Perks go onto every building of that type.'
       : 'Build or rebuild an RV Lab to research.', W - 420 - LIST_W, m.x + 22 + LIST_W + 14);
     // The tabs, over the list: the selected one green, a red "!" on a tab with research ready.
     TABS.forEach((tb, i) => {
-      const tw = (LIST_W - 6) / 2, tx = m.x + 22 + i * (tw + 6), ty = m.y + 61, on = tb.key === tab;
+      const tw = (LIST_W - 6) / 2, tx = m.x + 22 + i * (tw + 6), ty = m.y + INFO_Y - 16, on = tb.key === tab;
       const g = m.add(scene.add.graphics());
       g.fillStyle(COLORS.frame, 1).fillRoundedRect(tx, ty, tw, 30, 9);
       g.fillStyle(on ? 0x6cbf2c : 0x4a4f5a, 1).fillRoundedRect(tx + 2, ty + 2, tw - 4, 25, 8);
       g.fillStyle(0xffffff, 0.18).fillRoundedRect(tx + 5, ty + 4, tw - 10, 7, 4);
       m.add(scene.add.text(tx + tw / 2, ty + 14, tb.label, textStyle(15)).setOrigin(0.5));
       if (tb.types.some((t) => canResearchFor(gs, t))) {
-        drawBadge(g, tx + tw - 9, ty + 9, 8);
-        m.add(scene.add.text(tx + tw - 9, ty + 8, '!', textStyle(12)).setOrigin(0.5));
+        drawBadge(g, tx + tw - 2, ty + 5, 8); // on the tab's top corner, clear of its label
+        m.add(scene.add.text(tx + tw - 2, ty + 4, '!', textStyle(12)).setOrigin(0.5));
       }
       const zone = m.add(scene.add.zone(tx, ty, tw, 30).setOrigin(0).setInteractive({ useHandCursor: true }));
       zone.on('pointerdown', () => {
@@ -297,8 +296,8 @@ export function openResearchWindow(scene, gs, { onClose = null, startType = null
     });
     // Top right: the selected defense's tiers as pips, then your RP.
     const pg = m.add(scene.add.graphics());
-    drawPips(pg, m.x + W - 230, m.y + 72, labPicks(gs, type));
-    balance(scene, m, gs, true, m.x + W - 22, m.y + 72);
+    const balanceLeft = balance(scene, m, gs, true, m.x + W - 22, m.y + INFO_Y);
+    drawPips(pg, balanceLeft - 14 - (18 * MAX_TIER + 8) / 2, m.y + INFO_Y, labPicks(gs, type)); // just left of the RP pill, whatever its width
 
     // The tab's buildings: picture, name, its five tiers as squares colored by pick, "!" when research is ready.
     const types = TABS.find((tb) => tb.key === tab).types;
@@ -309,12 +308,12 @@ export function openResearchWindow(scene, gs, { onClose = null, startType = null
       g.fillStyle(COLORS.frame, sel ? 1 : 0.2).fillRoundedRect(lx, y, LIST_W, itemH - 4, 9);
       g.fillStyle(sel ? 0x6cbf2c : 0xf3ecdd, 1).fillRoundedRect(lx + 2, y + 2, LIST_W - 4, itemH - 8, 8);
       const pic = m.add(scene.add.image(lx + 24, y + itemH - 8, buildingTextureKey(scene, t, 1)).setOrigin(0.5, 1));
-      pic.setScale(Math.min(36 / pic.frame.width, (itemH - 10) / pic.frame.height));
-      const name = m.add(scene.add.text(lx + 48, y + 5, buildingName(t), sel ? textStyle(14) : bodyStyle(13.5, COLORS.ink, { fontStyle: 'bold' })));
-      if (name.width > LIST_W - 64) name.setScale((LIST_W - 64) / name.width);
+      fitIcon(pic, 36, itemH - 10);
+      const name = m.add(scene.add.text(lx + 48, y + 3, buildingName(t), sel ? textStyle(14) : bodyStyle(13.5, COLORS.ink, { fontStyle: 'bold' })));
+      fitWidth(name, LIST_W - 80); // ends before the "!" badge
       const picks = labPicks(gs, t);
       for (let d = 0; d < MAX_TIER; d++) {
-        g.fillStyle(picks[d] ? PATH_COLORS[picks[d]] : sel ? 0x3f7a1c : 0xcfc6b3, 1).fillRect(lx + 50 + d * 13, y + itemH - 20, 10, 8);
+        g.fillStyle(picks[d] ? PATH_COLORS[picks[d]] : sel ? 0x3f7a1c : 0xcfc6b3, 1).fillRect(lx + 50 + d * 13, y + itemH - 16, 10, 6);
       }
       if (canResearchFor(gs, t)) {
         drawBadge(g, lx + LIST_W - 14, y + 14, 10);
@@ -337,18 +336,36 @@ export function openResearchWindow(scene, gs, { onClose = null, startType = null
     const s = st(path, tier);
     const c = checkResearch(gs, type, path, tier);
     const count = labTierCount(gs, type);
+    const locked = lockedPath(gs, type);
     const checks = s.state === 'owned' || s.state === 'taken' || s.hidden ? [] : [
       [lab >= tier, `RV Lab level ${tier}${lab ? ` (yours: ${lab})` : ''}`],
-      ...(tier > 1 ? [[count >= tier - 1, `A tier ${tier - 1} pick first`]] : []),
+      ...(tier > 1 ? [[count >= tier - 1, `Tier ${tier - 1} first`]] : []),
       [!isWaveActive(gs), 'Not during a wave']
     ];
-    const detail = { type, path, tier, checks, hidden: !!s.hidden, applies: s.state === 'taken' || s.hidden ? '' : appliesText(tier, s.state === 'owned'), rp: true, button: null };
+    const detail = { type, path, tier, checks, hidden: !!s.hidden, applies: s.state === 'taken' || s.hidden ? '' : appliesText(s.state === 'owned'), rp: true, button: null };
+    if (!locked && !s.hidden && s.state === 'available') detail.applies += ' Picking it locks every ' + buildingName(type) + ' to Path ' + path.toUpperCase() + '.';
     if (s.hidden) detail.note = `Unlocks at RV Lab level ${tier}`;
     else if (s.state === 'owned') { detail.note = '✔ Researched'; detail.noteGood = true; }
-    else if (s.state === 'taken') detail.note = `You took Path ${labPicks(gs, type)[tier - 1].toUpperCase()} at tier ${tier}. Picks are final.`;
-    else if (s.state === 'future') detail.note = `Pick a tier ${count + 1} option first`;
-    else detail.button = { label: c.cost === 0 ? 'Research (free)' : `Research · ${formatGold(c.cost ?? researchCost(tier))} RP`, ok: c.ok, sub: c.reason, onClick: () => { if (gs.researchAbility(type, path, tier).ok) { selected = { path, tier: Math.min(MAX_TIER, tier + 1) }; refresh(); } } };
+    else if (s.state === 'taken') detail.note = `Your ${buildingName(type)}s are locked to Path ${locked.toUpperCase()}. Reset the path to switch.`;
+    else if (s.state === 'future') detail.note = `Research tier ${count + 1} first`;
+    else detail.button = { label: c.cost === 0 ? 'Research (free)' : `Research · ${rpText(c.cost ?? researchCost(tier))}`, ok: c.ok, sub: c.reason, onClick: () => { if (gs.researchAbility(type, path, tier).ok) { selected = { path, tier: Math.min(MAX_TIER, tier + 1) }; refresh(); } } };
     drawDetails(scene, m, gx + GUTTER + COL_W * 3 + GAP * 2 + 16, gy, PANEL_W, GRID_H, detail);
+
+    // Paid respec, under the tree: clears this type's path (its picks are not refunded) so it can take another.
+    if (count > 0) {
+      const rc = checkRespec(gs, type), ry = gy + GRID_H + 8 + RESPEC_H / 2;
+      m.add(scene.add.text(gx, ry, `${buildingName(type)}s are locked to Path ${locked.toUpperCase()} · ${pathName(type, locked)}${rc.ok ? '' : ` (${rc.reason})`}`, bodyStyle(14, COLORS.inkDim, { fontStyle: 'bold' })).setOrigin(0, 0.5));
+      const rb = new Button(scene, gx + GUTTER + COL_W * 3 + GAP * 2 + 16 + PANEL_W - 150, ry, 300, 42, `Reset path · ${rpText(rc.cost)}`, () => {
+        confirmDialog(scene, {
+          title: 'Reset path?',
+          lines: [`Reset the ${buildingName(type)} path for ${rpText(rc.cost)}?`,
+            `Its ${count} researched tier${count > 1 ? 's' : ''} are lost (no refund) and you pick a path again.`],
+          confirmLabel: 'Reset', onConfirm: () => { if (gs.respecPath(type).ok) { selected = null; refresh(); } }
+        });
+      }, { color: 0x8e5bd6, fontSize: 18, radius: 12 });
+      rb.setEnabled(rc.ok);
+      m.add(rb);
+    }
   };
   unfollow = follow(scene, gs, refresh);
   refresh();

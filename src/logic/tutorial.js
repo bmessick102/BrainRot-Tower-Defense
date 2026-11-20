@@ -143,6 +143,7 @@ export function applyStarterBase(state) {
   const rebuilt = !!old && old.level >= 1;
   state.buildings = [createBuilding(state, 'townHall', thCol, thRow, rebuilt ? 1 : 0)];
   for (const s of STARTER_BASE) state.buildings.push(createBuilding(state, s.type, s.col, s.row, 1));
+  state.wallLevel = 1; // any starter walls are Level 1, the village's wall level
   if (!rebuilt) state.gold = upgradeCost('townHall', 0);
   state.tutorialStep = TUTORIAL_DONE_STEP;
   state.tutorialDone = true;

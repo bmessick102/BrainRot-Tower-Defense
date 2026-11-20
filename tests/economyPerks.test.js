@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { CONFIG } from '../src/config.js';
-import { produceMines, getCapacity, storageDrainAmount, collectMine, mineStockCap, mineProduction } from '../src/logic/economy.js';
+import { getCapacity, storageDrainAmount, collectMine, mineStockCap, mineProduction } from '../src/logic/economy.js';
 import { gnomeRoster, tripTime } from '../src/logic/villagers.js';
 import { stepEconomyPerks } from '../src/logic/econPerks.js';
 import { damageBuilding, damageEnemy } from '../src/logic/combat.js';
@@ -53,7 +53,7 @@ describe('Bitcoin Mine perks', () => {
     expect(m.compound).toBe(2);
   });
 
-  it('Security: Hidden Stash vs Bitcoin Stealers, Panic Room when low, Bounty Vault nearby', () => {
+  it('Security: Hidden Stash vs Mr. Least, Panic Room when low, Bounty Vault nearby', () => {
     const s = village();
     const m = pick(addBuilding(s, 'mine', 9, 16, 4), 'c', 'c', 'c', 'c');
     const thief = addEnemy(s, 'thief', 8.5, 16.5);

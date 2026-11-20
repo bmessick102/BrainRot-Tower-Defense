@@ -1,5 +1,4 @@
 import { describe, it, expect } from 'vitest';
-import { CONFIG } from '../src/config.js';
 import { villagersShouldBeOut, VILLAGER_SETTINGS, gnomeHeading, pickWanderSpot } from '../src/objects/Villagers.js';
 import { makeStateWithTownHall, seededRng } from './helpers.js';
 

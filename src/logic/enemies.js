@@ -10,7 +10,7 @@ import { abilityFx } from './abilities.js';
 import { getNav, distanceField, nextStep } from './pathfinding.js';
 import { emit, nextId, random } from './util.js';
 import { enrageFactor } from './enrage.js';
-import { walkToward } from './motion.js';
+import { walkToward, moveToward } from './motion.js';
 
 /** A Village Hall's base wave (scripted for the first ones, the last scripted one grown after that). */
 function baseWaveFor(th) {
@@ -109,7 +109,7 @@ export function createEnemy(state, kind, spawnX, spawnY, hpMultiplier = 1) {
   };
 }
 
-/** An invisible enemy (Money Stealer) shows itself: defenses can target it from now on. */
+/** An invisible enemy (Mr. Least) shows itself: defenses can target it from now on. */
 export function revealEnemy(state, e) {
   if (!e.hidden) return;
   e.hidden = false;
@@ -150,6 +150,7 @@ export function findNearestBuilding(state, x, y, onlyTypes = null, exclude = nul
   for (const b of state.buildings) {
     if (b.destroyed || (exclude && exclude.includes(b.id))) continue;
     if (CONFIG.defenses[b.type]?.trap) continue; // hidden traps: enemies can't see them
+    if (b.spellInvisT > 0) continue;             // nor buildings under an Invisibility spell (spells.js)
     if (b.type === 'wall' && !(onlyTypes && onlyTypes.includes('wall'))) continue;
     if (onlyTypes && !matchesTypes(b, onlyTypes)) continue;
     const d = distanceToFootprint(b, x, y);
@@ -159,7 +160,7 @@ export function findNearestBuilding(state, x, y, onlyTypes = null, exclude = nul
 }
 
 /**
- * Nearest building this enemy wants: for picky enemies (config `prefers`, e.g. the Money Stealer)
+ * Nearest building this enemy wants: for picky enemies (config `prefers`, e.g. Mr. Least)
  * the nearest standing building of those types, and only when none are left, the nearest of any.
  */
 export function pickTarget(state, e) {
@@ -171,10 +172,10 @@ export function pickTarget(state, e) {
   return findNearestBuilding(state, e.x, e.y);
 }
 
-/** Keep the current target unless it was destroyed; then pick the next one. */
+/** Keep the current target unless it was destroyed (or turned invisible by a spell); then pick the next one. */
 export function ensureTarget(state, e) {
   const current = findBuilding(state, e.targetId);
-  if (current && !current.destroyed) return current;
+  if (current && !current.destroyed && !(current.spellInvisT > 0)) return current;
   const next = pickTarget(state, e);
   e.targetId = next ? next.id : null;
   return next;
@@ -187,15 +188,6 @@ export function findBumpedBuilding(state, e) {
     if (isInsideFootprint(b, e.x, e.y, BUMP_PADDING)) return b;
   }
   return null;
-}
-
-/** Move (x, y) of an enemy up to `step` toward a point; returns the remaining distance. */
-function moveToward(e, tx, ty, step) {
-  const d = distance(e.x, e.y, tx, ty);
-  if (d <= step) { e.x = tx; e.y = ty; return 0; }
-  e.x += ((tx - e.x) / d) * step;
-  e.y += ((ty - e.y) / d) * step;
-  return d - step;
 }
 
 /** Old straight-line walk (used only when an enemy is off the nav grid or has no route). */
@@ -253,7 +245,7 @@ function stepGround(state, e, target, cfg, step, nav) {
     e.overWall = isOverWall(nav, e.x, e.y); // the view arcs it up while it's over a wall
     if (e.overWall && !was) {
       emit(state, 'enemyJump', { id: e.id, kind: e.kind, x: e.x, y: e.y });
-      revealEnemy(state, e); // the first wall jump gives an invisible goblin away
+      revealEnemy(state, e); // the first wall jump gives an invisible Mr. Least away
     }
   }
   return distanceToFootprint(target, e.x, e.y) <= range + EPS ? target : null;
@@ -390,7 +382,7 @@ function stepBabyCar(state, e, cfg, hall, step, dt, rage) {
 
 /**
  * Ground enemies fight the Brisket King when he's in their reach (melee: next to him; ranged: within their
- * range). Picky raiders (Bitcoin Stealers, Neegies...) ignore him unless his Royal Taunt pulls them in, and
+ * range). Picky raiders (Mr. Least, Neegies...) ignore him unless his Royal Taunt pulls them in, and
  * Wall Breakers, flyers, bosses and tunnelers never stop for him. Returns true if it dealt with him this step.
  */
 function fightHero(state, e, cfg, step, rage) {
@@ -453,14 +445,31 @@ function stepBurrower(state, e, cfg, target, step, dt, rage) {
   emit(state, 'enemyAttack', { id: e.id, kind: e.kind, targetId: target.id });
 }
 
+/** How many troops a Da Baby Car's burst stands for at wave n (deathSpawn.base, +1 every perWaves past fromWave). */
+export function babyCarBurstSize(cfg, waveNumber) {
+  const d = cfg.deathSpawn;
+  return d.base + Math.floor(Math.max(0, (waveNumber || 0) - d.fromWave) / d.perWaves);
+}
+
 /**
- * The Da Baby Car's burst when it's destroyed: how many troops, and which. Count: deathSpawn.base, +1 every
- * perWaves waves past fromWave. Kinds: the ground troops in the Village Hall's base wave (no flyers, no
- * Neegies, no more Da Baby Cars), weighted by how many of each that wave has; Grunts if it has none.
+ * Crowd cap for the burst: past deathSpawn.maxCount troops, the burst drops maxCount and each one is packed
+ * (health, damage, gold and RP x this), like a capped wave (waves.js applyCrowdCap). 1 = not packed.
+ */
+export function babyCarBurstPack(cfg, waveNumber) {
+  const max = cfg.deathSpawn.maxCount;
+  const size = babyCarBurstSize(cfg, waveNumber);
+  return max && size > max ? Math.round((size / max) * 100) / 100 : 1;
+}
+
+/**
+ * The Da Baby Car's burst when it's destroyed: how many troops, and which. Count: babyCarBurstSize, at most
+ * deathSpawn.maxCount (babyCarBurstPack makes up the rest). Kinds: the ground troops in the Village Hall's base
+ * wave (no flyers, no Neegies, no more Da Baby Cars), weighted by how many of each that wave has; Grunts if it
+ * has none.
  */
 export function babyCarBurst(state, cfg, waveNumber, baseComp) {
   const d = cfg.deathSpawn;
-  const count = d.base + Math.floor(Math.max(0, waveNumber - d.fromWave) / d.perWaves);
+  const count = Math.min(babyCarBurstSize(cfg, waveNumber), d.maxCount || Infinity);
   const weights = ENEMY_KINDS
     .filter((k) => k !== 'babycar' && k !== 'neegy' && !isAirKind(k) && (baseComp[k] || 0) > 0)
     .map((k) => [k, baseComp[k]]);
@@ -676,8 +685,11 @@ export function removeDeadEnemies(state) {
     e.deathDropped = true;
     const w = state.wave || {};
     const mix = babyCarBurst(state, cfg, w.number || 1, burstBase(state));
+    // A very late wave's burst is capped (babyCarBurstPack): fewer troops, each that much tougher.
+    const pack = babyCarBurstPack(cfg, w.number || 1);
+    const from = pack > 1 ? { ...e, maxHp: e.maxHp * pack, pack } : e;
     const troops = [];
-    for (const [kind, n] of Object.entries(mix)) troops.push(...dropTroopsAt(state, e, kind, n, e.x, e.y, { landing: 0.25 }));
+    for (const [kind, n] of Object.entries(mix)) troops.push(...dropTroopsAt(state, from, kind, n, e.x, e.y, { landing: 0.25 }));
     emit(state, 'babyCarBurst', { id: e.id, x: e.x, y: e.y, troops: troops.map((t) => t.id) });
   }
   state.enemies = state.enemies.filter((e) => e.alive);

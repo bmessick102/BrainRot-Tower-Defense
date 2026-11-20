@@ -2,7 +2,7 @@
 // Rah Fire Ring, sparkler pops, and small "Stun!" / "Crit!" tags. All screen positions are world pixels.
 import Phaser from 'phaser';
 import { rangeEllipse } from '../logic/iso.js';
-import { splashRing, fireworkBurst, fireballImpact, floatText } from './Effects.js';
+import { splashRing, fireworkBurst, fireballImpact } from './Effects.js';
 
 const FX_DEPTH = 2700;
 
@@ -120,7 +120,3 @@ export function drawFireRing(g, x, y, radiusTiles, time, phase = 0) {
   }
 }
 
-/** A short tag over an enemy ("Stun!", "Crit!"). */
-export function tagText(scene, x, y, text, color) {
-  floatText(scene, x, y, text, color, 13);
-}

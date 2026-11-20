@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { CONFIG } from '../src/config.js';
-import { ensureTarget, stepEnemy, enemyDamageVs, LANDING_SECONDS, ENEMY_KINDS, removeDeadEnemies } from '../src/logic/enemies.js';
+import { stepEnemy, enemyDamageVs, LANDING_SECONDS, ENEMY_KINDS, removeDeadEnemies } from '../src/logic/enemies.js';
 import { matchesTypes, damageEnemy } from '../src/logic/combat.js';
 import { waveComposition } from '../src/logic/waves.js';
 import { makeStateWithTownHall, addBuilding, addEnemy } from './helpers.js';
@@ -75,8 +75,8 @@ describe('Neegy Balloon', () => {
     expect(s.enemies).toHaveLength(0);
   });
 
-  it('joins the waves from wave 3 (1, then 2); Neegies are never queued', () => {
-    expect(CONFIG.waves.map((w) => w.balloon)).toEqual([0, 0, 1, 2]);
+  it('joins the waves from Village Hall 3 (1, 1, then 2); Neegies are never queued', () => {
+    expect(CONFIG.waves.map((w) => w.balloon)).toEqual([0, 0, 1, 1, 2]); // v0.5 rebalance (VH5 has a scripted wave)
     for (let n = 1; n <= 10; n++) expect(waveComposition(n).neegy).toBe(0);
     expect(ENEMY_KINDS).toContain('balloon');
     expect(ENEMY_KINDS).toContain('neegy');

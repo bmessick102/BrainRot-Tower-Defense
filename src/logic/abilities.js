@@ -1,21 +1,21 @@
-// RV Lab ability paths: research (one pick per tier, per defense type), the tiers each building has (from
-// those picks and its level), merged effects, and the effective stats a defense fights with (its own tiers
-// plus any F.L.O.C.K Commander aura).
-// Research: at each tier the RV Lab picks ONE option for a defense type, path A's, B's or C's (any mix:
-// A1, B2, A3; picks are final). Tier N needs a tier N-1 pick; the RV Lab's level caps the tier. Kept as
-// state.research[type] = ['a', 'b', 'a'] (tier 1 first).
-// Every building of that type gets the picks automatically, up to the first tier its own level is too low
-// for (picksForLevel in abilityConfig.js). Kept on each building as b.picks (synced by syncAbilityPicks), which
-// is what combat reads.
-// The trees, costs and level requirements are in src/abilityConfig.js. Research costs research points (RP).
+// RV Lab perk paths: research (one pick per tier, per building type), the tiers each building has (from those
+// picks), merged effects, and the effective stats a defense fights with (its own tiers plus any F.L.O.C.K
+// Commander aura).
+// Research: the FIRST pick for a type commits the type to that path (A, B or C); every later tier is that
+// path's (PATH LOCK). Tier N needs tier N-1; the RV Lab's level caps the tier (tier N needs lab level N). Kept
+// as state.research[type] = ['a', 'a', 'a'] (tier 1 first). A paid respec (respecCost) clears a type's picks so
+// it can take another path. A building's own level has no effect on perks.
+// Every building of that type gets the picks automatically. Kept on each building as b.picks (synced by
+// syncAbilityPicks), which is what combat reads.
+// The trees and costs are in src/abilityConfig.js. Research and respec cost research points (RP).
 // No Phaser, no spending here (GameState does that).
 import { CONFIG } from '../config.js';
-import { ABILITIES, ABILITY_COSTS, MAX_TIER, PATH_KEYS, levelReq, picksForLevel } from '../abilityConfig.js';
+import { ABILITIES, ABILITY_COSTS, MAX_TIER, PATH_KEYS, picksFor } from '../abilityConfig.js';
 import { defenseRange, typeConfig, maxHp } from './buildings.js';
 import { isWaveActive } from './util.js';
 import { researchPoints, needRpReason } from './researchPoints.js';
 
-export { ABILITIES, MAX_TIER, PATH_KEYS, levelReq, picksForLevel };
+export { ABILITIES, MAX_TIER, PATH_KEYS, picksFor };
 
 /** Does this building type have ability paths? (Every defense and trap.) */
 export function hasAbilities(type) {
@@ -40,21 +40,6 @@ export function picksOf(b) {
   return (b && b.picks) || [];
 }
 
-/** How many tiers this building owns (0-5). */
-export function tierCount(b) {
-  return picksOf(b).length;
-}
-
-/** Which path the building picked at a tier (1-based), or null. */
-export function pickAt(b, tier) {
-  return picksOf(b)[tier - 1] || null;
-}
-
-/** How many of the building's tiers came from this path. */
-export function pathTier(b, path) {
-  return picksOf(b).filter((p) => p === path).length;
-}
-
 /** The tiers (1-based) the building took from this path, e.g. [1, 3]. */
 export function pathTiers(b, path) {
   return picksOf(b).map((p, i) => (p === path ? i + 1 : 0)).filter(Boolean);
@@ -74,24 +59,15 @@ export function labTierCount(state, type) {
   return labPicks(state, type).length;
 }
 
-/** Is this option (type, path, tier) the RV Lab's pick at that tier? */
-export function isResearched(state, type, path, tier) {
-  return labPicks(state, type)[tier - 1] === path;
+/** The path a type is committed to (its first pick), or null while it is still free to choose. */
+export function lockedPath(state, type) {
+  return labPicks(state, type)[0] || null;
 }
 
-/** The tiers (1-based) the RV Lab picked from this path for a type, e.g. [1, 3]. */
-export function researchedTiers(state, type, path) {
-  return labPicks(state, type).map((p, i) => (p === path ? i + 1 : 0)).filter(Boolean);
-}
-
-/** How many of a type's picks came from this path. */
-export function researchTier(state, type, path) {
-  return researchedTiers(state, type, path).length;
-}
-
-/** Is a tier open to pick (or already picked)? Tier N opens once tier N-1 has a pick, from any path. */
+/** Is a tier open to pick (or already picked) on this path? Only the locked path (or any, while free), in order. */
 export function tierUnlocked(state, type, path, tier) {
-  return tier <= labTierCount(state, type) + 1;
+  const locked = lockedPath(state, type);
+  return tier <= labTierCount(state, type) + 1 && (!locked || locked === path);
 }
 
 /** The tier a type picks next, or null when all five are picked. */
@@ -116,14 +92,14 @@ export function researchCost(tier) {
 }
 
 /**
- * Give every building with ability paths the tiers its type's picks and its level allow (b.picks). Health
+ * Give every building with ability paths its type's RV Lab picks (b.picks; its level plays no part). Health
  * tiers keep the same share of health. Returns the ids of the buildings whose tiers changed.
  */
 export function syncAbilityPicks(state) {
   const changed = [];
   for (const b of state.buildings) {
     if (!hasAbilities(b.type)) continue;
-    const next = picksForLevel(state.research, b.type, b.level);
+    const next = picksFor(state.research, b.type);
     if (next.join('') === picksOf(b).join('')) continue;
     const oldMax = maxHp(b);
     b.picks = next;
@@ -191,8 +167,9 @@ export function towerMinRange(b) {
 
 /** Damage multiplier from the tower's own tiers and a Commander aura (Rally). */
 export function towerDamageMult(b) {
-  // (+ DJ Babyface's Main Stage while Drop the Beat lasts)
-  return 1 + ((abilityFx(b).damagePct || 0) + (aura(b).damagePct || 0) + (b.djBoostT > 0 ? b.djDmgPct || 0 : 0)) / 100;
+  // (+ DJ Babyface's Main Stage while Drop the Beat lasts, + a Rage spell)
+  return 1 + ((abilityFx(b).damagePct || 0) + (aura(b).damagePct || 0) + (b.djBoostT > 0 ? b.djDmgPct || 0 : 0)
+    + (b.spellRageT > 0 ? b.spellRageDmgPct || 0 : 0)) / 100;
 }
 
 /** Seconds between shots (faster with fire-rate tiers and a Commander aura). */
@@ -205,6 +182,7 @@ export function towerFireInterval(b) {
     + (b.celebrateT > 0 ? b.celebratePct || 0 : 0)                         // a nearby Firework's Celebration
     + (fx.groundFireRatePct && b._noFlyers ? fx.groundFireRatePct : 0)     // Firework Rapid Display
     + (b.djBoostT > 0 ? b.djBoostPct || 0 : 0)                             // DJ Babyface's Drop the Beat
+    + (b.spellRageT > 0 ? b.spellRagePct || 0 : 0)                         // a Rage spell (spells.js)
     + (b._heroDecree || 0);                                                // the Brisket King's Royal Decree
   return cfg.fireInterval / (1 + pct / 100) / lastStand;
 }
@@ -220,6 +198,8 @@ export function checkResearch(state, type, path, tier = nextResearchTier(state, 
   }
   const cost = isResearchFree(state) ? 0 : researchCost(tier);
   if (tier > count + 1) return { ok: false, reason: `Research tier ${count + 1} first`, cost, tier };
+  const locked = lockedPath(state, type);
+  if (locked && locked !== path) return { ok: false, reason: `Locked to Path ${locked.toUpperCase()}`, cost, tier };
   const lab = labLevel(state);
   if (!lab) {
     const ruin = state.buildings.some((b) => b.type === 'rvlab');
@@ -229,6 +209,26 @@ export function checkResearch(state, type, path, tier = nextResearchTier(state, 
   if (isWaveActive(state)) return { ok: false, reason: 'Not during a wave', cost, tier };
   if (researchPoints(state) < cost) return { ok: false, reason: needRpReason(cost, researchPoints(state)), cost, tier };
   return { ok: true, reason: '', cost, tier };
+}
+
+// ---------- paid respec ----------
+/** RP to reset a type's path: CONFIG.rules.respecShare of what its picks cost to research (0 with no picks). */
+export function respecCost(state, type) {
+  const n = labTierCount(state, type);
+  if (!n) return 0;
+  let sum = 0;
+  for (let t = 1; t <= n; t++) sum += researchCost(t);
+  return Math.max(1, Math.round(sum * (CONFIG.rules.respecShare ?? 0.5)));
+}
+
+/** Can the type's path be reset now? { ok, reason, cost }. The old picks are not refunded. */
+export function checkRespec(state, type) {
+  if (!labTierCount(state, type)) return { ok: false, reason: 'Nothing to reset', cost: 0 };
+  const cost = respecCost(state, type);
+  if (!labLevel(state)) return { ok: false, reason: 'Build an RV Lab', cost };
+  if (isWaveActive(state)) return { ok: false, reason: 'Not during a wave', cost };
+  if (researchPoints(state) < cost) return { ok: false, reason: needRpReason(cost, researchPoints(state)), cost };
+  return { ok: true, reason: '', cost };
 }
 
 /** Could the RV Lab pick (and pay for) a tier for this type right now? */
@@ -324,7 +324,26 @@ export function convertOldResearch(oldResearch, buildings) {
   return { research, refund };
 }
 
-/** Ring / pool / burn numbers that depend on a building's level (Tower of Rah's beam damage per second). */
-export function baseDps(b) {
-  return CONFIG.defenses[b.type].levels[b.level - 1].dps || 0;
+/**
+ * Save version 5 -> 6 (path lock): a type's picks may have mixed paths ("aba"). Keep the path with the most picks
+ * (a tie goes to the path picked first) for as many tiers as it had picks, and refund what the type paid in RP
+ * beyond the price of those tiers. { research: { type: "aa" }, refund }.
+ */
+export function convertMixedResearch(obj) {
+  const research = {};
+  let refund = 0;
+  if (!obj || typeof obj !== 'object' || Array.isArray(obj)) return { research, refund };
+  for (const [type, v] of Object.entries(obj)) {
+    if (!hasAbilities(type) || typeof v !== 'string' || !PICKS_RE.test(v)) continue;
+    const picks = v.split('');
+    const count = (p) => picks.filter((x) => x === p).length;
+    const best = picks.reduce((b, p) => (count(p) > count(b) ? p : b), picks[0]);
+    const kept = count(best);
+    let paid = 0, keptCost = 0;
+    for (let t = 1; t <= picks.length; t++) paid += researchCost(t);
+    for (let t = 1; t <= kept; t++) keptCost += researchCost(t);
+    refund += paid - keptCost;
+    research[type] = best.repeat(kept);
+  }
+  return { research, refund };
 }

@@ -7,8 +7,9 @@ export const TEX = {
   mapDusk: 'map_background_dusk', // the warm sky between day and night
   mapDawn: 'map_background_dawn', // the same going back, between night and day
   light: 'fx_light',
-  fog: 'fx_fog', // soft cloud puff for the screen-corner fog
+  fog: 'fx_fog', // soft cloud puff for the spawn fog (src/objects/SpawnFog.js)
   villager: 'villager_gnome',
+  villagerWork: 'villager_gnome_work', // a gnome busy at a building (mining, repairing, building); faces left
   coin: 'ui_coin',
   spawnMarker: 'ui_spawn_marker',
   markEye: 'fx_mark_eye', // over enemies marked by a F.L.O.C.K Tower
@@ -17,11 +18,13 @@ export const TEX = {
   settingsButton: 'ui_settings_button',
   editButton: 'ui_edit_layout_button',
   startButton: 'ui_start_button',
-  titleBackground: 'ui_title_background',
+  titleBackground: 'title_bg', // the painted landscape with no characters (art-source/title); the animated title is TitleBackdropScene
   achievementIcon: 'ui_achievement',
-  researchPoint: 'ui_research_point', // optional art (art-source/ui/ui_research_point.png); a flask is drawn without it
+  researchPoint: 'ui_research_point', // the Burger (research points are shown as Burgers); UIScene draws a simple one without the art
   researchReady: 'ui_research_ready', // the book bobbing over the RV Lab when research is ready (falls back to the RP token)
-  beatReady: 'ui_beat_ready'         // over DJ Babyface when Drop the Beat is ready (falls back to a "DROP!" label)
+  beatReady: 'ui_beat_ready',        // over DJ Babyface when Drop the Beat is ready (falls back to a "DROP!" label)
+  feastReady: 'ui_feast_ready',      // Brisket Feast's hotbar icon, and over him while it's ready (a gold crown)
+  heroCrown: 'ui_hero_crown'         // the crown behind the hero's level number beside his health bar
 };
 
 /** Base (single-model) building texture. */
@@ -30,6 +33,8 @@ export const buildingKey = (type) => `bld_${type}`;
 export const buildingLevelKey = (type, level) => `bld_${type}_lv${level}`;
 export const buildingDestroyedKey = (type) => `bld_${type}_destroyed`;
 export const enemyKey = (kind) => `enemy_${kind}`;
+/** A Fuel Station spell's icon art (art-source/spells/ui_spell_<kind>.png), e.g. ui_spell_rage (Karuba Coffee). */
+export const spellArtKey = (kind) => `ui_spell_${kind}`;
 
 /** Projectile kind (from logic) -> texture key. */
 export const PROJECTILE_KEYS = {
@@ -39,6 +44,7 @@ export const PROJECTILE_KEYS = {
   wizard: 'proj_wizard',
   firework: 'proj_firework',
   catapult: 'proj_catapult',
+  spear: 'proj_spear',
   slinger: 'proj_slinger',
   bomb: 'proj_bomb',
   // RV Lab ability shots reuse existing pictures: Grapeshot pellets and Boulders are cannonballs,
@@ -52,8 +58,8 @@ export const PROJECTILE_KEYS = {
 export const FILE_KEY_ALIASES = {
   game_map_grid: TEX.map, game_map_grid_night: TEX.mapNight, game_map_grid_dusk: TEX.mapDusk, game_map_grid_dawn: TEX.mapDawn
 };
-/** Files present in public/assets but not loaded (kept for the team). */
-export const UNLOADED_FILES = ['game_map'];
+// Files the game doesn't use live in unused-assets/ (outside public/, so they never ship), e.g. the old flat
+// title picture ui_title_background, the layout reference for TitleBackdropScene.
 
 export const SFX = {
   uiClick: 'sfx_ui_click',
@@ -71,6 +77,8 @@ export const SFX = {
   wizardFire: 'sfx_wizard_fire',
   wizardImpact: 'sfx_wizard_impact',
   fireworkFire: 'sfx_firework_fire',
+  spearFire: ['sfx_spear_fire1', 'sfx_spear_fire2'], // the Spear Thrower's throw: one at random per shot
+  spearHit: 'sfx_spear_hit',                          // a spear hits an enemy (in place of the generic hit sound)
   catapultFire: 'sfx_catapult_fire',     // the Catapult's throw
   catapultImpact: 'sfx_catapult_impact', // its shot lands
   catapultPool: 'sfx_catapult_pool',     // the pink pool sizzling while it lasts (fades out with the pool)
@@ -79,7 +87,7 @@ export const SFX = {
   wizardVoice: ['sfx_wizard_voice_1', 'sfx_wizard_voice_2'],
   bombExplode: 'sfx_bomber_bomb_impact', // a Bomber's bomb lands (7.6 s tail; capped at a few at once)
   bomberFlying: 'sfx_bomber_flying',     // plane drone while any Bomber is in the air (one shared loop; see AirHum)
-  enemyHitSmall: 'sfx_enemy_small_hit',  // a Grunt, Sneaker Shark or Money Stealer strikes a building or wall
+  enemyHitSmall: 'sfx_enemy_small_hit',  // a Grunt, Sneaker Shark or Mr. Least strikes a building or wall
   enemyHitBig: 'sfx_enemy_big_hit',      // a Tank strikes a building or wall
   sharkJump: 'sfx_shark_jump',           // a Sneaker Shark leaps onto a wall
   enemyEliminated: 'sfx_enemy_eliminated', // any enemy dies (capped at a few at once)
@@ -92,14 +100,17 @@ export const SFX = {
   sharkVoice: 'sfx_shark_voice',           // "Tralalero tralala" (now and then while one is in the wave)
   gruntVoice: 'sfx_grunt_voice',           // "Tung tung tung sahur" (now and then while one is in the wave)
   raBeam: 'sfx_ra_beam',                   // looping while a Tower of Rah beam burns
-  raHeatUp: 'sfx_ra_heat_up',              // a Tower of Rah beam heats up to its next stage      // a Mousetrap springs                    // the player pays to rebuild a destroyed building       // an enemy enters an empty F.L.O.C.K Tower range
+  raHeatUp: 'sfx_ra_heat_up',              // a Tower of Rah beam heats up to its next stage
   buildingSelect: 'sfx_building_select', // clicking a building
   heroSelect: 'sfx_hero_select',         // clicking the Brisket King himself (his voice; never talks over itself)
   altarSelect: 'sfx_altar_select',       // clicking the Brisket King's altar
+  heroFeast: 'sfx_hero_feast',           // Brisket Feast goes off
+  heroSnore: 'sfx_hero_snore',           // looping softly while the Brisket King is asleep (HeroView's SnoreLoop)
   invalid: 'sfx_invalid',               // placing/dropping a building on an invalid spot
   hit: 'sfx_hit',
   buildingDestroyed: 'sfx_building_destroyed',
   waveStart: 'sfx_wave_start',
+  waveCountdown: 'sfx_wave_countdown', // Start Wave pressed: the countdown begins
   waveClear: 'sfx_wave_clear',
   achievement: 'sfx_achievement',   // an achievement unlocks (optional: the wave-clear fanfare plays without it)
   gameOver: 'sfx_game_over'
@@ -110,6 +121,7 @@ export const MUSIC = {
   village: 'music_village', // fallback between waves when the ambience files are missing
   ambientDay: 'ambient_day',     // between waves by day: looping ambience (crossfades with the night one)
   ambientNight: 'ambient_night', // between waves by night
+  planning: 'music_planning', // the wave countdown: plays once, ending as the wave hits
   attack: 'music_attack'    // at night while enemies attack (add public/assets/audio/music_attack.mp3)
 };
 

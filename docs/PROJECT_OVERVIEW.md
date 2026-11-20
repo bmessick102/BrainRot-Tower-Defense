@@ -32,7 +32,7 @@ It's a hybrid of *Clash of Clans* (build and upgrade a village on an isometric g
 1. **Earn:** Bitcoin Mines fill with gold; click to collect. Gnome villagers mine extra and carry it to storage.
 2. **Build:** spend gold in the shop on defenses, walls and economy buildings, and place them on the grid.
 3. **Upgrade:** buildings level up instantly (no timers); the Village Hall unlocks new buildings.
-4. **Research:** spend research points in the RV Lab on perks for every building type.
+4. **Research:** spend Burgers (the research currency) in the RV Lab on perks for every building type.
 5. **Defend:** press Start Wave whenever you're ready. Enemies attack from the map edges; your defenses fight automatically, and you can trigger DJ Babyface's "Drop the Beat" mid-fight.
 6. **Repeat:** every wave is tougher than the last. The goal is to survive as long as possible.
 
@@ -53,7 +53,7 @@ It's a hybrid of *Clash of Clans* (build and upgrade a village on an isometric g
 
 **Defenses:** Cannon, Locklair Tower, Litman Mortar, Gandolf Tower, Firework Launcher (anti-air), Mousetrap (hidden trap), F.L.O.C.K Tower (support: marks enemies, reveals hidden ones), The Diddypult (long-range oil pools), Tower of Rah (heating beam).
 
-**Enemies:** Tung Tung Tung Sahur (Grunt), Cappuccino Assasino (ranged), Bombadillo Crocadillo (bomber), Tripi Tropi Tropi Tripa (tank), Tralalero Tralala (wall jumper), Goyum Goblin (invisible gold thief), Boneca Ambalabu (Wall Breaker), Neegy Balloon (drops paratroopers), Skibidi Toilet (tunnels underground), and **Da Baby Car**, a raid boss that rams straight through your walls.
+**Enemies:** Tung Tung Tung Sahur (Grunt), Cappuccino Assasino (ranged), Bombadillo Crocadillo (bomber), Tripi Tropi Tropi Tripa (tank), Tralalero Tralala (wall jumper), Mr. Least (invisible gold thief), Boneca Ambalabu (Wall Breaker), Neegy Balloon (drops paratroopers), Skibidi Toilet (tunnels underground), and **Da Baby Car**, a raid boss that rams straight through your walls.
 
 ---
 
@@ -73,7 +73,7 @@ It's a hybrid of *Clash of Clans* (build and upgrade a village on an isometric g
 
 **Waves and stakes**
 - **Endless waves.** Every 3rd wave is a special one (Air Raid, Siege, Heist...), announced in advance.
-- **Wave stars:** 1-3 stars by how much of your village survives, with bonus gold and RP for clean defenses.
+- **Wave stars:** 1-3 stars by how much of your village survives, with bonus gold and Burgers for clean defenses.
 - **Day/night cycle (~8 minutes):** attacking at night makes enemies "restless" (tougher, but they pay 25% more), so when you fight is a choice.
 
 **Readability and onboarding**
@@ -177,7 +177,7 @@ Supabase  (accounts, cloud saves, achievements, leaderboard)
   - whether a run gets limited lives;
   - escalation past Village Hall 10;
   - milestone rewards every 10 waves;
-  - an endless RP sink once every tree is full.
+  - an endless Burger sink once every tree is full.
 - **Balance pass:** many new systems were added quickly. Next is a playtest-driven tuning round, possibly with a bot that plays 30 waves and reports gold and difficulty.
 - **More art:** extra level pictures for DJ Babyface, and any remaining buildings.
 

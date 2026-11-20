@@ -35,8 +35,8 @@ const LIGHT_BLEND = 'SCREEN';
 const BUILDING_LIT_TOP = 0xe2e6f8;
 const BUILDING_LIT_WARMTH = 0.2;
 const LIGHT_COLORS = {
-  townHall: 0xffa23c, mine: 0x3cb8ff, storage: 0xffb43c, house: 0xffc86b, cannon: 0xff8a3c,
-  archer: 0xff9a3c, mortar: 0xff7a3c, wizard: 0xb066ff, firework: 0xff4d6d, catapult: 0xff5fa8, flock: 0x4cd6ff, mousetrap: 0xffc24a, ra: 0xff7a2a, rvlab: 0xffd27a, dj: 0xc070ff, altar: 0xffb04a
+  townHall: 0xffa23c, mine: 0xffa23c, storage: 0xffb43c, house: 0xffc86b, cannon: 0xff8a3c,
+  archer: 0xff9a3c, mortar: 0xff7a3c, wizard: 0xb066ff, firework: 0xff4d6d, catapult: 0xff5fa8, spear: 0xc98a4a, flock: 0x4cd6ff, mousetrap: 0xffc24a, ra: 0xff7a2a, rvlab: 0xffd27a, dj: 0xc070ff, altar: 0xffb04a, fuelStation: 0xffc24a
 };
 
 // Shared rubble art for any building without its own bld_<type>_destroyed picture. Every variant that
@@ -69,7 +69,9 @@ export const WALL_RUBBLE = [
 export const LEVELS_PER_ART = 2;
 // Types with a picture for every level (the RV Lab: 5 levels, 5 pictures; walls: 8 levels, 8 pictures; DJ
 // Babyface: a picture per level, and a level without one yet shows the closest lower picture).
-const LEVELS_PER_ART_BY_TYPE = { rvlab: 1, wall: 1, dj: 1 };
+// Catapult: 5 levels, a picture each. (The Spear Thrower, 10 levels / 5 pictures, and the Fuel Station, 8 levels /
+// 4 pictures, use the usual picture per 2 levels and grow on the levels in between, like the Cannon.)
+const LEVELS_PER_ART_BY_TYPE = { rvlab: 1, wall: 1, dj: 1, catapult: 1 };
 
 /** Which picture (1-based) a building level shows. */
 export function artTier(level, type = null) {
@@ -117,10 +119,10 @@ const DEFAULT_SPRITE_SCALE = 0.75;
 // Mousetrap: a flat 1-tile trap, drawn a little wider than its tile.
 // Tower of Rah: a tall, slim tower, drawn narrower than its footprint (it starts small and grows a lot).
 // RV Lab: a long RV on its own paved pad; 0.77 of its 2x2 footprint (10% bigger than the earlier 0.7).
-const SPRITE_SCALE = { mortar: 0.65, cannon: 0.63, firework: 0.52, catapult: 0.66, flock: 1.28, mousetrap: 1.1, ra: 0.54, rvlab: 0.77, dj: 0.77, altar: 0.66 };
+const SPRITE_SCALE = { mortar: 0.65, cannon: 0.63, firework: 0.52, catapult: 0.66, spear: 0.66, flock: 1.28, mousetrap: 1.1, ra: 0.54, rvlab: 0.77, dj: 0.77, altar: 0.66, fuelStation: 0.8 };
 
 // Buildings grow as they level up: this share of their normal size at Level 1, up to LEVEL_SIZE.max at
-// their top level (Level 10, or Level 6 for the Catapult). They only grow on upgrades that keep the same
+// their top level (Level 10, or the type's own top level). They only grow on upgrades that keep the same
 // picture (the new picture already looks bigger), so with art every 2 levels: Level 2, 4, 6 ... grow and
 // Level 3, 5, 7 ... keep the size they had.
 export const LEVEL_SIZE = { min: 0.855, max: 0.99, maxLevel: 10 }; // 10% under the old 0.95 / 1.1
@@ -235,7 +237,7 @@ export class BuildingView {
     this.chipText = scene.add.text(0, 0, '', textStyle(13)).setOrigin(0.5);
     this.badge = scene.add.container(0, 0, [this.chipGfx, this.chipText]).setDepth(OVERLAY_DEPTH);
     this.chipKey = '';
-    this.hpBar = new HealthBar(scene, { width: b.size * 24, height: 12, depth: OVERLAY_DEPTH, color: HP_TEAM.player, badge: true });
+    this.hpBar = new HealthBar(scene, { width: Math.max(48, b.size * 24), height: 12, depth: OVERLAY_DEPTH, color: HP_TEAM.player, badge: true });
     this.coin = b.type === 'mine' ? scene.add.image(0, 0, TEX.coin).setDepth(OVERLAY_DEPTH + 1).setVisible(false) : null;
     // DJ Babyface: its hype meter (during waves, or while charged) and a bobbing "DROP!" once it's full.
     this.hypeGfx = b.type === 'dj' ? scene.add.graphics().setDepth(OVERLAY_DEPTH) : null;
@@ -348,6 +350,9 @@ export class BuildingView {
       if (b.sprung) this.sprite.setTint(0x7a7a7a); // a sprung trap looks spent until it resets
       // Boosted by DJ Babyface's Drop the Beat: the defense pulses between pink and cyan party lights.
       else if (b.djBoostT > 0 && !b.destroyed) this.sprite.setTint(Math.sin(time * 0.02) > 0 ? 0xffc8f4 : 0xc8f4ff);
+      // Under a Rage spell (spells.js): an angry red pulse. Healing: a soft green one.
+      else if (b.spellRageT > 0 && !b.destroyed) this.sprite.setTint(lerpColor(0xff6a5a, 0xffb0a0, 0.5 + 0.5 * Math.sin(time * 0.015)));
+      else if (b.spellHealT > 0 && !b.destroyed && b.hp < maxHp(b)) this.sprite.setTint(lerpColor(0xb8ffb0, 0xffffff, 0.5 + 0.5 * Math.sin(time * 0.01)));
       // In range of the selected DJ Babyface: a soft purple glow, gently pulsing, so it's clear what it reaches.
       else if (this.scene.djAffected && this.scene.djAffected.has(b.id)) {
         const k = 0.5 + 0.5 * Math.sin(time * 0.005);
@@ -361,6 +366,8 @@ export class BuildingView {
         this.sprite.setTint(top, top, bottom, bottom);
       } else this.sprite.setTint(moon); // moonlit at night (rubble has no light)
     }
+    // Invisibility spell: see-through while it lasts (enemies can't see it either).
+    this.sprite.setAlpha(this.baseAlpha * this.fade * (b.spellInvisT > 0 && !b.destroyed ? 0.4 + 0.08 * Math.sin(time * 0.01) : 1));
     const lit = night > 0.01 && !b.destroyed;
     this.light.setVisible(lit);
     if (lit) {
@@ -441,12 +448,12 @@ export class BuildingView {
   variantKey(b, key, time = 0) {
     if (b.destroyed || !/_lv\d+$/.test(key)) return key;
     let variant = null;
-    if (b.type === 'cannon' || b.type === 'mortar') {
+    if (b.type === 'cannon' || b.type === 'mortar' || b.type === 'spear') {
       // Cannon: 4 facings. Mortar: left (its plain picture) or right (_r). Turned toward the enemy it's shooting;
       // with nothing to shoot (between waves too) it looks around now and then, at random (lookAround).
       const gs = this.scene.gs;
       const t = b.targetId && gs ? gs.enemies.find((e) => e.id === b.targetId && e.alive) : null;
-      const four = b.type === 'cannon';
+      const four = b.type !== 'mortar'; // Cannon and Spear Thrower: 4 facings
       if (t) {
         const a = gridToScreen(b.col + fpW(b) / 2, b.row + fpH(b) / 2), p = gridToScreen(t.x, t.y);
         const dx = p.x - a.x, dy = p.y - a.y;

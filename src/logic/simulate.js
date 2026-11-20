@@ -1,6 +1,7 @@
 // One simulation step. GameScene calls this every frame with dt in seconds (capped).
 import { stepHero } from './hero.js';
 import { stepDj } from './dj.js';
+import { stepSpells } from './spells.js';
 import { stepEconomyPerks } from './econPerks.js';
 import { DEFENSE_TYPES } from './buildings.js';
 import { produceMines, produceHallIncome } from './economy.js';
@@ -22,7 +23,8 @@ export const MAX_STEP = 0.1; // seconds; long frames are capped so nothing tunne
  */
 export function simulate(state, dt) {
   if (state.gameOver) return;
-  dt = Math.min(Math.max(dt, 0), MAX_STEP);
+  // (A NaN step, e.g. a broken frame time, would turn every position and timer into NaN for good: skip it.)
+  dt = Number.isFinite(dt) ? Math.min(Math.max(dt, 0), MAX_STEP) : dt > 0 ? MAX_STEP : 0;
   stepClock(state, dt);
   // Gnome jobs for this step (also read by the gnome sprites; not saved).
   const gnomes = assignGnomes(state);
@@ -36,6 +38,7 @@ export function simulate(state, dt) {
   if (!state.gameOver) stepTraps(state, dt); // ground enemies stepping onto set Mousetraps spring them (+ re-arm, lures)
   stepFlockTowers(state); // mark + reveal enemies in F.L.O.C.K Tower range before the defenses fire
   stepDj(state, dt, DEFENSE_TYPES); // DJ Babyface: boosts run down, light show, its perks (Auto-DJ, VIP Lounge...)
+  if (!state.gameOver) stepSpells(state, dt); // Fuel Station spells in play: Rage, Heal, Freeze, Invisibility, Heat Field
   stepEconomyPerks(state, dt); // economy perks on a timer: mine Auto-Collect, house Garden and Militia
   if (!state.gameOver) stepDefenses(state, dt);
   if (!state.gameOver) stepSpecials(state, dt); // RV Lab specials on a timer (Arrow Storm, Meteor, Finale)

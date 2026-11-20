@@ -3,6 +3,8 @@
 // so accounts, villages, achievements and the leaderboard can be tried without a server.
 // Not secure (anyone with the browser can read it) and never used in the built game.
 
+import { conflictError } from './errors.js';
+
 const DB_KEY = 'ibtd.dev.db';
 const SESSION_KEY = 'ibtd.dev.session';
 const DELAY_MS = 120; // feel a little like a network call
@@ -109,47 +111,65 @@ export class LocalBackend {
     return out;
   }
 
-  async updateBase(id, fields) {
+  /**
+   * Like SupabaseBackend.updateBase: `updatedAt` is the village's revision (it moves only when the save or
+   * checkpoint changes, always forward); with `expected`, a stale change is refused with a conflict error.
+   */
+  async updateBase(id, fields, { expected = null } = {}) {
     await wait();
     const d = this.db();
     const b = d.bases.find((x) => x.id === id && x.userId === this.userId);
     if (!b) throw new Error('That village no longer exists.');
-    Object.assign(b, fields, { updatedAt: now() });
+    if (expected && b.updatedAt !== expected) throw conflictError(b.updatedAt);
+    const same = (k) => fields[k] === undefined || JSON.stringify(fields[k] ?? null) === JSON.stringify(b[k] ?? null);
+    const content = !same('save') || !same('checkpoint');
+    const { updatedAt, userId, id: _id, ...rest } = fields; // eslint-disable-line no-unused-vars
+    Object.assign(b, rest);
+    if (content) b.updatedAt = new Date(Math.max(Date.now(), (Date.parse(b.updatedAt) || 0) + 1)).toISOString();
     this.write(d);
+    return { updatedAt: b.updatedAt };
   }
 
   async deleteBase(id) {
     await wait();
     const d = this.db();
+    this.me(d);
     d.bases = d.bases.filter((x) => !(x.id === id && x.userId === this.userId));
     this.write(d);
   }
 
   async getStats() {
     await wait();
-    const s = this.db().stats.find((x) => x.userId === this.userId);
+    const d = this.db();
+    this.me(d);
+    const s = d.stats.find((x) => x.userId === this.userId);
     return s ? { bestWave: s.bestWave, bestTownHall: s.bestTownHall, counters: { ...s.counters } } : { bestWave: 0, bestTownHall: 0, counters: {} };
   }
 
   async saveStats(stats) {
     await wait();
     const d = this.db();
+    this.me(d);
     let s = d.stats.find((x) => x.userId === this.userId);
     if (!s) d.stats.push(s = { userId: this.userId, bestWave: 0, bestTownHall: 0, counters: {}, reachedAt: null });
     if (stats.bestWave > s.bestWave) { s.bestWave = stats.bestWave; s.reachedAt = now(); }
     s.bestTownHall = Math.max(s.bestTownHall, stats.bestTownHall);
     s.counters = { ...stats.counters };
     this.write(d);
+    return { bestWave: s.bestWave };
   }
 
   async listAchievements() {
     await wait();
-    return this.db().achievements.filter((a) => a.userId === this.userId).map(({ userId, ...a }) => ({ ...a })); // eslint-disable-line no-unused-vars
+    const d = this.db();
+    this.me(d);
+    return d.achievements.filter((a) => a.userId === this.userId).map(({ userId, ...a }) => ({ ...a })); // eslint-disable-line no-unused-vars
   }
 
   async earnAchievements(list) {
     await wait();
     const d = this.db();
+    this.me(d);
     for (const a of list) {
       if (d.achievements.some((x) => x.userId === this.userId && x.id === a.id)) continue;
       d.achievements.push({ userId: this.userId, id: a.id, baseId: a.baseId || null, earnedAt: now(), claimedAt: null });
@@ -160,6 +180,7 @@ export class LocalBackend {
   async claimAchievement(id) {
     await wait();
     const d = this.db();
+    this.me(d);
     const a = d.achievements.find((x) => x.userId === this.userId && x.id === id);
     if (a && !a.claimedAt) a.claimedAt = now();
     this.write(d);

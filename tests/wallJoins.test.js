@@ -16,7 +16,7 @@ describe('single-tile walls', () => {
     expect(CONFIG.walls.segmentLength).toBe(1);
     expect(footprintDims('wall', 'x')).toEqual({ w: 1, h: 1 });
     expect(footprintDims('wall', 'y')).toEqual({ w: 1, h: 1 });
-    expect(CONFIG.walls.levels.map((l) => l.cost)).toEqual([10, 25, 60, 150, 350, 800, 1800, 4000]);
+    expect(CONFIG.walls.levels.map((l) => l.cost)).toEqual([10, 20, 40, 80, 150, 300, 500, 800]);
     expect(CONFIG.limits.wall[0]).toBe(24);
   });
 

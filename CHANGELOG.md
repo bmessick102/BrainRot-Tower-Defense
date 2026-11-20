@@ -2,6 +2,96 @@
 
 The version shows in the bottom-left corner of every screen (`package.json` `version` plus the commit). Details for everything below are in [README.md](README.md).
 
+## 0.5.0
+
+A big feature release: everything since 0.4.1 (the 37-item fixes and features list, plus the QA rounds).
+
+### Before you deploy (manual steps)
+
+1. **Update the Supabase database first.** In the Supabase SQL editor, run **supabase/migration-2026-11-20-base-limit-lock.sql** and **supabase/migration-2026-11-20-base-revision.sql** (or simply run the whole **supabase/schema.sql** again; it includes both and is safe to re-run). Do this *before* pushing: the new game saves villages only on top of the revision the server gave it, which needs the revision trigger (`stamp_base`), and the server-side wave count (`check_base()`) now counts waves the way the game does.
+2. Then push to `main` (GitHub Pages deploys it).
+
+### Burgers (research points, renamed)
+
+- **Research points are now Burgers**, with a burger icon everywhere they show: the top bar, costs and buttons ("Brew · 40 Burgers", "Research · 240 Burgers"), the "+N" over defeated enemies, the wave-cleared banner, "Burgers full: N lost", the research and Fuel Station windows, tips, the guide and How to Play. The bar is a toasted-bun orange instead of purple. Nothing about how they work changed, and saves are untouched.
+- **Burgers are capped**, like gold: the bar in the top row (left of the gold bar, with the day/night pill moved directly under the gold bar) shows a cap that grows with the RV Lab's level (400 with no lab, then 700 / 1,500 / 3,500 / 6,500 / 10,000). Anything earned past it is lost, so spend them.
+- **What they pay for:** perks, path resets, spells, and upgrades of the RV Lab (Levels 2-5: 300 / 800 / 2,000 / 4,000), the Fuel Station (Levels 2-8) and the **Brisket King's altar** (his Levels 2-10: 150 / 250 / 400 / 650 / 1,000 / 1,600 / 2,500 / 4,000 / 6,000; building the altar still costs 3,000 gold). Burger levels aren't refunded as gold when selling. Beating a wave now pays 15 x the wave number (was 10).
+
+### Perks (RV Lab)
+
+- **One path per building type:** your first pick for a type (say Cannon A1) locks every Cannon to Path A for tiers 2-5. **Reset path** (under the tree) clears a type's picks for half of what they cost, with no refund, so it can take another path. Existing villages keep their picks (save version 7).
+- **Perks no longer depend on building level:** a perk goes onto every building of that type at once, whatever its level. Only the RV Lab's level gates a tier (tier N needs lab level N). This covers the defenses, the economy buildings, DJ Babyface, the Brisket King's altar and the Fuel Station.
+- New perk trees are added with one call (`registerPerkTree`, see docs/PERKS.md).
+
+### New: Fuel Station, spells and the hotbar
+
+- **Fuel Station** (a Kwik Trip; Economy tab, from Village Hall 2, 8 levels, four pictures, growing each level). Level 1 costs 400 gold; later levels cost Burgers. It opens a window like the RV Lab's: **Brew Spells**, and a **Perks** tab (*Potency*, *Spread*, *Refinery*).
+- **Six spells**, opened by the station's level: Karuba Coffee (**Rage**), Donut (**Heal**), Ice Bag (**Freeze**), Spicy Tornado (**Heat Field**), Chocolate Milk (**Invisibility**) and Energy Drink (**Lightning Strike**, which hits the toughest enemies in its circle hard). Each is brewed with Burgers and used once; your Village Hall level sets how many you can carry (1 to 5). Every spell has its own icon art.
+- **A guided first spell:** at Village Hall 2 the guide walks you through building the station and brewing a free first Karuba Coffee; its hotbar slot pulses until you cast it.
+- **The hotbar** (bottom middle, during waves) replaces the old ability buttons: your spells, **Brisket Feast** and DJ Babyface's **Drop the Beat**, each with a number key (F for the Feast). Click a spell, then the map, to drop it (a ring shows its radius). Clicking the hero, his altar or the DJ booth now only selects them. The building info panel steps aside when it would cover the hotbar.
+
+### New defense: Spear Thrower
+
+- A long-range sniper (Defenses tab, from Village Hall 3; 1 / 2 / 3 allowed at Village Hall 3 / 5 / 8; 10 levels). Range 8.5, a heavy throw every 2.5 s, ground and air. The spear flies on through a short line behind its first target, piercing at 100% / 75% / 50% / 25%. Five pictures in four facings (it turns toward its target), its own spear, two throw sounds and a hit sound, and three perk paths (*Impaler*, *Hunter*, *Throwing Arm*).
+
+### The Diddypult
+
+- **The final unlock:** it now opens at Village Hall 10 and is last in the shop. It has **5 levels, one new picture each** (Levels 4 and 5 are new), hitting much harder per level so it holds up at Village Hall 10, with cheaper top levels.
+
+### The Brisket King
+
+- **Knocked out in a raid, he stays down until it ends** (no sleep cycle mid-raid), with a KO effect over his head. The new **Second Wind** perk gets him back up after 20 s at 40% health.
+- **Always-on health bar** with his level drawn on the new crown picture. **Rage look** while Brisket Feast is active: a red tint and anger puffs. A soft light surrounds him at night.
+- **New poses:** standing, both attacks (alternating), sleeping, waking up, defeated, and a select pose when you click him. Brisket Feast has its own sound; he snores softly while asleep.
+- His ability and its description are on every hero info page, and the altar's shop info has a button that opens his Hero page.
+- **His upgrades cost Burgers** (see Burgers above).
+
+### Waves
+
+- **Wave markers:** for each corner the next wave attacks from, a red arrow disc and the enemy types with counts sit on the map at the back of that path, always visible, the same size at any zoom, and sliding in along the path when the HUD would cover them. **Fog** drifts over the back of every path where enemies come onto the map.
+- **Random corners:** every wave picks how many corners it uses and which ones at random, at every Village Hall level, and its enemy types come **mixed together** instead of one type after another.
+- **The wave countdown is back:** Start Wave gives you 30 seconds before the attack, with a red "!" over each path the enemies will use and the planning music, which ends as the wave hits. Build during it, press **Start Now** to skip it, or **Cancel** to put the wave back. The tutorial's first wave counts down 10 seconds.
+
+### Walls
+
+- **Walls upgrade all at once:** click any wall and press **Upgrade Walls** to raise every wall one level, for walls placed x the new level's price (all or nothing; each level still needs its Village Hall). The per-wall upgrade and "Select connected walls" are gone. New walls are built at your current wall level. Prices are much lower: 10 / 20 / 40 / 80 / 150 / 300 / 500 / 800 per wall per level (was up to 4,000), so 132 walls go to Level 8 for 105,600. Existing villages bring every wall to its most common level (ties go to the higher one).
+
+### Characters and art
+
+- **Mr. Least replaces the Goyum Goblin:** the sneaky gold thief is now a smug man in a sharp suit (walking, attack and death pictures; a little taller). He works exactly as before.
+- **Animated title screen:** the loading screen and title menu are a living scene. The logo drops in and pulses; Gandolf, the archer and a worker gnome stand by the mortar, facing a crowd of enemies, all breathing gently; the crocodile plane flies past, the balloon bobs, embers drift and the wizard's staff glows. While the game loads, the mortar fires its man at the enemies; when loading finishes he hovers at the top of his arc on the title menu.
+- **Gnomes at work:** a gnome working at a building (mining, repairing) shows a working pose. New gnome picture.
+- **Skibidi Toilet** has an attack picture; new Tank and Diddypult pictures.
+
+### Interface
+
+- **Fixes for overlapping UI:** the RV Lab window no longer sits under its title bar, long window titles shrink clear of the close button, shop cards keep names, "Village Hall N required" and traits apart, the Villages list never runs a long name under the Play button, the Start Wave button is sized to its hint, How to Play's stat tiles no longer let a long value run into its label (the Fuel Station's "New spell at level" tile), the RV Lab guide's note in the research window stays clear of the grid, and an upgrade that can't be bought yet still says what it costs in ("600 Burgers", not "600").
+- **Leagues:** the Profile shows every league's badge and the wave it takes (yours tagged YOU), and How to Play has a Leagues tab. Leagues are much harder: Bronze needs wave 5, Silver 20, Gold 40, Crystal 70, Champion 110, WarLord 160 (was 1 / 4 / 7 / 10 / 15 / 25). The Leaderboard and the Profile now agree on your league (the server used to count waves by Village Hall level).
+- **Graphics setting** (Settings and the pause menu): **Auto / High / Low**. Low draws fewer particles, fog puffs, night glows and floating numbers; Auto switches to Low by itself when the frame rate stays low.
+
+### Balance
+
+- Village Halls 2-4 had waves far harder than the defenses they allow; they're toned down, and Village Hall 5 has a scripted base wave of its own. Late waves grow faster from there (enemy count x1.18 and health x1.14 per Village Hall, was x1.15 / x1.1).
+- Bitcoin Mine Levels 6-10 make 12-33% more gold. Cannon damage +10%; Locklair Tower and Firework Launcher -10% (the Spear Thrower shares air cover now); Litman Mortar -5%, Gandolf -7%; F.L.O.C.K Tower and Tower of Rah upgrades cheaper.
+
+### Accounts, saves and sync safety
+
+- **Safer saving across tabs and devices:** opening a village in a second tab tells the first, which stops saving it ("This village was opened in another tab", with **Reload here and take over**). A tab or device with an older copy can no longer overwrite newer progress: the server refuses it, and that copy is kept as a backup you can **Restore** from Villages → Import from this device. Unsent progress left on a device is merged by the server's revision instead of the device clock.
+- **Play Offline:** if the server can't be reached when you start, the login screen offers **Retry** and **Play Offline** (your villages from this device, as the last account that logged in here); everything is sent at the next login. The leaderboard and achievement rewards wait until then.
+- **Shared devices:** each account's unsent copies wait for that account only; Villages no longer offers another account's copies. Log Out also forgets the remembered email and clears the saved login, even offline.
+- **Account and save fixes:** the 5-village limit holds when two tabs create villages at once (a database lock); logging out mid-upload and another player logging in can't put the upload in the wrong account, and nothing is sent once the login changed (another tab logging in as someone else); a game keeps saving into the village it started in, whatever the session does next; switching villages starts a clean game (a leftover HUD piece from the last one could crash it); a save the game can't read is kept on the device before a fresh start replaces it; an old-version village on the device imports as a current save; a village update that changed nothing on the server (deleted elsewhere) stays unsent instead of being dropped; and saves from every version (1 to 7) load, while corrupt or tampered ones are rejected without crashing.
+
+### Performance and stability
+
+- Faster drawing for slow devices and late waves: cached circles, arcs and shapes, a pooled and capped layer of floating numbers, health bars that redraw only when they change, and a faster gnome lookup.
+- Very high waves (tested to 500+) stay stable: Da Baby Car's burst is capped, a bad frame time can no longer reach the game rules, spells check where they're cast, and sounds are skipped while the browser still has audio locked.
+- Fixed a test that failed now and then (the two-tab test's message timing).
+
+### Cleanup
+
+- Unused images and sounds moved out of the shipped game into `unused-assets/` (outside `public/`), with a list of where each came from; the old research point token is kept there too.
+- Removed code left over from replaced systems and duplicated helpers (unused functions, the old wall group upgrade, the unused `UNLOADED_FILES` list), and brought comments and docs up to date.
+
 ## 0.4.1
 
 - **Brisket King's health bar** now rides along with him when he hops walls (and with the bounce in his step), and sits above his tallest pose, so it never covers him.

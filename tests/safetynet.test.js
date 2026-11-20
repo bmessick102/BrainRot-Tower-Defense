@@ -1,5 +1,4 @@
 import { describe, it, expect } from 'vitest';
-import { CONFIG } from '../src/config.js';
 import { hallIncomeRate, produceHallIncome, salvageMine, repairCost } from '../src/logic/economy.js';
 import { checkWaveCleared } from '../src/logic/waves.js';
 import { makeStateWithTownHall, addBuilding } from './helpers.js';

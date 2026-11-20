@@ -33,6 +33,9 @@ export const VILLAGER_SETTINGS = {
 };
 
 const S_HEIGHT = VILLAGER_SETTINGS.heightPx;
+// The working pose (TEX.villagerWork, used when its art exists): drawn facing left with an arm out, so its feet
+// sit a little right of the picture's middle.
+const WORK_ORIGIN_X = 0.55;
 
 /** Gnome i of n faces its own direction from the hall: evenly spaced around it, rotated by `offset`. */
 export function gnomeHeading(i, n, offset = 0) {
@@ -143,6 +146,7 @@ export class Villagers {
   constructor(scene, gs) {
     this.scene = scene;
     this.gs = gs;
+    this.hasWorkPose = scene.textures.exists(TEX.villagerWork);
     this.gnomes = new Map(); // gnome id -> sprite + movement state
     this.gridSig = '';
     this.grid = null;
@@ -161,15 +165,20 @@ export class Villagers {
       id, sprite, coin, carrying: false, state: 'inside', inside: home ? home.id : null, enterId: null,
       x: 0, y: 0, tx: 0, ty: 0, path: [], wait: rand(...VILLAGER_SETTINGS.exitDelay),
       phase: Math.random() * Math.PI * 2, baseScale: sprite.scaleX, anim: 0, hop: 0,
-      job: null, spot: null, faceX: null, sparkT: Math.random()
+      job: null, spot: null, faceX: null, sparkT: Math.random(), pose: 'stand'
     };
   }
 
-  /** Walkable tiles, rebuilt only when buildings change. */
+  /** Walkable tiles, rebuilt only when buildings change (checked once per frame by update(), see refreshGrid). */
   walkable() {
-    const sig = this.gs.buildings.map((b) => `${b.col},${b.row},${fpW(b)},${fpH(b)},${b.destroyed ? 1 : 0}`).join('|');
-    if (sig !== this.gridSig) { this.gridSig = sig; this.grid = walkableGrid(this.gs.buildings); }
+    if (!this.grid) this.refreshGrid();
     return this.grid;
+  }
+
+  /** Rebuild the walkable grid if the buildings changed. Once per frame: tileAt() runs hundreds of times a frame. */
+  refreshGrid() {
+    const sig = this.gs.buildings.map((b) => `${b.col},${b.row},${fpW(b)},${fpH(b)},${b.destroyed ? 1 : 0}`).join('|');
+    if (sig !== this.gridSig || !this.grid) { this.gridSig = sig; this.grid = walkableGrid(this.gs.buildings); }
   }
 
   /** The walkable-grid value under (x, y): TILE_BLOCKED, TILE_OPEN or TILE_WALL. */
@@ -274,6 +283,7 @@ export class Villagers {
     const gs = this.gs;
     const th = getTownHall(gs);
     if (!th) return;
+    this.refreshGrid();
     const jobs = gs._gnomes || assignGnomes(gs);
     const byId = new Map(gs.buildings.map((b) => [b.id, b]));
     const out = villagersShouldBeOut(gs) && !th.destroyed;
@@ -388,6 +398,13 @@ export class Villagers {
       if (g.state === 'inside' || this.scene.editMode) { s.setVisible(false); g.coin.setVisible(false); continue; }
       const moving = g.state === 'walking' || g.state === 'returning';
       const working = g.state === 'working';
+      // Busy at a building: the working pose; back to the standing picture as soon as it walks off.
+      const pose = working && this.hasWorkPose ? 'work' : 'stand';
+      if (pose !== g.pose) {
+        g.pose = pose;
+        s.setTexture(pose === 'work' ? TEX.villagerWork : TEX.villager).setOrigin(pose === 'work' ? WORK_ORIGIN_X : 0.5, 1);
+        g.baseScale = S_HEIGHT / s.frame.height;
+      }
       const p = gridToScreen(g.x, g.y);
       let bob = 0;
       if (moving) bob = -Math.abs(Math.sin(time * 0.014 + g.phase)) * 2.5;
@@ -405,17 +422,13 @@ export class Villagers {
         const sx = gridToScreen(g.path[0].x, g.path[0].y).x;
         if (Math.abs(sx - p.x) > 1) s.setFlipX(sx < p.x);
       } else if (working && g.faceX !== null) {
-        s.setFlipX(g.faceX < p.x);
+        // The standing picture faces right, the working pose left.
+        s.setFlipX(g.pose === 'work' ? g.faceX > p.x : g.faceX < p.x);
       }
       s.setTint(this.scene.ambientTint ?? 0xffffff);
       g.coin.setVisible(g.carrying && g.anim > 0.5)
         .setPosition(p.x, p.y + bob - S_HEIGHT - 8 + Math.sin(time * 0.008 + g.phase) * 2)
         .setDepth(s.depth + 0.01).setTint(this.scene.ambientTint ?? 0xffffff);
     }
-  }
-
-  /** Gnomes currently outside (for tests/debug). */
-  outsideCount() {
-    return [...this.gnomes.values()].filter((g) => g.state !== 'inside').length;
   }
 }

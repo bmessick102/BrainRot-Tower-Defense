@@ -2,16 +2,17 @@ import { describe, it, expect } from 'vitest';
 import { CONFIG } from '../src/config.js';
 import { ABILITIES, ABILITY_COSTS } from '../src/abilityConfig.js';
 import {
-  mergeFx, abilityFx, pathTier, tierUnlocked, canResearchSomething, canResearchFor, checkResearch, labLevel, labTierCount, syncAbilityPicks, towerRange, towerFireInterval, towerMinRange, ABILITY_TYPES, DEFENSE_ABILITY_TYPES, ECONOMY_ABILITY_TYPES
+  mergeFx, abilityFx, tierUnlocked, canResearchSomething, canResearchFor, checkResearch, checkRespec, respecCost, lockedPath, labPicks, labLevel, labTierCount, syncAbilityPicks, towerFireInterval, towerMinRange, ABILITY_TYPES, DEFENSE_ABILITY_TYPES, ECONOMY_ABILITY_TYPES
 } from '../src/logic/abilities.js';
 import { DEFENSE_TYPES, checkUpgrade, maxLevel, limitFor, footprintDims, createBuilding, maxHp } from '../src/logic/buildings.js';
 import { stepDefenses, stepProjectiles, stepPools, isValidTarget, fireDefense, applySplash } from '../src/logic/combat.js';
 import { stepBeams } from '../src/logic/beams.js';
 import { stepFlockTowers } from '../src/logic/flock.js';
 import { stepTraps, springTrap } from '../src/logic/traps.js';
-import { stepSpecials, stepStrikes } from '../src/logic/abilityEffects.js';
+import { stepSpecials } from '../src/logic/abilityEffects.js';
 import { sellRefund } from '../src/logic/economy.js';
-import { serializeGame, parseSave, validateSave } from '../src/logic/save.js';
+import { serializeGame, parseSave, validateSave, SAVE_VERSION } from '../src/logic/save.js';
+import { rpCap, addResearchPoints } from '../src/logic/researchPoints.js';
 import { GameState } from '../src/state/GameState.js';
 import { makeStateWithTownHall, addBuilding, addEnemy } from './helpers.js';
 
@@ -27,7 +28,7 @@ function memoryStorage() {
 describe('ability trees', () => {
   it('every defense and economy building has three paths (A, B, C) of five tiers, each with a name, text and effects', () => {
     expect([...DEFENSE_ABILITY_TYPES].sort()).toEqual([...DEFENSE_TYPES, 'altar'].sort()); // (+ the Brisket King's altar)
-    expect([...ECONOMY_ABILITY_TYPES].sort()).toEqual(['dj', 'house', 'mine', 'storage']);
+    expect([...ECONOMY_ABILITY_TYPES].sort()).toEqual(['dj', 'fuelStation', 'house', 'mine', 'storage']);
     expect([...ABILITY_TYPES].sort()).toEqual([...DEFENSE_ABILITY_TYPES, ...ECONOMY_ABILITY_TYPES].sort());
     // Every tier name is unique across the whole game (no repeats).
     const names = ABILITY_TYPES.flatMap((t) => ['a', 'b', 'c'].flatMap((p) => ABILITIES[t][p].tiers.map((x) => x.name)));
@@ -78,11 +79,46 @@ describe('RV Lab', () => {
     expect(footprintDims('rvlab')).toEqual({ w: 2, h: 2 });
     expect(maxLevel('rvlab')).toBe(5);
     expect([1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map((th) => limitFor('rvlab', th))).toEqual([0, 0, 0, 1, 1, 1, 1, 1, 1, 1]);
-    const s = makeStateWithTownHall({ gold: 1e6 }, 4);
+    const s = makeStateWithTownHall({ gold: 1e6, researchPoints: 1e6 }, 4);
     const lab = addBuilding(s, 'rvlab', 5, 5, 1);
     expect(checkUpgrade(s, lab).reason).toBe('Requires VH5');
     s.buildings[0].level = 5;
-    expect(checkUpgrade(s, lab).ok).toBe(true);
+    expect(checkUpgrade(s, lab)).toMatchObject({ ok: true, currency: 'rp', cost: CONFIG.rvlab.levels[1].cost });
+  });
+
+  it('costCurrency: "rp" levels are paid in RP, not gold, and are not refunded as gold', () => {
+    const gs = new GameState({ storage: memoryStorage() });
+    gs.startNew();
+    gs.buildings[0].level = 10;
+    gs.tutorialDone = true;
+    const lab = createBuilding(gs, 'rvlab', 12, 24, 1);
+    gs.buildings.push(lab);
+    gs.gold = 50000; gs.researchPoints = 100;
+    const cost = CONFIG.rvlab.levels[1].cost;
+    expect(checkUpgrade(gs, lab)).toMatchObject({ ok: false, currency: 'rp', reason: `Need ${cost - 100} more Burgers` });
+    gs.researchPoints = cost + 7;
+    expect(gs.upgradeBuilding(lab.id).ok).toBe(true);
+    expect(lab.level).toBe(2);
+    expect(gs.researchPoints).toBe(7);
+    expect(gs.gold).toBe(50000);
+    expect(sellRefund(lab)).toBe(Math.round(CONFIG.rvlab.levels[0].cost * CONFIG.rules.sellRefund)); // gold levels only
+    expect(checkUpgrade(gs, createBuilding(gs, 'cannon', 2, 2, 1)).currency).toBe('gold');
+  });
+
+  it('RP is capped by RV Lab level: extra RP is lost and reported', () => {
+    const s = makeStateWithTownHall({ researchPoints: 0 }, 10);
+    const caps = CONFIG.rules.rpCaps;
+    expect(rpCap(s)).toBe(caps[0]);
+    const lost = [];
+    s.events = s.events || {};
+    s.emit = (name, d) => { if (name === 'researchPointsChanged') lost.push(d.lost); };
+    expect(addResearchPoints(s, caps[0] + 50)).toBe(caps[0]);
+    expect(s.researchPoints).toBe(caps[0]);
+    expect(lost.at(-1)).toBe(50);
+    expect(addResearchPoints(s, 10)).toBe(0);
+    addBuilding(s, 'rvlab', 5, 5, 3);
+    expect(rpCap(s)).toBe(caps[3]);
+    expect(addResearchPoints(s, 10)).toBe(10);
   });
 
   it('research needs a standing RV Lab whose level covers the tier, and happens by day', () => {
@@ -106,27 +142,74 @@ describe('RV Lab', () => {
     expect(ABILITY_COSTS.research).toEqual([80, 240, 600, 1400, 3000]);
     const s = makeStateWithTownHall({ gold: 1e6, researchPoints: 10 }, 10);
     addBuilding(s, 'rvlab', 5, 5, 1);
-    expect(checkResearch(s, 'cannon', 'a').reason).toBe(`Need ${ABILITY_COSTS.research[0] - 10} more RP`);
+    expect(checkResearch(s, 'cannon', 'a').reason).toBe(`Need ${ABILITY_COSTS.research[0] - 10} more Burgers`);
     s.researchPoints = ABILITY_COSTS.research[0];
     expect(checkResearch(s, 'cannon', 'a').ok).toBe(true);
   });
 
-  it('one pick per tier, any mix: taking A1 closes B1 and C1; tier 2 opens on every path', () => {
+  it('path lock: the first pick commits the type to that path; only its tiers open after', () => {
     const s = makeStateWithTownHall({ researchPoints: 1e6 }, 10);
     addBuilding(s, 'rvlab', 5, 5, 5);
     expect(checkResearch(s, 'cannon', 'b', 2).reason).toBe('Research tier 1 first');
+    expect(lockedPath(s, 'cannon')).toBe(null);
     s.research = { cannon: ['a'] };
+    expect(lockedPath(s, 'cannon')).toBe('a');
     expect(checkResearch(s, 'cannon', 'a', 1).reason).toBe('Already researched');
     expect(checkResearch(s, 'cannon', 'b', 1).reason).toBe('Took Path A');
-    expect(checkResearch(s, 'cannon', 'c', 1).reason).toBe('Took Path A');
-    for (const p of ['a', 'b', 'c']) {
-      expect(tierUnlocked(s, 'cannon', p, 2)).toBe(true);
-      expect(checkResearch(s, 'cannon', p)).toMatchObject({ ok: true, tier: 2 });
-    }
+    expect(checkResearch(s, 'cannon', 'b')).toMatchObject({ ok: false, reason: 'Locked to Path A', tier: 2 });
+    expect(checkResearch(s, 'cannon', 'c').reason).toBe('Locked to Path A');
+    expect(tierUnlocked(s, 'cannon', 'b', 2)).toBe(false);
+    expect(tierUnlocked(s, 'cannon', 'a', 2)).toBe(true);
+    expect(checkResearch(s, 'cannon', 'a')).toMatchObject({ ok: true, tier: 2 });
     expect(tierUnlocked(s, 'cannon', 'a', 3)).toBe(false);
-    s.research = { cannon: ['a', 'b', 'a', 'c', 'b'] };
+    s.research = { cannon: ['a', 'a', 'a', 'a', 'a'] };
     expect(checkResearch(s, 'cannon', 'a').reason).toBe('Fully researched');
     expect(labTierCount(s, 'cannon')).toBe(5);
+    // Other types are free to pick any path.
+    expect(checkResearch(s, 'archer', 'c')).toMatchObject({ ok: true, tier: 1 });
+  });
+
+  it('paid respec clears a type\'s path for RP with no refund of the old picks', () => {
+    const gs = new GameState({ storage: memoryStorage() });
+    gs.startNew();
+    gs.buildings[0].level = 10;
+    gs.tutorialDone = true;
+    gs.labGuideStep = 99;
+    gs.buildings.push(createBuilding(gs, 'rvlab', 12, 24, 5));
+    const c = createBuilding(gs, 'cannon', 9, 16, 1);
+    gs.buildings.push(c);
+    gs.researchPoints = 1000;
+    expect(checkRespec(gs, 'cannon')).toMatchObject({ ok: false, reason: 'Nothing to reset' });
+    gs.researchAbility('cannon', 'a'); gs.researchAbility('cannon', 'a');
+    const cost = Math.round((ABILITY_COSTS.research[0] + ABILITY_COSTS.research[1]) * CONFIG.rules.respecShare);
+    expect(respecCost(gs, 'cannon')).toBe(cost);
+    gs.researchPoints = cost - 1;
+    expect(gs.respecPath('cannon').ok).toBe(false);
+    gs.researchPoints = cost + 5;
+    expect(gs.respecPath('cannon').ok).toBe(true);
+    expect(gs.researchPoints).toBe(5);                 // paid, nothing back
+    expect(labPicks(gs, 'cannon')).toEqual([]);
+    expect(c.picks).toEqual([]);
+    gs.researchPoints = 1000;
+    expect(gs.researchAbility('cannon', 'c').ok).toBe(true); // free to take another path now
+    expect(c.picks).toEqual(['c']);
+    gs.wave.phase = 'active';
+    expect(checkRespec(gs, 'cannon').reason).toBe('Not during a wave');
+  });
+
+  it('perks ignore the building level: a level 1 building has every researched tier', () => {
+    const gs = new GameState({ storage: memoryStorage() });
+    gs.startNew();
+    gs.buildings[0].level = 10;
+    gs.tutorialDone = true;
+    gs.labGuideStep = 99;
+    gs.buildings.push(createBuilding(gs, 'rvlab', 12, 24, 5));
+    const c = createBuilding(gs, 'cannon', 9, 16, 1);
+    gs.buildings.push(c);
+    gs.researchPoints = 1e6;
+    for (let i = 0; i < 3; i++) gs.researchAbility('cannon', 'b');
+    expect(c.picks).toEqual(['b', 'b', 'b']);
+    expect(createBuilding(gs, 'cannon', 2, 2, 1).picks).toEqual(['b', 'b', 'b']);
   });
 
   it('the RV Lab book shows only when there is research to do that you can afford', () => {
@@ -141,7 +224,7 @@ describe('RV Lab', () => {
     expect(canResearchSomething(s)).toBe(false);          // not during a wave
   });
 
-  it('a pick goes onto every building of that type whose level is high enough; lower ones get it on upgrade', () => {
+  it('a pick goes onto every building of that type at once, whatever its level', () => {
     const gs = new GameState({ storage: memoryStorage() });
     gs.startNew();
     gs.buildings[0].level = 10;
@@ -158,20 +241,16 @@ describe('RV Lab', () => {
     const applied = [];
     gs.on('abilitiesApplied', (d) => applied.push(d.ids));
     expect(gs.researchAbility('cannon', 'a').ok).toBe(true);   // A1
-    expect(gs.researchAbility('cannon', 'b').ok).toBe(true);   // B2
-    expect(c1.picks).toEqual(['a', 'b']);                       // level 4: tiers 1-2
-    expect(c2.picks).toEqual(['a']);                            // level 2: tier 1
-    expect(c3.picks).toEqual([]);                               // level 1: none yet
-    expect(applied[0].sort()).toEqual([c1.id, c2.id].sort());
-    expect(applied[1]).toEqual([c1.id]);
+    expect(gs.researchAbility('cannon', 'b').ok).toBe(false);  // locked to Path A
+    expect(gs.researchAbility('cannon', 'a').ok).toBe(true);   // A2
+    for (const c of [c1, c2, c3]) expect(c.picks).toEqual(['a', 'a']); // every level has both tiers
+    expect(applied[0].sort()).toEqual([c1.id, c2.id, c3.id].sort());
+    expect(applied[1].sort()).toEqual([c1.id, c2.id, c3.id].sort());
     // Research is the only price: RP, once. No gold.
     expect(rp0 - gs.researchPoints).toBe(ABILITY_COSTS.research[0] + ABILITY_COSTS.research[1]);
     expect(gs.gold).toBe(gold0);
-    // Upgrading the level 1 cannon to 2 brings it tier 1.
-    expect(gs.upgradeBuilding(c3.id).ok).toBe(true);
-    expect(c3.picks).toEqual(['a']);
-    // A new cannon at level 1 has none; one placed by createBuilding at level 4 has tiers 1-2.
-    expect(createBuilding(gs, 'cannon', 2, 2, 4).picks).toEqual(['a', 'b']);
+    // A new cannon has them too.
+    expect(createBuilding(gs, 'cannon', 2, 2, 1).picks).toEqual(['a', 'a']);
     // Selling refunds gold for levels only.
     expect(sellRefund(c1)).toBe(Math.round((150 + 300 + 600 + 1200) * CONFIG.rules.sellRefund));
     // Other types aren't touched.
@@ -206,16 +285,16 @@ describe('RV Lab', () => {
     const c = createBuilding(gs, 'cannon', 9, 16, 6);
     gs.buildings.push(c);
     gs.researchPoints = 1e6;
-    for (const p of ['a', 'c', 'a']) gs.researchAbility('cannon', p);
+    for (const p of ['c', 'c', 'c']) gs.researchAbility('cannon', p);
     const saved = serializeGame(gs);
-    expect(saved.research).toEqual({ cannon: 'aca' });
+    expect(saved.research).toEqual({ cannon: 'ccc' });
     expect(saved.buildings.find((b) => b.id === c.id).picks).toBeUndefined();
     const parsed = parseSave(JSON.stringify(saved));
     expect(parsed.status).toBe('ok');
     const gs2 = new GameState({ storage: memoryStorage() });
     gs2.loadFromSave(parsed.data);
-    expect(gs2.research).toEqual({ cannon: ['a', 'c', 'a'] });
-    expect(gs2.getBuilding(c.id).picks).toEqual(['a', 'c', 'a']);
+    expect(gs2.research).toEqual({ cannon: ['c', 'c', 'c'] });
+    expect(gs2.getBuilding(c.id).picks).toEqual(['c', 'c', 'c']);
     for (const bad of [{ cannon: 'abd' }, { cannon: 'aaaaaa' }, { cannon: '' }, { townHall: 'a' }, { cannon: ['a'] }]) {
       expect(validateSave({ ...saved, research: bad })).toBe(false);
     }
@@ -246,6 +325,23 @@ describe('RV Lab', () => {
     expect(gs.buildings.filter((b) => b.type === 'cannon').map((b) => b.picks.join(''))).toEqual(['bb', 'bb', 'bb']);
   });
 
+  it('version 5 saves: mixed paths keep the path with the most picks, the extra RP is refunded; Diddypult level clamps to 5', () => {
+    const s = makeStateWithTownHall({ gold: 100, tutorialDone: true, tutorialStep: 11, researchPoints: 5 }, 10);
+    addBuilding(s, 'cannon', 9, 16, 10);
+    addBuilding(s, 'catapult', 12, 20, 5);
+    const old = { ...serializeGame(s), version: 5 };
+    old.research = { cannon: 'aba', archer: 'bc', wizard: 'cc' };   // cannon: A wins (2 picks); archer: tie, first (B) wins
+    old.buildings.find((b) => b.type === 'catapult').level = 6;
+    const parsed = parseSave(JSON.stringify(old));
+    expect(parsed.status).toBe('ok');
+    expect(parsed.data.version).toBe(SAVE_VERSION);
+    expect(parsed.data.research).toEqual({ cannon: 'aa', archer: 'b', wizard: 'cc' });
+    const r = ABILITY_COSTS.research;
+    // cannon paid r1+r2+r3, keeps tiers 1-2 (r1+r2): refund r3. archer paid r1+r2, keeps tier 1: refund r2.
+    expect(parsed.data.researchPoints).toBe(5 + r[2] + r[1]);
+    expect(parsed.data.buildings.find((b) => b.type === 'catapult').level).toBe(5);
+  });
+
   it('old saves with no research still load', () => {
     const s = makeStateWithTownHall({ gold: 100, tutorialDone: true, tutorialStep: 11 }, 3);
     addBuilding(s, 'cannon', 9, 16, 2);
@@ -272,7 +368,7 @@ describe('ability effects in a fight', () => {
     expect(back.x).toBeGreaterThan(14.5); // shoved away from the cannon
   });
 
-  it('Locklair Double Arrow shoots two enemies at once; Keen Sight sees invisible goblins', () => {
+  it('Locklair Double Arrow shoots two enemies at once; Keen Sight sees an invisible Mr. Least', () => {
     const s = attack();
     const a = addBuilding(s, 'archer', 9, 16, 10);
     a.picks = ['a', 'a'];
@@ -287,14 +383,14 @@ describe('ability effects in a fight', () => {
     expect(isValidTarget(a, ghost)).toBe(true);
   });
 
-  it('Mortar Barrage fires 3 shells; Close Support shrinks the blind spot', () => {
+  it('Mortar Barrage fires 2 shells; Close Support shrinks the blind spot', () => {
     const s = attack();
     const m = addBuilding(s, 'mortar', 9, 16, 10);
     m.picks = ['a', 'a', 'a', 'a', 'b'];
     expect(towerMinRange(m)).toBe(1.5);
     addEnemy(s, 'tank', 16, 17, { hp: 1e6, maxHp: 1e6 });
     for (let i = 0; i < 20; i++) stepDefenses(s, 0.05);
-    expect(s.projectiles.length).toBe(3);
+    expect(s.projectiles.length).toBe(2); // v0.5 rebalance (was 3)
   });
 
   it('Gandolf Chain Lightning arcs to enemies outside the fireball splash', () => {
@@ -354,7 +450,7 @@ describe('ability effects in a fight', () => {
 
   it('Diddypult Toxic pools last longer and spread wider', () => {
     const s = attack();
-    const cat = addBuilding(s, 'catapult', 3, 3, 6);
+    const cat = addBuilding(s, 'catapult', 3, 3, 5);
     cat.picks = ['a', 'a'];
     const e = addEnemy(s, 'grunt', 3 + 1 + 10, 4, { hp: 1e6, maxHp: 1e6 });
     const p = fireDefense(s, cat, e);

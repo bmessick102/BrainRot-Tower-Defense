@@ -2,20 +2,24 @@
 // `storage` is passed in (window.localStorage in the game, a fake in tests). Every access is try/catch.
 import { validHeroSleep } from './hero.js';
 import { CONFIG } from '../config.js';
-import { BUILDING_TYPES, WALL_ORIENTS, footprintDims, buildingSize, maxLevel, levelStats, isDefense, maxHp } from './buildings.js';
+import { BUILDING_TYPES, WALL_ORIENTS, footprintDims, buildingSize, maxLevel, levelStats, isDefense, maxHp, wallLevel, commonWallLevel } from './buildings.js';
 import { isRectOnGrass, footprintsOverlap } from './grid.js';
-import { serializeResearch, validResearch, deserializeResearch, hasAbilities, convertOldResearch, picksForLevel } from './abilities.js';
+import { serializeResearch, validResearch, deserializeResearch, hasAbilities, convertOldResearch, convertMixedResearch, picksFor } from './abilities.js';
 import { validLabGuide } from './labGuide.js';
 import { validHype } from './dj.js';
 import { mineStockCap } from './economy.js';
 import { serializeTips, validTips, deserializeTips } from './tips.js';
 import { validResearchPoints } from './researchPoints.js';
+import { serializeSpells, validSpells, deserializeSpells, validFuelGuide } from './spells.js';
+import { PATHS } from './waves.js';
 
 // Version 2 adds the day/night clock and nightsAtMaxTownHall (waves come at night).
 // Version 1 saves (waves on Town Hall upgrade) still load: see migrateV1.
 // Version 4: walls went from 10 levels (a picture per 2) to 6 (a picture each); see migrateV3.
 // Version 5: the RV Lab's research applies to every building (one pick per tier per type); see migrateV4.
-export const SAVE_VERSION = 5;
+// Version 6: a type's research is locked to one path (A, B or C); see migrateV5.
+// Version 7: the Spear Thrower (5 -> 10 levels) and Fuel Station (4 -> 8) got a picture per 2 levels; see migrateV6.
+export const SAVE_VERSION = 7;
 // Wall segments were 3 tiles long up to save version 2.
 const V2_WALL_LENGTH = 3;
 export const SAVE_KEYS = {
@@ -44,11 +48,15 @@ export function serializeGame(state, now = new Date()) {
     tutorialStep: state.tutorialStep,
     tutorialDone: !!state.tutorialDone,
     // RV Lab research: { type: "aba" }, the pick at each tier (left out when nothing is researched). Every
-    // building of that type has those tiers as far as its level allows, so buildings don't store them.
+    // building of that type has those tiers, so buildings don't store them.
     research: serializeResearch(state.research),
     labGuide: state.labGuideStep || 0, // RV Lab guide step (labGuide.js); missing in older saves
+    wavePlan: state.wavePlan ? { number: state.wavePlan.number, paths: [...state.wavePlan.paths] } : null, // next wave's corners (waves.js); missing in older saves
     tips: serializeTips(state),        // first-time tips already shown (tips.js); missing in older saves
     researchPoints: Math.floor(state.researchPoints || 0), // RP for RV Lab abilities; missing in older saves
+    spells: serializeSpells(state),    // Fuel Station spells brewed and waiting ("rage,heal"); missing in older saves
+    fuelGuide: state.fuelGuide || 0,   // Fuel Station guide step (spells.js); missing in older saves
+    wallLevel: wallLevel(state), // every wall's level (walls upgrade all at once); missing in older saves
     buildings: state.buildings.map((b) => {
       const out = { id: b.id, type: b.type, level: b.level, col: b.col, row: b.row };
       if (b.type === 'mine') out.stock = Math.round((b.stock || 0) * 100) / 100;
@@ -63,6 +71,14 @@ export function serializeGame(state, now = new Date()) {
 }
 
 const isInt = (v) => Number.isInteger(v);
+const SINGLE_PATH_RE = /^(a+|b+|c+)$/;
+
+/** The next wave's saved corners: missing / null (planned on load) or { number: wave >= 1, paths: 1-4 corners }. */
+export function validWavePlan(p) {
+  if (p === undefined || p === null) return true;
+  return typeof p === 'object' && isInt(p.number) && p.number >= 1 && Array.isArray(p.paths)
+    && p.paths.length >= 1 && p.paths.length <= PATHS.length && p.paths.every((x) => PATHS.includes(x));
+}
 
 /**
  * Version 1 -> version 2. v1 had no clock (start at morning) and a 10-step tutorial whose
@@ -128,7 +144,35 @@ export function migrateV4(obj) {
   return { ...obj, version: 5, research, researchPoints: rp + refund, labGuide, buildings };
 }
 
-/** True only for a well-formed version 5 save whose buildings all sit on grass without overlapping. */
+/**
+ * Version 5 -> version 6: the first RV Lab pick for a type now locks its path. A type with picks on several
+ * paths keeps the path with the most picks (convertMixedResearch) and the RP it paid beyond that is refunded.
+ */
+export function migrateV5(obj) {
+  const { research, refund } = convertMixedResearch(obj.research);
+  const rp = Number.isInteger(obj.researchPoints) && obj.researchPoints >= 0 ? obj.researchPoints : 0;
+  // The Diddypult (catapult) went from 6 levels to 5: a saved level 6 becomes 5.
+  const buildings = Array.isArray(obj.buildings)
+    ? obj.buildings.map((b) => (b && b.type === 'catapult' && Number.isInteger(b.level) && b.level > 5 ? { ...b, level: 5 } : b))
+    : obj.buildings;
+  return { ...obj, version: 6, research: obj.research === undefined ? obj.research : research, researchPoints: rp + refund, buildings };
+}
+
+/**
+ * Version 6 -> version 7: the Spear Thrower went from 5 levels (a picture each) to 10 and the Fuel Station from 4 to
+ * 8 (a picture per 2 levels). Old level L becomes 2L - 1, the first level that shows the same picture (and, for the
+ * Fuel Station, opens the same spells), kept no higher than the Village Hall allows.
+ */
+export function migrateV6(obj) {
+  const cap = Number.isInteger(obj.townHallLevel) ? Math.max(1, obj.townHallLevel) : 1;
+  const buildings = Array.isArray(obj.buildings)
+    ? obj.buildings.map((b) => (b && (b.type === 'spear' || b.type === 'fuelStation') && Number.isInteger(b.level) && b.level >= 1
+      ? { ...b, level: Math.max(1, Math.min(2 * b.level - 1, cap)) } : b))
+    : obj.buildings;
+  return { ...obj, version: 7, buildings };
+}
+
+/** True only for a well-formed version 7 save whose buildings all sit on grass without overlapping. */
 export function validateSave(obj) {
   if (!obj || typeof obj !== 'object') return false;
   if (obj.version !== SAVE_VERSION) return false;
@@ -141,9 +185,15 @@ export function validateSave(obj) {
   if (typeof obj.tutorialDone !== 'boolean') return false;
   if (!Array.isArray(obj.buildings)) return false;
   if (!validResearch(obj.research)) return false;
+  // Since version 6 a type's research follows one path ("aaa", never "aba"; migrateV5 converts older ones).
+  if (obj.research && Object.values(obj.research).some((v) => !SINGLE_PATH_RE.test(v))) return false;
+  if (!validWavePlan(obj.wavePlan)) return false;
   if (!validLabGuide(obj.labGuide)) return false;
   if (!validTips(obj.tips)) return false;
   if (!validResearchPoints(obj.researchPoints)) return false;
+  if (!validSpells(obj.spells)) return false;
+  if (!validFuelGuide(obj.fuelGuide)) return false;
+  if (obj.wallLevel !== undefined && (!isInt(obj.wallLevel) || obj.wallLevel < 1 || obj.wallLevel > Math.min(maxLevel('wall'), Math.max(1, obj.townHallLevel)))) return false;
 
   const seen = new Set();
   const placed = [];
@@ -177,17 +227,21 @@ export function validateSave(obj) {
 export function deserializeGame(obj) {
   let maxId = 0;
   const research = deserializeResearch(obj.research);
+  // Walls all share one level. Saves from before that (no wallLevel) take their walls' most common level
+  // (ties: the higher one; commonWallLevel), and every wall is brought to it, up or down.
+  const walls = obj.wallLevel !== undefined ? obj.wallLevel : commonWallLevel(obj.buildings);
   const buildings = obj.buildings.map((s) => {
     const n = parseInt(String(s.id).replace(/\D/g, ''), 10);
     if (Number.isFinite(n)) maxId = Math.max(maxId, n);
-    const b = { id: s.id, type: s.type, level: s.level, col: s.col, row: s.row, ...footprintDims(s.type, s.orient), hp: levelStats(s.type, s.level).hp, destroyed: false };
+    const level = s.type === 'wall' ? walls : s.level;
+    const b = { id: s.id, type: s.type, level, col: s.col, row: s.row, ...footprintDims(s.type, s.orient), hp: levelStats(s.type, level).hp, destroyed: false };
     if (s.type === 'wall') b.orient = s.orient;
     else b.size = buildingSize(s.type);
     if (s.type === 'mine') b.stock = s.stock || 0; // clamped below, once its perks (Deep Vault) are known
     if (s.type === 'dj') b.hype = s.hype || 0;
     if (s.type === 'altar') b.heroSleep = s.heroSleep || 0;
     if (isDefense(s.type)) { b.cooldown = 0; b.targetId = null; }
-    if (hasAbilities(s.type)) b.picks = picksForLevel(research, s.type, s.level);
+    if (hasAbilities(s.type)) b.picks = picksFor(research, s.type);
     b.hp = maxHp(b); // with any health tiers
     if (s.type === 'mine') b.stock = Math.min(b.stock, mineStockCap(b));
     if (s.destroyed) { b.destroyed = true; b.hp = 0; }
@@ -203,7 +257,11 @@ export function deserializeGame(obj) {
     research,
     labGuideStep: obj.labGuide || 0,
     tipsSeen: deserializeTips(obj.tips),
+    wavePlan: obj.wavePlan && validWavePlan(obj.wavePlan) ? { number: obj.wavePlan.number, paths: [...new Set(obj.wavePlan.paths)] } : null,
     researchPoints: obj.researchPoints || 0,
+    spells: deserializeSpells(obj.spells),
+    fuelGuide: obj.fuelGuide || 0,
+    wallLevel: walls,
     buildings,
     nextId: maxId + 1
   };
@@ -218,6 +276,8 @@ export function parseSave(text) {
   if (obj && typeof obj === 'object' && obj.version === 2) obj = migrateV2(obj);
   if (obj && typeof obj === 'object' && obj.version === 3) obj = migrateV3(obj);
   if (obj && typeof obj === 'object' && obj.version === 4) obj = migrateV4(obj);
+  if (obj && typeof obj === 'object' && obj.version === 5) obj = migrateV5(obj);
+  if (obj && typeof obj === 'object' && obj.version === 6) obj = migrateV6(obj);
   if (!validateSave(obj)) return { status: 'invalid', data: null };
   return { status: 'ok', data: obj };
 }
@@ -291,5 +351,25 @@ export function loadSettings(storage) {
 }
 
 export function saveSettings(storage, settings) {
-  return writeKey(storage, SAVE_KEYS.settings, JSON.stringify({ music: settings.music, sfx: settings.sfx }));
+  const graphics = loadGraphicsSetting(storage); // kept: it's saved on its own (saveGraphicsSetting)
+  return writeKey(storage, SAVE_KEYS.settings, JSON.stringify({ music: settings.music, sfx: settings.sfx, graphics }));
+}
+
+/** Graphics quality saved with the settings (src/quality.js): 'auto' (the default), 'high' or 'low'. */
+export const GRAPHICS_SETTINGS = ['auto', 'high', 'low'];
+
+export function loadGraphicsSetting(storage) {
+  try {
+    const obj = JSON.parse(readKey(storage, SAVE_KEYS.settings) || 'null') || {};
+    return GRAPHICS_SETTINGS.includes(obj.graphics) ? obj.graphics : 'auto';
+  } catch {
+    return 'auto';
+  }
+}
+
+/** Save the graphics quality, keeping the volume levels. */
+export function saveGraphicsSetting(storage, graphics) {
+  const { music, sfx } = loadSettings(storage);
+  const g = GRAPHICS_SETTINGS.includes(graphics) ? graphics : 'auto';
+  return writeKey(storage, SAVE_KEYS.settings, JSON.stringify({ music, sfx, graphics: g }));
 }

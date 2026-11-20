@@ -109,6 +109,6 @@ describe('Wall Breaker', () => {
   });
 
   it('joins the waves from wave 3', () => {
-    expect(CONFIG.waves.map((w) => w.breaker)).toEqual([0, 0, 2, 4]);
+    expect(CONFIG.waves.map((w) => w.breaker)).toEqual([0, 0, 2, 3, 5]); // v0.5 rebalance
   });
 });

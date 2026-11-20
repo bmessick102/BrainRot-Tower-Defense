@@ -3,16 +3,21 @@ import { CONFIG } from '../src/config.js';
 import {
   waveComposition, choosePaths, buildSpawnQueues, triggerWave, stepWaveSpawning, checkWaveCleared,
   enemiesLeft, nightWaveNumber, waveRamp, scaledWaveComposition, nextWaveComposition, nextWaveInfo,
-  specialTypesAt, specialWaveType, specialComposition, waveStrength, PATHS
+  getWavePlan, wavePlanCounts, specialTypesAt, specialWaveType, specialComposition, waveStrength, PATHS, skipCountdown, cancelCountdown
 } from '../src/logic/waves.js';
+import { startTutorialWave } from '../src/logic/dayNight.js';
+import { TUTORIAL_NIGHT_STEP } from '../src/logic/tutorial.js';
 import { ENEMY_KINDS } from '../src/logic/enemies.js';
 import { makeStateWithTownHall, seededRng } from './helpers.js';
 
 const w4 = CONFIG.waves[3];
+const w5 = CONFIG.waves[4];
 
 describe('waves.js', () => {
-  it('waves 1 to 4 match config', () => {
+  it('waves 1 to 5 match config (Village Hall 5 has a scripted base wave too)', () => {
+    expect(CONFIG.waves).toHaveLength(5);
     for (let n = 1; n <= 4; n++) expect(waveComposition(n)).toEqual({ ...CONFIG.waves[n - 1], toilet: 0 }); // (Skibidi Toilets join from Village Hall 5)
+    expect(waveComposition(5)).toEqual({ ...CONFIG.waves[4], toilet: CONFIG.enemies.toilet.baseCount });
   });
 
   it('wave 1 always uses the top path', () => {
@@ -30,23 +35,36 @@ describe('waves.js', () => {
     }
   });
 
-  it('wave 5 follows the endless formulas', () => {
-    const c = waveComposition(5);
-    for (const k of ENEMY_KINDS) if (!CONFIG.enemies[k].fromTownHall) expect(c[k]).toBe(Math.round((w4[k] || 0) * 1.15 ** 1));
-    expect(c.toilet).toBe(CONFIG.enemies.toilet.baseCount); // joins at Village Hall 5
-    expect(c.grunt).toBe(40);
-    expect(c.hpMultiplier).toBe(Math.round(1.2 * 1.1 * 100) / 100);
-    expect(c.hpMultiplier).toBe(1.32);
+  it('wave 6 follows the endless formulas from the Village Hall 5 base', () => {
+    const { endlessCountGrowth: cg, endlessHpGrowth: hg } = CONFIG.rules;
+    const c = waveComposition(6);
+    for (const k of ENEMY_KINDS) if (!CONFIG.enemies[k].fromTownHall) expect(c[k]).toBe(Math.round((w5[k] || 0) * cg));
+    expect(c.toilet).toBe(Math.round(CONFIG.enemies.toilet.baseCount * cg)); // joined at Village Hall 5
+    expect(c.hpMultiplier).toBe(Math.round(w5.hpMultiplier * hg * 100) / 100);
     expect(c.spawnPaths).toBe(2);
   });
 
   it('wave 8 follows the endless formulas', () => {
+    const { endlessCountGrowth: cg, endlessHpGrowth: hg } = CONFIG.rules;
     const c = waveComposition(8);
-    for (const k of ENEMY_KINDS) if (!CONFIG.enemies[k].fromTownHall) expect(c[k]).toBe(Math.round((w4[k] || 0) * 1.15 ** 4));
-    expect(c.toilet).toBe(Math.round(CONFIG.enemies.toilet.baseCount * 1.15 ** 3));
-    expect(c.grunt).toBe(61);
-    expect(c.hpMultiplier).toBe(1.76);
+    for (const k of ENEMY_KINDS) if (!CONFIG.enemies[k].fromTownHall) expect(c[k]).toBe(Math.round((w5[k] || 0) * cg ** 3));
+    expect(c.toilet).toBe(Math.round(CONFIG.enemies.toilet.baseCount * cg ** 3));
+    expect(c.hpMultiplier).toBe(Math.round(w5.hpMultiplier * hg ** 3 * 100) / 100);
     expect(c.spawnPaths).toBe(3);
+  });
+
+  it('spawn corners by Village Hall: 1, 1, 2, 2, 2, 2, 3, 3, 4, 4', () => {
+    expect([1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map((n) => waveComposition(n).spawnPaths)).toEqual([1, 1, 2, 2, 2, 2, 3, 3, 4, 4]);
+  });
+
+  it('each Village Hall base wave is tougher than the one before (total enemy HP x hpMultiplier)', () => {
+    let prev = 0;
+    for (let n = 1; n <= 10; n++) {
+      const c = waveComposition(n);
+      const s = waveStrength(c) * c.hpMultiplier;
+      expect(s).toBeGreaterThan(prev);
+      prev = s;
+    }
   });
 
   it('all 4 corners are in play by wave 9', () => {
@@ -58,24 +76,57 @@ describe('waves.js', () => {
     expect(waveComposition(30).spawnPaths).toBe(4);
   });
 
-  it('splits enemies evenly and orders Tanks, Wall Breakers, Grunt/Slinger alternating, Bombers then Balloons last', () => {
+  it('splits enemies evenly and interleaves the troop types instead of sending one type at a time', () => {
     const q = buildSpawnQueues(w4, ['left', 'right']);
     const all = [...q.left, ...q.right];
     for (const k of ENEMY_KINDS) expect(all.filter((x) => x === k)).toHaveLength(w4[k] || 0);
     expect(Math.abs(q.left.length - q.right.length)).toBeLessThanOrEqual(1);
     for (const path of ['left', 'right']) {
       const list = q[path];
-      const firstNonTank = list.findIndex((k) => k !== 'tank');
-      expect(list.slice(0, firstNonTank).every((k) => k === 'tank')).toBe(true);
-      const firstBomber = list.indexOf('bomber');
-      // Bombers, then Neegy Balloons, bring up the rear.
-      expect(list.slice(firstBomber).every((k) => k === 'bomber' || k === 'balloon')).toBe(true);
-      expect(list.lastIndexOf('bomber')).toBeLessThan(list.indexOf('balloon'));
-      // Wall Breakers come right after the Tanks, so they reach the walls first.
-      const firstGrunt = list.indexOf('grunt');
-      expect(list.slice(firstNonTank, firstGrunt).every((k) => k === 'breaker')).toBe(true);
-      expect(list.slice(firstGrunt, firstGrunt + 4)).toEqual(['grunt', 'slinger', 'grunt', 'slinger']);
+      // No type forms a long back-to-back run, and the first 10 already mix at least 3 types.
+      let run = 1, longest = 1;
+      for (let i = 1; i < list.length; i++) { run = list[i] === list[i - 1] ? run + 1 : 1; longest = Math.max(longest, run); }
+      expect(longest).toBeLessThanOrEqual(3);
+      expect(new Set(list.slice(0, 10)).size).toBeGreaterThanOrEqual(3);
     }
+  });
+
+  it('the Da Baby Car boss still leads its path', () => {
+    const q = buildSpawnQueues({ ...w4, babycar: 1 }, ['top']);
+    expect(q.top[0]).toBe('babycar');
+  });
+
+  it('the wave plan has 1-4 random corners, is made ahead, and is kept until the wave is cleared', () => {
+    const seen = new Set();
+    for (let seed = 1; seed < 80; seed++) {
+      const state = makeStateWithTownHall({}, 10);
+      state.rng = seededRng(seed);
+      state.wavesCleared = 20;
+      const plan = getWavePlan(state);
+      expect(plan.number).toBe(21);
+      expect(new Set(plan.paths).size).toBe(plan.paths.length);
+      seen.add(plan.paths.length);
+      expect(getWavePlan(state)).toBe(plan); // stable until the wave is cleared
+      triggerWave(state);
+      expect(state.wave.paths).toEqual(plan.paths);
+    }
+    expect([...seen].sort()).toEqual([1, 2, 3, 4]);
+  });
+
+  it('wave 1 plans only the top corner; the plan is replaced for a new wave number', () => {
+    const state = makeStateWithTownHall({}, 1);
+    expect(getWavePlan(state).paths).toEqual(['top']);
+    state.wavesCleared = 3;
+    expect(getWavePlan(state).number).toBe(4);
+  });
+
+  it('wavePlanCounts reports per-corner enemy counts that add up to the wave', () => {
+    const state = makeStateWithTownHall({}, 3);
+    state.wavesCleared = 2;
+    const counts = wavePlanCounts(state);
+    const total = Object.values(counts).reduce((n, c) => n + Object.values(c).reduce((a, b) => a + b, 0), 0);
+    const comp = nextWaveComposition(state);
+    expect(total).toBe(ENEMY_KINDS.reduce((n, k) => n + (comp[k] || 0), 0));
   });
 
   it('runs countdown -> spawning -> cleared with free repair', () => {
@@ -85,7 +136,12 @@ describe('waves.js', () => {
     expect(state.wave).toMatchObject({ phase: 'countdown', number: 1, paths: ['top'] });
     expect(enemiesLeft(state)).toBe(CONFIG.waves[0].grunt);
 
-    stepWaveSpawning(state, 0.02); // no countdown: it starts on the next step
+    // The countdown: a tick each second, nothing spawns until it runs out.
+    for (let t = 0; t < CONFIG.rules.waveCountdown - 0.55; t += 0.1) stepWaveSpawning(state, 0.1);
+    expect(state.wave.phase).toBe('countdown');
+    expect(state.enemies).toHaveLength(0);
+    expect(state.events.filter((e) => e.name === 'waveTick').length).toBe(CONFIG.rules.waveCountdown - 1);
+    stepWaveSpawning(state, 0.52);
     expect(state.wave.phase).toBe('active');
     expect(state.enemies).toHaveLength(1);
     stepWaveSpawning(state, CONFIG.rules.spawnInterval);
@@ -201,7 +257,7 @@ describe('waves.js', () => {
     });
 
     it('never have more than maxEnemiesFactor x the normal count (the rest goes into HP)', () => {
-      // A few big enemies: the same strength in Bitcoin Stealers would be far more than 2x the count.
+      // A few big enemies: the same strength in Mr. Leasts would be far more than 2x the count.
       const normal = { ...scaledWaveComposition(4, 1), grunt: 1, slinger: 0, bomber: 0, tank: 3, shark: 0, thief: 1, breaker: 0, balloon: 0 };
       const c = specialComposition(normal, 'heist');
       expect(kinds(c).reduce((n, k) => n + c[k], 0)).toBeLessThanOrEqual(Math.round(5 * SW.maxEnemiesFactor));
@@ -223,5 +279,36 @@ describe('waves.js', () => {
       expect(state.gold).toBe(cleared.bonus);
       expect(nextWaveInfo(state).special).toBeNull(); // the wave after is normal again
     });
+  });
+
+  it('Start Now skips the rest of the countdown; the tutorial wave counts down for less', () => {
+    const state = makeStateWithTownHall({}, 1);
+    triggerWave(state);
+    stepWaveSpawning(state, 5);
+    expect(skipCountdown(state)).toBe(true);
+    stepWaveSpawning(state, 0.01);
+    expect(state.wave.phase).toBe('active');
+    expect(state.enemies.length).toBeGreaterThan(0);
+    expect(skipCountdown(state)).toBe(false); // already attacking
+    const tut = makeStateWithTownHall({ tutorialDone: false, tutorialStep: TUTORIAL_NIGHT_STEP }, 1);
+    startTutorialWave(tut);
+    expect(tut.wave.countdown).toBe(CONFIG.rules.tutorialCountdown);
+  });
+
+  it('Cancel during the countdown puts the wave back (same number), and never as a quick start', () => {
+    const state = makeStateWithTownHall({ tutorialDone: true, tutorialStep: 10 }, 1);
+    state.sinceWaveCleared = 0;
+    triggerWave(state);
+    const n = state.wave.number;
+    stepWaveSpawning(state, 5);
+    expect(cancelCountdown(state)).toBe(true);
+    expect(state.wave.phase).toBe('idle');
+    expect(state.events.some((e) => e.name === 'waveCancelled' && e.data.number === n)).toBe(true);
+    expect(nightWaveNumber(state)).toBe(n);
+    expect(state.sinceWaveCleared).toBe(Infinity);
+    stepWaveSpawning(state, 60);
+    expect(state.enemies).toHaveLength(0); // nothing comes
+    triggerWave(state); stepWaveSpawning(state, CONFIG.rules.waveCountdown + 0.1);
+    expect(cancelCountdown(state)).toBe(false); // too late once it attacks
   });
 });

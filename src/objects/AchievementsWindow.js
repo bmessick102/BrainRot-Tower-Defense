@@ -3,7 +3,7 @@
 // from the title screen the window only shows progress.
 import { Modal } from './Modal.js';
 import { Button } from './Button.js';
-import { drawStatBar, drawBadge } from './uiDraw.js';
+import { drawStatBar, drawBadge, fitIcon } from './uiDraw.js';
 import { ACHIEVEMENTS, ACHIEVEMENT_GROUPS, achievementProgress, progressValues } from '../logic/achievements.js';
 import { addGold, formatGold } from '../logic/economy.js';
 import { isWaveActive } from '../logic/util.js';
@@ -149,7 +149,7 @@ export class AchievementsWindow {
     const rx = x + w - 66;
     if (s.textures.exists(TEX.coin)) {
       const coin = s.add.image(rx - 34, y + 22, TEX.coin);
-      coin.setScale(20 / Math.max(coin.frame.width, coin.frame.height));
+      fitIcon(coin, 20);
       m.add(coin);
     }
     m.add(s.add.text(rx - 20, y + 22, formatGold(a.reward), bodyStyle(17, earned && !claimable ? COLORS.inkDim : COLORS.inkAccent)).setOrigin(0, 0.5));
@@ -167,6 +167,8 @@ export class AchievementsWindow {
     const gs = this.gs;
     if (!gs) return;
     if (isWaveActive(gs)) { this.message = 'Claim rewards after the wave.'; this.render(); return; }
+    // Offline, the server doesn't have this achievement yet: its reward waits for the next login.
+    if (this.session.offline) { this.message = 'You’re playing offline: rewards can be claimed once you log in again.'; this.render(); return; }
     if (gs.gold + a.reward > gs.capacity) {
       this.message = `Not enough storage room for ${formatGold(a.reward)} gold: spend some, or build / upgrade Bitcoin Storage.`;
       this.render();

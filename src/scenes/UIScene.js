@@ -5,10 +5,10 @@ import { CONFIG } from '../config.js';
 import { IS_TOUCH } from '../device.js';
 import {
   DEFENSE_TYPES, ECONOMY_TYPES, WALL_TYPES, buildableCount, buildCost, buildingName, checkBuy, checkUpgrade, countOwned, isDefense,
-  levelStats, limitFor, maxHp, maxLevel, typeConfig, footprintDims, wallGroup, planWallGroupUpgrade
+  levelStats, limitFor, maxHp, maxLevel, typeConfig, footprintDims, wallLevel
 } from '../logic/buildings.js';
 import { checkRepair, formatGold, repairCost, hallIncomeRate, mineStockCap } from '../logic/economy.js';
-import { enemiesLeft, nightWaveNumber, nextWaveInfo } from '../logic/waves.js';
+import { enemiesLeft, nightWaveNumber, nextWaveInfo, wavePlanCounts } from '../logic/waves.js';
 import { liveStars, starText } from '../logic/waveStars.js';
 import { isClockRunning, canStartWave, secondsToNextPhase, nightAmount, isDark } from '../logic/dayNight.js';
 import {
@@ -18,17 +18,25 @@ import { isWaveActive } from '../logic/util.js';
 import { gnomeStats, gnomeTier } from '../logic/villagers.js';
 import { Button } from '../objects/Button.js';
 import { ResourceBar, formatSpaced } from '../objects/ResourceBar.js';
-import { drawWindow, drawGlossy, drawHudPill, drawRibbon, drawBadge, drawShowcaseCard, drawCardStrip } from '../objects/uiDraw.js';
+import { drawWindow, drawGlossy, drawHudPill, drawRibbon, drawBadge, drawShowcaseCard, drawCardStrip, drawAngledArrow, fitWidth, fitIcon } from '../objects/uiDraw.js';
+import {
+  TOP_ROW_CY, topRowY, GOLD_BAR, RP_BAR, CLOCK, clockRect, PROFILE, WAVE_CX, waveSpan,
+  fitInSpan, fitPill, liftClear, rectsOverlap, findOverlaps, SCREEN
+} from '../logic/hudLayout.js';
 import { MAP } from '../mapTiles.js';
 import { BUILDING_DESCRIPTIONS } from '../buildingText.js';
 import { buildingTextureKey } from '../objects/BuildingView.js';
 import { TEX, SFX } from '../assetKeys.js';
 import { playSfx } from '../audio.js';
-import { COLORS, bodyStyle, textStyle } from '../theme.js';
+import { COLORS, bodyStyle, textStyle, RP_BAR_COLORS } from '../theme.js';
 import { achievementById } from '../logic/achievements.js';
 import { LEAGUES } from '../logic/leagues.js';
-import { RESEARCH_TYPES, UTILITY_TYPES, HERO_TYPES } from '../logic/buildings.js';
-import { heroStats } from '../logic/hero.js';
+import { RESEARCH_TYPES, UTILITY_TYPES, HERO_TYPES, SPELL_TYPES } from '../logic/buildings.js';
+import { AbilityHotbar } from '../objects/AbilityHotbar.js';
+import { openFuelStationWindow } from '../objects/FuelStationWindow.js';
+import { SPELL_KINDS, spellConfig, spellFullName, spellSlots, brewedSpells } from '../logic/spells.js';
+import { rpCap, rpText } from '../logic/researchPoints.js';
+import { heroStats, getAltar } from '../logic/hero.js';
 import { djStats, hypeNeeded } from '../logic/dj.js';
 import { hotbarGroups } from '../logic/layout.js';
 import { hasAbilities, canResearchFor, labLevel, towerRange, towerMinRange, towerFireInterval } from '../logic/abilities.js';
@@ -51,25 +59,29 @@ const TRAY = { x: 14, y: 72, h: 206 };
 const CARD_Y = TRAY.y + 6;
 const CARD_H = TRAY.h - 12;
 const FOOTER = { y: 286, h: 34 };
-// Corner fog: a few drifting cloud puffs in each screen corner, always on, under the HUD.
-const FOG = { color: 0xe4ecf2, alpha: 0.5, puffsPerCorner: 3, scale: [1.9, 2.6], drift: [25, 55], period: [7000, 11000] };
-
+const SHOP_CARD_W = 200; // every shop card is this wide; more than fit = more pages
+/** Card grid: left edge, gap and how many cards fit on a page. */
+function shopCardGrid() {
+  const x0 = TRAY.x + 8, gap = 12;
+  return { x0, gap, perPage: Math.max(1, Math.floor((SHOP_W - x0 * 2 + gap) / (SHOP_CARD_W + gap))) };
+}
 // Traps (hidden, like the Mousetrap) get their own tab; they're still defenses in the game rules.
 const TRAP_TYPES = DEFENSE_TYPES.filter((t) => CONFIG.defenses[t].trap);
 const SHOP_TABS = [
   { key: 'defenses', label: 'Defenses', types: [...DEFENSE_TYPES.filter((t) => !TRAP_TYPES.includes(t)), ...HERO_TYPES] }, // the Brisket King's altar too
   { key: 'traps', label: 'Traps', types: TRAP_TYPES },
-  { key: 'economy', label: 'Economy', types: [...ECONOMY_TYPES, ...RESEARCH_TYPES, ...UTILITY_TYPES] }, // the RV Lab and DJ Babyface sit with the economy buildings
+  { key: 'economy', label: 'Economy', types: [...ECONOMY_TYPES, ...RESEARCH_TYPES, ...UTILITY_TYPES, ...SPELL_TYPES] }, // the RV Lab, DJ Babyface and Fuel Station sit with the economy buildings
   { key: 'walls', label: 'Walls', types: WALL_TYPES }
 ];
 
 // Quick bar: a compact strip along the bottom, right-aligned just left of the Edit / Shop buttons.
 // Centered on the same line as the Edit button (y 650), about its height.
-const QB = { y: 650 - 40, h: 80, right: 1004, btnH: 52, upgradeW: 200, groupW: 112, infoW: 74, abilityW: 132 };
+const QB = { y: 650 - 40, h: 80, right: 1004, btnH: 52, upgradeW: 200, infoW: 74, abilityW: 132 };
 
 const INFO_W = 440;
 const INFO_X = 1280 - 16 - INFO_W;
-const INFO_Y = 92; // below the gold bar; tall enough panels still clear the Settings icon
+const INFO_Y = Math.ceil(CLOCK.cy + CLOCK.h / 2) + 8; // below the gold bar and the day/night pill under it
+const INFO_TOP_MIN = TOP_ROW_CY + 36;                    // a very tall panel may rise to here (just under the top row)
 const INFO_HEADER = 62;
 const INFO_TABS_Y = 90; // Info / Stats tab buttons
 // Building picture card on the left; the tabs and their content sit in the column to its right.
@@ -82,24 +94,18 @@ const INFO_BTN_H = 48; // keeps the tallest panel (Upgrade + Sell + Repair) clea
 const BANNER_MS = 2500;
 const EARLY_W = 150; // "Start Wave" button beside the wave pill
 const EARLY_GAP = 10;
-const SPECIAL_BTN_W = 230;
+const CANCEL_W = 112; // "Cancel" beside Start Now during the countdown
+const EARLY_H = 54;         // Start Wave button height: room for its label and a hint line without touching the edges
+const PILL_H = 46;          // the wave pill beside it
+const SPECIAL_BTN_MAX = 300; // the widest the button grows for a long hint
+// Top row: Profile, wave pill + Start Wave, the RP bar and the gold bar all share one centre line; the geometry
+// lives in src/logic/hudLayout.js (TOP_ROW_CY, topRowY, GOLD_BAR, RP_BAR, CLOCK, waveSpan), where tests check
+// that nothing overlaps. To add a bar to the row, place it with topRowY(its height) (its top y).
+// The wave pill + button are centered near WAVE_CX, inside the free span between the profile and the RP bar.
 // Layout editor hotbar (bottom left, beside the Edit button) and its cards.
 const HOTBAR = { x: 16, y: 598, w: 988, h: 114 };
 const HOTBAR_CARD = { w: 84, h: 92, gap: 8 };
 const SHIFT_PAD = { x: 96, y: 474, dx: 34, dy: 26 }; // center of the layout shift pad and its buttons' offsets
-
-/**
- * A bold arrow with a shaft (white, dark outline) centered on cx, cy, pointing at screen angle `ang`.
- * (A plain triangle turned to the map's shallow diagonals just reads as up / down.)
- */
-function drawAngledArrow(g, cx, cy, size, ang) {
-  const L = size / 2, hl = L * 0.95, hw = L * 0.8, sw = L * 0.3;
-  const ux = Math.cos(ang), uy = Math.sin(ang);
-  const at = (u, v) => ({ x: cx + ux * u - uy * v, y: cy + uy * u + ux * v });
-  const pts = [at(L, 0), at(L - hl, hw), at(L - hl, sw), at(-L, sw), at(-L, -sw), at(L - hl, -sw), at(L - hl, -hw)];
-  g.lineStyle(4, COLORS.frame, 1).strokePoints(pts, true);
-  g.fillStyle(0xffffff, 1).fillPoints(pts, true);
-} // the red Start Wave button before a special wave (room for its hint)
 
 export class UIScene extends Phaser.Scene {
   constructor() {
@@ -113,8 +119,15 @@ export class UIScene extends Phaser.Scene {
     this.shopTab = 'defenses';
     this.selectedId = null;
     this.placementActive = false;
+    // The scene object is reused for every game (maybe another village): nothing from the last one carries over.
+    this.toastQueue = []; this.toastBusy = false; // a toast cut off mid-show would block every later one
+    this.cornerRects = null; this.babyCarAnnounced = null; this.profileBadgeCount = undefined;
+    this.tipShown = false; this.rpLostSum = 0; this.heroTabAt = 0;
+    // HUD pieces the build steps below check for (the profile pill redraws the wave pill if it exists): the last
+    // game's were destroyed with it. (A stale wave pill crashed the HUD when the player or league changed.)
+    this.waveText = null; this.waveBg = null; this.wavePillRect = null; this.profileRight = undefined; this.waveSpanFor = undefined;
+    this.rpBar = null; this.rpLostText = null; this.clockText = null; this.clockRect = null; this.infoPanel = null;
 
-    this.buildFog(); // first, so every HUD element draws over it
     this.buildGold();
     this.buildResearchPoints();
     this.buildClock();
@@ -125,6 +138,7 @@ export class UIScene extends Phaser.Scene {
     this.buildShopButton();
     this.buildShopBadge();
     this.buildEditButton();
+    this.abilityBar = new AbilityHotbar(this, this.gs, this.world); // the ability hotbar (bottom middle)
     this.buildRotateButton();
     this.buildInfo();
     this.buildQuickBar();
@@ -147,6 +161,8 @@ export class UIScene extends Phaser.Scene {
       if (b && b.type === 'altar') this.refreshInfo();
     }
     this.drawFocus(time);
+    this.abilityBar.update(time);
+    this.layoutAroundAbilityBar(); // the info panel keeps clear of it
     this.refreshClock();
     if (this.selectedId && this.infoPanel.visible) this.syncInfoPic();
     if (this.quickBar && this.quickBar.visible) this.quickBar.setY(this.quickBarY()); // follows the guide opening / closing
@@ -157,41 +173,23 @@ export class UIScene extends Phaser.Scene {
     return this.input.hitTestPointer(pointer).length > 0;
   }
 
-  // ---------- gold ----------
-  buildFog() {
-    const { width: W, height: H } = this.scale;
-    const R = Phaser.Math;
-    for (const [cx, cy] of [[0, 0], [W, 0], [0, H], [W, H]]) {
-      const sx = cx ? -1 : 1; // direction into the screen
-      const sy = cy ? -1 : 1;
-      for (let i = 0; i < FOG.puffsPerCorner; i++) {
-        const x = cx + sx * R.Between(0, 110);
-        const y = cy + sy * R.Between(0, 70);
-        const scale = R.FloatBetween(FOG.scale[0], FOG.scale[1]);
-        const alpha = FOG.alpha * (1 - i * 0.18);
-        const puff = this.add.image(x, y, TEX.fog).setTint(FOG.color).setAlpha(alpha).setScale(scale)
-          .setRotation(R.FloatBetween(0, Math.PI * 2)).setDepth(-100);
-        // Slow drift in and out of the corner, swelling and thinning a little as it goes.
-        this.tweens.add({
-          targets: puff,
-          x: x + sx * R.Between(FOG.drift[0], FOG.drift[1]),
-          y: y + sy * R.Between(FOG.drift[0], FOG.drift[1]) * 0.6,
-          scale: scale * 1.12,
-          alpha: alpha * 0.75,
-          rotation: puff.rotation + R.FloatBetween(-0.25, 0.25),
-          duration: R.Between(FOG.period[0], FOG.period[1]),
-          delay: R.Between(0, 3000),
-          yoyo: true,
-          repeat: -1,
-          ease: 'Sine.easeInOut'
-        });
-      }
-    }
+  // ---------- spawn corners: the map's wave markers ----------
+  /**
+   * Per attack corner of the next wave (the running one while it lasts): GameScene's WaveMarkers draw an arrow
+   * and the enemy kinds with counts on the map at the back of that corner's path (world space, under this HUD).
+   * The fog over the back of every path is GameScene's too (SpawnFog), always on.
+   */
+  syncCornerHud() {
+    let counts = {};
+    try { counts = wavePlanCounts(this.gs); } catch (e) { counts = {}; }
+    if (this.gs.gameOver) counts = {};
+    if (this.world && this.world.waveMarkers) this.world.waveMarkers.setCounts(counts);
   }
 
+  // ---------- gold ----------
   buildGold() {
     // Top right: the coin's right edge sits ~18 px from the screen edge.
-    this.goldBar = new ResourceBar(this, 1280 - 18 - 32 - 270, 34, 270, 36, TEX.coin);
+    this.goldBar = new ResourceBar(this, GOLD_BAR.x, GOLD_BAR.y, GOLD_BAR.w, GOLD_BAR.h, TEX.coin);
     const r = this.goldBar.bounds();
     this.add.zone(r.x, r.y, r.w, r.h).setOrigin(0).setInteractive();
   }
@@ -200,48 +198,63 @@ export class UIScene extends Phaser.Scene {
     this.goldBar.setValue(this.gs.gold, this.gs.capacity);
   }
 
-  // ---------- research points (under the gold bar) ----------
-  /** A small flask icon for research points, drawn once unless real art (TEX.researchPoint) was loaded. */
+  // ---------- Burgers (research points; the bar left of the gold bar) ----------
+  /** A small drawn burger for the Burgers icon, made once unless the real art (TEX.researchPoint) was loaded. */
   ensureRpIcon() {
     if (this.textures.exists(TEX.researchPoint)) return;
     const g = this.make.graphics({ x: 0, y: 0, add: false });
-    g.fillStyle(0x1b1712, 1).fillRoundedRect(11, 1, 10, 4, 2).fillRect(12, 4, 8, 10)
-      .fillTriangle(3, 29, 29, 29, 20, 12).fillTriangle(3, 29, 12, 12, 20, 12);
-    g.fillStyle(0xe9e4ff, 1).fillRect(14, 4, 4, 10).fillTriangle(6, 27, 26, 27, 17, 14).fillTriangle(6, 27, 15, 14, 17, 14);
-    g.fillStyle(0xa25cff, 1).fillTriangle(7, 27, 25, 27, 21, 20).fillTriangle(7, 27, 11, 20, 21, 20);
-    g.fillStyle(0xffffff, 0.8).fillCircle(13, 23, 1.5).fillCircle(18, 22, 1);
+    g.fillStyle(0x2a160a, 1).fillRoundedRect(2, 4, 28, 25, 9);                          // outline
+    g.fillStyle(0xe0913a, 1).fillEllipse(16, 11, 24, 13).fillRoundedRect(5, 23, 22, 4, 2); // buns
+    g.fillStyle(0x7ac142, 1).fillRect(4, 15, 24, 2);                                    // lettuce
+    g.fillStyle(0xffc43a, 1).fillRect(4, 17, 24, 2);                                    // cheese
+    g.fillStyle(0x6b3418, 1).fillRoundedRect(5, 19, 22, 4, 2);                          // patty
+    g.fillStyle(0xfff1c4, 0.9).fillEllipse(11, 9, 3, 2).fillEllipse(17, 7, 3, 2).fillEllipse(21, 10, 3, 2); // seeds
     g.generateTexture(TEX.researchPoint, 32, 32);
     g.destroy();
   }
 
-  /** "RP 123" pill under the gold bar, right-aligned with it. */
+  /**
+   * The Burgers resource bar (research points; internally rp): same look as the gold bar, burger orange, in the
+   * top row just left of it. Its "Max" is the cap (grows with the RV Lab's level); any earned past it is lost
+   * (see showRpLost).
+   */
   buildResearchPoints() {
     this.ensureRpIcon();
-    const r = this.goldBar.bounds();
-    this.rpBg = this.add.graphics();
-    this.rpText = this.add.text(0, r.y + r.h + 18, '', textStyle(17)).setOrigin(1, 0.5);
-    this.rpIcon = this.add.image(0, r.y + r.h + 18, TEX.researchPoint);
-    this.rpIcon.setScale(24 / this.rpIcon.frame.height);
-    this.rpLabel = this.add.text(0, r.y + r.h + 18, 'RP', textStyle(13, '#d3b0ff')).setOrigin(1, 0.5);
-    this.rpZone = this.add.zone(0, 0, 10, 10).setOrigin(0).setInteractive();
+    this.rpBar = new ResourceBar(this, RP_BAR.x, RP_BAR.y, RP_BAR.w, RP_BAR.h, TEX.researchPoint,
+      RP_BAR_COLORS);
+    const r = this.rpBar.bounds();
+    this.add.zone(r.x, r.y, r.w, r.h).setOrigin(0).setInteractive();
+    this.rpLostSum = 0;
+    // "Burgers full: n lost" takes the place of the bar's "Max" label for a moment (so it never lands on the wave
+    // banner or the info panel below the row).
+    const mt = this.rpBar.maxText;
+    this.rpLostText = this.add.text(mt.x, mt.y, '', { fontFamily: mt.style.fontFamily, fontSize: mt.style.fontSize, color: '#ffb0b0', stroke: '#000000', strokeThickness: 4 }).setOrigin(0, 1).setAlpha(0).setDepth(460);
     this.refreshResearchPoints();
   }
 
   refreshResearchPoints() {
-    if (!this.rpText) return;
-    const r = this.goldBar.bounds();
-    const right = r.x + r.w, cy = r.y + r.h + 18;
-    this.rpText.setText(formatSpaced(this.gs.researchPoints || 0)).setPosition(right - 12, cy);
-    this.rpLabel.setPosition(this.rpText.x - this.rpText.width - 6, cy + 1);
-    this.rpIcon.setPosition(this.rpLabel.x - this.rpLabel.width - 16, cy);
-    const left = this.rpIcon.x - 20, w = right - left;
-    this.rpBg.clear();
-    drawHudPill(this.rpBg, left, cy - 14, w, 28);
-    this.rpZone.setPosition(left, cy - 14).setSize(w, 28);
-    if (this.rpZone.input) this.rpZone.input.hitArea.setSize(w, 28);
+    if (!this.rpBar) return;
+    this.rpBar.setValue(this.gs.researchPoints || 0, rpCap(this.gs));
   }
 
-  // ---------- time of day (left of the RP pill) ----------
+  /** "Burgers full: 12 lost" under the bar when Burgers are earned past the cap; adds up while kills keep coming. */
+  showRpLost(n) {
+    if (!this.rpLostText) return;
+    this.rpLostSum += n;
+    const max = this.rpBar.maxText;
+    this.tweens.killTweensOf([this.rpLostText, max]);
+    this.rpLostText.setText(`Burgers full: ${formatSpaced(this.rpLostSum)} lost`).setAlpha(1);
+    // Kept left of the bar's icon (a long count shrinks).
+    const room = this.rpBar.x + this.rpBar.w - this.rpBar.iconRadius - 4 - this.rpLostText.x;
+    this.rpLostText.setScale(this.rpLostText.width > room ? room / this.rpLostText.width : 1);
+    max.setAlpha(0);
+    this.tweens.add({
+      targets: this.rpLostText, alpha: 0, delay: 900, duration: 500,
+      onComplete: () => { this.rpLostSum = 0; this.tweens.add({ targets: max, alpha: 1, duration: 200 }); }
+    });
+  }
+
+  // ---------- time of day (directly below the gold bar) ----------
   /**
    * The day/night clock, which runs on its own (waves come whenever Start Wave is pressed): a sun or moon and
    * the phase with the time left in it, e.g. "Day 3:12", "Night 1:05". Hidden until the clock runs.
@@ -254,22 +267,21 @@ export class UIScene extends Phaser.Scene {
   }
 
   refreshClock() {
-    if (!this.clockText || !this.rpBg) return;
+    if (!this.clockText) return;
     const gs = this.gs, c = gs.clock;
     const show = !!c && isClockRunning(gs);
     if (!show) {
-      if (this.clockKey !== 'off') { this.clockKey = 'off'; this.clockBg.clear(); this.clockIcon.clear(); this.clockText.setText(''); }
+      if (this.clockKey !== 'off') { this.clockKey = 'off'; this.clockBg.clear(); this.clockIcon.clear(); this.clockText.setText(''); this.clockRect = null; }
       return;
     }
     const left = Math.ceil(secondsToNextPhase(c));
     const label = { day: 'Day', dusk: 'Dusk', night: 'Night', dawn: 'Dawn' }[c.phase] || 'Day';
     const text = `${label} ${Math.floor(left / 60)}:${String(left % 60).padStart(2, '0')}`;
     const night = nightAmount(c);
-    const key = `${text}|${night.toFixed(2)}|${this.rpZone.x}`;
+    const key = `${text}|${night.toFixed(2)}`;
     if (key === this.clockKey) return;
     this.clockKey = key;
-    const r = this.goldBar.bounds();
-    const cy = r.y + r.h + 18, right = this.rpZone.x - 8;
+    const { cy, right } = CLOCK; // directly below the gold bar, right-aligned with its coin
     this.clockText.setText(text).setPosition(right - 12, cy).setColor(night > 0.5 ? '#cfd8ff' : '#fff3c4');
     const ix = this.clockText.x - this.clockText.width - 16;
     const g = this.clockIcon;
@@ -290,7 +302,8 @@ export class UIScene extends Phaser.Scene {
     }
     const leftEdge = ix - 16, w = right - leftEdge;
     this.clockBg.clear();
-    drawHudPill(this.clockBg, leftEdge, cy - 14, w, 28);
+    drawHudPill(this.clockBg, leftEdge, cy - CLOCK.h / 2, w, CLOCK.h);
+    this.clockRect = clockRect(w); // the wave banner keeps clear of it
   }
 
   // ---------- profile (top left) ----------
@@ -301,7 +314,7 @@ export class UIScene extends Phaser.Scene {
   buildProfile() {
     this.profile = null;
     if (!session.loggedIn || !session.user) return;
-    const c = this.add.container(14, 8).setDepth(450);
+    const c = this.add.container(PROFILE.x, topRowY(PROFILE.h)).setDepth(450);
     this.profile = c;
     this.refreshProfile();
   }
@@ -315,7 +328,10 @@ export class UIScene extends Phaser.Scene {
     const tx = hasBadge ? 58 : 18;
     const name = this.add.text(tx, 36, session.user.username, textStyle(20)).setOrigin(0, 0.5);
     const small = this.add.text(tx, 15, hasBadge ? `${league.name} League` : 'Profile', textStyle(13, hasBadge ? COLORS.textGold : COLORS.textDim)).setOrigin(0, 0.5);
-    const w = Math.max(name.width, small.width) + tx + 18;
+    // A long username (up to 16 wide letters) shrinks so the pill leaves room for the wave pill beside it.
+    for (const t of [name, small]) fitWidth(t, PROFILE.maxTextW);
+    const w = Math.max(name.displayWidth, small.displayWidth) + tx + 18;
+    this.profileRight = PROFILE.x + w + 22; // with the news badge on its corner
     const bg = this.add.graphics();
     drawHudPill(bg, 0, 0, w, 50);
     const hover = this.add.graphics().setVisible(false);
@@ -323,7 +339,7 @@ export class UIScene extends Phaser.Scene {
     c.add([bg, hover, small, name]);
     if (hasBadge) {
       const img = this.add.image(28, 25, league.texture);
-      img.setScale(48 / Math.max(img.frame.width, img.frame.height));
+      fitIcon(img, 48);
       c.add(img);
     }
     // What's new (like the shop's badge): rewards to claim + achievements / league not seen yet. It pops when
@@ -346,6 +362,7 @@ export class UIScene extends Phaser.Scene {
     zone.on('pointerout', () => hover.setVisible(false));
     zone.on('pointerdown', () => { playSfx(this, SFX.uiClick); this.openProfile(); });
     c.add(zone);
+    if (this.waveText && this.profileRight !== this.waveSpanFor) this.refreshWave(); // the wave pill keeps clear of it
   }
 
   openProfile() {
@@ -361,50 +378,102 @@ export class UIScene extends Phaser.Scene {
   // ---------- wave status ----------
   buildWave() {
     this.waveBg = this.add.graphics();
-    this.waveText = this.add.text(640, 39, '', textStyle(22)).setOrigin(0.5);
-    // "Start Wave" sits right of the pill by day: waves only come when the player starts them.
-    this.earlyBtn = new Button(this, 0, 39, EARLY_W, 46, 'Start Wave', () => this.gs.startWave(),
-      { color: COLORS.buttonGood, fontSize: 18, radius: 12 });
+    this.waveText = this.add.text(WAVE_CX, TOP_ROW_CY, '', textStyle(22)).setOrigin(0.5);
+    // "Start Wave" sits right of the pill: waves only come when the player starts them. During the countdown it
+    // turns into "Start Now" (the wave attacks right away).
+    this.earlyBtn = new Button(this, 0, TOP_ROW_CY, EARLY_W, EARLY_H, 'Start Wave', () => {
+      if (this.gs.wave && this.gs.wave.phase === 'countdown') this.gs.startWaveNow();
+      else this.gs.startWave();
+    },
+      { color: COLORS.buttonGood, fontSize: 19, radius: 12 });
+    // During the countdown: Cancel puts the wave back (same number), as if Start Wave was never pressed.
+    this.cancelWaveBtn = new Button(this, 0, -500, CANCEL_W, EARLY_H, 'Cancel', () => this.gs.cancelWave(),
+      { color: COLORS.buttonDanger, fontSize: 19, radius: 12 });
+    this.cancelWaveBtn.setLabel('Cancel', 'Not yet');
+    this.cancelWaveBtn.setVisible(false);
   }
 
   refreshWave() {
+    this.syncCornerHud();
     const w = this.gs.wave;
-    let text = '', special = null;
-    if (w.phase === 'countdown' || w.phase === 'active') {
+    // Each state has shorter versions of its text for when the top row is tight (a long username, the
+    // countdown's three buttons): refreshWave uses the longest that fits.
+    let texts = [], special = null;
+    if (w.phase === 'countdown') {
+      // The countdown: how long until it attacks ("!" markers show where from).
+      special = w.special ? CONFIG.specialWaves.types[w.special] : null;
+      const s = Math.max(0, Math.ceil(w.countdown));
+      texts = [`Wave ${w.number}${special ? ` · ${special.name}` : ''} attacks in ${s}s`, `Wave ${w.number} in ${s}s`, `${s}s`];
+    } else if (w.phase === 'active') {
       special = w.special ? CONFIG.specialWaves.types[w.special] : null;
       const live = liveStars(this.gs); // the rating this wave is on track for
-      text = `Wave ${w.number}${special ? ` · ${special.name}` : ''} · ${enemiesLeft(this.gs)} enemies left${w.enraged ? ' · Enraged!' : w.restless ? ' · Restless' : ''}${live ? `  ${starText(live)}` : ''}`;
-    } else if (this.gs.tutorialDone && this.gs.townHall && this.gs.townHall.level === 0) text = 'Rebuild your Village Hall to begin';
+      const left = enemiesLeft(this.gs), stars = live ? `  ${starText(live)}` : '';
+      texts = [`Wave ${w.number}${special ? ` · ${special.name}` : ''} · ${left} enemies left${w.enraged ? ' · Enraged!' : w.restless ? ' · Restless' : ''}${stars}`,
+        `Wave ${w.number} · ${left} left${stars}`, `${left} left`];
+    } else if (this.gs.tutorialDone && this.gs.townHall && this.gs.townHall.level === 0) texts = ['Rebuild your Village Hall to begin', 'Rebuild your Village Hall'];
     else if (isClockRunning(this.gs)) {
       // Warn about a special wave (or Da Baby Car, the raid boss) all through the build time before it.
       const info = nextWaveInfo(this.gs);
       special = info.specialInfo || (info.babyCars ? { name: info.babyCars > 1 ? `${info.babyCars} ${CONFIG.enemies.babycar.name}s` : CONFIG.enemies.babycar.name, hint: 'Raid boss: rams straight at your Village Hall' } : null);
-      text = `Next: Wave ${nightWaveNumber(this.gs)}${special ? ` · ${special.name}!` : ''}`;
+      const n = nightWaveNumber(this.gs);
+      texts = [`Next: Wave ${n}${special ? ` · ${special.name}!` : ''}`, `Wave ${n}${special ? '!' : ''}`];
     }
+    const text = texts[0] || '';
     this.waveText.setText(text).setColor(special ? COLORS.textBad : COLORS.text);
     this.waveBg.clear();
+    this.wavePillRect = null;
 
-    const canCall = canStartWave(this.gs) && !this.world.editMode;
+    const counting = w.phase === 'countdown' && this.gs.tutorialDone;
+    const canCall = (canStartWave(this.gs) || counting) && !this.world.editMode;
     this.earlyBtn.setVisible(canCall);
+    this.cancelWaveBtn.setVisible(counting && canCall);
+    if (!counting || !canCall) this.cancelWaveBtn.setY(-500);
     if (!text) { this.earlyBtn.setY(-500); return; }
-    // Before a special wave the button turns red, widens and says what's coming.
-    const bw = canCall && special ? SPECIAL_BTN_W : EARLY_W;
-    // Center the pill (+ button, when shown) as one group.
-    const tw = this.waveText.width + 48;
-    const group = tw + (canCall ? EARLY_GAP + bw : 0);
-    const left = 640 - group / 2;
-    this.waveText.setX(left + tw / 2);
-    drawHudPill(this.waveBg, left, 18, tw, 42);
+    // Before a special wave the button turns red and says what's coming; at night it says the wave will be
+    // restless (a special wave's hint comes first); in the countdown it's "Start Now". Its width follows the
+    // hint, so the text never spills out of it.
+    let bw = 0;
     if (canCall) {
-      this.earlyBtn.color = special ? COLORS.buttonDanger : COLORS.buttonGood;
-      this.earlyBtn.resize(bw);
-      this.earlyBtn.setPosition(left + tw + EARLY_GAP + bw / 2, 39);
-      // At night the wave will be restless: say so (a special wave's hint comes first).
       const nightHint = isDark(this.gs.clock) ? `Night: restless, +${Math.round(CONFIG.rules.night.lootBonus * 100)}% loot` : '';
-      this.earlyBtn.setLabel('Start Wave', special ? special.hint : nightHint);
-    } else {
-      this.earlyBtn.setY(-500);
+      this.earlyBtn.color = special ? COLORS.buttonDanger : COLORS.buttonGood;
+      if (counting) this.earlyBtn.setLabel('Start Now', 'Skip the countdown');
+      else this.earlyBtn.setLabel('Start Wave', special ? special.hint : nightHint);
+      const sub = this.earlyBtn.sub;
+      sub.setScale(1);
+      this.earlyBtn.label.setScale(1);
+      bw = Math.min(SPECIAL_BTN_MAX, Math.max(EARLY_W, Math.ceil(sub.width) + 40));
+      fitWidth(sub, bw - 28); // a very long hint shrinks to fit
+      this.earlyBtn.resize(bw, EARLY_H);
     }
+    // Center the pill (+ buttons, when shown) as one group near WAVE_CX, inside the free span between the profile
+    // and the RP bar: the pill text steps down to a shorter version (then shrinks), and if that's still not
+    // enough the Start button narrows (its hint shrinks with it).
+    const span = waveSpan(this.profile ? this.profileRight : 0);
+    this.waveSpanFor = this.profile ? this.profileRight : undefined;
+    const avail = span.hi - span.lo;
+    const widths = texts.map((t) => this.waveText.setScale(1).setText(t).width);
+    let gap = (canCall ? EARLY_GAP + bw : 0) + (counting && canCall ? EARLY_GAP + CANCEL_W : 0);
+    let fit = fitPill(avail, widths, gap);
+    if (fit.overflow > 0 && canCall) {
+      const nbw = Math.max(EARLY_W - 20, bw - Math.ceil(fit.overflow));
+      gap -= bw - nbw;
+      bw = nbw;
+      const sub = this.earlyBtn.sub;
+      sub.setScale(1);
+      fitWidth(sub, bw - 28);
+      fitWidth(this.earlyBtn.label, bw - 16);
+      this.earlyBtn.resize(bw, EARLY_H);
+      fit = fitPill(avail, widths, gap);
+    }
+    this.waveText.setText(texts[fit.index]).setScale(fit.scale);
+    const tw = fit.pillW;
+    const left = fitInSpan(span.lo, span.hi, tw + gap, WAVE_CX).left;
+    this.waveText.setX(left + tw / 2);
+    drawHudPill(this.waveBg, left, TOP_ROW_CY - PILL_H / 2, tw, PILL_H);
+    this.wavePillRect = { x: left, y: TOP_ROW_CY - PILL_H / 2, w: tw, h: PILL_H };
+    if (canCall) this.earlyBtn.setPosition(left + tw + EARLY_GAP + bw / 2, TOP_ROW_CY);
+    else this.earlyBtn.setY(-500);
+    if (counting && canCall) this.cancelWaveBtn.setPosition(left + tw + EARLY_GAP + bw + EARLY_GAP + CANCEL_W / 2, TOP_ROW_CY);
   }
 
   // ---------- pause ----------
@@ -416,6 +485,7 @@ export class UIScene extends Phaser.Scene {
     img.on('pointerover', () => img.setScale(s * 1.06));
     img.on('pointerout', () => img.setScale(s));
     img.on('pointerdown', () => { playSfx(this, SFX.uiClick); this.world.openPause(); });
+    this.settingsButton = img;
   }
 
   // ---------- shop ----------
@@ -468,6 +538,66 @@ export class UIScene extends Phaser.Scene {
     this.shopButton.setAlpha(this.shopButtonEnabled() || this.shopOpen ? 1 : 0.4);
   }
 
+  // ---------- ability hotbar (src/objects/AbilityHotbar.js): what keeps clear of it ----------
+  /**
+   * The hotbar (bottom middle: spells, Brisket Feast, Drop the Beat). Each frame it steps around the guide
+   * bubble (and a tall info panel that can't move); when it moves, the info panel is placed again.
+   * The quick bar sits above it (quickBarY).
+   */
+  layoutAroundAbilityBar() {
+    const bar = this.abilityBar;
+    if (!bar) return;
+    bar.avoid = [this.guideRect()].filter(Boolean);
+    bar.extraAvoid = this.infoPanel && this.infoPanel.visible && this.infoPanelBlocksBar
+      ? { x: this.infoPanel.x, y: this.infoPanel.y, w: INFO_W, h: this.infoH || 0 } : null;
+    const r = bar.rect();
+    const key = r ? `${r.x},${r.y},${r.w},${r.h}` : '';
+    if (key === this.abilityBarKey) return;
+    this.abilityBarKey = key;
+    if (this.infoPanel && this.infoPanel.visible) this.placeInfoPanel();
+  }
+
+  /** Screen rects of the fixed corner buttons (Settings, Shop, Edit), measured once at their resting size. */
+  cornerButtonRects() {
+    if (!this.cornerRects) {
+      const rect = (img) => { const b = img.getBounds(); return { x: b.x, y: b.y, w: b.width, h: b.height }; };
+      this.cornerRects = [this.settingsButton, this.shopButton, this.editButton].filter(Boolean).map(rect);
+    }
+    return this.cornerRects;
+  }
+
+  /**
+   * The full info panel (top right, under the day/night pill) steps left when it would cover something: a tall
+   * panel clears the Settings / Shop / Edit buttons, then the hotbar (to the hotbar's left if there's room, else
+   * it stays and the hotbar steps left of it instead: infoPanelBlocksBar).
+   */
+  placeInfoPanel() {
+    const h = this.infoH || 0;
+    let x = INFO_X, y = INFO_Y;
+    // Too tall to fit under the day/night pill (the Brisket King's Hero tab): it rises to just under the top
+    // row instead, left of the pill.
+    if (y + h > SCREEN.h - 8) {
+      y = Math.max(INFO_TOP_MIN, SCREEN.h - 8 - h);
+      const clock = this.clockRect || clockRect(130);
+      x = Math.min(x, clock.x - 8 - INFO_W);
+    }
+    const at = (px) => ({ x: px, y, w: INFO_W, h });
+    const fixed = this.cornerButtonRects();
+    for (let i = 0; i < fixed.length; i++) {
+      const hit = fixed.find((o) => rectsOverlap(at(x), o, 8));
+      if (!hit) break;
+      x = hit.x - 8 - INFO_W;
+    }
+    this.infoPanelBlocksBar = false;
+    const r = this.abilityBar && this.abilityBar.naturalRect();
+    if (r && rectsOverlap(at(x), r, 8)) {
+      const left = r.x - 8 - INFO_W;
+      if (left >= 16 && !fixed.some((o) => rectsOverlap(at(left), o, 8))) x = left; else this.infoPanelBlocksBar = true;
+    }
+    this.infoPanel.setX(Math.max(16, x)).setY(y);
+    if (this.guide) this.refreshGuide(); // the bubble hides if the panel had to spread over it
+  }
+
   // ---------- edit mode ----------
   /**
    * Buttons shown while a building is being placed or moved: "Rotate (R)" for walls, and on touch screens
@@ -491,8 +621,12 @@ export class UIScene extends Phaser.Scene {
     this.cancelPlaceBtn.setLabel(this.world.placement && this.world.placement.mode === 'move' ? 'Put Back' : 'Cancel');
     const row = [touch && this.cancelPlaceBtn, rotate && this.rotateBtn, touch && this.placeBtn].filter(Boolean);
     for (const b of [this.rotateBtn, this.placeBtn, this.cancelPlaceBtn]) if (!row.includes(b)) b.setVisible(false).setY(-500);
-    const gap = 14, y = this.world.editMode ? HOTBAR.y - 90 : 628; // above the hotbar in edit mode
-    let x = 640 - (row.reduce((t, b) => t + b.btnW, 0) + gap * (row.length - 1)) / 2;
+    const gap = 14, rowW = row.reduce((t, b) => t + b.btnW, 0) + gap * (row.length - 1);
+    let x = 640 - rowW / 2;
+    let y = this.world.editMode ? HOTBAR.y - 90 : 628; // above the hotbar in edit mode
+    // ...and lifted above the ability hotbar and the guide bubble when they're in the way.
+    const h = 52, obstacles = [this.abilityBar && this.abilityBar.rect(), this.guideRect()];
+    y = liftClear({ x, y: y - h / 2, w: rowW, h }, obstacles) + h / 2;
     for (const b of row) { b.setVisible(true).setPosition(x + b.btnW / 2, y); x += b.btnW + gap; }
   }
 
@@ -616,7 +750,7 @@ export class UIScene extends Phaser.Scene {
     const active = held && held.type === grp.type && held.level === grp.level;
     if (active) g.lineStyle(3, 0xffe066, 1).strokeRoundedRect(1, 1, w - 2, h - 2, 12);
     const icon = this.add.image(w / 2, tileY + 8, buildingTextureKey(this, grp.type, grp.level)).setOrigin(0.5, 1);
-    icon.setScale(Math.min((w - 18) / icon.frame.width, (h - 26) / icon.frame.height));
+    fitIcon(icon, w - 18, h - 26);
     const lv = this.add.text(8, h - 6, `Lv ${grp.level}`, textStyle(13)).setOrigin(0, 1);
     const badge = this.add.graphics();
     drawBadge(badge, w - 14, 14, 13);
@@ -682,6 +816,13 @@ export class UIScene extends Phaser.Scene {
     });
     const close = new Button(this, SHOP_W - 18, 16, 48, 46, '', () => this.closeShop(), { color: COLORS.buttonDanger, icon: 'x', radius: 10 });
     c.add(close);
+    // Page arrows (shown only when a tab has more cards than fit), left of the close button.
+    this.shopPage = 0;
+    const pgY = headerMid - 2;
+    this.shopPrev = new Button(this, 884, pgY, 44, 40, '', () => { this.shopPage--; this.refreshShop(); }, { icon: 'left', radius: 10, color: COLORS.buttonDark });
+    this.shopPageText = this.add.text(948, pgY, '', textStyle(18)).setOrigin(0.5);
+    this.shopNext = new Button(this, 1012, pgY, 44, 40, '', () => { this.shopPage++; this.refreshShop(); }, { icon: 'right', radius: 10, color: COLORS.buttonDark });
+    c.add([this.shopPrev, this.shopPageText, this.shopNext]);
 
     this.cardLayer = this.add.container(0, 0);
     c.add(this.cardLayer);
@@ -713,6 +854,7 @@ export class UIScene extends Phaser.Scene {
   }
 
   setShopTab(tab) {
+    if (tab !== this.shopTab) this.shopPage = 0;
     this.shopTab = tab;
     this.refreshShop();
   }
@@ -772,19 +914,23 @@ export class UIScene extends Phaser.Scene {
     this.refreshShopFooter();
     this.cardLayer.removeAll(true);
     const types = SHOP_TABS.find((t) => t.key === this.shopTab).types;
-    // Cards shrink to fit when a tab has more of them (Defenses has 5); short tabs line up on the left.
-    const gap = 12, x0 = TRAY.x + 8;
-    const cw = Math.min(214, Math.floor((SHOP_W - x0 * 2 - gap * (types.length - 1)) / types.length));
-    types.forEach((type, i) => {
-      this.cardLayer.add(this.makeCard(type, x0 + i * (cw + gap), CARD_Y, cw, CARD_H));
+    // Every card is the same size; a tab with more cards than fit gets pages (arrows in the header).
+    const { x0, gap, perPage } = shopCardGrid();
+    const pages = Math.max(1, Math.ceil(types.length / perPage));
+    this.shopPage = Math.max(0, Math.min(this.shopPage || 0, pages - 1));
+    this.shopPrev.setVisible(pages > 1).setEnabled(this.shopPage > 0);
+    this.shopNext.setVisible(pages > 1).setEnabled(this.shopPage < pages - 1);
+    this.shopPageText.setVisible(pages > 1).setText(`${this.shopPage + 1} / ${pages}`);
+    types.slice(this.shopPage * perPage, (this.shopPage + 1) * perPage).forEach((type, i) => {
+      this.cardLayer.add(this.makeCard(type, x0 + i * (SHOP_CARD_W + gap), CARD_Y, SHOP_CARD_W, CARD_H));
     });
   }
 
   /** Short trait line for the bottom-left of a shop card. */
-  cardTrait(type) {
-    if (type === 'flock') return 'Reveals & marks';
+  cardTrait(type, narrow = false) {
+    if (type === 'flock') return narrow ? 'Reveals' : 'Reveals & marks';
     if (type === 'mousetrap') return 'Hidden trap';
-    if (type === 'ra') return 'Beam · Ground & Air';
+    if (type === 'ra') return narrow ? 'Beam' : 'Beam · Ground & Air';
     if (isDefense(type)) {
       const cfg = typeConfig(type);
       return cfg.hitsGround && cfg.hitsAir ? 'Ground & Air' : cfg.hitsAir ? 'Air only' : 'Ground only';
@@ -795,7 +941,8 @@ export class UIScene extends Phaser.Scene {
     if (type === 'wall') return CONFIG.walls.segmentLength > 1 ? `${CONFIG.walls.segmentLength}-tile segment` : 'Joins any wall';
     if (type === 'rvlab') return 'Defense abilities';
     if (type === 'dj') return 'Boosts gnomes and defenses';
-    if (type === 'altar') return 'Hero: the Brisket King';
+    if (type === 'fuelStation') return narrow ? 'Spells' : 'Brews spells (Burgers)';
+    if (type === 'altar') return narrow ? 'Hero' : 'Hero: the Brisket King';
     return '';
   }
 
@@ -817,22 +964,28 @@ export class UIScene extends Phaser.Scene {
     const cx = w / 2, tileY = h - 66, thh = Math.min(64, w * 0.32) / 2;
     drawShowcaseCard(g, 0, 0, w, h, { locked, tileY });
 
-    const icon = this.add.image(cx, tileY + thh * 0.6, buildingTextureKey(this, type, 1)).setOrigin(0.5, 1);
-    icon.setScale(Math.min((w - 46) / icon.frame.width, 96 / icon.frame.height));
+    // (Walls show the village's wall level: new walls are placed at it.)
+    const icon = this.add.image(cx, tileY + thh * 0.6, buildingTextureKey(this, type, type === 'wall' ? wallLevel(this.gs) : 1)).setOrigin(0.5, 1);
+    fitIcon(icon, w - 46, 96);
     if (locked) { icon.setTint(0x9a9a9a); icon.setAlpha(0.55); }
 
     // Name top-left (wraps short of the info button).
     const name = this.add.text(10, 7, buildingName(type), textStyle(w < 200 ? 16 : 17, COLORS.text, { wordWrap: { width: w - 44 } }));
+    // A long name steps down font sizes until it takes two lines (three small ones at the very worst, which still
+    // end well above the lock text and the icon).
+    for (let size = (w < 200 ? 16 : 17) - 1; size >= 13 && name.height > size * 2.7; size--) name.setFontSize(size);
+    if (name.height > 13 * 3.6) name.setScale((13 * 3.6) / name.height);
     // Bottom row: trait on the left, "Built: n/max" on the right.
     const rowY = h - 40;
-    const trait = this.add.text(10, rowY, this.cardTrait(type), textStyle(13)).setOrigin(0, 1);
+    const trait = this.add.text(10, rowY, this.cardTrait(type, w < 130), textStyle(13)).setOrigin(0, 1);
     const builtLabel = this.add.text(w - 10, rowY - 17, type === 'wall' ? 'Walls:' : 'Built:', textStyle(11)).setOrigin(1, 1);
     const built = this.add.text(w - 10, rowY + 1, `${countOwned(this.gs.buildings, type)}/${limitFor(type, th)}`, textStyle(16)).setOrigin(1, 1);
-    // Narrow cards (a full Defenses tab): shrink the trait line so it never runs into the Built count.
+    // Narrow cards (a full Defenses tab): wrap the trait onto a second line (growing upward) so it never runs
+    // into the Built count.
     const room = w - 10 - Math.max(built.width, builtLabel.width) - 6 - 10;
-    if (trait.width > room) trait.setScale(Math.max(0.6, room / trait.width));
+    if (trait.width > room) { trait.setFontSize(12); trait.setWordWrapWidth(room, true); }
     drawCardStrip(g, 6, h - 36, w - 12);
-    const cost = this.add.text(0, h - 22, formatGold(buildCost(type)), textStyle(20, short ? COLORS.textBad : COLORS.text)).setOrigin(0.5);
+    const cost = this.add.text(0, h - 22, formatGold(buildCost(type, this.gs)), textStyle(20, short ? COLORS.textBad : COLORS.text)).setOrigin(0.5);
     const coin = this.add.image(0, h - 21, TEX.coin);
     coin.setScale(24 / coin.frame.height);
     const pw = cost.width + 6 + 24;
@@ -840,7 +993,12 @@ export class UIScene extends Phaser.Scene {
     coin.setX(w / 2 + pw / 2 - 12);
     card.add([g, icon, name, trait, builtLabel, built, cost, coin]);
     if (locked) {
-      card.add(this.add.text(cx, tileY - 34, this.lockedText(st.reason), textStyle(16, COLORS.text, { align: 'center', wordWrap: { width: w - 20 } })).setOrigin(0.5));
+      const lock = this.add.text(cx, Math.round(h * 0.42), this.lockedText(st.reason), textStyle(14, COLORS.text, { align: 'center', wordWrap: { width: w - 16 } })).setOrigin(0.5);
+      fitWidth(lock, w - 20);
+      const pill = this.add.graphics();
+      const pw = lock.displayWidth + 18, ph = lock.displayHeight + 10;
+      pill.fillStyle(0x000000, 0.62).fillRoundedRect(cx - pw / 2, lock.y - ph / 2, pw, ph, 10);
+      card.add([pill, lock]);
     }
 
     // Hover brightens buyable cards.
@@ -879,7 +1037,8 @@ export class UIScene extends Phaser.Scene {
     const unlock = typeConfig(type).unlockTownHall ?? 1;
     const limitNow = limitFor(type, th);
     const allowed = th < unlock ? `Unlocks at VH${unlock}` : `${type === 'wall' ? 'Walls' : 'Built'} ${countOwned(this.gs.buildings, type)} / ${limitNow} at VH${th}`;
-    c.add(this.add.text(18, header + 16, `Cost ${formatGold(buildCost(type))} · ${allowed}`, bodyStyle(14, COLORS.inkAccent)));
+    const costText = type === 'wall' ? `Cost ${formatGold(buildCost(type, this.gs))} (Level ${wallLevel(this.gs)})` : `Cost ${formatGold(buildCost(type))}`;
+    c.add(this.add.text(18, header + 16, `${costText} · ${allowed}`, bodyStyle(14, COLORS.inkAccent)));
     const desc = this.add.text(18, header + 40, BUILDING_DESCRIPTIONS[type] || '', bodyStyle(14, COLORS.ink, { wordWrap: { width: W - 36 }, lineSpacing: 3 }));
     c.add(desc);
     const top = desc.y + desc.height + 14;
@@ -891,12 +1050,28 @@ export class UIScene extends Phaser.Scene {
     const col = PIC.x + PIC.w + 16;
     const preview = { type, level: 1, hp: levelStats(type, 1).hp, destroyed: false, stock: 0, ...footprintDims(type) };
     let y = Math.max(this.drawStats(c, preview, col, top, W - col - 18, true), top + PIC.h) + 14;
+    const altar = type === 'altar' ? getAltar(this.gs) : null;
+    if (altar) {   // the Brisket King's altar: a shortcut to his hero page
+      c.add(new Button(this, W / 2 - 110, y, 220, 40, 'Open Brisket King', () => {
+        this.hideShopInfo();
+        this.closeShop();
+        this.world.select(altar.id);
+        this.infoTab = 'hero';
+        this.openInfo();
+      }, { color: COLORS.buttonBlue, fontSize: 18, radius: 10 }));
+      y += 54;
+    }
     const close = new Button(this, W - 10, 10, 40, 40, '', () => this.hideShopInfo(), { color: COLORS.buttonDanger, icon: 'x', radius: 9 });
     c.add(close);
     drawWindow(bg, 0, 0, W, y, { header });
     blocker.setSize(W, y);
-    c.setY(SHOP_OPEN_Y - y - 8);
+    // Above the shop, left of the day/night pill; a tall one (the altar's) stops just under the top row and
+    // overlaps the shop's header instead of the top row.
+    const popTop = Math.max(INFO_TOP_MIN, SHOP_OPEN_Y - y - 8);
+    const clock = this.clockRect || clockRect(130);
+    c.setPosition(popTop < clock.y + clock.h + 8 ? Math.min(x, clock.x - 8 - W) : x, popTop);
     this.shopInfo = c;
+    this.shopInfoH = y;
   }
 
   hideShopInfo() {
@@ -912,7 +1087,7 @@ export class UIScene extends Phaser.Scene {
     drawShowcaseCard(g, x, y, PIC.w, PIC.h, { tileY, tileW });
     const pic = (image || this.add.image(0, 0, key)).setTexture(key).setOrigin(0.5, 1);
     pic.setPosition(x + PIC.w / 2, tileY + tileW * 0.3);
-    pic.setScale(Math.min((PIC.w - 24) / pic.frame.width, (PIC.h - 44) / pic.frame.height));
+    fitIcon(pic, PIC.w - 24, PIC.h - 44);
     return pic;
   }
 
@@ -941,11 +1116,11 @@ export class UIScene extends Phaser.Scene {
       upgrade: new Button(this, INFO_W / 2, 0, bw, INFO_BTN_H, 'Upgrade', () => this.onUpgrade(), { color: COLORS.buttonGood, fontSize: 19 }),
       sell: new Button(this, INFO_W / 2, 0, bw, INFO_BTN_H, 'Sell', () => this.gs.sellBuilding(this.selectedId), { color: COLORS.buttonDanger, fontSize: 19 }),
       repair: new Button(this, INFO_W / 2, 0, bw, INFO_BTN_H, 'Repair', () => this.gs.repair(this.selectedId), { color: COLORS.buttonGood, fontSize: 19 }),
-      // Walls: switch to (or back from) the whole connected group of same-level walls.
-      group: new Button(this, INFO_W / 2, 0, bw, INFO_BTN_H, 'Select connected walls', () => this.world.setGroupMode(!this.groupMode), { color: COLORS.buttonBlue, fontSize: 19 }),
       // RV Lab abilities: a defense's own tiers, or the RV Lab's research.
       abilities: new Button(this, INFO_W / 2, 0, bw, INFO_BTN_H, 'Abilities', () => this.openAbilities(), { color: COLORS.button, fontSize: 19 }),
-      research: new Button(this, INFO_W / 2, 0, bw, INFO_BTN_H, 'Research', () => this.openResearch(), { color: COLORS.button, fontSize: 19 })
+      research: new Button(this, INFO_W / 2, 0, bw, INFO_BTN_H, 'Research', () => this.openResearch(), { color: COLORS.button, fontSize: 19 }),
+      // Fuel Station: its brewing window.
+      brew: new Button(this, INFO_W / 2, 0, bw, INFO_BTN_H, 'Brew Spells', () => this.openFuelStation(), { color: 0x8e5bd6, fontSize: 19 })
     };
     const close = new Button(this, INFO_W - 12, 12, 42, 40, '', () => this.world.select(null), { color: COLORS.buttonDanger, icon: 'x', radius: 9 });
     c.add([this.infoBg, this.infoBlocker, this.infoName, this.infoLevel, this.infoPicBg, this.infoPic, this.infoContent,
@@ -955,16 +1130,19 @@ export class UIScene extends Phaser.Scene {
   }
 
   /**
-   * Info panel picture: the same art the map shows (current level, or this building's rubble when
+   * Info panel picture: the map's art for the current level, held still (or this building's rubble when
    * destroyed). Checked every frame too, because the map swaps its sprite a frame after the state changes.
    */
   syncInfoPic(b = this.gs.getBuilding(this.selectedId)) {
     if (!b) return;
     const view = this.world.views && this.world.views.buildings.get(b.id);
-    let picKey = view && view.sprite ? view.sprite.texture.key : buildingTextureKey(this, b.type, b.level, b.destroyed);
+    // A static picture: never the map's turning / filling variants (cannon facings, storage fill). Only rubble
+    // copies the map, so it shows the same pile.
+    let picKey = b.destroyed && view && view.sprite ? view.sprite.texture.key : buildingTextureKey(this, b.type, b.level, b.destroyed);
     // The Hero tab shows the Brisket King himself (asleep when he is).
     if (b.type === 'altar' && this.infoTab === 'hero') {
-      const k = this.gs.hero && this.gs.hero.status === 'asleep' ? 'hero_brisket_sleep' : 'hero_brisket';
+      const hs = this.gs.hero && this.gs.hero.status;
+      const k = hs === 'down' ? 'hero_brisket_defeated' : hs === 'asleep' ? 'hero_brisket_sleep' : 'hero_brisket';
       if (this.textures.exists(k)) picKey = k;
     }
     if (picKey === this.infoPicKey) return;
@@ -974,7 +1152,9 @@ export class UIScene extends Phaser.Scene {
   }
 
   hideInfo() {
+    const was = this.infoPanel.visible;
     this.infoPanel.setVisible(false).setX(2000);
+    if (was && this.guide) this.refreshGuide(); // back, if a tall panel had hidden it
   }
 
   // ---------- RV Lab windows ----------
@@ -984,6 +1164,16 @@ export class UIScene extends Phaser.Scene {
     if (!b || !hasAbilities(b.type) || Modal.isOpen(this)) return;
     // The guide bubble hides while a window is open (the window shows the guide's hint) and comes back after.
     openResearchWindow(this, this.gs, { startType: b.type, onClose: () => this.refreshGuide() }); // its tree in the RV Lab
+    this.refreshGuide();
+  }
+
+  /** The Fuel Station's brewing window (its Perks button opens its tree in the RV Lab window). */
+  openFuelStation() {
+    if (Modal.isOpen(this)) return;
+    openFuelStationWindow(this, this.gs, {
+      onClose: () => this.refreshGuide(),
+      onPerks: () => { openResearchWindow(this, this.gs, { startType: 'fuelStation', onClose: () => this.refreshGuide() }); this.refreshGuide(); }
+    });
     this.refreshGuide();
   }
 
@@ -1001,6 +1191,11 @@ export class UIScene extends Phaser.Scene {
       const lvl = b.destroyed ? 0 : b.level;
       return { show: true, key: 'research', label: 'Research', sub: lvl ? `Tiers 1-${lvl}` : 'Rebuild first', ok: !b.destroyed };
     }
+    if (b.type === 'fuelStation') {
+      // Its perks are in the RV Lab (Economy tab, or the Perks button in its window); this opens the brewing.
+      const n = brewedSpells(this.gs).length, slots = spellSlots(this.gs);
+      return { show: true, key: 'brew', label: this.infoOpen ? 'Brew Spells' : 'Brew', sub: b.destroyed ? 'Rebuild first' : `${n} / ${slots} spells`, ok: !b.destroyed };
+    }
     if (!hasAbilities(b.type)) return { show: false };
     const ready = canResearchFor(this.gs, b.type);
     const sub = ready ? 'Research ready!' : labLevel(this.gs) ? '' : 'Needs an RV Lab';
@@ -1010,7 +1205,7 @@ export class UIScene extends Phaser.Scene {
   onUpgrade() {
     const b = this.gs.getBuilding(this.selectedId);
     if (!b) return;
-    if (this.groupMode && b.type === 'wall') this.gs.upgradeWallGroup(b.id);
+    if (b.type === 'wall') this.gs.upgradeWalls(); // Upgrade Walls: every wall at once
     else this.gs.upgradeBuilding(b.id);
   }
 
@@ -1099,12 +1294,19 @@ export class UIScene extends Phaser.Scene {
       const st = heroStats(b), h = this.gs.hero;
       const status = !h ? '' : h.status === 'asleep' ? `asleep (${Math.floor(Math.ceil(h.sleepT) / 60)}:${String(Math.ceil(h.sleepT) % 60).padStart(2, '0')})` : h.status === 'waking' ? 'waking up' : 'ready';
       return [`Brisket King Lv ${b.level}: ${st.maxHp} HP, ${Math.round(st.damage)} per hit · ${status}`,
-        `Guards ${st.guardRange} tiles · Brisket Feast: click him in a wave (${st.feastCharges}x per wave)`];
+        `Guards ${st.guardRange} tiles · Brisket Feast: its hotbar slot in a wave (${st.feastCharges}x per wave)`];
     }
     if (b.type === 'dj') {
       const s = djStats(b);
       return [`Gnomes in range work +${s.gnomeBoostPct}% faster · range ${s.range} tiles`,
-        `Hype ${Math.floor(b.hype || 0)} / ${hypeNeeded(b)}: full, click it in a wave to Drop the Beat (+${s.beatPct}% fire rate, ${s.beatSeconds} s)`];
+        `Hype ${Math.floor(b.hype || 0)} / ${hypeNeeded(b)}: full, use its hotbar slot in a wave to Drop the Beat (+${s.beatPct}% fire rate, ${s.beatSeconds} s)`];
+    }
+    if (b.type === 'fuelStation') {
+      const names = (lvl) => SPELL_KINDS.filter((k) => spellConfig(k).level === lvl).map((k) => spellFullName(k));
+      const open = SPELL_KINDS.filter((k) => spellConfig(k).level <= b.level).map((k) => spellConfig(k).name);
+      const next = b.level < maxLevel('fuelStation') ? names(b.level + 1) : [];
+      return [`Brews ${open.join(', ')}`, `Spell slots: ${spellSlots(this.gs)} (more with the Village Hall) · ${brewedSpells(this.gs).length} brewed`,
+        next.length ? `Level ${b.level + 1} adds ${next.join(' and ')}` : 'Every spell unlocked'];
     }
     if (b.type === 'rvlab') {
       const next = b.level < maxLevel('rvlab') ? levelStats('rvlab', b.level + 1) : null;
@@ -1145,11 +1347,11 @@ export class UIScene extends Phaser.Scene {
     y += 30;
     const fmt = (n) => formatGold(Math.round(n));
     const left = h ? Math.ceil(h.sleepT) : 0;
-    const status = !h ? '-' : h.status === 'asleep' ? `Asleep · ${Math.floor(left / 60)}:${String(left % 60).padStart(2, '0')}`
+    const status = !h ? '-' : h.status === 'down' ? 'Knocked out' : h.status === 'asleep' ? `Asleep · ${Math.floor(left / 60)}:${String(left % 60).padStart(2, '0')}`
       : h.status === 'waking' ? 'Waking up' : 'Ready';
     const feastLeft = h ? Math.max(0, st.feastCharges - (isWaveActive(this.gs) ? h.feastsUsed : 0)) : st.feastCharges;
     const rows = [
-      ['Status', status, '', h && h.status === 'asleep' ? COLORS.inkBad : COLORS.inkGood],
+      ['Status', status, '', h && (h.status === 'asleep' || h.status === 'down') ? COLORS.inkBad : COLORS.inkGood],
       ['Health', `${fmt(h ? Math.max(0, h.hp) : st.maxHp)} / ${fmt(st.maxHp)}`, nxt ? `+${fmt(nxt.maxHp - st.maxHp)}` : ''],
       ['Damage', `${fmt(st.damage)} per hit`, nxt ? `+${fmt(nxt.damage - st.damage)}` : ''],
       ['Attack speed', `${Math.round((1 / st.attackInterval) * 100) / 100} hits / s`, ''],
@@ -1163,7 +1365,15 @@ export class UIScene extends Phaser.Scene {
       if (gain) box.add(this.add.text(v.x + v.width + 6, y, gain, bodyStyle(13, COLORS.inkGood)));
       y += 21;
     }
-    const tip = this.add.text(INFO_COL, y + 4, 'Click him during a wave for Brisket Feast. He naps after a wave to heal.', bodyStyle(13, COLORS.inkDim, { wordWrap: { width: INFO_COL_W } }));
+    // His ability, described at every altar level.
+    const F = CONFIG.altar.hero.feast;
+    const ability = this.add.text(INFO_COL, y + 4, 'Ability: Brisket Feast', textStyle(15, COLORS.textGold));
+    box.add(ability);
+    y += ability.height + 6;
+    const descr = this.add.text(INFO_COL, y, `Heals him ${F.healPct}%, then he rages for ${F.boostSeconds} s (${F.damagePct}% more damage, ${F.speedPct}% faster) and slams and stuns enemies around him. Once per wave. Use its slot on the hotbar during a wave (or press its number key).`, bodyStyle(13, COLORS.ink, { wordWrap: { width: INFO_COL_W } }));
+    box.add(descr);
+    y += descr.height;
+    const tip = this.add.text(INFO_COL, y + 4, 'He naps after a wave to heal. If he is knocked out in a raid he stays down until it ends.', bodyStyle(13, COLORS.inkDim, { wordWrap: { width: INFO_COL_W } }));
     box.add(tip);
     return y + 4 + tip.height + 10;
   }
@@ -1255,9 +1465,9 @@ export class UIScene extends Phaser.Scene {
     this.qbButtons = {
       upgrade: new Button(this, 0, QB.h / 2, QB.upgradeW, QB.btnH, 'Upgrade', () => this.onUpgrade(), { color: COLORS.buttonGood, fontSize: 17 }),
       repair: new Button(this, 0, QB.h / 2, QB.upgradeW, QB.btnH, 'Rebuild', () => this.gs.repair(this.selectedId), { color: COLORS.buttonGood, fontSize: 17 }),
-      group: new Button(this, 0, QB.h / 2, QB.groupW, QB.btnH, 'Select all', () => this.world.setGroupMode(!this.groupMode), { color: COLORS.buttonBlue, fontSize: 15 }),
       abilities: new Button(this, 0, QB.h / 2, QB.abilityW, QB.btnH, 'Abilities', () => this.openAbilities(), { color: COLORS.button, fontSize: 17 }),
       research: new Button(this, 0, QB.h / 2, QB.abilityW, QB.btnH, 'Research', () => this.openResearch(), { color: COLORS.button, fontSize: 17 }),
+      brew: new Button(this, 0, QB.h / 2, QB.abilityW, QB.btnH, 'Brew', () => this.openFuelStation(), { color: 0x8e5bd6, fontSize: 17 }),
       info: new Button(this, 0, QB.h / 2, QB.infoW, QB.btnH, 'Info', () => this.openInfo(), { color: COLORS.buttonBlue, fontSize: 17 })
     };
     const close = new Button(this, 0, 0, 34, 32, '', () => this.world.select(null), { color: COLORS.buttonDanger, icon: 'x', radius: 8 });
@@ -1274,10 +1484,8 @@ export class UIScene extends Phaser.Scene {
   refreshQuickBar(b) {
     const gs = this.gs;
     const btn = this.qbButtons;
-    const group = b.type === 'wall' ? wallGroup(gs, b) : [];
-    const grouped = this.groupMode && group.length > 1;
     const ruin = b.type === 'townHall' && b.level === 0;
-    this.qbName.setText(grouped ? `Walls  x${group.length}` : buildingName(b.type));
+    this.qbName.setText(buildingName(b.type));
     this.qbLevel.setText(`Level ${b.level} / ${maxLevel(b.type)}${b.destroyed ? '  ·  Destroyed' : ruin ? '  ·  In ruins' : ''}`);
     const shown = [];
     // Destroyed (not walls): Rebuild. Otherwise Upgrade (or Rebuild for the starting hall ruin).
@@ -1287,13 +1495,10 @@ export class UIScene extends Phaser.Scene {
       btn.repair.setLabel(`Rebuild · ${formatGold(repairCost(b))}`, rep.ok ? (ok ? '' : 'Follow the guide') : rep.reason).setEnabled(ok);
       shown.push(btn.repair);
     } else {
-      const u = this.upgradeButtonState(b, group, grouped, ruin);
+      const u = this.upgradeButtonState(b, ruin);
       btn.upgrade.setLabel(u.label, u.sub).setEnabled(u.ok);
+      btn.upgrade.resize(Math.max(QB.upgradeW, Math.ceil(Math.max(btn.upgrade.label.width, btn.upgrade.sub.width)) + 24)); // "Upgrade Walls · 105,600"
       shown.push(btn.upgrade);
-    }
-    if (b.type === 'wall' && !b.destroyed && group.length > 1) {
-      btn.group.setLabel(grouped ? 'One wall' : `Select all ${group.length}`, grouped ? '' : 'connected');
-      shown.push(btn.group);
     }
     const ab = this.abilityButtonState(b);
     if (ab.show) {
@@ -1307,6 +1512,7 @@ export class UIScene extends Phaser.Scene {
     let x = textW;
     for (const bt of shown) { bt.setX(x + bt.btnW / 2); x += bt.btnW + 8; }
     const w = x + 8;
+    this.qbW = w;
     this.quickBar.setVisible(true).setX(QB.right - w).setY(this.quickBarY());
     this.qbClose.setPosition(w - 6, 4);
     this.qbBg.clear();
@@ -1317,25 +1523,24 @@ export class UIScene extends Phaser.Scene {
 
   /** While the tutorial guide is up (bottom-left), the bar sits just above it instead of beside it. */
   quickBarY() {
-    return this.guide && this.guide.y < 1000 ? this.guide.y - QB.h - 8 : QB.y;
+    // ...and above the ability hotbar when it would cover it.
+    const r = { x: this.quickBar ? this.quickBar.x : 0, y: QB.y, w: this.qbW || QB.right, h: QB.h };
+    return liftClear(r, [this.guideRect(), this.abilityBar && this.abilityBar.rect()]);
   }
 
-  /** The Upgrade button's label, subtext and whether it can be pressed (one building, or a wall group). */
-  upgradeButtonState(b, group, grouped, ruin) {
+  /** The Upgrade button's label, subtext and whether it can be pressed (a wall's is Upgrade Walls: all of them). */
+  upgradeButtonState(b, ruin) {
     const gs = this.gs;
-    if (grouped) {
-      const plan = planWallGroupUpgrade(gs, group);
-      const n = plan.ids.length;
-      const ok = n > 0 && tutorialAllows(gs, 'upgrade', 'wall');
-      const label = n === 0 ? `Upgrade ${plan.total} walls` : n === plan.total ? `Upgrade ${n} walls · ${formatGold(plan.cost)}` : `Upgrade ${n} of ${plan.total} · ${formatGold(plan.cost)}`;
-      const sub = n === 0
-        ? (plan.reason === 'Max level' ? 'Max level' : plan.each !== null && gs.gold < plan.each ? `Need ${formatGold(plan.each - gs.gold)} more gold for one` : plan.reason)
-        : ok ? `To level ${b.level + 1}${n < plan.total ? ` · all ${plan.total}: ${formatGold(plan.total * plan.each)}` : ''}` : 'Follow the guide';
+    if (b.type === 'wall') {
+      const up = checkUpgrade(gs, b); // checkWallUpgrade: every wall, walls placed x the next level's price
+      const ok = up.ok && tutorialAllows(gs, 'upgrade', 'wall');
+      const label = up.cost === null ? 'Upgrade Walls' : `Upgrade Walls · ${formatGold(up.cost)}`;
+      const sub = !up.ok ? up.reason : !ok ? 'Follow the guide' : `All ${up.count} to level ${up.level}`;
       return { label, sub, ok };
     }
     const up = checkUpgrade(gs, b);
     const verb = ruin ? 'Rebuild' : 'Upgrade'; // the starting hall ruin is rebuilt, not upgraded
-    const label = up.cost === null ? verb : `${verb} · ${formatGold(up.cost)}`;
+    const label = up.cost === null ? verb : `${verb} · ${up.currency === 'rp' ? rpText(up.cost) : formatGold(up.cost)}`;
     let sub = up.reason;
     const ok = up.ok && tutorialAllows(gs, 'upgrade', b.type);
     if (up.ok && !ok) sub = 'Follow the guide';
@@ -1355,12 +1560,11 @@ export class UIScene extends Phaser.Scene {
     if (!b) { this.hideInfo(); return; }
     this.infoPanel.setVisible(true).setX(INFO_X);
 
-    // Walls: the whole connected group of same-level walls (group mode), worked out live.
-    const group = b.type === 'wall' ? wallGroup(gs, b) : [];
-    const grouped = this.groupMode && group.length > 1;
-    this.infoName.setText(grouped ? `Walls  x${group.length}` : buildingName(b.type));
+    this.infoName.setText(buildingName(b.type));
     const ruin = b.type === 'townHall' && b.level === 0;
-    this.infoLevel.setText(`Level ${b.level} / ${maxLevel(b.type)}${b.destroyed ? '  ·  Destroyed' : ruin ? '  ·  In ruins' : grouped ? '  ·  connected group' : ''}`);
+    // Walls all share one level: the count of walls it applies to.
+    const walls = b.type === 'wall' ? `  ·  all ${countOwned(gs.buildings, 'wall')} walls` : '';
+    this.infoLevel.setText(`Level ${b.level} / ${maxLevel(b.type)}${b.destroyed ? '  ·  Destroyed' : ruin ? '  ·  In ruins' : walls}`);
     this.layoutInfoTabs(b);
     for (const [tab, btn] of Object.entries(this.infoTabs)) {
       btn.color = tab === this.infoTab ? COLORS.buttonGood : COLORS.buttonDark;
@@ -1374,30 +1578,21 @@ export class UIScene extends Phaser.Scene {
     const waveActive = isWaveActive(gs);
     const visible = [];
 
-    const u = this.upgradeButtonState(b, group, grouped, ruin);
+    const u = this.upgradeButtonState(b, ruin);
     btn.upgrade.setLabel(u.label, u.sub).setEnabled(u.ok);
     visible.push(btn.upgrade);
-
-    // Walls touching other walls of the same level: switch to (or back from) the whole group.
-    const showGroup = b.type === 'wall' && !b.destroyed && group.length > 1;
-    btn.group.setVisible(showGroup);
-    if (showGroup) {
-      btn.group.setLabel(grouped ? 'Select one wall' : `Select connected walls (${group.length})`, grouped ? '' : 'Same level, to upgrade together');
-      visible.push(btn.group);
-    }
 
     // RV Lab: a defense's Abilities, or the RV Lab's Research. (Not on ruins: Rebuild takes that row, which
     // keeps the tallest panel at three buttons, clear of the Settings icon.)
     const ab = b.destroyed ? { show: false } : this.abilityButtonState(b);
-    for (const k of ['abilities', 'research']) btn[k].setVisible(ab.show && ab.key === k);
+    for (const k of ['abilities', 'research', 'brew']) btn[k].setVisible(ab.show && ab.key === k);
     if (ab.show) {
       btn[ab.key].setLabel(ab.label, ab.sub).setEnabled(ab.ok);
       visible.push(btn[ab.key]);
     }
 
     // Selling is never possible while enemies attack, so the button steps aside then (keeps the panel short).
-    // (Not for a whole wall group: selling stays one wall at a time.)
-    const showSell = b.type !== 'townHall' && !waveActive && !grouped;
+    const showSell = b.type !== 'townHall' && !waveActive;
     if (showSell) {
       const sell = gs.checkSell(b);
       const sellOk = sell.ok && tutorialAllows(gs, 'sell');
@@ -1423,6 +1618,8 @@ export class UIScene extends Phaser.Scene {
     drawWindow(this.infoBg, 0, 0, INFO_W, h, { header: INFO_HEADER });
     this.infoBlocker.setSize(INFO_W, h);
     if (this.infoBlocker.input) this.infoBlocker.input.hitArea.setSize(INFO_W, h);
+    this.infoH = h;
+    this.placeInfoPanel(); // (item 29) off the ability hotbar
   }
 
   /**
@@ -1440,7 +1637,7 @@ export class UIScene extends Phaser.Scene {
     const cx = x + 6, cy = y + 6, tileY = cy + ph - 30, tileW = 46;
     drawShowcaseCard(g, cx, cy, pw, ph, { tileY, tileW });
     const pic = this.add.image(cx + pw / 2, tileY + tileW * 0.3, TEX.villager).setOrigin(0.5, 1);
-    pic.setScale(Math.min((pw - 30) / pic.frame.width, (ph - 30) / pic.frame.height));
+    fitIcon(pic, pw - 30, ph - 30);
     box.add(pic);
     // Name, and how many live here (with the next level's extra in green, like the Stats tab).
     const tx = cx + pw + 12, tw = x + w - 12 - tx;
@@ -1482,11 +1679,35 @@ export class UIScene extends Phaser.Scene {
     this.bannerText.setAlpha(0);
   }
 
+  /**
+   * The free span [lo, hi] for an overlay at screen rows y0..y1, centered near x 640: left of the day/night pill
+   * and of the info panel when they reach those rows.
+   */
+  overlaySpan(y0, y1) {
+    let hi = SCREEN.w - 16;
+    const row = { x: 0, y: y0, w: SCREEN.w, h: y1 - y0 };
+    if (this.clockRect && rectsOverlap(row, this.clockRect)) hi = Math.min(hi, this.clockRect.x - 8);
+    if (this.infoPanel && this.infoPanel.visible && rectsOverlap(row, { x: this.infoPanel.x, y: this.infoPanel.y, w: INFO_W, h: this.infoH || 0 })) {
+      hi = Math.min(hi, this.infoPanel.x - 8);
+    }
+    if (this.shopInfo && rectsOverlap(row, { x: this.shopInfo.x, y: this.shopInfo.y, w: SHOP_INFO_W, h: this.shopInfoH || 0 })) {
+      hi = Math.min(hi, this.shopInfo.x - 8);
+    }
+    return { lo: 16, hi };
+  }
+
   showBanner(text) {
-    this.bannerText.setText(text);
-    const w = this.bannerText.width + 70;
+    this.bannerText.setText(text).setScale(1);
+    // The ribbon (y 90-154, its tails 26 px out each side) stays clear of the day/night pill and the info panel;
+    // a long message shrinks to fit.
+    const TAILS = 52, PAD = 70;
+    const span = this.overlaySpan(90, 154);
+    const fit = fitInSpan(span.lo, span.hi, this.bannerText.width + PAD + TAILS, 640);
+    if (fit.scale < 1) this.bannerText.setScale((fit.w - PAD - TAILS) / this.bannerText.width);
+    const w = this.bannerText.displayWidth + PAD, cx = fit.left + fit.w / 2;
+    this.bannerText.setX(cx);
     this.bannerBg.clear();
-    drawRibbon(this.bannerBg, 640, 90, w, 54);
+    drawRibbon(this.bannerBg, cx, 90, w, 54);
     this.tweens.killTweensOf([this.bannerBg, this.bannerText]);
     this.bannerBg.setAlpha(1);
     this.bannerText.setAlpha(1);
@@ -1519,6 +1740,11 @@ export class UIScene extends Phaser.Scene {
     this.guide = c;
   }
 
+  /** Screen rect of the guide bubble (portrait + speech bubble) while it shows, else null. */
+  guideRect() {
+    return this.guide && this.guide.visible && this.guide.y < 1000 ? { x: 16, y: this.guide.y, w: 612, h: 160 } : null;
+  }
+
   /** Is the RV Lab guide what the bubble shows right now? (The first tutorial always comes first.) */
   labGuideShown() {
     return !isGuideVisible(this.gs) && isLabGuideVisible(this.gs) && !Modal.isOpen(this);
@@ -1530,9 +1756,15 @@ export class UIScene extends Phaser.Scene {
     // First-time tips take the bubble when neither guide is using it (not behind a window).
     const tip = !isGuideVisible(gs) && !lab && !Modal.isOpen(this) ? currentTip(gs) : null;
     this.tipShown = !!tip;
-    const visible = isGuideVisible(gs) || lab || !!tip;
+    const y = this.shopOpen ? SHOP_OPEN_Y - 176 : 720 - 170;
+    // A tall info panel (the Brisket King's Hero tab) that had to spread over the bubble's spot hides it until
+    // it closes, like a window does.
+    const panel = this.infoPanel && this.infoPanel.visible && this.infoPanel.x < SCREEN.w
+      ? { x: this.infoPanel.x, y: this.infoPanel.y, w: INFO_W, h: this.infoH || 0 } : null;
+    const covered = !!panel && rectsOverlap({ x: 16, y, w: 612, h: 160 }, panel);
+    const visible = (isGuideVisible(gs) || lab || !!tip) && !covered;
     this.guide.setVisible(visible);
-    this.guide.setY(visible ? (this.shopOpen ? SHOP_OPEN_Y - 176 : 720 - 170) : 2000);
+    this.guide.setY(visible ? y : 2000);
     if (!visible) return;
     if (tip) {
       this.guideText.setText(tip.text).setFontSize(16);
@@ -1672,8 +1904,13 @@ export class UIScene extends Phaser.Scene {
     const on = (names, fn) => names.forEach((n) => gs.on(n, fn, this));
     const isSelected = (d) => d && d.id === this.selectedId;
 
-    on(['researchPointsChanged', 'baseReset'], () => this.refreshResearchPoints());
-    on(['goldChanged', 'buildingPlaced', 'buildingSold', 'buildingUpgraded', 'baseReset', 'abilityResearched', 'abilitiesApplied'], () => {
+    on(['researchPointsChanged', 'baseReset'], (d) => {
+      this.refreshResearchPoints();
+      if (d && d.lost > 0) this.showRpLost(d.lost);
+      const sel = this.selectedId && gs.getBuilding(this.selectedId);
+      if (sel && (sel.type === 'rvlab' || sel.type === 'fuelStation')) this.refreshInfo(); // their upgrades are paid in RP
+    });
+    on(['goldChanged', 'buildingPlaced', 'buildingSold', 'buildingUpgraded', 'wallsUpgraded', 'baseReset', 'abilityResearched', 'abilitiesApplied'], () => {
       this.refreshShopBadge();
       this.refreshGold();
       if (this.shopOpen) this.refreshShop();
@@ -1687,7 +1924,6 @@ export class UIScene extends Phaser.Scene {
     on(['selectionChanged'], (d) => {
       if (d.id !== this.selectedId) this.infoOpen = false; // a new selection starts with the quick bar
       this.selectedId = d.id;
-      this.groupMode = !!d.group;
       if (d.id && this.shopOpen) this.closeShop();
       this.refreshInfo();
     });
@@ -1696,7 +1932,7 @@ export class UIScene extends Phaser.Scene {
       this.showPlacementButtons(d);
       this.refreshGuide();
     });
-    on(['waveTriggered', 'enemyKilled', 'enemySpawned', 'clockPhase', 'townHallUpgraded', 'tutorialChanged', 'buildingDestroyed'], () => this.refreshWave());
+    on(['waveTriggered', 'waveTick', 'enemyKilled', 'enemySpawned', 'clockPhase', 'townHallUpgraded', 'tutorialChanged', 'buildingDestroyed'], () => this.refreshWave());
     on(['waveStarted'], () => {
       this.closeShop();
       this.refreshWave();
@@ -1709,12 +1945,13 @@ export class UIScene extends Phaser.Scene {
       const sp = d.special ? CONFIG.specialWaves.types[d.special] : null;
       const bonus = (d.bonus || 0) + (d.starGold || 0) ? ` (+${formatGold((d.bonus || 0) + (d.starGold || 0))} bonus)` : '';
       const stars = d.stars ? `${starText(d.stars)} ` : '';
-      this.showBanner(`${stars}${sp ? `${sp.name} (wave ${d.number})` : `Wave ${d.number}`} cleared! +${formatGold(d.bounty)} gold${bonus} · +${formatGold(d.rp || 0)} RP${ruins}`);
+      this.showBanner(`${stars}${sp ? `${sp.name} (wave ${d.number})` : `Wave ${d.number}`} cleared! +${formatGold(d.bounty)} gold${bonus} · +${rpText(d.rp || 0)}${ruins}`);
       // Then, if the gnomes rebuilt a mine for free, say so.
       if (d.salvaged) this.time.delayedCall(BANNER_MS + 200, () => this.showBanner('Your gnomes salvaged a Bitcoin Mine!'));
       this.refreshAll();
     });
     on(['storageFull'], () => this.showBanner('Storage full'));
+    on(['spellBrewed', 'spellDiscarded'], () => this.refreshInfo()); // the Fuel Station's Brew button counts them
     on(['achievementEarned'], (d) => { this.queueAchievementToast(d.id); this.refreshProfile(); });
     on(['leaguePromoted', 'waveCleared'], () => this.refreshProfile()); // new league badge / furthest wave
     on(['leaguePromoted'], (d) => {
@@ -1731,13 +1968,20 @@ export class UIScene extends Phaser.Scene {
     // Restless nights: a wave that's attacking when it gets dark (or that starts in the dark), and dawn after.
     on(['restlessChanged'], (d) => {
       const bonus = Math.round(CONFIG.rules.night.lootBonus * 100);
-      this.showBanner(d.restless ? `Night: the enemies are restless! +${bonus}% gold & RP` : 'Daylight: the enemies calm down');
+      this.showBanner(d.restless ? `Night: the enemies are restless! +${bonus}% gold & Burgers` : 'Daylight: the enemies calm down');
       this.refreshWave();
     });
     on(['waveCalled'], (d) => {
       this.refreshWave();
       const sp = this.gs.wave.special ? CONFIG.specialWaves.types[this.gs.wave.special] : null;
-      this.showBanner(sp ? `Wave ${d.number}: ${sp.name} incoming!` : `Wave ${d.number} incoming!`);
+      const secs = Math.ceil(this.gs.wave.countdown);
+      this.showBanner(sp ? `Wave ${d.number}: ${sp.name} in ${secs}s!` : `Wave ${d.number} attacks in ${secs}s!`);
+    });
+    on(['waveCancelled'], () => {
+      this.showBanner("Wave cancelled: start it when you're ready");
+      this.refreshWave();
+      this.refreshEditButton();
+      this.refreshShopButton();
     });
     on(['editModeChanged', 'waveTriggered'], () => { this.refreshEditButton(); this.refreshShopButton(); this.refreshWave(); });
     on(['layoutDraftChanged', 'placementChanged'], () => { if (this.world.editMode) this.refreshHotbar(); });
@@ -1782,7 +2026,7 @@ export class UIScene extends Phaser.Scene {
     let icon = null;
     if (a.texture && this.textures.exists(a.texture)) {
       icon = this.add.image(mx, my, a.texture);
-      icon.setScale(62 / Math.max(icon.frame.width, icon.frame.height));
+      fitIcon(icon, 62);
     } else {
       g.fillStyle(0xa86a12, 1).fillCircle(mx, my, 24);
       g.fillStyle(0xffc83a, 1).fillCircle(mx, my - 2, 20);
@@ -1792,12 +2036,54 @@ export class UIScene extends Phaser.Scene {
     }
     [title, name, sub].forEach((t) => t.setX(t.x + 24));
     c.add([g, title, name, sub, ...(icon ? [icon] : [])]);
-    c.setAlpha(0).setScale(0.85);
-    this.tweens.add({ targets: c, alpha: 1, scale: 1, duration: 260, ease: 'Back.easeOut' });
+    // Centered under the banner, but clear of the info panel (y 166-254 on screen); a wide one shrinks.
+    const span = this.overlaySpan(166, 254);
+    const fit = fitInSpan(span.lo, span.hi, w, 640);
+    c.setX(fit.left + fit.w / 2);
+    c.setAlpha(0).setScale(0.85 * fit.scale);
+    this.tweens.add({ targets: c, alpha: 1, scale: fit.scale, duration: 260, ease: 'Back.easeOut' });
     this.tweens.add({
       targets: c, alpha: 0, y: 182, delay: 3400, duration: 350,
       onComplete: () => { c.destroy(); this.time.delayedCall(150, () => this.nextToast()); }
     });
+  }
+
+  /**
+   * Screen rects of every HUD piece showing right now, by name (for the overlap check below; the dev build's
+   * console can call window.__IBTD__.scene.getScene('UIScene').hudOverlaps()).
+   */
+  hudRects() {
+    const on = (o) => o && o.visible !== false && o.y > -100 && o.y < SCREEN.h + 100;
+    const btn = (b) => (on(b) ? { x: b.x - b.btnW / 2, y: b.y - b.btnH / 2, w: b.btnW, h: b.btnH } : null);
+    const [settings, shop, edit] = this.cornerButtonRects();
+    const r = {
+      profile: this.profile ? { x: PROFILE.x, y: topRowY(PROFILE.h), w: this.profileRight - PROFILE.x, h: PROFILE.h } : null,
+      wavePill: this.wavePillRect || null,
+      startWave: btn(this.earlyBtn),
+      cancelWave: btn(this.cancelWaveBtn),
+      rpBar: this.rpBar.bounds(),
+      goldBar: this.goldBar.bounds(),
+      clock: this.clockRect || null,
+      settings, shop, edit,
+      infoPanel: on(this.infoPanel) && this.infoPanel.x < SCREEN.w ? { x: this.infoPanel.x, y: this.infoPanel.y, w: INFO_W, h: this.infoH || 0 } : null,
+      quickBar: on(this.quickBar) ? { x: this.quickBar.x, y: this.quickBar.y, w: this.qbW || 0, h: QB.h } : null,
+      abilityBar: this.abilityBar ? this.abilityBar.rect() : null,
+      guide: this.guideRect(),
+      rotate: btn(this.rotateBtn), place: btn(this.placeBtn), cancelPlace: btn(this.cancelPlaceBtn),
+      shopInfo: this.shopInfo ? { x: this.shopInfo.x, y: this.shopInfo.y, w: SHOP_INFO_W, h: this.shopInfoH || 0 } : null
+    };
+    if (this.world.editMode && this.hotbar.visible) {
+      r.layoutHotbar = { ...HOTBAR };
+      r.editHint = { x: HOTBAR.x, y: HOTBAR.y - 53, w: this.editHint.width + 44, h: 42 };
+      r.layoutSave = btn(this.layoutSave); r.layoutCancel = btn(this.layoutCancel); r.layoutRemoveAll = btn(this.layoutRemoveAll);
+      if (this.shiftPad.visible) r.shiftPad = { x: SHIFT_PAD.x - SHIFT_PAD.dx - 30, y: SHIFT_PAD.y - SHIFT_PAD.dy - 30, w: (SHIFT_PAD.dx + 30) * 2, h: (SHIFT_PAD.dy + 30) * 2 };
+    }
+    return r;
+  }
+
+  /** Overlapping HUD pairs right now, e.g. ['clock/infoPanel'] (the shop window and modal windows aside). */
+  hudOverlaps() {
+    return findOverlaps(this.hudRects());
   }
 
   refreshAll() {

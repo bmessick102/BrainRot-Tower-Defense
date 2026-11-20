@@ -10,10 +10,14 @@
 --   get_leaderboard()  top players by furthest wave: username, best wave, best Village Hall (no emails)
 --
 -- Anti-cheat (the game runs in the player's browser, so the database checks what it's told):
---   a village's best wave can't be higher than its Village Hall level (up to 10); past wave 10 it only goes
---   up one wave per night the database itself has counted, and it counts at most one night per 30 seconds
---   of real time (no real night is that fast). A player's leaderboard wave can't be higher than their
---   villages back up. A village imported with history counts for at most its Village Hall level.
+--   a village's best wave can't be higher than the waves the database itself has counted for it
+--   (verified_cleared), and it counts at most one wave per 30 seconds of real time and five per save (no real
+--   wave is that fast). A player's leaderboard wave can't be higher than their villages back up. A village
+--   imported with history starts counted for at most its Village Hall level.
+--
+-- Revisions: bases.updated_at is a village's revision, moved forward by the database only when its save
+-- changes (stamp_base). The game saves only on top of the revision it loaded, so a stale tab or device can't
+-- overwrite newer progress.
 
 -- ---------------------------------------------------------------- tables
 create table if not exists public.profiles (
@@ -85,9 +89,12 @@ returns boolean language sql security definer set search_path = '' stable as $$
 $$;
 
 -- ---------------------------------------------------------------- villages: at most 5 per player
+-- One new village at a time per player (a lock until the insert commits), so two tabs creating villages at the
+-- same moment can't both get past the count.
 create or replace function public.limit_bases()
 returns trigger language plpgsql security definer set search_path = '' as $$
 begin
+  perform pg_advisory_xact_lock(hashtext('ibtd.bases.' || new.user_id::text));
   if (select count(*) from public.bases where user_id = new.user_id) >= 5 then
     raise exception 'base limit reached' using errcode = 'P0001';
   end if;
@@ -99,7 +106,11 @@ create trigger bases_limit before insert on public.bases
   for each row execute function public.limit_bases();
 
 -- ---------------------------------------------------------------- villages: anti-cheat
--- Village Hall 10 is the top level (CONFIG.rules.maxTownHallLevel); 30 s is the fastest a night can count.
+-- Waves are numbered in the order they're fought (wave N = waves cleared + 1), so the furthest wave a village
+-- can have survived is the number of waves the database has counted for it (verified_cleared). 30 s is the
+-- fastest a wave can count, and at most 5 are counted per save. (Before waves were numbered this way the cap
+-- was the Village Hall level, then one per night at Village Hall 10: that left the leaderboard far behind the
+-- game's own count. max_nights is still kept, but no longer used.)
 create or replace function public.check_base()
 returns trigger language plpgsql set search_path = '' as $$
 declare
@@ -112,12 +123,12 @@ begin
   cleared := greatest(coalesce((new.save ->> 'wavesCleared')::int, 0), 0);
   new.town_hall := th;
   if tg_op = 'INSERT' then
-    -- A village that starts with history (imported from a browser) can't be checked:
-    -- it counts for at most its Village Hall level.
-    new.verified_cleared := cleared;
+    -- A village that starts with history (imported from a browser) can't be checked: it starts counted for
+    -- at most its Village Hall level, and the rest is counted at the usual pace as it is played and saved.
+    new.verified_cleared := least(cleared, th);
     new.max_nights := 0;
     new.last_night_at := now();
-    new.best_wave := case when cleared > 0 then least(greatest(new.best_wave, 0), th) else 0 end;
+    new.best_wave := least(greatest(new.best_wave, 0), new.verified_cleared);
     return new;
   end if;
   new.user_id := old.user_id;
@@ -135,18 +146,36 @@ begin
     new.verified_cleared := new.verified_cleared + credit;
     new.last_night_at := now();
     if th >= 10 then new.max_nights := old.max_nights + credit; end if;
-    -- The furthest wave this village can have survived: its Village Hall level, then one per counted night at the top.
-    supported := case when th < 10 then th else 9 + greatest(new.max_nights, 1) end;
-    new.best_wave := greatest(old.best_wave, least(greatest(new.best_wave, 0), supported));
-  else
-    new.best_wave := old.best_wave; -- no newly counted night: the best can't move
   end if;
+  -- The furthest wave this village can have survived: every wave counted for it. It only goes up.
+  supported := new.verified_cleared;
+  new.best_wave := greatest(old.best_wave, least(greatest(new.best_wave, 0), supported));
   return new;
 end $$;
 
 drop trigger if exists bases_check on public.bases;
 create trigger bases_check before insert or update on public.bases
   for each row execute function public.check_base();
+
+-- ---------------------------------------------------------------- villages: revisions
+-- updated_at is a village's revision: the game saves only on top of the revision it loaded (SupabaseBackend.
+-- updateBase), so a stale tab or device can't overwrite newer progress. The server alone moves it, forward,
+-- whenever the save or checkpoint changes (a rename is not a new revision). Also in
+-- migration-2026-11-20-base-revision.sql.
+create or replace function public.stamp_base()
+returns trigger language plpgsql set search_path = '' as $$
+begin
+  if new.save is distinct from old.save or new.checkpoint is distinct from old.checkpoint then
+    new.updated_at := greatest(clock_timestamp(), old.updated_at + interval '1 microsecond');
+  else
+    new.updated_at := old.updated_at;
+  end if;
+  return new;
+end $$;
+
+drop trigger if exists bases_stamp on public.bases;
+create trigger bases_stamp before update on public.bases
+  for each row execute function public.stamp_base();
 
 -- ---------------------------------------------------------------- stats: bests only go up
 -- ... and never past what the player's villages back up (their best_wave / town_hall, checked above).
@@ -240,4 +269,5 @@ grant execute on function public.username_available(text) to anon, authenticated
 revoke execute on function public.handle_new_user() from public, anon, authenticated;
 revoke execute on function public.limit_bases() from public, anon, authenticated;
 revoke execute on function public.check_base() from public, anon, authenticated;
+revoke execute on function public.stamp_base() from public, anon, authenticated;
 revoke execute on function public.keep_bests() from public, anon, authenticated;

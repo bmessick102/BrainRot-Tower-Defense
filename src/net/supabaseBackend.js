@@ -1,6 +1,7 @@
 // The online backend: Supabase Auth (email + password) and the tables in supabase/schema.sql.
 // Every method returns plain camelCase objects and throws an Error with a player-friendly message.
 import { createClient } from '@supabase/supabase-js';
+import { networkError, conflictError } from './errors.js';
 
 const BASE_COLUMNS = 'id, name, save, checkpoint, town_hall, wave, best_wave, created_at, updated_at';
 
@@ -24,6 +25,11 @@ function baseColumns(f) {
 /** Supabase / network errors -> something a player can act on. */
 export function friendlyError(error) {
   const msg = String((error && (error.message || error.error_description)) || error || '');
+  // No connection, or the server itself is down: the login screen offers offline play for these.
+  const status = Number(error && error.status);
+  if (/failed to fetch|networkerror|network request failed|load failed|fetch/i.test(msg) || status >= 500 || (error && error.name === 'AuthRetryableFetchError')) {
+    return networkError();
+  }
   const rules = [
     [/invalid login credentials/i, 'Wrong email or password.'],
     [/already registered|already been registered|user_already_exists/i, 'That email already has an account. Log in instead.'],
@@ -35,7 +41,6 @@ export function friendlyError(error) {
     [/unable to validate email|invalid format|email address .* is invalid/i, 'That email address doesn’t look right.'],
     [/base limit/i, 'You already have the most villages allowed.'],
     [/rate limit|too many requests/i, 'Too many tries. Wait a minute and try again.'],
-    [/failed to fetch|networkerror|network request failed|load failed|fetch/i, 'Can’t reach the server. Check your connection.'],
     [/jwt|not authenticated|session/i, 'Your login expired. Log in again.']
   ];
   for (const [re, text] of rules) if (re.test(msg)) return new Error(text);
@@ -61,12 +66,33 @@ export class SupabaseBackend {
       auth: { persistSession: true, autoRefreshToken: true, storageKey: 'ibtd.auth' }
     });
     this.userId = null;
+    // Another tab on this browser logged out or into a different account (the login is shared between tabs):
+    // this tab's requests would now run as someone else, so it must start over (account.js reloads the page).
+    // Unsent progress is safe: it stays in the device copies, marked unsent, for the next login.
+    this.onUserChanged = null;
+    this.db.auth.onAuthStateChange((event, s) => this.authChanged(event, s));
+  }
+
+  /** Supabase's login changed (this tab or another). Returns true when it is no longer this tab's player. */
+  authChanged(event, s) {
+    const id = (s && s.user && s.user.id) || null;
+    if (!this.userId || id === this.userId || event === 'INITIAL_SESSION') return false;
+    const was = this.userId;
+    this.userId = null; // nothing more is sent as the old player
+    // Outside the auth callback (Supabase warns against awaiting auth calls inside it).
+    setTimeout(() => { if (this.onUserChanged) this.onUserChanged({ from: was, to: id }); }, 0);
+    return true;
   }
 
   /** The logged-in player from a saved session, or null. */
   async currentUser() {
     const { data, error } = await this.db.auth.getSession();
-    if (error || !data || !data.session) return null;
+    if (error) {
+      const e = friendlyError(error);
+      if (e.network) throw e; // can't tell yet: the login screen offers Retry / Play Offline
+      return null;
+    }
+    if (!data || !data.session) return null;
     return this.profileFor(data.session.user);
   }
 
@@ -108,7 +134,16 @@ export class SupabaseBackend {
 
   async signOut() {
     this.userId = null;
-    await this.db.auth.signOut();
+    try {
+      await Promise.race([this.db.auth.signOut(), new Promise((r) => setTimeout(r, 4000))]);
+    } finally {
+      // Logged out on purpose: the saved login must go even when the server can't be reached (Supabase keeps it
+      // when it can't refresh an expired one first), or the next person on this device would be logged in as you.
+      try {
+        const ls = typeof localStorage !== 'undefined' ? localStorage : null;
+        if (ls) for (const k of Object.keys(ls)) if (k === 'ibtd.auth' || k.startsWith('ibtd.auth-')) ls.removeItem(k);
+      } catch { /* blocked */ }
+    }
   }
 
   // ---------- villages ----------
@@ -117,11 +152,35 @@ export class SupabaseBackend {
   }
 
   async createBase(fields) {
-    return toBase(check(await this.db.from('bases').insert(baseColumns(fields)).select(BASE_COLUMNS).single()));
+    // The owner is named, not left to the login the request carries: if another tab switched accounts, the
+    // security rules refuse it instead of filing the village under the other account.
+    if (!this.userId) throw new Error('Your login expired. Log in again.');
+    return toBase(check(await this.db.from('bases').insert({ ...baseColumns(fields), user_id: this.userId }).select(BASE_COLUMNS).single()));
   }
 
-  async updateBase(id, fields) {
-    check(await this.db.from('bases').update({ ...baseColumns(fields), updated_at: new Date().toISOString() }).eq('id', id));
+  /**
+   * Change a village. Returns { updatedAt }: its revision now. `updated_at` is the village's revision: it
+   * changes only when its save or checkpoint does (the bases_stamp trigger sets it on the server; before that
+   * migration runs, this sends it). With `expected` (the revision this tab loaded or last saved), the change
+   * only applies on top of that revision: if another tab or device saved in between, it throws a conflict
+   * error (isConflictError) and changes nothing. Throws when no row matched (the village was deleted
+   * elsewhere, or the login changed), so it stays unsent.
+   */
+  async updateBase(id, fields, { expected = null } = {}) {
+    if (!this.userId) throw new Error('Your login expired. Log in again.');
+    const uid = this.userId;
+    const cols = baseColumns(fields);
+    if (fields.save !== undefined || fields.checkpoint !== undefined) cols.updated_at = new Date().toISOString();
+    let q = this.db.from('bases').update(cols).eq('id', id).eq('user_id', uid);
+    if (expected) q = q.eq('updated_at', expected);
+    const rows = check(await q.select('id, updated_at'));
+    if (rows && rows.length) return { updatedAt: rows[0].updated_at };
+    if (expected) {
+      // Nothing matched: a newer revision (another tab or device saved), or the village is gone.
+      const now = check(await this.db.from('bases').select('id, updated_at').eq('id', id).eq('user_id', uid).maybeSingle());
+      if (now) throw conflictError(now.updated_at);
+    }
+    throw new Error('That village no longer exists.');
   }
 
   async deleteBase(id) {
@@ -134,10 +193,12 @@ export class SupabaseBackend {
     return r ? { bestWave: r.best_wave, bestTownHall: r.best_town_hall, counters: r.counters || {} } : { bestWave: 0, bestTownHall: 0, counters: {} };
   }
 
+  /** Save the stats. Returns what the server kept ({ bestWave }): it only counts waves it has verified. */
   async saveStats(stats) {
-    check(await this.db.from('player_stats').upsert({
+    const r = check(await this.db.from('player_stats').upsert({
       user_id: this.userId, best_wave: stats.bestWave, best_town_hall: stats.bestTownHall, counters: stats.counters
-    }));
+    }).select('best_wave').maybeSingle());
+    return { bestWave: r ? r.best_wave : null };
   }
 
   async listAchievements() {
@@ -153,7 +214,7 @@ export class SupabaseBackend {
   }
 
   async claimAchievement(id) {
-    check(await this.db.from('achievements').update({ claimed_at: new Date().toISOString() }).eq('achievement', id).is('claimed_at', null));
+    check(await this.db.from('achievements').update({ claimed_at: new Date().toISOString() }).eq('user_id', this.userId).eq('achievement', id).is('claimed_at', null));
   }
 
   /** Top `limit` players by furthest wave, plus the caller's own row: [{ rank, username, bestWave, bestTownHall, isMe }]. */

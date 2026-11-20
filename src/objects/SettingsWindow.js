@@ -1,14 +1,15 @@
-// Home screen Settings window: a Settings tab (Music / Effects volume, Delete Saved Game with a
+// Home screen Settings window: a Settings tab (Music / Effects volume, Graphics quality, Delete Saved Game with a
 // confirm step) and a Credits tab. Built at the scene root on a dim backdrop; destroy() removes it all.
 import { Button } from './Button.js';
 import { addVolumeSlider } from './VolumeSlider.js';
+import { addGraphicsToggle } from './GraphicsToggle.js';
 import { drawWindow } from './uiDraw.js';
 import { COLORS, bodyStyle, textStyle } from '../theme.js';
 import { getMusicLevel, getSfxLevel, setMusicLevel, setSfxLevel } from '../audio.js';
 import { saveSettings } from '../logic/save.js';
 import { CREDITS_TEAM, CREDITS_NOTES } from '../credits.js';
 
-const W = 560, H = 430, HEADER = 60, DEPTH = 1000;
+const W = 560, H = 490, HEADER = 60, DEPTH = 1000;
 
 export class SettingsWindow {
   /**
@@ -78,26 +79,27 @@ export class SettingsWindow {
     const x = this.px + 200, sw = 250;
     this.add(addVolumeSlider(s, { x, y: this.py + 176, width: sw, label: 'Music', get: getMusicLevel, set: (v) => { setMusicLevel(v); save(); }, depth: DEPTH + 1 }));
     this.add(addVolumeSlider(s, { x, y: this.py + 236, width: sw, label: 'Effects', get: getSfxLevel, set: (v) => { setSfxLevel(v); save(); }, depth: DEPTH + 1 }));
+    this.add(addGraphicsToggle(s, { x, y: this.py + 296, width: sw, storage: this.storage, depth: DEPTH + 1 }));
 
     const g = s.add.graphics();
-    g.fillStyle(COLORS.bodyShade, 1).fillRect(this.px + 24, this.py + 286, W - 48, 2);
+    g.fillStyle(COLORS.bodyShade, 1).fillRect(this.px + 24, this.py + 346, W - 48, 2);
     this.add(g);
 
     const by = this.py + H - 62;
     if (this.account) {
-      this.add(s.add.text(cx, this.py + 318, `Signed in as ${this.account.username}`, bodyStyle(20)).setOrigin(0.5));
-      this.add(s.add.text(cx, this.py + 346, this.account.email || '', bodyStyle(16, COLORS.inkDim)).setOrigin(0.5));
+      this.add(s.add.text(cx, this.py + 378, `Signed in as ${this.account.username}`, bodyStyle(20)).setOrigin(0.5));
+      this.add(s.add.text(cx, this.py + 406, this.account.email || '', bodyStyle(16, COLORS.inkDim)).setOrigin(0.5));
       this.add(s.add.text(cx, this.py + H - 40, 'Make, switch or delete villages from Villages on the title screen.', bodyStyle(15, COLORS.inkDim)).setOrigin(0.5));
       return;
     }
     if (this.confirming) {
-      this.add(s.add.text(cx, this.py + 318, 'Delete your saved village? This can\'t be undone.', bodyStyle(18, COLORS.inkBad)).setOrigin(0.5));
+      this.add(s.add.text(cx, this.py + 378, 'Delete your saved village? This can\'t be undone.', bodyStyle(18, COLORS.inkBad)).setOrigin(0.5));
       this.add(new Button(s, cx - 110, by, 200, 54, 'Delete', () => this.deleteSave(), { color: COLORS.buttonDanger, fontSize: 21 }));
       this.add(new Button(s, cx + 110, by, 200, 54, 'Cancel', () => { this.confirming = false; this.show('settings'); }, { color: COLORS.buttonDark, fontSize: 21 }));
       return;
     }
     const info = this.notice || (this.hasSave ? 'Starts you over from the tutorial. Settings are kept.' : 'There is no saved game.');
-    this.add(s.add.text(cx, this.py + 318, info, bodyStyle(17, this.notice ? COLORS.inkGood : COLORS.inkDim)).setOrigin(0.5));
+    this.add(s.add.text(cx, this.py + 378, info, bodyStyle(17, this.notice ? COLORS.inkGood : COLORS.inkDim)).setOrigin(0.5));
     const del = new Button(s, cx, by, 300, 54, 'Delete Saved Game', () => { this.confirming = true; this.show('settings'); }, { color: COLORS.buttonDanger, fontSize: 21 });
     del.setEnabled(this.hasSave);
     this.add(del);

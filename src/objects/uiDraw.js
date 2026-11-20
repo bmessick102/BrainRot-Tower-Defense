@@ -155,6 +155,19 @@ export function drawArrow(g, cx, cy, size, dir) {
   g.fillStyle(0xffffff, 1).fillPoints(pts, true);
 }
 
+/**
+ * A bold arrow with a shaft (white, dark outline) centered on cx, cy, pointing at screen angle `ang`.
+ * (A plain triangle turned to the map's shallow diagonals just reads as up / down.)
+ */
+export function drawAngledArrow(g, cx, cy, size, ang) {
+  const L = size / 2, hl = L * 0.95, hw = L * 0.8, sw = L * 0.3;
+  const ux = Math.cos(ang), uy = Math.sin(ang);
+  const at = (u, v) => ({ x: cx + ux * u - uy * v, y: cy + uy * u + ux * v });
+  const pts = [at(L, 0), at(L - hl, hw), at(L - hl, sw), at(-L, sw), at(-L, -sw), at(L - hl, -sw), at(L - hl, -hw)];
+  g.lineStyle(4, COLORS.frame, 1).strokePoints(pts, true);
+  g.fillStyle(0xffffff, 1).fillPoints(pts, true);
+}
+
 /** Bold "X" icon (white with a dark outline) centered on cx, cy. */
 export function drawCross(g, cx, cy, size) {
   const s = size / 2;
@@ -179,4 +192,16 @@ export function drawFullscreenIcon(g, cx, cy, size, exit = false) {
       g.beginPath().moveTo(x + ax, y).lineTo(x, y).lineTo(x, y + ay).strokePath();
     }
   }
+}
+
+// ---------- fitting things into a box (these set the object's scale) ----------
+/** Shrink a text (or any object with a width) to at most maxW px wide; one that fits keeps its scale. */
+export function fitWidth(obj, maxW) {
+  if (obj.width > maxW) obj.setScale(maxW / obj.width);
+  return obj;
+}
+
+/** Scale an image to fit a w x h box (square by default), keeping its proportions (art isn't all square). */
+export function fitIcon(img, w, h = w) {
+  return img.setScale(Math.min(w / img.frame.width, h / img.frame.height));
 }

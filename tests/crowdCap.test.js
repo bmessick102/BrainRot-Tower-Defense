@@ -63,7 +63,7 @@ describe('crowd cap', () => {
 
   it('packed enemies come proportionally further apart (same strength per second)', () => {
     const s = makeStateWithTownHall({ tutorialDone: true, tutorialStep: 10, wavesCleared: 127 }, 10);
-    triggerWave(s);
+    triggerWave(s, 0); // no countdown
     const pack = s.wave.pack;
     stepWaveSpawning(s, 0.01); // goes active, first group spawns
     const first = s.enemies.length;

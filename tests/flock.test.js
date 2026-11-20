@@ -48,14 +48,14 @@ describe('F.L.O.C.K Tower', () => {
   it('reveals invisible enemies that come into range, for good', () => {
     const s = makeStateWithTownHall();
     addBuilding(s, 'flock', 9, 16);
-    const goblin = addEnemy(s, 'thief', 12, 17, { hidden: true });
+    const least = addEnemy(s, 'thief', 12, 17, { hidden: true });
     stepFlockTowers(s);
-    expect(goblin.hidden).toBe(false);
+    expect(least.hidden).toBe(false);
     expect(s.events.filter((x) => x.name === 'enemyRevealed')).toHaveLength(1);
-    goblin.x = 30; goblin.y = 30;                  // walks out of range
+    least.x = 30; least.y = 30;                  // walks out of range
     stepFlockTowers(s);
-    expect(goblin.hidden).toBe(false);
-    expect(goblin.markBonus).toBe(0);
+    expect(least.hidden).toBe(false);
+    expect(least.markBonus).toBe(0);
   });
 
   it('a destroyed tower marks nothing, and towers never shoot', () => {

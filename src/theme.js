@@ -58,6 +58,12 @@ export const COLORS = {
   invalid: 0xff4d4d
 };
 
+// Burgers (research points, internally rp): a toasted-bun orange, warmer and redder than the gold bar's yellow.
+export const RP_COLOR = 0xe0782e;
+export const RP_TEXT_COLOR = '#ffb877';
+/** The Burgers resource bar (ResourceBar colors). */
+export const RP_BAR_COLORS = { fill: RP_COLOR, light: 0xffb878, dark: 0x9c4614, trough: 0x2e1a0e };
+
 /** Chunky white display text with a heavy black outline and a drop shadow. */
 export function textStyle(size = 18, color = COLORS.text, extra = {}) {
   return {

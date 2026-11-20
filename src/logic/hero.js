@@ -6,12 +6,13 @@
 //   - During a wave he charges ground enemies inside his guard range (tiles from the altar's center), hits
 //     the one he's chasing every attackInterval s, and goes back to roaming when the area is clear.
 //     Ground enemies that come within their reach of him fight him back (enemies.js heroInReach).
-//   - Knocked out, he's carried back to the altar asleep for maxSleepSeconds. When a wave is beaten he sleeps
-//     to heal: the share of health he lost x maxSleepSeconds. He sleeps through any wave started meanwhile,
+//   - Knocked out during a raid, he lies where he fell ('down', no sleep) until the raid ends, then gets up on
+//     his own (waking). The Second Wind perk gets him back up after a few seconds in the same raid.
+//     When a wave is beaten he sleeps to heal: the share of health he lost x maxSleepSeconds. He sleeps through any wave started meanwhile,
 //     then takes wakeSeconds to get up. Sleep counts down on game time and is saved on the altar.
-//   - Brisket Feast: clicked during a wave (once per wave; twice with Feast for Days): heals, boosts his
+//   - Brisket Feast: its hotbar button during a wave (once per wave; twice with Feast for Days): heals, boosts his
 //     damage and speed for a few seconds, and slams the enemies around him.
-// The hero lives in state.hero (not saved: rebuilt from the altar), status 'ready' | 'asleep' | 'waking'.
+// The hero lives in state.hero (not saved: rebuilt from the altar), status 'ready' | 'asleep' | 'waking' | 'down'.
 import { CONFIG } from '../config.js';
 import { levelStats, maxHp } from './buildings.js';
 import { abilityFx } from './abilities.js';
@@ -21,7 +22,7 @@ import { emit, isWaveActive, random } from './util.js';
 import { getNav } from './pathfinding.js';
 import { MAP } from '../mapTiles.js';
 import { damageEnemy, enemyIsAir, isBurrowedUnseen, applySlow, applyStun } from './combat.js';
-import { knockback } from './motion.js';
+import { knockback, moveToward } from './motion.js';
 
 const H = () => CONFIG.altar.hero;
 // Roaming: how far from the altar's center he strolls (share of his guard range), how long he pauses at
@@ -163,7 +164,7 @@ export function ensureHero(state) {
     h = state.hero = {
       altarId: altar.id, x: c.x, y: c.y, hp: sleep > 0 ? Math.round(st.maxHp * 0.5) : st.maxHp,
       status: sleep > 0 ? 'asleep' : 'ready', sleepT: sleep, sleepTotal: Math.max(sleep, 1), wakeT: 0,
-      targetId: null, cooldown: 0, attacking: false, hits: 0, boostT: 0, feastsUsed: 0, secondWindUsed: false
+      targetId: null, cooldown: 0, attacking: false, hits: 0, boostT: 0, feastsUsed: 0, downT: 0
     };
   }
   return h;
@@ -181,20 +182,14 @@ function validFoe(e, home, guard) {
     && distance(home.x, home.y, e.x, e.y) <= guard;
 }
 
-function moveToward(h, tx, ty, step) {
-  const dx = tx - h.x, dy = ty - h.y, d = Math.hypot(dx, dy);
-  if (d <= step || d < 1e-6) { h.x = tx; h.y = ty; return 0; }
-  h.x += (dx / d) * step; h.y += (dy / d) * step;
-  return d - step;
-}
-
-/** Carry him back to the altar to sleep `seconds` (knocked out, or after a wave). */
-function putToSleep(state, h, seconds) {
+/** Carry him back to the altar to sleep `seconds` (knocked out, or after a wave). `knockedOut`: the view shows him defeated. */
+function putToSleep(state, h, seconds, knockedOut = false) {
   const altar = getAltar(state);
   const c = altar ? footprintCenter(altar) : { x: h.x, y: h.y };
   h.x = c.x; h.y = c.y;
   h.targetId = null; h.attacking = false; h.boostT = 0; h.roamTo = null; h.waypoint = null; h.overWall = false; h.moving = false;
   h.status = 'asleep';
+  h.knockedOut = knockedOut;
   h.sleepT = h.sleepTotal = Math.max(0.1, seconds);
 }
 
@@ -218,7 +213,20 @@ export function stepHero(state, dt) {
     h.hp += (st.maxHp - h.hp) * Math.min(1, dt / Math.max(dt, h.sleepT));
     h.sleepT = Math.max(0, h.sleepT - dt);
     altar.heroSleep = h.sleepT;
-    if (h.sleepT <= 0) { h.hp = st.maxHp; h.status = 'waking'; h.wakeT = H().wakeSeconds; altar.heroSleep = 0; emit(state, 'heroWaking', {}); }
+    if (h.sleepT <= 0) { h.hp = st.maxHp; h.status = 'waking'; h.knockedOut = false; h.wakeT = H().wakeSeconds; altar.heroSleep = 0; emit(state, 'heroWaking', {}); }
+    return;
+  }
+  if (h.status === 'down') {
+    // Knocked out: stays down until the raid ends (Second Wind: gets back up after a few seconds).
+    h.downT += dt;
+    h.hp = 0;
+    const revive = st.fx.heroReviveSeconds;
+    if (!isWaveActive(state)) { h.hp = st.maxHp; h.status = 'waking'; h.knockedOut = false; h.wakeT = H().wakeSeconds; emit(state, 'heroWaking', {}); }
+    else if (revive && h.downT >= revive) {
+      h.hp = st.maxHp * (st.fx.heroReviveHpPct || 0.4);
+      h.status = 'ready'; h.knockedOut = false;
+      emit(state, 'heroSecondWind', { x: h.x, y: h.y });
+    }
     return;
   }
   if (h.status === 'waking') {
@@ -293,16 +301,10 @@ export function damageHero(state, amount) {
   h.hp -= amount * (1 - (st.fx.heroArmor || 0));
   emit(state, 'heroDamaged', { hp: h.hp, maxHp: st.maxHp });
   if (h.hp > 0) return;
-  if (st.fx.heroSecondWind && !h.secondWindUsed) {         // Second Helping
-    h.secondWindUsed = true;
-    h.hp = st.maxHp * st.fx.heroSecondWind;
-    emit(state, 'heroSecondWind', { x: h.x, y: h.y });
-    return;
-  }
   h.hp = 0;
+  h.status = 'down'; h.knockedOut = true; h.downT = 0;
+  h.targetId = null; h.attacking = false; h.boostT = 0; h.roamTo = null; h.waypoint = null; h.overWall = false; h.moving = false;
   emit(state, 'heroKnockedOut', { x: h.x, y: h.y });
-  putToSleep(state, h, st.maxSleep);
-  altar.heroSleep = h.sleepT;
 }
 
 /** Can the player use Brisket Feast now? { ok, reason } */
@@ -310,6 +312,7 @@ export function checkFeast(state) {
   const h = state.hero;
   if (!h) return { ok: false, reason: 'No Brisket King' };
   if (!isWaveActive(state)) return { ok: false, reason: 'Only during a wave' };
+  if (h.status === 'down') return { ok: false, reason: "He's knocked out" };
   if (h.status !== 'ready') return { ok: false, reason: 'He\'s asleep' };
   const st = heroStats(getAltar(state));
   if (h.feastsUsed >= st.feastCharges) return { ok: false, reason: 'Used this wave' };
@@ -343,18 +346,23 @@ export function useFeast(state) {
   return { ok: true, reason: '' };
 }
 
-/** A wave starts: his Feast charges and Second Helping come back. */
+/** A wave starts: his Feast charges come back. */
 export function heroWaveStarted(state) {
   const h = ensureHero(state);
   if (!h) return;
   h.feastsUsed = 0;
-  h.secondWindUsed = false;
 }
 
 /** The wave is beaten: he goes home and sleeps off the damage he took (none taken: no nap). */
 export function heroAfterWave(state) {
   const h = ensureHero(state);
-  if (!h || h.status !== 'ready') return;
+  if (!h) return;
+  if (h.status === 'down') {   // knocked out in the raid: he just gets up (no nap)
+    h.hp = heroStats(getAltar(state)).maxHp; h.status = 'waking'; h.knockedOut = false; h.wakeT = H().wakeSeconds;
+    emit(state, 'heroWaking', {});
+    return;
+  }
+  if (h.status !== 'ready') return;
   const altar = getAltar(state);
   const st = heroStats(altar);
   const lost = 1 - Math.max(0, h.hp) / st.maxHp;

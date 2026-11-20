@@ -6,10 +6,10 @@ import { CONFIG } from '../config.js';
 import { MAP } from '../mapTiles.js';
 import { canPlaceRect } from '../logic/grid.js';
 import {
-  checkBuy, checkUpgrade, planSwap, maxHp, wallGroup, planWallGroupUpgrade, createBuilding, applyLevelUp, buildCost, footprintDims, getTownHall, townHallLevel
+  checkBuy, checkUpgrade, planSwap, checkWallUpgrade, wallLevel, createBuilding, applyLevelUp, buildCost, footprintDims, getTownHall, townHallLevel, DEFENSE_TYPES
 } from '../logic/buildings.js';
 import { getCapacity, spendGold, addGold, setGold, collectMine, sellRefund, repairBuilding } from '../logic/economy.js';
-import { createIdleWave } from '../logic/waves.js';
+import { createIdleWave, skipCountdown, cancelCountdown } from '../logic/waves.js';
 import { advanceTutorial, applyStarterBase, canSkipTutorial, TUTORIAL_DONE_STEP, TUTORIAL_NIGHT_STEP } from '../logic/tutorial.js';
 import { createClock, startTutorialWave, resumeClockOnLoad, startGrace, startNextWave } from '../logic/dayNight.js';
 import { simulate } from '../logic/simulate.js';
@@ -17,20 +17,23 @@ import { deserializeGame, writeGame, SAVE_KEYS } from '../logic/save.js';
 import { isWaveActive } from '../logic/util.js';
 import { applyLayout } from '../logic/layout.js';
 import { dropTheBeat } from '../logic/dj.js';
-import { DEFENSE_TYPES } from '../logic/buildings.js';
 import { tipEvent, dismissTip, hideAllTips } from '../logic/tips.js';
-import { checkResearch, labPicks, syncAbilityPicks } from '../logic/abilities.js';
-import { addResearchPoints, spendResearchPoints } from '../logic/researchPoints.js';
+import { checkResearch, checkRespec, labPicks, syncAbilityPicks } from '../logic/abilities.js';
+import { spendResearchPoints } from '../logic/researchPoints.js';
 import { advanceLabGuide, startLabGuideIfDue, skipLabGuide } from '../logic/labGuide.js';
+import { brewSpell, discardSpell, castSpell, fuelGuideEvent } from '../logic/spells.js';
 
 // The Storage the game saves through. main.js sets it to the account session's storage (src/net/session.js),
 // which saves into the open village; without it (tests, blocked storage) it's plain localStorage.
 let gameStorage = null;
 export function setGameStorage(storage) { gameStorage = storage; }
 
-/** Where the game saves (the open village, or localStorage), or null when the browser blocks storage. */
+/**
+ * Where the game saves (the open village, or localStorage), or null when the browser blocks storage. The
+ * session's storage is pinned to the village open right now, so a game keeps saving into its own village.
+ */
 export function getStorage() {
-  if (gameStorage) return gameStorage;
+  if (gameStorage) return typeof gameStorage.pinned === 'function' ? gameStorage.pinned() : gameStorage;
   try { return typeof window !== 'undefined' ? window.localStorage : null; } catch { return null; }
 }
 
@@ -67,11 +70,12 @@ export class GameState {
 
   emit(name, data) {
     for (const l of [...(this.listeners.get(name) || [])]) l.fn.call(l.ctx, data);
+    if (name !== 'tipsChanged' && name !== 'fuelGuideChanged') fuelGuideEvent(this, name, data || {}); // Fuel Station guide, before its tips
     if (name !== 'tipsChanged') tipEvent(this, name, data || {}); // first-time tips (tips.js)
     if (TUTORIAL_EVENTS.includes(name)) this.tutorialEvent(name, data || {});
     if (LAB_GUIDE_EVENTS.includes(name)) advanceLabGuide(this, name, data || {});
     if (name === 'townHallUpgraded') startLabGuideIfDue(this); // Village Hall 4 unlocks the RV Lab
-    if (name === 'labGuideChanged') this.save();
+    if (name === 'labGuideChanged' || name === 'fuelGuideChanged') this.save();
     if (name === 'waveStarted') heroWaveStarted(this);
     if (name === 'waveCleared') { heroAfterWave(this); this.save(); } // the Brisket King naps before the save
     // Each night's wave: the checkpoint (for Retry) is the base as dusk falls.
@@ -92,14 +96,27 @@ export class GameState {
     this.tipsSeen = [];          // first-time tips already shown (tips.js), saved
     this.tipQueue = [];          // tips waiting to show (not saved: they come up again if still due)
     this.researchPoints = 0;     // RP: the currency for RV Lab abilities (researchPoints.js)
+    this.spells = [];            // Fuel Station spells brewed and waiting for a raid (spells.js), saved
+    this.fuelGuide = 0;          // Fuel Station guide step (spells.js FUEL_GUIDE: build, free Rage, cast it), saved
+    this.activeSpells = [];      // spell zones in play during a wave (not saved)
+    this.wallLevel = 1;          // every wall's level (Upgrade Walls raises them all; new walls start at it), saved
     this.wave = createIdleWave();
-    this.wavesCleared = 0;       // nights survived
+    this.wavePlan = null;        // the next wave's spawn corners ({ number, paths }, waves.js), saved
+    this.wavesCleared = 0;      // nights survived
     this.nightsAtMaxTownHall = 0;
     this.clock = createClock();
     this.tutorialStep = 1;
     this.tutorialDone = false;
     this.gameOver = false;
     this.nextId = 1;
+    // Not saved, worked out as the game runs: nothing carries over from the village loaded before.
+    this.sinceWaveCleared = undefined; // seconds since the last wave was beaten (quick starts, dayNight.js)
+    this.hallIncomeCarry = 0;          // the Village Hall's gold trickle between payouts (economy.js)
+    this._gardenGold = 0;              // the same for economy perks (econPerks.js)
+    this._nav = null;                  // pathfinding cache (pathfinding.js)
+    this._gnomes = null;               // this step's gnome jobs (simulate.js)
+    this._gnomeWork = null;            // gnome gold trips (villagers.js)
+    this._spellMarks = false;          // spell zones marked on enemies (spells.js)
   }
 
   /** Fresh game: the ruined (level 0) Village Hall at its anchor, starting gold, tutorial step 1. */
@@ -115,10 +132,14 @@ export class GameState {
     this.reset();
     const data = deserializeGame(obj);
     this.buildings = data.buildings;
+    this.wallLevel = data.wallLevel; // (its walls are already brought to it)
     this.research = data.research;
     this.labGuideStep = data.labGuideStep;
     this.tipsSeen = data.tipsSeen;
+    this.wavePlan = data.wavePlan || null;
     this.researchPoints = data.researchPoints;
+    this.spells = data.spells || [];
+    this.fuelGuide = data.fuelGuide || 0;
     this.wavesCleared = data.wavesCleared;
     this.nightsAtMaxTownHall = data.nightsAtMaxTownHall;
     this.clock = data.clock;
@@ -133,14 +154,33 @@ export class GameState {
     tipEvent(this, 'tipsChecked'); // e.g. a special wave or Da Baby Car already next
   }
 
-  /** DJ Babyface: Drop the Beat (a full hype meter, during a wave). */
   /** The Brisket King's Brisket Feast (during a wave). */
   useFeast() {
     return useFeast(this);
   }
 
+  /** DJ Babyface: Drop the Beat (a full hype meter, during a wave). */
   dropTheBeat(id) {
     return dropTheBeat(this, this.getBuilding(id), DEFENSE_TYPES);
+  }
+
+  /** Fuel Station: brew a spell with RP (between waves). Saved. */
+  brewSpell(kind) {
+    const r = brewSpell(this, kind);
+    if (r.ok) this.save();
+    return r;
+  }
+
+  /** Fuel Station: pour out a brewed spell (no refund). Saved. */
+  discardSpell(kind) {
+    const r = discardSpell(this, kind);
+    if (r.ok) this.save();
+    return r;
+  }
+
+  /** Cast a brewed spell at grid point (x, y) during a wave (it's used up). */
+  castSpell(kind, x, y) {
+    return castSpell(this, kind, x, y);
   }
 
   /** The tip bubble's "Got it" (saved, so it won't show again in this village). */
@@ -192,8 +232,8 @@ export class GameState {
     const { w, h } = footprintDims(type, orient);
     const spot = canPlaceRect(this.buildings, col, row, w, h);
     if (!spot.ok) return spot;
-    spendGold(this, buildCost(type));
-    const b = createBuilding(this, type, col, row, 1, null, orient);
+    spendGold(this, buildCost(type, this)); // a wall costs (and starts at) the village's wall level
+    const b = createBuilding(this, type, col, row, type === 'wall' ? wallLevel(this) : 1, null, orient);
     this.buildings.push(b);
     this.emit('buildingPlaced', { id: b.id, type });
     this.emit('goldChanged', { gold: this.gold, capacity: this.capacity });
@@ -267,11 +307,13 @@ export class GameState {
   upgradeBuilding(id) {
     const b = this.getBuilding(id);
     if (!b) return { ok: false, reason: 'Missing' };
+    if (b.type === 'wall') return this.upgradeWalls(); // walls only ever go up all together
     const check = checkUpgrade(this, b);
     if (!check.ok) return check;
-    spendGold(this, check.cost);
+    if (check.currency === 'rp') spendResearchPoints(this, check.cost); // costCurrency: 'rp' levels (the RV Lab)
+    else spendGold(this, check.cost);
     applyLevelUp(b);
-    const ids = syncAbilityPicks(this); // a level can bring the next researched tier
+    const ids = syncAbilityPicks(this);
     this.emit('buildingUpgraded', { id, type: b.type, level: b.level });
     if (ids.length) this.emit('abilitiesApplied', { ids, type: b.type });
     this.emit('goldChanged', { gold: this.gold, capacity: this.capacity });
@@ -281,30 +323,30 @@ export class GameState {
   }
 
   /**
-   * Upgrade the whole group of connected same-level walls around wall `id` (as many as the gold covers,
-   * nearest first). One save at the end. Returns { ok, upgraded, total }.
+   * Upgrade Walls: every wall goes up one level at once, for walls placed x the new level's price
+   * (checkWallUpgrade), and new walls start at the new level. One event ('wallsUpgraded') and one save.
+   * Returns { ok, reason, level, count, cost }.
    */
-  upgradeWallGroup(id) {
-    const wall = this.getBuilding(id);
-    const group = wallGroup(this, wall);
-    const plan = planWallGroupUpgrade(this, group);
-    if (!plan.ids.length) return { ok: false, reason: plan.reason, upgraded: 0, total: plan.total };
-    for (const wid of plan.ids) {
-      const b = this.getBuilding(wid);
-      const check = checkUpgrade(this, b);
-      if (!check.ok) break;
-      spendGold(this, check.cost);
-      applyLevelUp(b);
-      this.emit('buildingUpgraded', { id: wid, type: b.type, level: b.level, group: true });
+  upgradeWalls() {
+    const check = checkWallUpgrade(this);
+    if (!check.ok) return check;
+    spendGold(this, check.cost);
+    this.wallLevel = check.level;
+    const ids = [];
+    for (const b of this.buildings) {
+      if (b.type !== 'wall') continue;
+      while (b.level < check.level) applyLevelUp(b); // keeps each wall's share of health
+      ids.push(b.id);
     }
+    this.emit('wallsUpgraded', { ids, level: check.level, count: check.count, cost: check.cost });
     this.emit('goldChanged', { gold: this.gold, capacity: this.capacity });
     this.save();
-    return { ok: true, reason: '', upgraded: plan.ids.length, total: plan.total };
+    return { ok: true, reason: '', level: check.level, count: check.count, cost: check.cost };
   }
 
   /**
-   * RV Lab: pick path `path`'s option as a defense type's next tier (one pick per tier, final). Every building
-   * of that type gets it at once (as far as its level allows).
+   * RV Lab: pick path `path`'s option as a type's next tier (the first pick locks the type to that path; a
+   * paid respec frees it). Every building of that type gets it at once, whatever its level.
    */
   researchAbility(type, path, tier = undefined) {
     const check = tier === undefined ? checkResearch(this, type, path) : checkResearch(this, type, path, tier);
@@ -316,6 +358,19 @@ export class GameState {
     if (ids.length) this.emit('abilitiesApplied', { ids, type });
     this.save();
     return { ok: true, reason: '', tier: check.tier };
+  }
+
+  /** RV Lab: reset a type's path for RP (no refund of its old picks); the type can then take any path. */
+  respecPath(type) {
+    const check = checkRespec(this, type);
+    if (!check.ok) return check;
+    spendResearchPoints(this, check.cost);
+    delete this.research[type];
+    const ids = syncAbilityPicks(this);
+    this.emit('abilityRespecced', { type });
+    if (ids.length) this.emit('abilitiesApplied', { ids, type });
+    this.save();
+    return { ok: true, reason: '', cost: check.cost };
   }
 
   collect(id) {
@@ -351,6 +406,19 @@ export class GameState {
   /** The Start Wave button: the next wave starts now, at whatever time of day it is. */
   startWave() {
     return startNextWave(this); // the checkpoint + autosave happen on 'waveTriggered'
+  }
+
+  /** Cancel (during the countdown, after the tutorial): back to waiting for Start Wave. */
+  cancelWave() {
+    if (!this.tutorialDone || !cancelCountdown(this)) return false;
+    this.save();
+    return true;
+  }
+
+  /** Start Now (during the countdown, after the tutorial): the wave attacks on the next step. */
+  startWaveNow() {
+    if (!this.tutorialDone) return false;
+    return skipCountdown(this);
   }
 
   update(dt) {

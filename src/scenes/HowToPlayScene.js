@@ -1,11 +1,12 @@
-// How to Play, in four tabs:
+// How to Play, in five tabs:
 //   Basics    - controls, waves and the day/night cycle, gold.
 //   Buildings - a browser for every building: picture (level 1 or max), what it is, where it unlocks, its
 //               ability paths, and how its stats grow from level 1 to max (all read from config).
 //   Upgrades  - leveling buildings and the Village Hall, rebuilding / selling, and the RV Lab abilities
-//               (build the lab -> research one pick per tier, which every building of that type gets).
+//               (build the lab -> pick a path per building type; every building of that type gets the perks).
 //   Enemies   - a browser for every enemy: picture, description, tags, which defenses can hit it, and stats.
-// Arrow keys browse the Buildings / Enemies lists; 1-4 switch tabs; Esc goes back to the title.
+//   Leagues   - every league's badge and the wave it takes, with where you stand when logged in.
+// Arrow keys browse the Buildings / Enemies lists; 1-5 switch tabs; Esc goes back to the title.
 import Phaser from 'phaser';
 import { CONFIG } from '../config.js';
 import { IS_TOUCH } from '../device.js';
@@ -15,21 +16,29 @@ import {
 } from '../logic/buildings.js';
 import { ENEMY_KINDS } from '../logic/enemies.js';
 import { formatGold } from '../logic/economy.js';
-import { ABILITIES, ABILITY_COSTS, ABILITY_LEVEL_REQ, PATH_COLORS, PATH_KEYS } from '../abilityConfig.js';
+import { ABILITIES, ABILITY_COSTS, PATH_COLORS, PATH_KEYS } from '../abilityConfig.js';
 import { Button } from '../objects/Button.js';
+import { addLeagueRow } from '../objects/LeagueRow.js';
+import { LEAGUES } from '../logic/leagues.js';
+import { session } from '../net/account.js';
 import { buildingTextureKey } from '../objects/BuildingView.js';
 import { TEX, enemyKey } from '../assetKeys.js';
-import { drawWindow, drawShowcaseCard, drawCardStrip, drawStatBar, drawTag, drawGlossy } from '../objects/uiDraw.js';
+import { drawWindow, drawShowcaseCard, drawCardStrip, drawStatBar, drawTag, drawGlossy, fitWidth, fitIcon } from '../objects/uiDraw.js';
 import { ENEMY_DESCRIPTIONS } from '../enemyText.js';
 import { BUILDING_DESCRIPTIONS } from '../buildingText.js';
-import { COLORS, bodyStyle, textStyle } from '../theme.js';
+import { COLORS, bodyStyle, textStyle, RP_COLOR } from '../theme.js';
+import { rpText } from '../logic/researchPoints.js';
+import { SPELL_KINDS, spellConfig, spellName, spellEffect } from '../logic/spells.js';
+import { addSpellIcon } from '../objects/SpellIcons.js';
+import { showTitleBackdrop } from './TitleBackdropScene.js';
 
 // ---------- layout ----------
 const TABS = [
   { key: 'basics', label: 'Basics' },
   { key: 'buildings', label: 'Buildings' },
   { key: 'upgrades', label: 'Upgrades' },
-  { key: 'enemies', label: 'Enemies' }
+  { key: 'enemies', label: 'Enemies' },
+  { key: 'leagues', label: 'Leagues' }
 ];
 const TAB = { y: 134, w: 200, h: 44, gap: 14 };
 const LEFT = 76, RIGHT = 1204;                 // content edges
@@ -42,7 +51,7 @@ const DESC_MAX_H = 66; // descriptions taller than ~3 lines drop to a smaller fo
 const STAT_COLS = 3, STAT_ROW = 40;
 
 // Buildings in the order a player meets them: the base, economy, walls, then defenses and traps.
-const BUILDING_ORDER = ['townHall', 'mine', 'storage', 'house', 'rvlab', 'dj', 'wall', 'cannon', 'archer', 'mortar', 'wizard', 'firework', 'flock', 'catapult', 'ra', 'mousetrap', 'altar'];
+const BUILDING_ORDER = ['townHall', 'mine', 'storage', 'house', 'rvlab', 'dj', 'fuelStation', 'wall', 'cannon', 'archer', 'mortar', 'wizard', 'firework', 'spear', 'flock', 'ra', 'catapult', 'mousetrap', 'altar'];
 
 // Defenses that attack (support towers like the F.L.O.C.K Tower never hit anything).
 const ATTACKERS = DEFENSE_TYPES.filter((t) => !typeConfig(t).support);
@@ -152,16 +161,27 @@ function buildingStats(type) {
     out.push(grow(type, 'Hero damage per hit', 'heroDamage', 0xff6b3d));
     out.push(fixed('Guard range', `${CONFIG.altar.hero.guardRange} tiles`, CONFIG.altar.hero.guardRange / 10, 0x3cb8ff));
     out.push(fixed('Longest nap', `${CONFIG.altar.hero.maxSleepSeconds} s`, 0.6, 0x9b59d0));
+    out.push(fixed('Upgrades cost', `${levelStats(type, 2).cost} → ${rpText(levelStats(type, top).cost)}`, 0.5, RP_COLOR));
   } else if (type === 'dj') {
     out.push(grow(type, 'Range', 'range', 0x4cd6ff, ' tiles'));
     out.push(grow(type, 'Gnome work speed', 'gnomeBoostPct', 0xffc93c, '%'));
     out.push(grow(type, 'Drop the Beat fire rate', 'beatPct', 0xff6b3d, '%'));
     out.push(grow(type, 'Drop the Beat length', 'beatSeconds', 0xc070ff, ' s'));
+  } else if (type === 'fuelStation') {
+    // The levels that open a new spell, how many a raid can carry (by Village Hall), and what an upgrade costs.
+    const opens = [...new Set(SPELL_KINDS.map((k) => spellConfig(k).level))].sort((a, b) => a - b);
+    out.push(fixed('New spell at level', opens.join(' · '), opens.length / top, 0x9b59d0));
+    const slots = cfg.spellSlots.filter((n) => n > 0);
+    out.push(fixed('Spells per raid', `${slots[0]} → ${slots[slots.length - 1]} (Village Hall)`, 1, 0x3cb8ff));
+    out.push(fixed('Upgrades cost', `${levelStats(type, 2).cost} → ${rpText(levelStats(type, top).cost)}`, 0.5, RP_COLOR));
+    out.push(fixed('Stronger per level', `+${Math.round(cfg.powerPerLevel * 100)}%`, cfg.powerPerLevel * 3, 0xff6b3d));
   } else if (type === 'rvlab') {
     out.push(fixed('Tiers it researches', `1 → ${top}`, 1, 0xff9a3c));
     out.push(fixed('Village Hall needed', `${levelStats('rvlab', 1).townHall} → ${levelStats('rvlab', top).townHall}`, 1, 0x3cb8ff));
   } else if (type === 'wall') {
-    out.push(fixed('Cost per wall', formatGold(buildCost('wall')), 0.1, 0xffc93c));
+    const prices = typeConfig('wall').levels.map((l) => l.cost);
+    out.push(fixed('Level price per wall', `${formatGold(prices[0])} → ${formatGold(prices[prices.length - 1])}`, 0.1, 0xffc93c));
+    out.push(fixed('Upgrades', 'All walls at once', 1, 0x3cb8ff));
   } else if (type === 'mousetrap') {
     out.push(grow(type, 'Damage', 'damage', 0xff6b3d));
     out.push(grow(type, 'Holds enemies', 'hold', 0xffc93c, ' s'));
@@ -197,7 +217,8 @@ function buildingTags(type) {
   if (type === 'townHall') tags.push(['Your base', 0xc98a12]);
   else if (type === 'wall') tags.push(['Wall', 0x8a6a46]);
   else if (type === 'rvlab') tags.push(['Research', 0x9b59d0]);
-  else if (type === 'dj') tags.push(['Utility', 0x9b59d0], ['Click to Drop the Beat', 0xc070ff]);
+  else if (type === 'dj') tags.push(['Utility', 0x9b59d0], ['Drop the Beat on the hotbar', 0xc070ff]);
+  else if (type === 'fuelStation') tags.push(['Spells', 0x9b59d0], ['Brewed with Burgers', RP_COLOR], ['Cast from the hotbar', 0xc070ff]);
   else if (type === 'altar') tags.push(['Hero', 0xc98a12], ['Melee', 0xd0583c], ['Sleeps to heal', 0x6c7a89]);
   else if (!isDefense(type)) tags.push(['Economy', COLORS.buttonGood]);
   else if (cfg.trap) tags.push(['Hidden trap', 0x6c7a89]);
@@ -222,8 +243,7 @@ export class HowToPlayScene extends Phaser.Scene {
 
   create() {
     const { width, height } = this.scale;
-    const bg = this.add.image(width / 2, height / 2, TEX.titleBackground);
-    bg.setScale(Math.max(width / bg.frame.width, height / bg.frame.height));
+    showTitleBackdrop(this); // the animated title picture (still running from the title screen), drawn under this scene
     this.add.rectangle(0, 0, width, height, 0x000000, 0.55).setOrigin(0);
 
     const g = this.add.graphics();
@@ -251,7 +271,7 @@ export class HowToPlayScene extends Phaser.Scene {
     };
     this.input.keyboard.on('keydown-LEFT', () => step(-1));
     this.input.keyboard.on('keydown-RIGHT', () => step(1));
-    ['ONE', 'TWO', 'THREE', 'FOUR'].forEach((k, i) => this.input.keyboard.on(`keydown-${k}`, () => this.showTab(TABS[i].key)));
+    ['ONE', 'TWO', 'THREE', 'FOUR', 'FIVE'].forEach((k, i) => this.input.keyboard.on(`keydown-${k}`, () => this.showTab(TABS[i].key)));
 
     this.showTab('basics');
   }
@@ -263,6 +283,7 @@ export class HowToPlayScene extends Phaser.Scene {
     this.detail = null;
     if (key === 'basics') this.buildBasics();
     else if (key === 'upgrades') this.buildUpgrades();
+    else if (key === 'leagues') this.buildLeagues();
     else this.buildBrowser(key);
   }
 
@@ -280,6 +301,16 @@ export class HowToPlayScene extends Phaser.Scene {
 
   /** Bullet lines at (x, y), wrapped to `w`. Returns the y below them. */
   bullets(x, y, w, lines, size = 15) {
+    // Shrink the text (down to 11 px) until every line fits above the bottom of the card.
+    for (; size > 11; size--) {
+      let h = y;
+      for (const line of lines) {
+        const probe = this.add.text(0, 0, line, bodyStyle(size, COLORS.ink, { wordWrap: { width: w - 16 }, lineSpacing: 2 }));
+        h += probe.height + 8;
+        probe.destroy();
+      }
+      if (h <= CONTENT_BOTTOM - 8) break;
+    }
     for (const line of lines) {
       this.page.add(this.add.text(x, y, '•', bodyStyle(size, COLORS.inkAccent, { fontStyle: 'bold' })));
       const t = this.add.text(x + 16, y, line, bodyStyle(size, COLORS.ink, { wordWrap: { width: w - 16 }, lineSpacing: 2 }));
@@ -294,10 +325,16 @@ export class HowToPlayScene extends Phaser.Scene {
     const gap = 22, colW = (RW - gap * (STAT_COLS - 1)) / STAT_COLS;
     stats.forEach((s, i) => {
       const x = RX + (i % STAT_COLS) * (colW + gap), sy = y + Math.floor(i / STAT_COLS) * STAT_ROW;
-      box.add(this.add.text(x, sy, s.label, bodyStyle(13, COLORS.inkDim)));
+      const label = this.add.text(x, sy, s.label, bodyStyle(13, COLORS.inkDim));
       const v = this.add.text(x + colW, sy, s.value, bodyStyle(13, COLORS.ink, { fontStyle: 'bold' })).setOrigin(1, 0);
       if (v.width > colW * 0.62) v.setFontSize(12);
-      box.add(v);
+      // Label (left) and value (right) share one line: a long pair shrinks (the value first) so they never touch.
+      const room = colW - 8;
+      if (label.width + v.width > room) {
+        fitWidth(v, Math.max(colW * 0.45, room - label.width));
+        fitWidth(label, room - v.displayWidth);
+      }
+      box.add([label, v]);
       if (s.growth) {
         // Growth bar: the faint part is the top level, the solid part level 1.
         drawStatBar(g, x, sy + 20, colW, 1, s.color);
@@ -320,38 +357,56 @@ export class HowToPlayScene extends Phaser.Scene {
     return ty + 32;
   }
 
+  // ---------- Leagues ----------
+  buildLeagues() {
+    const w = RIGHT - LEFT;
+    // Where you stand, when you're logged in (the same number the Profile uses).
+    const player = session && session.loggedIn;
+    const best = player ? session.stats.bestWave || 0 : -1;
+    const top = this.card(LEFT, CONTENT_TOP + 4, w, 262, 'Every league');
+    addLeagueRow(this, (o) => this.page.add(o), { x: LEFT + 18, y: top + 4, w: w - 36, h: 262 - 62, best, large: true });
+    const y = CONTENT_TOP + 4 + 262 + 14;
+    const by = this.card(LEFT, y, w, CONTENT_BOTTOM - y, 'How leagues work');
+    this.bullets(LEFT + 22, by - 6, w - 44, [
+      'Your league comes from the furthest wave you have survived on your account.',
+      `Your badge shows on your Profile and on the Leaderboard, which ranks players by furthest wave. There are ${LEAGUES.length} leagues, from Bronze to WarLord.`,
+      player ? 'Your Profile (top left of the game) shows how close you are to the next league.' : 'Log in to see your own league and how far you are from the next one.'
+    ], 14);
+  }
+
   // ---------- Basics ----------
   buildBasics() {
     const gap = 20, w = (RIGHT - LEFT - gap * 2) / 3, h = CONTENT_BOTTOM - CONTENT_TOP;
     const cols = [
       ['Controls', IS_TOUCH ? [
-        'Tap: select, collect, and press buttons.',
-        'Drag the map to pan; pinch with two fingers to zoom.',
-        'Placing: drag the see-through building where you want it (or tap a spot), then tap Place or tap it again.',
-        'Walls: each Place starts the next one right after it. Touching walls join up.',
-        'Edit button (bottom right): rearrange your village. Pick buildings up (or Remove All) into the hotbar, place them again, slide the whole layout with the Shift arrows, then Save.',
-        'Profile (top left): your league, rank, achievements and stats.'
+        'Tap to select, collect, and press buttons.',
+        'Drag the map to move it. Pinch with two fingers to zoom.',
+        'To build: pick a building in the Shop, drag it where you want it, then tap Place.',
+        'Walls: each Place starts the next wall. Walls that touch join up.',
+        'Edit button (bottom right): move your buildings around, then press Save.',
+        'Profile (top left): your league, achievements and stats.'
       ] : [
-        'Left-click: select, collect, place, and press buttons.',
-        'Drag the map to pan; scroll to zoom.',
-        'Esc: cancel placing, close a window, or pause.',
-        'Walls: keep clicking to lay a line. Touching walls join up.',
-        'Edit button (bottom right): rearrange your village. Pick buildings up (or Remove All) into the hotbar, place them again, slide the whole layout with the Shift arrows, then Save.',
-        'Profile (top left): your league, rank, achievements and stats.'
+        'Left-click to select, collect, build, and press buttons.',
+        'Drag the map to move it. Scroll to zoom.',
+        'Esc: cancel building, close a window, or pause.',
+        'In a wave, the hotbar (bottom middle) holds Brisket Feast, Drop the Beat and your spells: click a slot or press 1-9. A spell then needs a click on the map.',
+        'Walls: keep clicking to make a line. Walls that touch join up.',
+        'Edit button (bottom right): move your buildings around, then press Save.',
+        'Profile (top left): your league, achievements and stats.'
       ]],
       ['Waves, day & night', [
-        'Build between waves as long as you like. Start Wave sends enemies from the flashing paths right away.',
-        `Day and night cycle on their own (~8 min; clock under your gold). Attacks in the dark are restless: enemies hit ${Math.round((CONFIG.rules.night.damage - 1) * 100)}% harder and move faster, but pay +${Math.round(CONFIG.rules.night.lootBonus * 100)}% gold and RP.`,
-        'Each wave is tougher than the last. Every 3rd is special (Air Raid, Siege...): the top bar warns you, and it pays bonus gold.',
-        `Waves are rated 1-3 stars by how much of your village survives; 3 stars pays +${Math.round(CONFIG.rules.waveStars.bonus[2] * 100)}% gold and RP. Everything destroyed is rebuilt free after.`,
-        'If the Village Hall falls, Retry rewinds to before that wave. Waves that drag on too long get enraged.'
+        'Build as long as you like. Press Start Wave to get 30 seconds to get ready. A "!" shows where enemies will come from.',
+        `Day turns to night about every 8 minutes. At night, enemies hit ${Math.round((CONFIG.rules.night.damage - 1) * 100)}% harder and move faster, but you earn +${Math.round(CONFIG.rules.night.lootBonus * 100)}% gold and Burgers.`,
+        'Each wave is harder than the last. Every 3rd wave is special and pays bonus gold.',
+        `You get 1 to 3 stars for how much of your village survives. 3 stars pays +${Math.round(CONFIG.rules.waveStars.bonus[2] * 100)}% gold and Burgers. After a wave, everything destroyed is rebuilt free.`,
+        'If your Village Hall falls, you can Retry the wave.'
       ]],
-      ['Gold & research points', [
-        'Bitcoin Mines fill with gold. Click a mine when its coin shows (not during a wave).',
-        'The Village Hall and Storage set the most gold you can hold. Build Storage to hold more.',
-        'Enemies that hit a Storage steal gold from it. Gnomes mine extra gold between waves and repair during attacks.',
-        'Defeated enemies pay a gold bounty. Achievements pay gold too: claim them from your Profile.',
-        `Research points (RP, under your gold) pay for research in the RV Lab. Every defeated enemy gives some (tougher ones more), and beating a wave gives ${CONFIG.rules.researchPointsPerWave} x the wave number.`
+      ['Gold & Burgers', [
+        'Bitcoin Mines make gold. Click a mine when its coin shows (not during a wave).',
+        'Your Village Hall and Storages decide how much gold you can hold.',
+        'Enemies that hit a Storage steal gold from it. Gnomes mine extra gold and repair buildings.',
+        'Defeated enemies and achievements pay gold.',
+        `Burgers pay for perks, path resets, spells and RV Lab upgrades. Defeated enemies give Burgers, and beating a wave gives ${CONFIG.rules.researchPointsPerWave} x the wave number. Your burger bar has a cap that grows with the RV Lab's level; Burgers beyond it are lost, so spend them.`
       ]]
     ];
     cols.forEach(([title, lines], i) => {
@@ -367,23 +422,22 @@ export class HowToPlayScene extends Phaser.Scene {
     // Left: leveling buildings.
     let y = this.card(LEFT, CONTENT_TOP, lw, h, 'Upgrading buildings');
     this.bullets(LEFT + 18, y, lw - 36, [
-      'Select a building and press Upgrade. Upgrades are instant, by day only.',
-      'A building can\'t be a higher level than your Village Hall.',
-      'Every level adds health and power. Buildings grow, and get new art every few levels.',
-      'Upgrading the Village Hall unlocks new buildings, lets you build more of each and hold more gold, but brings bigger attacks with new enemy types.',
-      'Walls: "Select all" upgrades a whole connected stretch at once.',
-      `Everything destroyed in a wave is rebuilt free once you beat it. During a wave you can Rebuild a building early for ${Math.round(CONFIG.rules.rebuildCostShare * 100)}% of its level's cost.`,
-      `Selling returns ${Math.round(CONFIG.rules.sellRefund * 100)}% of the gold spent on a building.`
+      'Select a building and press Upgrade. Upgrades are instant and only work by day.',
+      'A building cannot be a higher level than your Village Hall.',
+      'Each level adds health and power. Buildings get bigger and get new art every few levels.',
+      'Upgrading the Village Hall unlocks new buildings and lets you build more of each. But the attacks get harder too.',
+      'Walls share one level: "Upgrade Walls" raises every wall at once, and new walls are built at that level.',
+      `After you beat a wave, destroyed buildings are rebuilt free. During a wave you can Rebuild one early for ${Math.round(CONFIG.rules.rebuildCostShare * 100)}% of its cost.`,
+      `Selling gives back ${Math.round(CONFIG.rules.sellRefund * 100)}% of the gold you spent on a building.`
     ]);
 
     // Right: the RV Lab and abilities, in three numbered steps plus an example.
     const rx = LEFT + lw + gap;
     y = this.card(rx, CONTENT_TOP, rw, h, 'Abilities (RV Lab)');
-    const req = ABILITY_LEVEL_REQ.default.join(' / ');
     const steps = [
-      ['Build the RV Lab', `Village Hall ${CONFIG.rvlab.unlockTownHall}, Shop → Economy. Each RV Lab level unlocks the next tier (level N needs Village Hall N+${levelStats('rvlab', 1).townHall - 1}).`],
-      ['Research one pick per tier (costs RP)', 'In the RV Lab (or a building\'s Abilities button), pick Path A\'s, B\'s or C\'s option at each tier, in any mix (A1, B2, A3...). Picks are final. Defenses and economy buildings (Mine, Storage, House, DJ) each have a tab.'],
-      ['Every building gets it', `No buying: each pick goes straight onto every building of that type. Tiers 1-5 work on buildings at level ${req}; lower ones get them as they level up.`]
+      ['Build the RV Lab', `You need Village Hall ${CONFIG.rvlab.unlockTownHall}. Find it in the Shop under Economy. Each RV Lab level opens the next tier, and upgrading it costs Burgers, not gold.`],
+      ['Pick a path, then climb it (costs Burgers)', 'Your first pick for a building type locks all of that type to Path A, B or C, and its next tiers are that path\'s. To switch, pay Burgers to reset the path (the old picks are not refunded).'],
+      ['Every building gets it', 'Each perk applies to every building of that type at once, whatever its level. Perks cost only Burgers and need only RV Lab level: tier N needs RV Lab level N.']
     ];
     steps.forEach(([title, text], i) => {
       const g = this.add.graphics();
@@ -404,7 +458,7 @@ export class HowToPlayScene extends Phaser.Scene {
     ex.fillStyle(0xe9e1cf, 1).fillRoundedRect(rx + 18, y, rw - 36, exH, 12);
     this.page.add(ex);
     const pic = this.add.image(rx + 64, y + exH - 10, buildingTextureKey(this, 'cannon', 5)).setOrigin(0.5, 1);
-    pic.setScale(Math.min(64 / pic.frame.width, 70 / pic.frame.height));
+    fitIcon(pic, 64, 70);
     this.page.add(pic);
     const picks = ['a', 'b', 'a'];
     const px = rx + 120, py = y + 24, R = 8, GAP = 20;
@@ -416,12 +470,12 @@ export class HowToPlayScene extends Phaser.Scene {
       ex.lineStyle(1.5, picks[k] ? 0xffffff : 0x8a8a8a, 1).strokePoints(pts, true);
     }
     const name = (p, t) => ABILITIES.cannon[p].tiers[t - 1].name;
-    this.page.add(this.add.text(px + GAP * 5 + 14, py, 'Example: a Cannon\'s tiers over its level badge', bodyStyle(14, COLORS.inkDim)).setOrigin(0, 0.5));
+    this.page.add(this.add.text(px + GAP * 5 + 14, py, 'Example: a Cannon\'s picks over its level badge', bodyStyle(14, COLORS.inkDim)).setOrigin(0, 0.5));
     this.page.add(this.add.text(px - 6, py + 22, `A1 ${name('a', 1)}  →  B2 ${name('b', 2)}  →  A3 ${name('a', 3)}`, bodyStyle(14, COLORS.ink, { fontStyle: 'bold' })));
-    this.page.add(this.add.text(px - 6, py + 46, 'Orange = Path A, blue = Path B, green = Path C, empty = not researched (or level too low).', bodyStyle(13, COLORS.inkDim)));
+    this.page.add(this.add.text(px - 6, py + 46, 'Orange = Path A, blue = Path B, green = Path C, empty = not researched.', bodyStyle(13, COLORS.inkDim)));
     y += exH + 12;
     const c = (list) => list.map(formatGold).join(' / ');
-    this.page.add(this.add.text(rx + 20, y, `Research, per tier: ${c(ABILITY_COSTS.research)} RP, once for every building\nof that type. A book bobs over the RV Lab when you can research.`, bodyStyle(13, COLORS.inkDim, { lineSpacing: 3 })));
+    this.page.add(this.add.text(rx + 20, y, `Research costs ${c(ABILITY_COSTS.research)} Burgers per tier.\nA book floats over the RV Lab when you can research.`, bodyStyle(13, COLORS.inkDim, { lineSpacing: 3 })));
   }
 
   // ---------- browsers (Buildings / Enemies) ----------
@@ -435,7 +489,7 @@ export class HowToPlayScene extends Phaser.Scene {
     this.chips = list.map((item, i) => {
       const chip = new Button(this, LEFT + chipW / 2 + i * (chipW + CHIP_GAP), CHIP_Y, chipW, CHIP_H, '', () => this.browsers[key].show(i), { radius: 10 });
       const img = this.add.image(0, -2, isB ? buildingTextureKey(this, item, 1) : enemyKey(item));
-      img.setScale(Math.min((chipW - 14) / img.frame.width, (CHIP_H - 14) / img.frame.height));
+      fitIcon(img, chipW - 14, CHIP_H - 14);
       chip.add(img);
       this.page.add(chip);
       return chip;
@@ -507,7 +561,8 @@ export class HowToPlayScene extends Phaser.Scene {
 
   description(text, y) {
     const d = this.add.text(RX, y, text || '', bodyStyle(15, COLORS.ink, { wordWrap: { width: RW }, lineSpacing: 3 }));
-    if (d.height > DESC_MAX_H) d.setFontSize(14).setLineSpacing(1); // long descriptions tighten up
+    // Long descriptions step down in size until they fit their box.
+    for (let size = 14; d.height > DESC_MAX_H && size >= 11; size--) d.setFontSize(size).setLineSpacing(1);
     this.detail.add(d);
     return d.y + d.height;
   }
@@ -532,7 +587,7 @@ export class HowToPlayScene extends Phaser.Scene {
     });
 
     const cfg = typeConfig(type);
-    const sub = type === 'townHall' ? 'The heart of your village' : isDefense(type) ? (cfg.trap ? 'Trap' : isSupport(type) ? 'Support tower' : 'Defense') : type === 'wall' ? 'Wall' : type === 'rvlab' ? 'Research' : type === 'altar' ? 'Hero' : type === 'dj' ? 'Utility' : 'Economy';
+    const sub = type === 'townHall' ? 'The heart of your village' : isDefense(type) ? (cfg.trap ? 'Trap' : isSupport(type) ? 'Support tower' : 'Defense') : type === 'wall' ? 'Wall' : type === 'rvlab' ? 'Research' : type === 'altar' ? 'Hero' : type === 'dj' ? 'Utility' : type === 'fuelStation' ? 'Spells' : 'Economy';
     let y = this.nameBlock(buildingName(type), sub);
     y = this.tagRow(p, RX, y + 6, buildingTags(type));
     y = this.description(BUILDING_DESCRIPTIONS[type], y + 4) + 10;
@@ -546,6 +601,19 @@ export class HowToPlayScene extends Phaser.Scene {
         tx += drawTag(this, p, tx, y, `${path.toUpperCase()} · ${ABILITIES[type][path].name}`, PATH_COLORS[path], textStyle(14)) + 8;
       }
       y += 36;
+    }
+    if (type === 'fuelStation') {
+      // Its six spells, in even columns: the item's picture, its name and (under it) its effect.
+      const colW = RW / SPELL_KINDS.length, textW = colW - 44;
+      SPELL_KINDS.forEach((k, i) => {
+        const sx = RX + i * colW;
+        const icon = addSpellIcon(this, sx + 17, y + 17, k, 36);
+        const name = this.add.text(sx + 40, y + 9, spellName(k), bodyStyle(13, COLORS.ink, { fontStyle: 'bold' })).setOrigin(0, 0.5);
+        const eff = this.add.text(sx + 40, y + 26, spellEffect(k), bodyStyle(11.5, COLORS.inkDim, { fontStyle: 'bold' })).setOrigin(0, 0.5);
+        for (const t of [name, eff]) fitWidth(t, textW);
+        p.add([icon, name, eff]);
+      });
+      y += 42;
     } else if (type === 'rvlab') {
       p.add(this.add.text(RX, y, `Researches the ability paths of all ${Object.keys(ABILITIES).length} defenses (see the Upgrades tab).`, bodyStyle(14, COLORS.inkDim, { fontStyle: 'bold' })));
       y += 26;
@@ -592,7 +660,7 @@ export class HowToPlayScene extends Phaser.Scene {
       const ok = defenseHitsEnemy(def, kind);
       drawGlossy(g, x, iy, iconW, iconH, ok ? 0xbfe8a0 : 0xc9c3b8, { radius: 9, lip: 3, shadow: false });
       const icon = this.add.image(x + iconW / 2, iy + iconH / 2 - 1, buildingTextureKey(this, def, 1));
-      icon.setScale(Math.min((iconW - 12) / icon.frame.width, (iconH - 10) / icon.frame.height));
+      fitIcon(icon, iconW - 12, iconH - 10);
       if (!ok) { icon.setTint(0x8a8a8a); icon.setAlpha(0.6); }
       const mark = this.add.text(x + iconW - 4, iy + 2, ok ? '✔' : '✘', textStyle(16, ok ? COLORS.textGood : COLORS.textBad)).setOrigin(0.5);
       const zone = this.add.zone(x, iy, iconW, iconH).setOrigin(0).setInteractive();

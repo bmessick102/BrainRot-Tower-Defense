@@ -2,14 +2,15 @@
 // for every texture key that wasn't loaded. Nothing else in the code cares which one it got.
 import Phaser from 'phaser';
 import { IMAGE_FILES, AUDIO_FILES } from '../assetManifest.js';
-import { TEX, FILE_KEY_ALIASES, UNLOADED_FILES, buildingKey, buildingDestroyedKey, enemyKey, PROJECTILE_KEYS } from '../assetKeys.js';
+import { TEX, FILE_KEY_ALIASES, buildingKey, buildingDestroyedKey, enemyKey, PROJECTILE_KEYS } from '../assetKeys.js';
 import { BUILDING_TYPES, buildingSize } from '../logic/buildings.js';
 import { MAP } from '../mapTiles.js';
 import { loadSettings } from '../logic/save.js';
 import { getStorage } from '../state/GameState.js';
 import { setMusicLevel, setSfxLevel } from '../audio.js';
-import { COLORS, FONT, textStyle, shade as shadeColor } from '../theme.js';
+import { COLORS, FONT, textStyle, shade } from '../theme.js';
 import { pickTip } from '../loadingTips.js';
+import { LOADED_EVENT, LOADED_FLAG } from './TitleBackdropScene.js';
 
 const BASE = import.meta.env.BASE_URL;
 
@@ -24,15 +25,18 @@ const BUILDING_LOOK = {
   wizard: { color: 0x7b3fb5, label: 'W' },
   firework: { color: 0xc0392b, label: 'F' },
   catapult: { color: 0xe86aa8, label: 'Ca' },
+  spear: { color: 0x9a6b3a, label: 'Sp' },
   flock: { color: 0x4a6a8a, label: 'FT' },
   mousetrap: { color: 0x8a6a3a, label: 'MT' },
   ra: { color: 0xd4a537, label: 'Ra' },
   rvlab: { color: 0xe9d8b4, label: 'RV' },
   dj: { color: 0x6a3fa0, label: 'DJ' },
+  fuelStation: { color: 0xc0392b, label: 'FS' },
   altar: { color: 0xb03a2e, label: 'BK' }
 };
 
 const TIP_MS = 4500; // how long each loading tip stays up
+const LOADING_UI_DEPTH = 1000; // the bar and tips draw above everything else
 const LOAD_PURPLE = 0x9b4fd6;
 
 /** Long pill-shaped progress bar: dark frame and trough, glossy purple fill (p = 0..1). */
@@ -47,13 +51,12 @@ function drawLoadingBar(g, x, y, w, h, p) {
   const fw = Math.max(0, Math.min(1, p)) * iw;
   if (fw <= 0) return;
   const w2 = Math.max(ih, fw); // never thinner than a circle, so the rounded ends stay round
-  g.fillStyle(shadeColor(LOAD_PURPLE, 0.7), 1).fillRoundedRect(ix, iy, w2, ih, ir);          // bottom lip
+  g.fillStyle(shade(LOAD_PURPLE, 0.7), 1).fillRoundedRect(ix, iy, w2, ih, ir);          // bottom lip
   g.fillStyle(LOAD_PURPLE, 1).fillRoundedRect(ix, iy, w2, ih - 4, (ih - 4) / 2);              // face
   g.fillStyle(0xffffff, 0.35).fillRoundedRect(ix + 6, iy + 3, Math.max(0, w2 - 12), ih * 0.3, ih * 0.15); // shine
 }
 
 const css = (hex, alpha = 1) => `rgba(${(hex >> 16) & 255},${(hex >> 8) & 255},${hex & 255},${alpha})`;
-const shade = (hex, f) => (Math.round(((hex >> 16) & 255) * f) << 16) | (Math.round(((hex >> 8) & 255) * f) << 8) | Math.round((hex & 255) * f);
 
 export class BootScene extends Phaser.Scene {
   constructor() {
@@ -65,26 +68,22 @@ export class BootScene extends Phaser.Scene {
     this.load.on('loaderror', (file) => console.warn(`Asset failed to load, using placeholder: ${file.key}`));
 
     for (const f of IMAGE_FILES) {
-      if (UNLOADED_FILES.includes(f.key)) continue;
       const key = FILE_KEY_ALIASES[f.key] || f.key;
-      if (this.textures.exists(key)) continue; // PreloadScene already loaded the background
+      if (this.textures.exists(key)) continue; // PreloadScene already loaded the title backdrop's art
       this.load.image(key, BASE + f.path);
     }
     for (const f of AUDIO_FILES) this.load.audio(f.key, BASE + f.path);
   }
 
   /**
-   * Loading screen: title art, a long rounded bar that fills with glossy purple and reads "Loading",
-   * and a gameplay tip underneath (a new one every few seconds if loading takes a while).
+   * Loading screen: a long rounded bar that fills with glossy purple and reads "Loading", and a gameplay tip
+   * underneath (a new one every few seconds if loading takes a while). The animated title picture behind them
+   * is its own scene (TitleBackdropScene, started by PreloadScene), which draws under this one; the bar and
+   * tip also sit at the top depth here.
    */
   buildLoadingScreen() {
     const { width, height } = this.scale;
     const items = [];
-    if (this.textures.exists(TEX.titleBackground)) {
-      const bg = this.add.image(width / 2, height / 2, TEX.titleBackground);
-      bg.setScale(Math.max(width / bg.frame.width, height / bg.frame.height));
-      items.push(bg);
-    }
     // Darken the bottom so the bar and tip read clearly over the art.
     const shadeG = this.add.graphics();
     const fadeTop = height - 200;
@@ -96,6 +95,7 @@ export class BootScene extends Phaser.Scene {
     const label = this.add.text(bar.cx, bar.cy - 2, 'Loading', textStyle(26)).setOrigin(0.5);
     const tip = this.add.text(width / 2, bar.cy + 40, pickTip(), textStyle(20, COLORS.text, { align: 'center', wordWrap: { width: 900 } })).setOrigin(0.5, 0);
     items.push(barG, label, tip);
+    items.forEach((o, i) => o.setDepth(LOADING_UI_DEPTH + i)); // shade, bar, label, tip: above everything
 
     const draw = (p) => drawLoadingBar(barG, bar.cx - bar.w / 2, bar.cy - bar.h / 2, bar.w, bar.h, p);
     draw(0);
@@ -108,7 +108,13 @@ export class BootScene extends Phaser.Scene {
         onYoyo: () => tip.setText(pickTip(tip.text))
       })
     });
-    this.load.once('complete', () => { rotate.remove(); items.forEach((o) => o.destroy()); });
+    this.load.once('complete', () => {
+      rotate.remove();
+      items.forEach((o) => o.destroy());
+      // The title picture's mortar fires its last shot (its man then hovers there on the title menu).
+      this.registry.set(LOADED_FLAG, true);
+      this.game.events.emit(LOADED_EVENT);
+    });
   }
 
   create() {
@@ -209,6 +215,11 @@ export class BootScene extends Phaser.Scene {
       ctx.fillStyle = '#ffb3d6'; ctx.fillRect(4, 12, 8, 7);
       ctx.fillStyle = '#ff5fa8'; ctx.beginPath(); ctx.roundRect(4, 1, 8, 6, 2); ctx.fill(); ctx.stroke();
     });
+    // Spear: a long shaft with a steel tip, pointing right (+x).
+    this.canvasTexture(PROJECTILE_KEYS.spear, 36, 6, (ctx) => {
+      ctx.strokeStyle = '#8a5a2b'; ctx.lineWidth = 2; ctx.beginPath(); ctx.moveTo(1, 3); ctx.lineTo(28, 3); ctx.stroke();
+      ctx.fillStyle = '#cfd6dc'; ctx.beginPath(); ctx.moveTo(35, 3); ctx.lineTo(27, 0); ctx.lineTo(27, 6); ctx.closePath(); ctx.fill();
+    });
     this.canvasTexture(PROJECTILE_KEYS.archer, 22, 4, (ctx) => {
       ctx.strokeStyle = '#7a4a1e'; ctx.lineWidth = 2; ctx.beginPath(); ctx.moveTo(1, 2); ctx.lineTo(21, 2); ctx.stroke();
     });
@@ -266,7 +277,7 @@ export class BootScene extends Phaser.Scene {
       ctx.lineJoin = 'round'; ctx.strokeStyle = '#4a0000'; ctx.lineWidth = 5; bang(); ctx.stroke();
       ctx.fillStyle = '#ffffff'; bang(); ctx.fill();
     });
-    // Fog puff: a lumpy cloud of overlapping soft circles (tinted and drifted by UIScene).
+    // Fog puff: a lumpy cloud of overlapping soft circles (tinted and drifted in the world by objects/SpawnFog.js).
     this.canvasTexture(TEX.fog, 256, 256, (ctx) => {
       const puffs = [[128, 128, 110, 0.55], [92, 110, 70, 0.5], [168, 104, 64, 0.45], [100, 166, 66, 0.45], [170, 160, 72, 0.5], [128, 80, 56, 0.35]];
       for (const [x, y, r, a] of puffs) {

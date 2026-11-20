@@ -1,14 +1,15 @@
 // Player-facing enemy descriptions shown on the How to Play enemy profiles. Names and stats live in config.js.
+// Keep each to two short sentences so it fits its box.
 export const ENEMY_DESCRIPTIONS = {
-  grunt: 'The everyday foot soldier. They pour in by the dozen, march to the nearest building and bash it. Weak alone, dangerous in a crowd.',
-  slinger: 'Hangs back and pelts buildings with stones from a distance. It has to step inside Cannon and Gandolf Tower range to hit them, though.',
-  bomber: 'Flies straight over walls and drops heavy bombs on whatever is below. Only defenses that hit air can stop it.',
-  tank: 'A slow, armored brute with enormous health. It soaks up fire while the rest of the wave slips past, and it hits hard.',
-  shark: 'A speedy raider in sneakers that leaps right over walls. Other buildings still block its path, so walls alone won\'t slow it.',
-  balloon: "A slow hot-air balloon that floats over your walls to your defenses, air defenses first, and keeps dropping Neegies onto one until it falls. With no defenses left it goes for anything. Shot down, it drops its last two Neegies where it lands.",
-  neegy: "A gangly paratrooper dropped by Neegy Balloons right next to your air defenses, which it hits twice as hard. Weak on its own, so keep something nearby that hits ground troops.",
-  breaker: 'Rolls a tire full of bombs straight at your walls and blows itself up, smashing most walls in one blast (the toughest take two) and hurting everything close by. With no walls left, it goes for your defenses.',
-  babycar: "A raid boss on wheels. It drives in a straight line for your Village Hall and rams through everything in its way: walls shatter in one hit, other buildings take a heavy hit as it plows on. Huge health, and when it's finally wrecked it bursts into a crowd of the wave's ground troops, so keep defenses near your hall.",
-  toilet: "Tunnels underground, straight under your walls, to the nearest building, then pops up to attack it. When that building falls it dives back down and tunnels to the next. Underground nothing can hit it unless a F.L.O.C.K Tower sees it, so put F.L.O.C.K Towers where it will come up.",
-  thief: "A fragile goblin that sneaks in invisible: defenses can't target it until it hops its first wall or hits a building (splash still catches it). It raids Mines and Storages at 3x damage."
+  grunt: 'A basic foot soldier. It walks to the nearest building and hits it. Weak alone, but they come in big groups.',
+  slinger: 'Stays back and throws stones at buildings. It has to walk into Cannon and Gandolf Tower range to do it.',
+  bomber: 'Flies over walls and drops bombs on what is below. Only defenses that can hit air can stop it.',
+  tank: 'A slow, armored brute with lots of health and a hard hit. It soaks up shots while others slip by.',
+  shark: 'A fast runner that jumps over walls. Other buildings still block it, so walls alone will not stop it.',
+  balloon: 'A slow balloon that floats over walls and drops Neegies on your air defenses. Shoot it down and it drops two more where it lands.',
+  neegy: 'A little paratrooper dropped by a Balloon. It hits air defenses twice as hard, so keep a ground defense nearby.',
+  breaker: 'Rolls a bomb tire at your walls and blows up, breaking most walls in one blast. With no walls left it goes for your defenses.',
+  babycar: 'A raid boss. It drives straight at your Village Hall and smashes through everything. When it is destroyed it bursts into troops, so keep defenses near your hall.',
+  toilet: 'Tunnels under your walls to the nearest building, then pops up to attack. Only a F.L.O.C.K Tower can see it while it is underground.',
+  thief: 'A smug man in a sharp suit who strolls in unseen until he hops a wall or hits a building. He goes straight for your money: Mines and Storages take 3x damage.'
 };

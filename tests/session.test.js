@@ -246,3 +246,20 @@ describe('Session (accounts, villages, sync)', () => {
     expect(await backend.usernameAvailable('ann')).toBe(false); // names are unique ignoring case
   });
 });
+
+describe('the leaderboard catches up with the game', () => {
+  it('keeps what the server verified, and offers the stats again while it is behind', async () => {
+    const device = memoryStorage(), backend = new LocalBackend(memoryStorage()), timers = manualTimers();
+    const session = new Session({ backend, storage: device, timers });
+    await session.signUp('lee@example.com', 'secret123', 'Lee');
+    await session.createBase('Home');
+    writeGame(session.storage, makeStateWithTownHall({ wavesCleared: 126, tutorialStep: 11, tutorialDone: true }, 10));
+    expect(session.stats.bestWave).toBe(126);
+    await timers.runAll();
+    for (let i = 0; i < 60 && session.serverBestWave !== 126; i++) await new Promise((r) => setTimeout(r, 50)); // the stats upload the timer started
+    // The browser-only test backend keeps what it is sent; the server would keep only what it verified.
+    expect(session.serverBestWave).toBe(126);
+    const rows = await backend.leaderboard(10);
+    expect(rows.find((r) => r.isMe).bestWave).toBe(126);
+  });
+});

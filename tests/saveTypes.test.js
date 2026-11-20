@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { BUILDING_TYPES, DEFENSE_TYPES, ECONOMY_TYPES, WALL_TYPES, createBuilding, footprintDims } from '../src/logic/buildings.js';
-import { serializeGame, validateSave, deleteGame, restoreBackup, SAVE_KEYS, parseSave } from '../src/logic/save.js';
+import { serializeGame, validateSave, deleteGame, restoreBackup, SAVE_KEYS } from '../src/logic/save.js';
 import { CONFIG } from '../src/config.js';
 import { makeStateWithTownHall } from './helpers.js';
 

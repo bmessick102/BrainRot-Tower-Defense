@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest';
 import { CONFIG } from '../src/config.js';
 import { ABILITY_RULES } from '../src/abilityConfig.js';
 import { maxHp } from '../src/logic/buildings.js';
-import { damageBuilding, damageEnemy, fireDefense, stepProjectiles, stepPools } from '../src/logic/combat.js';
+import { damageBuilding, damageEnemy, fireDefense, stepProjectiles } from '../src/logic/combat.js';
 import { stepEnemy } from '../src/logic/enemies.js';
 import { stepBeams } from '../src/logic/beams.js';
 import { stepFlockTowers } from '../src/logic/flock.js';
@@ -21,10 +21,10 @@ describe('Path C: Cannon Fortress', () => {
     const c = addBuilding(s, 'cannon', 9, 16, 10);
     const base = maxHp(c);
     c.picks = C(2);
-    expect(maxHp(c)).toBe(Math.round(base * 1.25));
+    expect(maxHp(c)).toBe(Math.round(base * 1.4)); // v0.5 rebalance: +40% (was +25%)
     c.hp = maxHp(c);
     damageBuilding(s, c, 100);
-    expect(maxHp(c) - c.hp).toBeCloseTo(85, 5);
+    expect(maxHp(c) - c.hp).toBeCloseTo(80, 5); // 20% armor (was 15%)
   });
 
   it('Spiked Plating hits melee attackers back; Self-Repair heals during attacks', () => {
@@ -154,7 +154,7 @@ describe('Path C: Tower of Rah Overheat and the timed specials', () => {
     const m = addBuilding(s, 'mortar', 9, 16, 10);
     m.picks = C(5);
     const g = addEnemy(s, 'tank', 14, 17, { hp: 1e6, maxHp: 1e6 });
-    for (let i = 0; i < 301; i++) stepSpecials(s, 0.05);
+    for (let i = 0; i < 401; i++) stepSpecials(s, 0.05); // every 20 s (v0.5; was 15)
     expect(g.held).toBeGreaterThan(0);
     expect(g.hp).toBeLessThan(1e6);
     const f = addBuilding(s, 'flock', 20, 12, 10);

@@ -1,17 +1,65 @@
 // Short-lived visual feedback: floating numbers/labels and splash rings.
 import { rangeEllipse } from '../logic/iso.js';
-import { textStyle } from '../theme.js';
+import { textStyle, RP_TEXT_COLOR } from '../theme.js';
+import { isLowQuality } from '../quality.js';
+import { TEX } from '../assetKeys.js';
+import { fitIcon } from './uiDraw.js';
 
-/** Text that rises and fades (damage numbers, "+3" gold). */
+// Floating texts on screen at once (per scene). Past it, small ones (damage numbers, bounties: size under
+// FLOAT_KEEP_SIZE) are skipped; call-outs like "LAST STAND!" always show. Finished texts are kept and reused.
+export const FLOAT_MAX = { high: 40, low: 14 };
+const FLOAT_KEEP_SIZE = 18;
+
+function floatPool(scene) {
+  if (!scene.floatPool) {
+    scene.floatPool = { live: 0, free: [] };
+    scene.events.once('shutdown', () => { scene.floatPool = null; });
+  }
+  return scene.floatPool;
+}
+
+/** Text that rises and fades (damage numbers, "+3" gold). Returns the text, or null when skipped (too many). */
 export function floatText(scene, x, y, text, color = '#ffffff', size = 16) {
-  const t = scene.add.text(x, y, text, textStyle(size, color)).setOrigin(0.5, 1).setDepth(6000);
+  const pool = floatPool(scene);
+  if (size < FLOAT_KEEP_SIZE && pool.live >= (isLowQuality() ? FLOAT_MAX.low : FLOAT_MAX.high)) return null;
+  let t = pool.free.pop();
+  while (t && !t.scene) t = pool.free.pop(); // (destroyed with something else)
+  if (t) t.setStyle(textStyle(size, color)).setText(text).setPosition(x, y).setAlpha(1).setVisible(true);
+  else t = scene.add.text(x, y, text, textStyle(size, color)).setOrigin(0.5, 1).setDepth(6000);
+  pool.live++;
   scene.tweens.add({
     targets: t,
     y: y - 34,
     alpha: 0,
     duration: 800,
     ease: 'Cubic.easeOut',
-    onComplete: () => t.destroy()
+    onComplete: () => {
+      if (scene.floatPool !== pool) { t.destroy(); return; }
+      pool.live--;
+      t.setVisible(false);
+      pool.free.push(t);
+    }
+  });
+  return t;
+}
+
+/** "+3" Burgers (research points) rising beside a kill's gold, with a small burger icon after the number. */
+export function rpGainText(scene, x, y, n) {
+  const t = floatText(scene, x, y, `+${n}`, RP_TEXT_COLOR, 13);
+  if (!t || !scene.textures.exists(TEX.researchPoint)) return t;
+  const pool = floatPool(scene);
+  pool.icons = pool.icons || [];
+  let img = pool.icons.pop();
+  while (img && !img.scene) img = pool.icons.pop();
+  if (!img) img = scene.add.image(0, 0, TEX.researchPoint).setOrigin(0, 1).setDepth(6000);
+  fitIcon(img, 15).setPosition(x + t.width / 2 + 2, y).setAlpha(1).setVisible(true);
+  scene.tweens.add({
+    targets: img, y: y - 34, alpha: 0, duration: 800, ease: 'Cubic.easeOut',
+    onComplete: () => {
+      if (scene.floatPool !== pool) { img.destroy(); return; }
+      img.setVisible(false);
+      pool.icons.push(img);
+    }
   });
   return t;
 }

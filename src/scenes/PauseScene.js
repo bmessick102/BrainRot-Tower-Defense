@@ -1,9 +1,11 @@
-// Pause menu: Resume, Save, Music and Effects volume sliders (0-100%, saved to ibtd.settings), Quit to Title.
+// Pause menu: Resume, Save, Music and Effects volume sliders (0-100%, saved to ibtd.settings), Graphics quality,
+// Quit to Title.
 // (Achievements moved to the in-game Profile, top left: src/objects/ProfileWindow.js.)
 import Phaser from 'phaser';
 import { saveSettings } from '../logic/save.js';
 import { getStorage } from '../state/GameState.js';
 import { addVolumeSlider } from '../objects/VolumeSlider.js';
+import { addGraphicsToggle } from '../objects/GraphicsToggle.js';
 import { isWaveActive } from '../logic/util.js';
 import { Button } from '../objects/Button.js';
 import { addFullscreenButton } from '../objects/FullscreenButton.js';
@@ -23,7 +25,7 @@ export class PauseScene extends Phaser.Scene {
     const { width, height } = this.scale;
     this.gs = this.registry.get('gameState');
     this.add.rectangle(0, 0, width, height, 0x000000, 0.55).setOrigin(0).setInteractive();
-    const pw = 440, ph = 480, px = width / 2 - pw / 2, py = height / 2 - ph / 2, header = 64;
+    const pw = 440, ph = 540, px = width / 2 - pw / 2, py = height / 2 - ph / 2, header = 64;
     const g = this.add.graphics();
     drawWindow(g, px, py, pw, ph, { header });
     this.add.text(width / 2, py + 4 + header / 2, 'Paused', textStyle(38)).setOrigin(0.5);
@@ -45,6 +47,7 @@ export class PauseScene extends Phaser.Scene {
     const x = cx - 70, width = 190;
     addVolumeSlider(this, { x, y, width, label: 'Music', get: getMusicLevel, set: (v) => { setMusicLevel(v); save(); } });
     addVolumeSlider(this, { x, y: y + 60, width, label: 'Effects', get: getSfxLevel, set: (v) => { setSfxLevel(v); save(); } });
+    addGraphicsToggle(this, { x, y: y + 120, width, storage });
   }
 
   showBanner(text) {

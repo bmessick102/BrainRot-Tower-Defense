@@ -56,6 +56,17 @@ export function applyStun(e, seconds) {
  * Walk a ground enemy up to `step` tiles straight toward (tx, ty) (a Cheese Bait lure). Returns false when a
  * building or wall is in the way (the lure gives up on it) and true while it's moving or has arrived.
  */
+/**
+ * Move a unit's (x, y) up to `step` straight toward a point, ignoring what's in the way (enemies, the hero);
+ * returns the distance still left.
+ */
+export function moveToward(u, tx, ty, step) {
+  const dx = tx - u.x, dy = ty - u.y, d = Math.hypot(dx, dy);
+  if (d <= step || d < 1e-6) { u.x = tx; u.y = ty; return 0; }
+  u.x += (dx / d) * step; u.y += (dy / d) * step;
+  return d - step;
+}
+
 export function walkToward(state, e, tx, ty, step) {
   const d = distance(e.x, e.y, tx, ty);
   if (d < 1e-6) return true;

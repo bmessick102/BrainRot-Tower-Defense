@@ -10,3 +10,6 @@ dist/
 /*.jpg
 /*.mp3
 /*.wav
+/*.zip
+# Once installed, those drops are moved to unused-assets/root/ (kept on disk, still not in git).
+/unused-assets/root/

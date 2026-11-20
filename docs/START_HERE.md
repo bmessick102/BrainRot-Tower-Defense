@@ -7,8 +7,8 @@ This folder is everything an AI coding agent needs to build the playable demo wi
 | `BUILD_CHARTER.md` | The full specification. Follow it exactly. |
 | `src/config.js` | Every balance number (generated from Game_Balance_Sheet.xlsx). Use as-is. |
 | `src/mapTiles.js` | Which map tiles are placeable grass, the map origin, town hall spot, and spawn points. Use as-is. |
-| `public/assets/images/game_map_grid.png` | The game background: forest clearing with the checkerboard on every grass tile. |
-| `public/assets/images/game_map.png` | Same map without the checkerboard (backup). |
+| `public/assets/images/map/game_map_grid.png` | The game background: forest clearing with the checkerboard on every grass tile. |
+| `docs/archive/game_map_v1.png` | Same map without the checkerboard (backup; it was `public/assets/images/game_map.png`, never loaded by the game). |
 
 Copy `src/` and `public/` into the repository at the same paths before starting.
 

@@ -9,11 +9,12 @@ import { isAirKind, LANDING_SECONDS, enemyLevel } from '../logic/enemies.js';
 import { enemyKey, TEX } from '../assetKeys.js';
 import { HealthBar, HP_TEAM } from './HealthBar.js';
 import { groundDepth } from './depth.js';
+import { isLowQuality } from '../quality.js';
 
 const ENEMY_BADGE = 0x8e1f2a; // level badge on enemy health bars (buildings' is blue)
 
 // On-screen height in pixels for real enemy art at zoom 1 (a 2x2 building is 128 px wide).
-const DISPLAY_HEIGHT = { grunt: 40, slinger: 44, bomber: 46, tank: 62, shark: 50, thief: 42, breaker: 46, balloon: 84, neegy: 48, babycar: 78, toilet: 50 };
+const DISPLAY_HEIGHT = { grunt: 40, slinger: 44, bomber: 46, tank: 62, shark: 50, thief: 50, breaker: 46, balloon: 84, neegy: 48, babycar: 78, toilet: 50 };
 // A dropped Neegy starts this far up (px) and floats down over its landing time.
 const DROP_HEIGHT = 95;
 // Real flyer art floats this far above its shadow (the placeholder has the shadow built in).
@@ -23,15 +24,18 @@ const FLY_HEIGHT_BY_KIND = { balloon: 80 };
 // Pictures drawn facing left, by texture key (the rest face right or front). Each pose has its own
 // picture, so facing is per picture: enemies always face where they're going.
 const FACES_LEFT = new Set([
-  'enemy_bomber', 'enemy_shark', 'enemy_thief', 'enemy_balloon', 'enemy_babycar',
+  'enemy_bomber', 'enemy_shark', 'enemy_balloon', 'enemy_babycar',
   'enemy_shark_attack', 'enemy_shark_death', 'enemy_tank_death', 'enemy_thief_death'
 ]);
 // Extra poses: enemy_<kind>_attack / enemy_<kind>_death in art-source/enemies/, used when present.
 const ATTACK_POSE_MS = 320;          // the attack picture shows this long after each hit
 const POSE_HEIGHT = { walk: 1, attack: 1, death: 0.85 }; // share of DISPLAY_HEIGHT (lying down is lower)
+// Per-kind overrides of POSE_HEIGHT: Mr. Least is tall and thin standing up but lies stretched out flat, so
+// his death picture is drawn lower to stay about as long as he is tall.
+const POSE_HEIGHT_BY_KIND = { thief: { death: 0.68 } };
 const DEATH_HOLD_MS = 650;           // the death picture stays this long...
 const DEATH_FADE_MS = 450;           // ...then fades out
-// Invisible enemies (a Money Stealer before it's revealed) are drawn see-through with a faint shimmer.
+// Invisible enemies (Mr. Least before he's revealed) are drawn see-through with a faint shimmer.
 const HIDDEN_ALPHA = 0.38;
 const UNDERGROUND_SEEN_ALPHA = 0.45; // a tunneling Skibidi Toilet seen by a F.L.O.C.K Tower
 const HIDDEN_SHIMMER = 0.07;
@@ -135,7 +139,8 @@ export class EnemyView {
       // Moonlit at night; a stalled wave's enraged enemies also glow angry red.
       const base = this.scene.ambientTint ?? 0xffffff;
       // Hacked by a F.L.O.C.K Override: purple. Dazzled by Showstopper: a pale flicker.
-      if (e.hackedT > 0) this.sprite.setTint(mulColor(base, 0xc58cff));
+      if (e.frozenT > 0) this.sprite.setTint(mulColor(base, 0x8fd8ff)); // held by a Freeze spell: icy blue
+      else if (e.hackedT > 0) this.sprite.setTint(mulColor(base, 0xc58cff));
       else if (e.disarmT > 0 && Math.sin(time * 0.03) > 0) this.sprite.setTint(mulColor(base, 0xfff3b0));
       else {
         const w = this.scene.gs && this.scene.gs.wave;
@@ -145,8 +150,9 @@ export class EnemyView {
     }
     const dark = darkness(this.scene.night || 0); // 0 until it's dark enough, then up to 1
     const night = dark;
-    this.glow.setVisible(dark > 0.01);
-    if (dark > 0.01) {
+    const glowOn = dark > 0.01 && !isLowQuality(); // (low graphics quality: no glows, one sprite less per enemy)
+    this.glow.setVisible(glowOn);
+    if (glowOn) {
       const w = Math.max(48, this.sprite.displayWidth * 1.5);
       const cy = this.air ? s.y - this.lift - this.sprite.displayHeight * 0.4 : s.y - 4;
       this.glow.setPosition(s.x, cy).setDisplaySize(w, this.air ? w * 0.8 : w * 0.55)
@@ -155,7 +161,8 @@ export class EnemyView {
   }
 
   poseHeight(pose) {
-    return (DISPLAY_HEIGHT[this.kind] || 40) * POSE_HEIGHT[pose] * this.packScale;
+    const share = (POSE_HEIGHT_BY_KIND[this.kind] && POSE_HEIGHT_BY_KIND[this.kind][pose]) ?? POSE_HEIGHT[pose];
+    return (DISPLAY_HEIGHT[this.kind] || 40) * share * this.packScale;
   }
 
   setPose(pose) {

@@ -47,13 +47,17 @@ describe('day/night clock (a cycle of its own; waves come when the player starts
     expect(secondsToNextPhase(s.clock)).toBeCloseTo(D.nightSeconds - 5, 5);
   });
 
-  it('Start Wave sends the wave right away at whatever time it is, and leaves the clock alone', () => {
+  it('Start Wave starts the countdown right away at whatever time it is, and leaves the clock alone', () => {
     for (const phase of ['day', 'dusk', 'night', 'dawn']) {
       const s = freePlay({ clock: { phase, t: 3 } });
       expect(startNextWave(s)).toMatchObject({ ok: true });
       expect(s.clock).toEqual({ phase, t: 3 });
       expect(s.events.find((e) => e.name === 'waveCalled').data).toMatchObject({ number: 1 });
-      stepWaveSpawning(s, 0.05);
+      expect(s.wave).toMatchObject({ phase: 'countdown', countdown: CONFIG.rules.waveCountdown });
+      stepWaveSpawning(s, CONFIG.rules.waveCountdown - 1);
+      expect(s.wave.phase).toBe('countdown'); // not yet
+      expect(s.enemies.length).toBe(0);
+      stepWaveSpawning(s, 1.05);
       expect(s.wave.phase).toBe('active');
       expect(s.enemies.length).toBeGreaterThan(0);
     }
@@ -62,7 +66,7 @@ describe('day/night clock (a cycle of its own; waves come when the player starts
   it('the clock keeps running through a wave, and beating it does not change the time', () => {
     const s = freePlay({ clock: { phase: 'day', t: D.daySeconds - 10 } });
     startNextWave(s);
-    stepWaveSpawning(s, 0.05);
+    stepWaveSpawning(s, CONFIG.rules.waveCountdown + 0.05);
     run(s, 20);
     expect(s.clock.phase).toBe('dusk'); // night fell mid-fight
     s.wave.queues = {}; s.enemies = [];
@@ -82,11 +86,11 @@ describe('day/night clock (a cycle of its own; waves come when the player starts
   it('starting within quickStartSeconds of clearing the last wave is a quick start', () => {
     const s = freePlay();
     expect(startNextWave(s).quick).toBe(false); // nothing cleared yet
-    s.wave.queues = {}; s.enemies = []; stepWaveSpawning(s, 0.05); checkWaveCleared(s);
+    s.wave.queues = {}; s.enemies = []; stepWaveSpawning(s, CONFIG.rules.waveCountdown + 0.05); checkWaveCleared(s);
     run(s, CONFIG.rules.quickStartSeconds - 1);
     expect(startNextWave(s).quick).toBe(true);
     expect(s.events.some((e) => e.name === 'waveQuickStarted')).toBe(true);
-    stepWaveSpawning(s, 0.05); s.wave.queues = {}; s.enemies = []; checkWaveCleared(s);
+    stepWaveSpawning(s, CONFIG.rules.waveCountdown + 0.05); s.wave.queues = {}; s.enemies = []; checkWaveCleared(s);
     run(s, CONFIG.rules.quickStartSeconds + 1);
     expect(startNextWave(s).quick).toBe(false);
   });

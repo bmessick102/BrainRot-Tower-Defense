@@ -36,11 +36,6 @@ export function isClockRunning(state) {
   return !!state.tutorialDone || state.tutorialStep >= TUTORIAL_NIGHT_STEP;
 }
 
-/** Daytime (day or dawn). */
-export function isDaytime(clock) {
-  return !!clock && (clock.phase === 'day' || clock.phase === 'dawn');
-}
-
 /** Seconds until the next phase starts. */
 export function secondsToNextPhase(clock) {
   if (!clock) return 0;
@@ -65,7 +60,7 @@ export function canStartWave(state) {
 }
 
 /**
- * The Start Wave button: the next wave starts right away, at whatever time of day it is. Starting within
+ * The Start Wave button: the next wave's countdown starts right away, at whatever time of day it is. Starting within
  * rules.quickStartSeconds of clearing the last wave counts as a quick start (the "Bring It On" achievement).
  */
 export function startNextWave(state) {
@@ -79,7 +74,7 @@ export function startNextWave(state) {
 
 /** The tutorial's first wave: sent as soon as the tutorial reaches it (no button). */
 export function startTutorialWave(state) {
-  if (!state.wave || state.wave.phase === 'idle') triggerWave(state);
+  if (!state.wave || state.wave.phase === 'idle') triggerWave(state, CONFIG.rules.tutorialCountdown);
 }
 
 /** Advance the clock: day -> dusk -> night -> dawn -> day, on its own. Runs before wave spawning each step. */
