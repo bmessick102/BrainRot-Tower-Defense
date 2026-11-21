@@ -309,6 +309,10 @@ export class BuildingView {
       this.sprite.setOrigin(0.5, 0.55).setDisplaySize(w, (w * this.sprite.frame.height) / this.sprite.frame.width).setPosition(c.x, c.y);
       front = { x: c.x, y: c.y + this.sprite.displayHeight * 0.45 };
     } else this.sprite.setOrigin(0.5, 1);
+    // Rubble is a low pile that enemies, gnomes and the hero walk across (a destroyed building is open ground):
+    // drawn from its footprint's back corner, so anyone standing on it or in front of it draws on top (v0.6.3;
+    // at the standing building's front-corner depth, enemies crossing it vanished under the picture).
+    if (b.destroyed) this.sprite.setDepth(b.col + b.row - 0.01);
     const top = front.y - this.sprite.displayHeight;
     // Click bounce (bottom origin, so it squashes into the ground and springs up).
     if (this.bx !== 1 || this.by !== 1) this.sprite.setScale(this.sprite.scaleX * this.bx, this.sprite.scaleY * this.by);

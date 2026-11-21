@@ -76,12 +76,13 @@ export const CONFIG = {
     // (11, the top one) every building keeps its own cap (limits[type]), and on top of that the village gets `count`
     // Bonus Slots: each is one more copy of any of the `types`, past that type's cap, at the normal price. Any mix
     // (all 5 can be Towers of Rah). Nothing marks which copy is the bonus one: slots in use = copies past the caps,
-    // so selling one frees a slot. Unique buildings (Village Hall, RV Lab, Fuel Station, DJ Babyface, altar) and walls
-    // can't use them.
+    // so selling one frees a slot. v0.6.3 (user): defenses only (every Defenses and Traps tab building); mines,
+    // storages and houses get one more each at Village Hall 11 instead (limits). Unique buildings (Village Hall,
+    // RV Lab, Fuel Station, DJ Babyface, altar) and walls can't use them.
     bonusSlots: {
       fromTownHall: 11,
       count: 5,
-      types: ['mine', 'storage', 'house', 'cannon', 'archer', 'mortar', 'wizard', 'firework', 'spear', 'ksi', 'mousetrap', 'flock', 'ra', 'catapult']
+      types: ['cannon', 'archer', 'mortar', 'wizard', 'firework', 'spear', 'ksi', 'mousetrap', 'flock', 'ra', 'catapult']
     },
     mineCoinIconThreshold: 0.1,
     buildingGap: 0
@@ -475,6 +476,9 @@ export const CONFIG = {
       minRange: 0,
       tickInterval: 0.2,
       stages: [{ after: 0, mult: 1 }, { after: 2, mult: 3 }, { after: 5, mult: 8 }],
+      // Once locked on, the beam holds its target this many tiles past its range (v0.6.3): a flyer hovering at the
+      // edge (La Vaca Saturno, nudged by the crowd) kept stepping out and back, so the beam kept starting cold.
+      leash: 0.75,
       unlockTownHall: 6,
       levels: [
         { cost: 5000, hp: 450, dps: 20 },
@@ -590,12 +594,12 @@ export const CONFIG = {
       ]
     }
   },
-  // Per Village Hall level (1-11). Village Hall 11 adds 12 walls; its other caps are Village Hall 10's (plus its
-  // Bonus Slots: rules.bonusSlots).
+  // Per Village Hall level (1-11). Village Hall 11 adds 12 walls and one Mine, Storage and House; its defense caps are
+  // Village Hall 10's (plus its Bonus Slots for defenses: rules.bonusSlots).
   limits: {
-    mine: [1, 2, 3, 3, 4, 4, 5, 5, 6, 6, 6],
-    storage: [1, 1, 2, 2, 3, 3, 4, 4, 5, 5, 5],
-    house: [1, 1, 2, 2, 3, 3, 4, 4, 5, 5, 5],
+    mine: [1, 2, 3, 3, 4, 4, 5, 5, 6, 6, 7],     // v0.6.3: Village Hall 11 adds one Mine, Storage and House
+    storage: [1, 1, 2, 2, 3, 3, 4, 4, 5, 5, 6],
+    house: [1, 1, 2, 2, 3, 3, 4, 4, 5, 5, 6],
     cannon: [1, 2, 2, 3, 3, 4, 4, 5, 5, 6, 6],
     archer: [0, 1, 2, 2, 3, 3, 4, 4, 5, 5, 5],
     mortar: [0, 1, 1, 2, 2, 3, 3, 4, 4, 5, 5],

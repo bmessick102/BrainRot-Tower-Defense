@@ -11,6 +11,7 @@ export function groundDepth(buildings, x, y) {
   let d = x + y;
   for (const b of buildings) {
     if (b.type === 'mousetrap') continue; // flat trap: anything on it draws on top anyway
+    if (b.destroyed) continue;            // rubble is drawn from its back corner (BuildingView): nothing to clear
     const x1 = b.col + fpW(b), y1 = b.row + fpH(b);
     const frontOfRightFace = x >= x1 && y > b.row - 0.5 && y < y1 + 0.5;
     const frontOfLeftFace = y >= y1 && x > b.col - 0.5 && x < x1 + 0.5;

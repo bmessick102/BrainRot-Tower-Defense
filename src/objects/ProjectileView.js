@@ -5,7 +5,7 @@
 import { gridToScreen, distance } from '../logic/iso.js';
 import { footprintCenter } from '../logic/grid.js';
 import { PROJECTILE_KEYS, TEX } from '../assetKeys.js';
-import { attachFireballFx, attachRocketFx } from './Effects.js';
+import { attachFireballFx, attachRocketFx, attachFrostFx } from './Effects.js';
 
 // On-screen width in pixels for each projectile kind.
 const DISPLAY_WIDTH = {
@@ -51,7 +51,9 @@ export class ProjectileView {
     this.hitOff = { x: 0, y: 0 };          // screen offset of the hit point from the target's ground spot
     this.startDist = null;                 // homing shots: distance to the target when first drawn
     // The Wizard's fireball is a light source: glow, hot core, and a spark trail.
+    // The KSI Tower's bottle: an icy glow and a frost trail (v0.6.3).
     this.fx = p.kind === 'wizard' ? attachFireballFx(scene, this.image, TEX.light)
+      : p.kind === 'ksi' || p.kind === 'ksiBounce' ? attachFrostFx(scene, this.image, TEX.light)
       : p.kind === 'firework' ? attachRocketFx(scene, this.image, TEX.light) : null;
     this.sync(p);
   }

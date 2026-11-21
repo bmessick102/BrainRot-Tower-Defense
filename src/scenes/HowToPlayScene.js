@@ -464,7 +464,7 @@ export class HowToPlayScene extends Phaser.Scene {
       'A building cannot be a higher level than your Village Hall.',
       'Each level adds health and power. Buildings get bigger and get new art every few levels.',
       'Upgrading the Village Hall unlocks new buildings and lets you build more of each. But the attacks get harder too.',
-      `Village Hall ${bonusTownHall()} adds ${CONFIG.rules.bonusSlots.count} Bonus Slots: each is one more building of any kind past its usual limit, at the normal price. Sell one to free its slot.`,
+      `Village Hall ${bonusTownHall()} adds ${CONFIG.rules.bonusSlots.count} Bonus Slots: each is one more defense of any kind past its usual limit, at the normal price (sell one to free its slot). It also allows one more Mine, Storage and House.`,
       'Walls share one level: "Upgrade Walls" raises every wall at once, and new walls are built at that level.',
       `After you beat a wave, destroyed buildings are rebuilt free. During a wave you can Rebuild one early for ${Math.round(CONFIG.rules.rebuildCostShare * 100)}% of its cost.`,
       `Selling gives back ${Math.round(CONFIG.rules.sellRefund * 100)}% of the gold you spent on a building.`

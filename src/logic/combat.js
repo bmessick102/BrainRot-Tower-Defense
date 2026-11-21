@@ -81,8 +81,10 @@ function validFor(aim, e) {
 }
 
 /** Alive, hittable type, inside range and outside minimum range (measured from the footprint center). */
-export function isValidTarget(b, e) {
-  return validFor(aimOf(b), e);
+export function isValidTarget(b, e, extraRange = 0) {
+  const aim = aimOf(b);
+  if (extraRange) aim.range += extraRange; // (a beam holding its lock: CONFIG.defenses.ra.leash)
+  return validFor(aim, e);
 }
 
 /** Every enemy this tower could shoot right now. */

@@ -86,11 +86,17 @@ describe('Village Hall 11: Bonus Slots', () => {
     for (let i = 0; i < n; i++) { addBuilding(s, type, c, r); c += 3; if (c > 30) { c = 0; r += 3; } }
   };
 
-  it('5 slots for any non-unique building; unique buildings and walls can\'t use them; caps stay VH10\'s', () => {
+  it('5 slots for defenses only (traps and support included); defense caps stay VH10\'s, the economy gets +1 each', () => {
     expect(S().count).toBe(5);
-    for (const t of ['townHall', 'rvlab', 'fuelStation', 'dj', 'altar', 'wall']) expect(takesBonusSlot(t)).toBe(false);
-    for (const t of ['mine', 'storage', 'house', 'cannon', 'ra', 'catapult', 'ksi', 'mousetrap', 'flock']) expect(takesBonusSlot(t)).toBe(true);
+    for (const t of ['townHall', 'rvlab', 'fuelStation', 'dj', 'altar', 'wall', 'mine', 'storage', 'house']) expect(takesBonusSlot(t)).toBe(false);
+    for (const t of DEFENSE_TYPES) expect(takesBonusSlot(t)).toBe(true);
     for (const t of S().types) expect(limitFor(t, 11)).toBe(limitFor(t, 10));
+    for (const t of ['mine', 'storage', 'house']) expect(limitFor(t, 11)).toBe(limitFor(t, 10) + 1);
+    // An economy building at its cap is just at its cap (no slot).
+    const s = makeStateWithTownHall({ gold: 1e9 }, 11);
+    while (s.buildings.filter((b) => b.type === 'mine').length < limitFor('mine', 11)) fill(s, 'mine', 1, [3 * s.buildings.length % 30, 26]);
+    expect(nextTakesBonusSlot(s, 'mine')).toBe(false);
+    expect(checkBuy(s, 'mine')).toEqual({ ok: false, reason: 'Limit reached' });
   });
 
   it('past its cap a building takes a slot at the normal price; all 5 can be one type (5 more Towers of Rah)', () => {
@@ -120,7 +126,7 @@ describe('Village Hall 11: Bonus Slots', () => {
 
   it('slots are shared by every type (any mix)', () => {
     const s = makeStateWithTownHall({ gold: 1e9 }, 11);
-    fill(s, 'mine', limitFor('mine', 11) + 2);
+    fill(s, 'cannon', limitFor('cannon', 11) + 2);
     fill(s, 'catapult', limitFor('catapult', 11) + 1, [0, 24]);
     expect(bonusSlotsUsed(s)).toBe(3);
     expect(roomFor(s, 'ra')).toBe(limitFor('ra', 11) + 2);

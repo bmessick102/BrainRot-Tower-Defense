@@ -2,6 +2,18 @@
 
 The version shows in the bottom-left corner of every screen (`package.json` `version` plus the commit). Details for everything below are in [README.md](README.md).
 
+## 0.6.3
+
+Saves load as they are (still save version 7).
+
+### Changed
+- **Village Hall 11 Bonus Slots take defenses only** (every Defenses and Traps tab building: Cannon to Diddypult, F.L.O.C.K and the Mousetrap). Instead, Village Hall 11 allows one more Mine (7), Storage (6) and House (6). A village that already put economy buildings in Bonus Slots keeps them (they count past the new limits, so no more can be built until it's under).
+- **KSI Tower effects in the Gandolf's style:** its bottle flies with an icy glow, a frosty halo and a trail of ice sparkles and snow (`attachFrostFx`), and bursts in a cold flash, ice shards, frost mist, spinning snowflakes and an ice-blue shockwave, with its splash ring (`frostImpact`, Effects.js).
+
+### Fixed
+- **Tower of Rah losing its heat on flyers at the edge of its range:** La Vaca Saturno hovers 3.5 tiles off its target, often right at the beam's 6-tile range, and the crowd nudged it out and back, so the beam kept dropping it and starting cold (x1) again. Once locked on, the beam now holds its target `leash` (0.75) tiles past its range; a new target still has to be in range.
+- **Enemies drawn under rubble:** a destroyed building's rubble kept the standing building's draw depth (its front corner), so enemies, gnomes and the hero crossing it vanished under the picture. Rubble is now drawn from its back corner, and the ground layering ignores destroyed buildings.
+
 ## 0.6.2
 
 Faster loading, especially on phones. Saves load as they are (still save version 7). Details in [README.md](README.md) under Graphics and performance.

@@ -1,9 +1,8 @@
-// Visuals for the v0.6 enemies and the KSI Tower, in the same style as AbilityFx.js / Effects.js (graphics only).
+// Visuals for the v0.6 enemies, in the same style as AbilityFx.js / Effects.js (graphics only). (The KSI Tower's
+// bottle and frost burst are in Effects.js: attachFrostFx / frostImpact.)
 //   missileWarningFx - Big Yahu's missile target: a red version of Arrow Storm's warning circle, pulsing, with a
 //                      crosshair, shown until it lands.
 //   quakeFx          - Brr Brr Patapim's earthquake: cracks running out across the ground and a dust ring.
-//   frostBurstFx     - a KSI Tower bottle bursting: an icy ring and a few flakes.
-import Phaser from 'phaser';
 import { rangeEllipse } from '../logic/iso.js';
 import { splashRing } from './Effects.js';
 import { isLowQuality } from '../quality.js';
@@ -64,19 +63,3 @@ export function quakeFx(scene, x, y, radiusTiles) {
   scene.tweens.add({ targets: g, alpha: 0, delay: 900, duration: 600, onComplete: () => g.destroy() });
 }
 
-/** A KSI Tower bottle bursting at (x, y): an icy ring the size of its splash and a few flakes popping out. */
-export function frostBurstFx(scene, x, y, radiusTiles) {
-  splashRing(scene, x, y, radiusTiles, ICE_BLUE, { duration: 520, depth: FX_DEPTH + 10 });
-  if (isLowQuality()) return;
-  const { rx, ry } = rangeEllipse(radiusTiles);
-  for (let i = 0; i < 7; i++) {
-    const a = Math.random() * Math.PI * 2, d = 0.3 + Math.random() * 0.7;
-    const f = scene.add.graphics().setDepth(FX_DEPTH + 11).setPosition(x, y - 6);
-    f.lineStyle(1.5, 0xffffff, 1);
-    for (let k = 0; k < 3; k++) { const b = (k * Math.PI) / 3; f.lineBetween(-Math.cos(b) * 3.5, -Math.sin(b) * 3.5, Math.cos(b) * 3.5, Math.sin(b) * 3.5); }
-    scene.tweens.add({
-      targets: f, x: x + Math.cos(a) * rx * d, y: y - 6 + Math.sin(a) * ry * d - 10, alpha: 0, rotation: Phaser.Math.FloatBetween(-2, 2),
-      duration: 520, ease: 'Cubic.easeOut', onComplete: () => f.destroy()
-    });
-  }
-}

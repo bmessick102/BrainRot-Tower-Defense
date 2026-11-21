@@ -29,9 +29,9 @@ import { DayNight } from '../objects/DayNight.js';
 import { Villagers } from '../objects/Villagers.js';
 import { AirHum } from '../objects/AirHum.js';
 import { BeamHum } from '../objects/BeamHum.js';
-import { floatText, rpGainText, splashRing, fireballImpact, fireworkBurst, breakerExplosion } from '../objects/Effects.js';
+import { floatText, rpGainText, splashRing, fireballImpact, frostImpact, fireworkBurst, breakerExplosion } from '../objects/Effects.js';
 import { TEX, SFX, MUSIC, FIRE_SFX, ENEMY_ATTACK_SFX, ENEMY_VOICE } from '../assetKeys.js';
-import { missileWarningFx, quakeFx, frostBurstFx, ICE_BLUE } from '../objects/EnemyFx.js';
+import { missileWarningFx, quakeFx, ICE_BLUE } from '../objects/EnemyFx.js';
 import { playSfxClip, playSfx, playSfxCapped, playSfxEndingIn, playVoiceLine, playMusic, pauseMusic, resumeMusic, stopMusic, crossfadeMusic, fadeOutMusic, hasAmbience, startAmbience, updateAmbience, stopAmbience, soundDuration, prefetchMusic, hasMusicFile, releaseMusic } from '../audio.js';
 import { requestAudio, requestImages } from '../assetLoader.js';
 import { villageImageKeys, reachableImageKeys } from '../assetPlan.js';
@@ -1390,8 +1390,10 @@ export class GameScene extends Phaser.Scene {
       } else if (d.kind === 'arrowStorm' || d.kind === 'meteor') {
         // Already drawn when they were called down (strikeIncoming).
       } else if (d.kind === 'ksi' || d.kind === 'ksiBounce') {
-        // A KSI Tower bottle bursts: an icy ring (its splash) and flakes.
-        frostBurstFx(this, s.x, s.y, d.radius);
+        // A KSI Tower bottle bursts: a cold flash, ice shards, frost mist, snowflakes and a shockwave (frostImpact),
+        // then the exact splash area as a ring, held a little longer so it reads clearly (like the Gandolf's).
+        frostImpact(this, s.x, s.y, d.radius, TEX.light);
+        splashRing(this, s.x, s.y, d.radius, ICE_BLUE, { duration: 600, depth: 2710 });
         playSfxCapped(this, SFX.ksiImpact, 4);
       } else if (d.kind === 'catapult') {
         // The bottle bursts: a pink splash ring and droplets; the pool itself is a PoolView.

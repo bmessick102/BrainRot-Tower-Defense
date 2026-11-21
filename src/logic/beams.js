@@ -1,7 +1,8 @@
 // Tower of Rah: a beam tower (like Clash of Clans' Inferno Tower). It locks onto the enemy with the most
 // health (current HP) in range, ground or air, and burns it with a continuous beam whose damage heats up
 // the longer it stays on that one enemy: CONFIG.defenses.ra.stages ({ after: seconds, mult }). When the
-// target dies, leaves range or turns invisible, the beam drops back to the first stage on a new target.
+// target dies, leaves range (by more than `leash` tiles: a locked beam holds on a little past its range) or turns
+// invisible, the beam drops back to the first stage on a new target.
 // Damage is dealt in ticks of tickInterval seconds (source 'beam').
 //
 // RV Lab abilities (src/abilityConfig.js):
@@ -66,7 +67,7 @@ export function stepBeams(state, dt) {
     if (b.heatMemoryT > 0) b.heatMemoryT -= dt;
     b.beams = (b.beams || []).filter((beam) => {
       const t = findEnemy(state, beam.targetId);
-      if (isValidTarget(b, t)) return true;
+      if (isValidTarget(b, t, cfg.leash || 0)) return true;
       // Heat Memory: remember the heat for a moment; Afterburn: the target it left keeps burning.
       if (fx.heatCarry) { b.heatMemory = beam.time; b.heatMemoryT = 1; }
       if (fx.afterburn && t && t.alive && beam.lastDps) burnEnemy(t, beam.lastDps * fx.afterburn, fx.afterburnSeconds);

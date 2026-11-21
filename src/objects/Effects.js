@@ -157,6 +157,127 @@ export function fireballImpact(scene, x, y, radiusTiles, lightKey) {
   scene.tweens.add({ targets: ring, scale: 1.15, alpha: 0, duration: 420, ease: 'Cubic.easeOut', onComplete: () => ring.destroy() });
 }
 
+// ---------- KSI Tower bottle (v0.6.3: ice effects in the style of the Gandolf fireball) ----------
+// Ice palette for sparkles and glows (white -> pale ice -> ice blue -> deep blue).
+export const ICE_COLORS = [0xffffff, 0xe4f8ff, 0xa8e6ff, 0x6fd0ff, 0x3d9bff];
+
+/**
+ * An icy glow, a frosty halo with a bright core, and a trail of ice sparkles and snow that ride along with a KSI
+ * Tower bottle. Same interface as attachFireballFx.
+ */
+export function attachFrostFx(scene, sprite, lightKey) {
+  if (sprite.preFX) {
+    sprite.preFX.padding = 10;
+    sprite.preFX.addGlow(0x9fe6ff, 5, 1, false, 0.1, 12);
+  }
+  const halo = scene.add.image(0, 0, lightKey).setBlendMode('ADD').setTint(0x5cc8ff);
+  const core = scene.add.image(0, 0, lightKey).setBlendMode('ADD').setTint(0xeafaff);
+  const trail = scene.add.particles(0, 0, lightKey, {
+    speed: { min: 4, max: 24 },
+    lifespan: { min: 300, max: 560 },
+    scale: { start: 0.1, end: 0 },
+    alpha: { start: 0.95, end: 0 },
+    tint: ICE_COLORS,
+    blendMode: 'ADD',
+    gravityY: 30, // the frost settles a little as it trails
+    frequency: 14,
+    quantity: 2
+  });
+  trail.startFollow(sprite);
+  const phase = Math.random() * Math.PI * 2;
+  return {
+    update(x, y, depth, time) {
+      const pulse = 1 + 0.15 * Math.sin(time * 0.025 + phase);
+      halo.setPosition(x, y).setScale(0.36 * pulse).setAlpha(0.75).setDepth(depth - 0.2);
+      core.setPosition(x, y).setScale(0.13 * pulse).setAlpha(0.95).setDepth(depth + 0.1);
+      trail.setDepth(depth - 0.3);
+    },
+    destroy() {
+      halo.destroy();
+      core.destroy();
+      trail.stopFollow();
+      trail.stop();
+      scene.time.delayedCall(600, () => trail.destroy());
+    }
+  };
+}
+
+/** A six-armed snowflake drawn in white (the frost burst's flakes). */
+function snowflake(scene, x, y, size, depth) {
+  const f = scene.add.graphics().setDepth(depth).setPosition(x, y);
+  f.lineStyle(1.6, 0xffffff, 1);
+  for (let k = 0; k < 3; k++) {
+    const a = (k * Math.PI) / 3, c = Math.cos(a) * size, s = Math.sin(a) * size;
+    f.lineBetween(-c, -s, c, s);
+    // little side twigs near each tip
+    for (const sign of [-1, 1]) {
+      const tx = c * 0.6 * sign, ty = s * 0.6 * sign, b = a + Math.PI / 2;
+      f.lineBetween(tx, ty, tx + (Math.cos(a) * sign * 0.3 + Math.cos(b) * 0.3) * size, ty + (Math.sin(a) * sign * 0.3 + Math.sin(b) * 0.3) * size);
+    }
+  }
+  return f;
+}
+
+/**
+ * A KSI Tower bottle bursting: a cold white flash, ice shards flying out, frost mist and snowflakes drifting down,
+ * and an ice-blue shockwave ring racing to the splash radius (the Gandolf fireball's impact, in ice).
+ */
+export function frostImpact(scene, x, y, radiusTiles, lightKey) {
+  const { rx, ry } = rangeEllipse(radiusTiles);
+  const flash = scene.add.image(x, y, lightKey).setBlendMode('ADD').setTint(0xcff2ff).setDepth(FX_DEPTH)
+    .setDisplaySize(rx * 2.3, ry * 2.3).setAlpha(1);
+  scene.tweens.add({ targets: flash, alpha: 0, scaleX: flash.scaleX * 1.35, scaleY: flash.scaleY * 1.35, duration: 340, ease: 'Cubic.easeOut', onComplete: () => flash.destroy() });
+  const core = scene.add.image(x, y - 6, lightKey).setBlendMode('ADD').setTint(0xffffff).setDepth(FX_DEPTH + 1).setScale(0.3);
+  scene.tweens.add({ targets: core, alpha: 0, scale: 0.55, duration: 240, onComplete: () => core.destroy() });
+
+  // Ice shards bursting out and falling.
+  const shards = scene.add.particles(x, y - 6, lightKey, {
+    speed: { min: 60, max: 200 },
+    angle: { min: 0, max: 360 },
+    lifespan: { min: 320, max: 680 },
+    scale: { start: 0.12, end: 0 },
+    alpha: { start: 1, end: 0 },
+    tint: ICE_COLORS,
+    blendMode: 'ADD',
+    gravityY: 160,
+    emitting: false
+  }).setDepth(FX_DEPTH + 2);
+  shards.explode(26);
+  // Frost mist hanging over the splash, drifting slowly down.
+  const mist = scene.add.particles(x, y, lightKey, {
+    x: { min: -rx * 0.7, max: rx * 0.7 },
+    y: { min: -ry * 0.7, max: ry * 0.5 },
+    speedY: { min: 4, max: 18 },
+    speedX: { min: -10, max: 10 },
+    lifespan: { min: 700, max: 1200 },
+    scale: { start: 0.09, end: 0.02 },
+    alpha: { start: 0.7, end: 0 },
+    tint: [0xffffff, 0xd8f4ff, 0x9fe0ff],
+    blendMode: 'ADD',
+    emitting: false
+  }).setDepth(FX_DEPTH + 2);
+  mist.explode(14);
+  scene.time.delayedCall(1400, () => { shards.destroy(); mist.destroy(); });
+
+  // Shockwave: an ice-blue ring with a white inner rim and a frosty fill.
+  const ring = scene.add.graphics().setDepth(FX_DEPTH - 1).setPosition(x, y).setScale(0.3);
+  ring.lineStyle(5, 0x5cc8ff, 1).strokeEllipse(0, 0, rx * 2, ry * 2);
+  ring.lineStyle(2, 0xffffff, 1).strokeEllipse(0, 0, rx * 1.7, ry * 1.7);
+  ring.fillStyle(0xa8e6ff, 0.28).fillEllipse(0, 0, rx * 2, ry * 2);
+  scene.tweens.add({ targets: ring, scale: 1.15, alpha: 0, duration: 440, ease: 'Cubic.easeOut', onComplete: () => ring.destroy() });
+
+  // Snowflakes spinning out and drifting down (not in low graphics quality).
+  if (isLowQuality()) return;
+  for (let i = 0; i < 6; i++) {
+    const a = Math.random() * Math.PI * 2, d = 0.35 + Math.random() * 0.65;
+    const f = snowflake(scene, x, y - 8, 3.5 + Math.random() * 2, FX_DEPTH + 3);
+    scene.tweens.add({
+      targets: f, x: x + Math.cos(a) * rx * d, y: y - 8 + Math.sin(a) * ry * d + 6, alpha: 0, rotation: (Math.random() - 0.5) * 4,
+      duration: 700 + Math.random() * 300, ease: 'Cubic.easeOut', onComplete: () => f.destroy()
+    });
+  }
+}
+
 // ---------- Firework rocket ----------
 export const FIREWORK_COLORS = [0xff3b5c, 0xffd23f, 0x3df5a7, 0x4cc9ff, 0xb46bff, 0xffffff];
 

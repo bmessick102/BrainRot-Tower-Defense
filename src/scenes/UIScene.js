@@ -1383,7 +1383,7 @@ New walls are built at your wall level (${wallLevel(this.gs)}), so one costs wha
       const rate = hallIncomeRate(b.level);
       const next = nextWaveInfo(this.gs);
       // The level before the Bonus Slots': say what the next upgrade brings.
-      const poolNext = b.level === bonusTownHall() - 1 ? [`Level ${bonusTownHall()}: ${CONFIG.rules.bonusSlots.count} Bonus Slots (extra buildings of any kind)`] : [];
+      const poolNext = b.level === bonusTownHall() - 1 ? [`Level ${bonusTownHall()}: ${CONFIG.rules.bonusSlots.count} Bonus Slots (extra defenses of any kind)`] : [];
       return [`Next attack: wave ${next.number}${next.specialInfo ? ` (${next.specialInfo.name})` : ''}`, ...(rate > 0 ? [`Makes ${rate} gold / s on its own`] : []), ...poolNext];
     }
     return [];
