@@ -32,7 +32,9 @@ import { BeamHum } from '../objects/BeamHum.js';
 import { floatText, rpGainText, splashRing, fireballImpact, fireworkBurst, breakerExplosion } from '../objects/Effects.js';
 import { TEX, SFX, MUSIC, FIRE_SFX, ENEMY_ATTACK_SFX, ENEMY_VOICE } from '../assetKeys.js';
 import { missileWarningFx, quakeFx, frostBurstFx, ICE_BLUE } from '../objects/EnemyFx.js';
-import { playSfxClip, playSfx, playSfxCapped, playSfxEndingIn, playVoiceLine, playMusic, pauseMusic, resumeMusic, stopMusic, crossfadeMusic, fadeOutMusic, hasAmbience, startAmbience, updateAmbience, stopAmbience, soundDuration } from '../audio.js';
+import { playSfxClip, playSfx, playSfxCapped, playSfxEndingIn, playVoiceLine, playMusic, pauseMusic, resumeMusic, stopMusic, crossfadeMusic, fadeOutMusic, hasAmbience, startAmbience, updateAmbience, stopAmbience, soundDuration, prefetchMusic, hasMusicFile, releaseMusic } from '../audio.js';
+import { requestAudio, requestImages } from '../assetLoader.js';
+import { villageImageKeys, reachableImageKeys } from '../assetPlan.js';
 import { COLORS } from '../theme.js';
 import { abilityFx, towerRange, towerMinRange } from '../logic/abilities.js';
 import { chainLightningFx, arrowStormFx, meteorFx, solarFlareFx, sparklerFx, drawFireRing } from '../objects/AbilityFx.js';
@@ -92,6 +94,10 @@ export class GameScene extends Phaser.Scene {
     }
     this.gs = gs;
     this.registry.set('gameState', gs);
+    // Building pictures past Level 1 stream in (src/assetPlan.js): this village's own first (the title screen
+    // usually has them in already), then everything its Village Hall can build, in the background.
+    requestImages(villageImageKeys(gs.buildings), { front: true });
+    requestImages(reachableImageKeys(gs.townHallLevel));
 
     // The map image is drawn at MAP.imageWidth x MAP.imageHeight world pixels (see mapTiles.js).
     this.add.image(0, 0, TEX.map).setOrigin(0, 0).setDisplaySize(MAP.imageWidth, MAP.imageHeight).setDepth(-10000);
@@ -177,6 +183,11 @@ export class GameScene extends Phaser.Scene {
     else if (phase === 'active') this.playAttackMusic();
     else playMusic(this, MUSIC.village);
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => stopAmbience());
+    // The wave tracks load on first play; fetch them now so the countdown and the attack start on cue.
+    prefetchMusic(MUSIC.planning);
+    prefetchMusic(MUSIC.attack);
+    // The title music has stopped or faded by now: free its memory (it reloads for the title screen).
+    this.time.delayedCall(2000, () => releaseMusic(this, MUSIC.title));
     // The planning track is timed to the countdown, so it pauses with the game.
     this.events.on(Phaser.Scenes.Events.PAUSE, () => pauseMusic(MUSIC.planning));
     this.events.on(Phaser.Scenes.Events.RESUME, () => resumeMusic(MUSIC.planning));
@@ -188,7 +199,16 @@ export class GameScene extends Phaser.Scene {
    * scene starts mid-countdown). Without the file the current music just fades out.
    */
   playPlanningMusic(resume = false) {
-    if (!this.cache.audio.exists(MUSIC.planning)) { fadeOutMusic(this, PLANNING_FADE_MS); return; }
+    if (!this.cache.audio.exists(MUSIC.planning)) {
+      fadeOutMusic(this, PLANNING_FADE_MS);
+      // Still loading (it streams in, src/assetPlan.js): start it, at the right point, once it's in.
+      if (hasMusicFile(MUSIC.planning)) {
+        requestAudio(MUSIC.planning).then((ok) => {
+          if (ok && this.sys.isActive() && this.gs.wave && this.gs.wave.phase === 'countdown') this.playPlanningMusic(true);
+        });
+      }
+      return;
+    }
     const left = Math.max(0, this.gs.wave.countdown);
     const seek = Math.max(0, CONFIG.rules.waveCountdown - left);
     if (resume || seek > 0.5) playMusic(this, MUSIC.planning, { loop: false, seek });
@@ -203,7 +223,7 @@ export class GameScene extends Phaser.Scene {
 
   /** Attack track at full volume immediately; the village track stands in if the attack file is missing. */
   playAttackMusic() {
-    playMusic(this, this.cache.audio.exists(MUSIC.attack) ? MUSIC.attack : MUSIC.village);
+    playMusic(this, hasMusicFile(MUSIC.attack) ? MUSIC.attack : MUSIC.village); // (loads first if it isn't in yet)
   }
 
   /**
@@ -1210,6 +1230,9 @@ export class GameScene extends Phaser.Scene {
     const gs = this.gs;
     const on = (name, fn) => gs.on(name, fn, this);
     const enemyPos = (d) => gridToScreen(d.x, d.y);
+
+    // A new Village Hall level: fetch the pictures of the levels it opens up (src/assetPlan.js).
+    on('townHallUpgraded', (d) => requestImages(reachableImageKeys(d.level)));
 
     on('enemyHit', (d) => {
       const v = this.views.enemies.get(d.id);

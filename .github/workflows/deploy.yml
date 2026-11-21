@@ -23,7 +23,9 @@ jobs:
         with:
           node-version: 22
           cache: npm
-      - run: npm ci
+      # --ignore-scripts: the art / audio tools (sharp, ffmpeg-static) are only for preparing assets on a dev machine;
+      # this skips ffmpeg-static's ~80 MB download. Tests and the build don't need them.
+      - run: npm ci --ignore-scripts
       - run: npm test
       - run: npm run build
       - uses: actions/upload-pages-artifact@v3

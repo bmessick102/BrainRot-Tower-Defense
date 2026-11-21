@@ -34,7 +34,7 @@ const ART = {
 /** Every texture the backdrop shows; PreloadScene loads these before the loading screen appears. */
 export const TITLE_ART_KEYS = [
   ...Object.values(ART),
-  'enemy_grunt', 'enemy_tank', 'enemy_shark', 'enemy_toilet', 'enemy_thief', 'enemy_breaker', 'enemy_neegy',
+  'enemy_grunt', 'enemy_tank', 'enemy_shark', 'enemy_toilet', 'enemy_thief', 'enemy_breaker',
   'enemy_patapim', 'enemy_pork', 'enemy_skeleton' // v0.6: Brr Brr Patapim, John Pork, Rahhh Skeleton
 ];
 // Effect textures drawn at runtime (no files).
@@ -76,13 +76,13 @@ const ORB_PULSE_MS = 900;
 // One big overlapping group in the foreground, all standing on the ground line near the bottom, kept right of
 // the title menu's Start Game button (x < 820 above y 540). Each has its own layer (`depth`, 0..1, lower = further
 // back; without one, taller = further back) so everyone stays visible. flip: the picture faces right, so it's mirrored
-// to face the heroes. v0.6 added Brr Brr Patapim, Rahhh Skeleton and John Pork and moved the rest to make room.
+// to face the heroes. v0.6 added Brr Brr Patapim, Rahhh Skeleton and John Pork and moved the rest to make room;
+// v0.6.1 took the gold Neegy out.
 const ENEMIES = [
   { key: 'enemy_patapim', x: 985, y: 606, h: 330, flip: true, depth: 0.1 },  // Brr Brr Patapim (v0.6): the tree giant, at the very back
   { key: 'enemy_tank', x: 1150, y: 630, h: 380, flip: true, depth: 0.2 },    // Tripi Tropi, the fish giant, back right
   { key: 'enemy_grunt', x: 1238, y: 664, h: 300, flip: true, depth: 0.45 },  // Tung Tung Sahur, at the right edge
   { key: 'enemy_skeleton', x: 902, y: 650, h: 255, flip: true, depth: 0.5 }, // Rahhh Skeleton (v0.6), left, shield up
-  { key: 'enemy_neegy', x: 985, y: 668, h: 250, flip: true, depth: 0.55 },   // the gold Neegy
   { key: 'enemy_pork', x: 1072, y: 690, h: 262, flip: false, depth: 0.62 },  // John Pork (v0.6, faces front), middle
   { key: 'enemy_thief', x: 1178, y: 700, h: 268, flip: true, depth: 0.66 },  // Mr. Least
   { key: 'enemy_shark', x: 1130, y: 716, h: 200, flip: false, depth: 0.8 },  // Tralalero Tralala (art faces left), front

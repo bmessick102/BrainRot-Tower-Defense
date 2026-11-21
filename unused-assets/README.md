@@ -38,6 +38,50 @@ file the game already uses, so they're only originals with their first names:
 | `Mr. Least Death Frame.png` | `art-source/enemies/enemy_thief_death.png` |
 | `skibidi Toilet Attack Image.png` | `art-source/enemies/enemy_toilet_attack.png` |
 | `Fuel Station Level 1.png` ... `Level 4.png` | `art-source/buildings/bld_fuelStation_lv1.png` ... `lv4.png` |
+
+v0.6 drops (KSI Tower, the five v0.6 enemies, the Skeleton, spell sounds); sounds were installed to `art-source/audio/`, whose game copies `npm run prepare-audio` makes:
+
+| Dropped file | Installed as |
+| --- | --- |
+| `Big Yahu Defeated Pose.png` | `art-source/enemies/enemy_yahu_death.png` |
+| `Big Yahu Enemy Attack Pose.png` | `art-source/enemies/enemy_yahu_attack.png` |
+| `Big Yahu Enemy Idle.png` | `art-source/enemies/enemy_yahu.png` |
+| `Brr Brr PataPim Attack Pose Image.png` | `art-source/enemies/enemy_patapim_attack.png` |
+| `Brr Brr Patapim Death Pose.png` | `art-source/enemies/enemy_patapim_death.png` |
+| `Brr Brr Patapim Idle Image.png` | `art-source/enemies/enemy_patapim.png` |
+| `John Pork Attack Pose.png` | `art-source/enemies/enemy_pork_attack.png` |
+| `John Pork Calling Pose.png` | `art-source/enemies/enemy_pork_call.png` |
+| `John Pork Death Pose.png` | `art-source/enemies/enemy_pork_death.png` |
+| `John Pork Enemy.png` | `art-source/enemies/enemy_pork.png` |
+| `KSI Tower Bottle projectile image.png` | `art-source/projectiles/proj_ksi.png` |
+| `KSI Tower L1.png` | `art-source/buildings/bld_ksi_lv1.png` |
+| `KSI Tower L2.png` | `art-source/buildings/bld_ksi_lv2.png` |
+| `KSI Tower L3.png` | `art-source/buildings/bld_ksi_lv3.png` |
+| `KSI Tower L4.png` | `art-source/buildings/bld_ksi_lv4.png` |
+| `KSI Tower L5.png` | `art-source/buildings/bld_ksi_lv5.png` |
+| `La Vaca Saturno Attack Image.png` | `art-source/enemies/enemy_vaca_attack.png` |
+| `La Vaca Saturno Boulder Projectile Image.png` | `art-source/projectiles/proj_vaca.png` |
+| `La Vaca Saturno Death Image.png` | `art-source/enemies/enemy_vaca_death.png` |
+| `La Vaca Saturno Idle.png` | `art-source/enemies/enemy_vaca.png` |
+| `Rahhh Skeleton Attack pose image.png` | `art-source/enemies/enemy_skeleton_attack.png` |
+| `Rahhh Skeleton Death Frame Image.png` | `art-source/enemies/enemy_skeleton_death.png` |
+| `Rahhh Skeleton Idle.png` | `art-source/enemies/enemy_skeleton.png` |
+| `Rahhh Skeleton Rage Ability Image.png` | `art-source/enemies/enemy_skeleton_rage.png` |
+| `Spawned Skelaton image.png` | `art-source/enemies/enemy_bones.png` |
+| `Spawned Skeleton Attack Image.png` | `art-source/enemies/enemy_bones_attack.png` |
+| `Spawned Skeloton death image.png` | `art-source/enemies/enemy_bones_death.png` |
+| `Brr Brr Patapim Walking Sound effect.mp3` | `art-source/audio/sfx_patapim_quake.mp3` |
+| `Freeze Spell Deploy Sound Effect.mp3` | `art-source/audio/sfx_spell_freeze.mp3` |
+| `Heal Spell Sound Effect.mp3` | `art-source/audio/sfx_spell_heal.mp3` |
+| `Heat Field Spell Sound Effect.mp3` | `art-source/audio/sfx_spell_heat.mp3` |
+| `Invisibility Spell Sound Effect.mp3` | `art-source/audio/sfx_spell_invisibility.mp3` |
+| `John Pork Calling Sound.mp3` | `art-source/audio/sfx_pork_call.mp3` |
+| `KSI Tower Projectile Impact.mp3` | `art-source/audio/sfx_ksi_impact.mp3` |
+| `La Vaca Saturno Projectile Impact.mp3` | `art-source/audio/sfx_vaca_impact.mp3` |
+| `Lightning Spell Sound Effect.mp3` | `art-source/audio/sfx_spell_lightning.mp3` |
+| `Rage Spell Sound Effect.mp3` | `art-source/audio/sfx_spell_rage.mp3` |
+| `Rahhh Skeleton Ability Sound effect.mp3` | `art-source/audio/sfx_skeleton_rage.mp3` |
+| `Rahhh Skeleton Attack Sound effect.mp3` | `art-source/audio/sfx_skeleton_attack.mp3` |
 | `The Diddypult Level 4.png`, `Level 5.png` | `art-source/buildings/bld_catapult_lv4.png`, `lv5.png` |
 | `Spear_Thrower.zip` (20 PNGs: levels 1-5, facings NE/NW/SE/SW) | `art-source/buildings/bld_spear_lv1..5_ur/_ul/_dr/_dl.png` (SW is also the plain `bld_spear_lvN.png`) |
 | `Burger Icon Image(replaces RP).png` | `art-source/ui/ui_research_point.png` (the Burger icon) |

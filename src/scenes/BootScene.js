@@ -1,7 +1,7 @@
-// Loads Cole's art and sounds that exist (from src/assetManifest.js), then draws a placeholder
-// for every texture key that wasn't loaded. Nothing else in the code cares which one it got.
+// Loads the core art and sounds (src/assetPlan.js: the rest streams in later through AssetStreamScene), then draws a
+// placeholder for every texture key that wasn't loaded. Nothing else in the code cares which one it got.
 import Phaser from 'phaser';
-import { IMAGE_FILES, AUDIO_FILES } from '../assetManifest.js';
+import { coreImages, coreAudio } from '../assetPlan.js';
 import { TEX, FILE_KEY_ALIASES, buildingKey, buildingDestroyedKey, enemyKey, PROJECTILE_KEYS } from '../assetKeys.js';
 import { BUILDING_TYPES, buildingSize } from '../logic/buildings.js';
 import { MAP } from '../mapTiles.js';
@@ -68,12 +68,14 @@ export class BootScene extends Phaser.Scene {
     this.buildLoadingScreen();
     this.load.on('loaderror', (file) => console.warn(`Asset failed to load, using placeholder: ${file.key}`));
 
-    for (const f of IMAGE_FILES) {
+    // Only the core files (src/assetPlan.js): higher-level building pictures, music and ambience stream in later
+    // (src/assetLoader.js), so a phone isn't downloading and decoding everything before the title screen.
+    for (const f of coreImages()) {
       const key = FILE_KEY_ALIASES[f.key] || f.key;
       if (this.textures.exists(key)) continue; // PreloadScene already loaded the title backdrop's art
       this.load.image(key, BASE + f.path);
     }
-    for (const f of AUDIO_FILES) this.load.audio(f.key, BASE + f.path);
+    for (const f of coreAudio()) this.load.audio(f.key, BASE + f.path);
   }
 
   /**
@@ -126,6 +128,7 @@ export class BootScene extends Phaser.Scene {
     const settings = loadSettings(getStorage());
     setMusicLevel(settings.music);
     setSfxLevel(settings.sfx);
+    this.scene.launch('AssetStreamScene'); // streams the rest in from now on (src/assetLoader.js)
     this.scene.start('AuthScene'); // logs in (or picks up a saved login), then the title screen
   }
 

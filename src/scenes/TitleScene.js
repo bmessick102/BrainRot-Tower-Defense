@@ -28,6 +28,12 @@ import { drawBadge } from '../objects/uiDraw.js';
 import { leagueFor } from '../logic/leagues.js';
 import { showTitleBackdrop } from './TitleBackdropScene.js';
 import { takeTakeover } from '../objects/LockOverlay.js';
+import { requestImages } from '../assetLoader.js';
+import { villageImageKeys } from '../assetPlan.js';
+
+// Opening a village waits at most this long for its building pictures (they stream in: src/assetPlan.js); after
+// that it opens anyway, with lower-level pictures standing in until the rest arrive.
+const VILLAGE_ART_WAIT_MS = 10000;
 
 export class TitleScene extends Phaser.Scene {
   constructor() {
@@ -56,6 +62,8 @@ export class TitleScene extends Phaser.Scene {
     // Logged in with no village open, the storage would fall through to the browser's old save: skip it.
     const save = this.online && !this.base ? { status: 'none', data: null } : loadGame(this.storage);
     this.hasSave = save.status === 'ok';
+    // Start fetching this village's building pictures now, so they're in by the time START GAME is pressed.
+    if (this.hasSave) requestImages(villageImageKeys(save.data.buildings), { front: true });
     this.settings = null;
     this.windowOpen = false;
 
@@ -238,6 +246,8 @@ export class TitleScene extends Phaser.Scene {
       if (!session.lock) this.scene.restart({ notice: 'That village isn’t available any more.' });
       return;
     }
+    if (nb.save) await this.waitForVillageArt(loadGame(getStorage()), t);
+    if (!this.sys.isActive()) return;
     this.scene.start('GameScene', { mode: nb.save ? 'continue' : 'new' });
   }
 
@@ -338,8 +348,30 @@ export class TitleScene extends Phaser.Scene {
     });
   }
 
-  continueGame() {
+  async continueGame() {
+    if (this.opening) return;
+    this.opening = true;
+    await this.waitForVillageArt(loadGame(this.storage));
+    if (!this.sys.isActive()) return;
     this.scene.start('GameScene', { mode: 'continue' });
+  }
+
+  /**
+   * Before a village opens: wait for its building pictures (most often already in, fetched when this screen
+   * opened), at most VILLAGE_ART_WAIT_MS, saying so in `label` (or a new "Loading village…" text).
+   */
+  async waitForVillageArt(save, label = null) {
+    const keys = save && save.status === 'ok' ? villageImageKeys(save.data.buildings) : [];
+    if (!keys.length) return;
+    const done = requestImages(keys, { front: true });
+    let ready = false;
+    done.then(() => { ready = true; });
+    await Promise.resolve(); // (already loaded: no label at all)
+    if (ready) return;
+    const t = label || this.add.text(this.scale.width / 2, 540, '', textStyle(22)).setOrigin(0.5).setDepth(50);
+    t.setText('Loading village…');
+    await Promise.race([done, new Promise((r) => setTimeout(r, VILLAGE_ART_WAIT_MS))]);
+    if (!label && t.active) t.destroy();
   }
 
   newGame() {

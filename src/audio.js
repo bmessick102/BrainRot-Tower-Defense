@@ -2,6 +2,9 @@
 // Two volume levels, Music and SFX (0-1), set from Settings / the pause menu and saved in ibtd.settings.
 // Phaser's global volume stays at 1; every sound here is scaled by its level instead.
 
+import { requestAudio } from './assetLoader.js';
+import { audioPath } from './assetPlan.js';
+
 // Music sits under sound effects so it never drowns them out.
 const MUSIC_MIX = 0.45;
 // Per-track boost on top of MUSIC_MIX, for tracks mastered quieter than the rest.
@@ -13,6 +16,46 @@ const SFX_MIN_GAP_MS = 40;
 
 let music = null;
 let musicKey = null;
+// Music and ambience load when they first play (v0.6.2, src/assetPlan.js). A track asked for before its file is in
+// waits here and starts when it arrives, unless something else was asked for (or the music stopped) meanwhile.
+let pendingMusic = null;
+let ambiencePending = false;
+const sceneAlive = (scene) => !!scene && !!scene.sys && (scene.sys.isActive() || scene.sys.isPaused() || scene.sys.isSleeping());
+
+/** Is the track loaded? If not (and it has a file), fetch it and run `then` when it's in, if it's still wanted. */
+function whenLoaded(scene, key, then) {
+  if (scene.cache.audio.exists(key)) return true;
+  if (!audioPath(key)) return false; // no file: the caller's fallback applies
+  pendingMusic = key;
+  requestAudio(key).then((ok) => {
+    if (!ok || pendingMusic !== key || !sceneAlive(scene)) return;
+    pendingMusic = null;
+    then();
+  });
+  return false;
+}
+
+/** Fetch a track ahead of time (so it starts on cue), without playing it. */
+export function prefetchMusic(key) {
+  if (audioPath(key)) requestAudio(key);
+}
+
+/** Does this track have a file (loaded or not)? */
+export function hasMusicFile(key) {
+  return !!audioPath(key);
+}
+
+/**
+ * Free a track's decoded sound (tens of MB for a long one) once it isn't playing, e.g. the title music in a
+ * village. It loads again (from the browser's cache) the next time it plays.
+ */
+export function releaseMusic(scene, key) {
+  if (musicKey === key || !scene.cache.audio.exists(key)) return;
+  const sounds = scene.sound.getAll(key);
+  if (sounds.some((s) => s.isPlaying)) return;
+  for (const s of sounds) s.destroy();
+  scene.cache.audio.remove(key);
+}
 const fading = new Set(); // old tracks fading out during a crossfade
 const lastPlayed = new Map();
 
@@ -130,7 +173,7 @@ export function playSfxEndingIn(scene, key, seconds) {
 export function playMusic(scene, key, { loop = true, seek = 0 } = {}) {
   if (musicKey === key && music && music.isPlaying) return;
   stopMusic();
-  if (!scene.cache.audio.exists(key)) return;
+  if (!whenLoaded(scene, key, () => playMusic(scene, key, { loop, seek }))) return;
   music = scene.sound.add(key, { loop, volume: musicVolume(key) });
   musicKey = key;
   music.play({ seek: Math.max(0, seek) });
@@ -150,7 +193,7 @@ export function resumeMusic(key) {
  */
 export function crossfadeMusic(scene, key, ms = 1500, { loop = true } = {}) {
   if (musicKey === key && music && music.isPlaying) return;
-  if (!scene.cache.audio.exists(key)) return;
+  if (!whenLoaded(scene, key, () => crossfadeMusic(scene, key, ms, { loop }))) return; // (the current track plays on meanwhile)
   const old = music;
   if (old) {
     fading.add(old);
@@ -167,6 +210,7 @@ export function crossfadeMusic(scene, key, ms = 1500, { loop = true } = {}) {
  * The next playMusic / crossfadeMusic starts fresh from silence.
  */
 export function fadeOutMusic(scene, ms = 500) {
+  pendingMusic = null;
   const old = music;
   music = null;
   musicKey = null;
@@ -204,14 +248,24 @@ const AMBIENCE_GAIN = 1;          // on top of MUSIC_MIX, like a music track
 const AMBIENCE_FADE_PER_S = 0.7;  // how fast they fade out for a wave / back in after (share of full per second)
 let ambience = null;              // { day, night, presence }
 
-/** Are the ambience files loaded? (Without them the village music plays between waves, as before.) */
+/** Does the game have the ambience files (loaded or not)? (Without them the village music plays between waves.) */
 export function hasAmbience(scene, dayKey, nightKey) {
-  return scene.cache.audio.exists(dayKey) && scene.cache.audio.exists(nightKey);
+  return !!audioPath(dayKey) && !!audioPath(nightKey);
 }
 
 /** Start both beds (silent; updateAmbience sets their volumes). Does nothing if they're already playing. */
 export function startAmbience(scene, dayKey, nightKey, { presence = 0 } = {}) {
-  if (ambience || !hasAmbience(scene, dayKey, nightKey)) return;
+  if (ambience || ambiencePending || !hasAmbience(scene, dayKey, nightKey)) return;
+  if (!scene.cache.audio.exists(dayKey) || !scene.cache.audio.exists(nightKey)) {
+    // Not loaded yet: fetch both, then start them (silent; they fade in), unless stopAmbience came first.
+    ambiencePending = true;
+    Promise.all([requestAudio(dayKey), requestAudio(nightKey)]).then(([a, b]) => {
+      if (!ambiencePending) return;
+      ambiencePending = false;
+      if (a && b && sceneAlive(scene)) startAmbience(scene, dayKey, nightKey, { presence });
+    });
+    return;
+  }
   const day = scene.sound.add(dayKey, { loop: true, volume: 0 });
   const night = scene.sound.add(nightKey, { loop: true, volume: 0 });
   day.play();
@@ -236,6 +290,7 @@ export function updateAmbience(night, on, dt) {
 }
 
 export function stopAmbience() {
+  ambiencePending = false;
   if (!ambience) return;
   destroySound(ambience.day);
   destroySound(ambience.night);
@@ -243,6 +298,7 @@ export function stopAmbience() {
 }
 
 export function stopMusic() {
+  pendingMusic = null;
   for (const t of fades) t.stop();
   fades.clear();
   destroySound(music);

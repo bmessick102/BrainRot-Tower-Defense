@@ -14,6 +14,8 @@ import { darkness, lerpColor } from './DayNight.js';
 import { hypeFill } from '../logic/dj.js';
 import { hasAbilities, picksOf, MAX_TIER, canResearchSomething } from '../logic/abilities.js';
 import { PATH_COLORS } from '../abilityConfig.js';
+import { requestImages, imageRequested } from '../assetLoader.js';
+import { artGroup, isDeferredImage } from '../assetPlan.js';
 
 const OVERLAY_DEPTH = 5000;
 // DJ Babyface's hype pill: width, and how far above the label row it sits when that row is showing.
@@ -102,6 +104,10 @@ export function buildingTextureKey(scene, type, level, destroyed = false, rubble
   }
   // The Village Hall's starting ruin (level 0) has its own picture.
   if (level === 0 && scene.textures.exists(buildingLevelKey(type, 0))) return buildingLevelKey(type, 0);
+  // A higher-level picture that isn't loaded yet (src/assetPlan.js): ask for it (and its variants) once; the closest
+  // lower picture shows until it arrives, then this picks it (views call this every frame).
+  const want = buildingLevelKey(type, artTier(level, type));
+  if (isDeferredImage(want) && !scene.textures.exists(want) && !imageRequested(want)) requestImages(artGroup(want), { front: true });
   for (let tier = artTier(level, type); tier >= 1; tier--) {
     const k = buildingLevelKey(type, tier);
     if (scene.textures.exists(k)) return k;

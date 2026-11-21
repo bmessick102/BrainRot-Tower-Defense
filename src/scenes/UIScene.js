@@ -1091,18 +1091,23 @@ export class UIScene extends Phaser.Scene {
     // Village Hall 11's Bonus Slots: how extra copies of this type work.
     const poolNote = takesBonusSlot(type) && bonusActive(th) && limitNow > 0
       ? `
-Bonus Slots: past ${limitNow}, each ${buildingName(type)} takes one of your ${bonusSlotCount(th)} Bonus Slots (${bonusSlotsFree(this.gs)} free), at the normal price. Sell one to free its slot.` : '';
+Bonus Slots: past ${limitNow}, each ${buildingName(type)} takes one of your ${bonusSlotCount(th)} Bonus Slots (${bonusSlotsFree(this.gs)} free), at the normal price. Sell one to free its slot.`
+      // Walls: why a new one comes in at a high level and price.
+      : type === 'wall' && wallLevel(this.gs) > 1 ? `
+New walls are built at your wall level (${wallLevel(this.gs)}), so one costs what a Level 1 wall and its upgrades would.` : '';
     const desc = this.add.text(18, header + 40, (BUILDING_DESCRIPTIONS[type] || '') + poolNote, bodyStyle(14, COLORS.ink, { wordWrap: { width: W - 36 }, lineSpacing: 3 }));
     c.add(desc);
     const top = desc.y + desc.height + 14;
-    // Level 1 picture on the left (labelled on the card, which saves a title row), Level 1 stats beside it.
+    // The level it's built at on the left (labelled on the card, which saves a title row), that level's stats beside
+    // it: Level 1, except walls, which are built at the village's wall level (and priced for it).
+    const lvl = type === 'wall' ? wallLevel(this.gs) : 1;
     const picG = this.add.graphics();
     c.add(picG);
-    c.add(this.drawBuildingPic(picG, PIC.x, top, buildingTextureKey(this, type, 1)));
+    c.add(this.drawBuildingPic(picG, PIC.x, top, buildingTextureKey(this, type, lvl)));
     if (type === 'altar') c.add(addHeroBadge(this, PIC.x + PIC.w - 24, top + 24, 36)); // the Brisket King's portrait
-    c.add(this.add.text(PIC.x + 10, top + 6, 'Level 1', textStyle(15)));
+    c.add(this.add.text(PIC.x + 10, top + 6, `Level ${lvl}`, textStyle(15)));
     const col = PIC.x + PIC.w + 16;
-    const preview = { type, level: 1, hp: levelStats(type, 1).hp, destroyed: false, stock: 0, ...footprintDims(type) };
+    const preview = { type, level: lvl, hp: levelStats(type, lvl).hp, destroyed: false, stock: 0, ...footprintDims(type) };
     let y = Math.max(this.drawStats(c, preview, col, top, W - col - 18, true), top + PIC.h) + 14;
     const altar = type === 'altar' ? getAltar(this.gs) : null;
     if (altar) {   // the Brisket King's altar: a shortcut to his hero page, a full-width button under the card

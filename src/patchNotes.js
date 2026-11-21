@@ -4,9 +4,17 @@
 // icon: what to draw beside an entry: { building: type } (its Level 1 picture), { enemy: kind }, { spell: kind },
 // { hero: true } (the Brisket King's badge) or { texture: key }.
 export const PATCH_NOTES = {
-  version: '0.6.1',
-  title: "What's New in v0.6.1",
+  version: '0.6.2',
+  title: "What's New in v0.6.2",
   entries: [
+    {
+      icon: { texture: 'ui_start_button' }, title: 'Loads much faster, especially on phones',
+      text: 'The game now downloads about 8 times less before the title screen. Higher-level building pictures and the music load while you play, so it starts quicker and uses far less memory on phones.'
+    },
+    {
+      icon: { building: 'wall', level: 8 }, title: 'Fixed: the wall\'s info in the shop',
+      text: 'The wall\'s "i" in the shop now shows the level new walls are built at (your wall level), with its picture and health, and explains why a new wall costs what it does.'
+    },
     {
       icon: { enemy: 'bones' }, title: 'Rahhh Skeleton now summons Skeletons (from Village Hall 6)',
       text: 'Near your base, Rahhh Skeleton now bashes his shield and three Skeletons climb out of the ground around him, then more every few seconds (up to six of his at once). Take him out before he gets close! He no longer enrages the enemies around him.'

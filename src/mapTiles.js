@@ -7,7 +7,7 @@
 // so tiles stay 64 x 32. originX/originY are in those world pixels. Measured by matching the old
 // 2102 x 1182 map (origin 994, 70) inside the new image: scale 0.6725, offset (129.25, 43.25).
 export const MAP = {
-  image: 'game_map_grid.png',
+  image: 'game_map_grid.webp',
   imageWidth: 2486,
   imageHeight: 1399,
   originX: 1186,

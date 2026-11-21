@@ -1,5 +1,6 @@
-// Texture and sound key constants. A file in public/assets/ named <key>.png / <key>.mp3 replaces
-// the placeholder with the same key (run `npm run prepare-art` to refresh src/assetManifest.js).
+// Texture and sound key constants. A file in public/assets/ named <key>.webp / <key>.mp3 replaces
+// the placeholder with the same key (art-source/<category>/<key>.png -> `npm run prepare-art`, which also refreshes
+// src/assetManifest.js; sounds: art-source/audio/ -> `npm run prepare-audio`).
 
 export const TEX = {
   map: 'map_background',

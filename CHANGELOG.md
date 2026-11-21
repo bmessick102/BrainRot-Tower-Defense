@@ -2,6 +2,22 @@
 
 The version shows in the bottom-left corner of every screen (`package.json` `version` plus the commit). Details for everything below are in [README.md](README.md).
 
+## 0.6.2
+
+Faster loading, especially on phones. Saves load as they are (still save version 7). Details in [README.md](README.md) under Graphics and performance.
+
+### Faster loading and phones
+- **About 8x less to download before the title screen** (about 11 MB instead of 94 MB): pictures are WebP (60 MB of PNGs down to 12 MB, looking the same) and sounds are smaller (32 MB down to 16 MB: lower-bitrate music, mono ambience and long loops, trimmed clips). On a phone at 4 Mbps the game reaches the login screen in about 28 s instead of about 3 minutes.
+- **Only what's needed loads up front.** Building pictures past Level 1 stream in: your village's own before it opens (START GAME waits for them, usually already in), then what your Village Hall can build, in the background; anything else when it's first shown, with the closest lower level standing in for a moment. Music and ambience load when they first play; the unused village track never loads.
+- **Much less memory on phones:** sounds are decoded only when needed (about 240 MB at most in a village instead of about 450 MB at startup), and the title music is freed once a village opens.
+- New scripts: `npm run prepare-audio` (originals now in `art-source/audio/`, the maps' in `art-source/map/`); `sharp` and `ffmpeg-static` are dev-only tools. The deploy skips their install scripts.
+
+### Changed
+- The gold Neegy no longer stands with the enemies on the title screen.
+
+### Fixed
+- The wall's shop "i" popup showed the Level 1 picture and health while the card and price were for your wall level (new walls are built at it). It now shows that level, and a line explains the price.
+
 ## 0.6.1
 
 Saves load as they are (still save version 7). Details in [README.md](README.md) under the enemy list.

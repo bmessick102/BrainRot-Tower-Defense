@@ -1,7 +1,7 @@
 {
   "name": "ibtd",
   "private": true,
-  "version": "0.6.1",
+  "version": "0.6.2",
   "description": "Italian Brainrot Tower Defense: a browser base-builder tower defense demo",
   "type": "module",
   "scripts": {
@@ -9,13 +9,16 @@
     "build": "vite build",
     "preview": "vite preview",
     "test": "vitest run",
-    "prepare-art": "node scripts/prepare-art.mjs"
+    "prepare-art": "node scripts/prepare-art.mjs",
+    "prepare-audio": "node scripts/prepare-audio.mjs"
   },
   "dependencies": {
     "@supabase/supabase-js": "2.118.0",
     "phaser": "3.90.0"
   },
   "devDependencies": {
+    "ffmpeg-static": "5.2.0",
+    "sharp": "0.34.3",
     "vite": "7.3.8",
     "vitest": "4.1.12"
   }

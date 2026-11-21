@@ -1,17 +1,19 @@
 // Prepares Cole's art for the game. Run with: npm run prepare-art
 //
 // 1. Reads full-size originals from art-source/<category>/<key>.png
-// 2. Trims empty transparent margins, scales to game size, writes public/assets/images/<category>/<key>.png
-// 3. Scans public/assets/ and writes src/assetManifest.js so BootScene only loads files that exist
+// 2. Trims empty transparent margins, scales to game size, writes public/assets/images/<category>/<key>.webp
+//    (WebP, high quality: about a fifth of the PNG's size; v0.6.2. The old .png beside it is removed.)
+// 3. Scans public/assets/ and writes src/assetManifest.js so the game only loads files that exist
 //    (missing files would otherwise show 404 errors in the console).
 //
-// No dependencies: PNG decode/encode uses Node's built-in zlib.
+// PNG decoding uses Node's built-in zlib; the WebP encoding uses the `sharp` dev dependency.
 // Images without transparency are skipped (with a warning) so they never show as a solid box in game.
 
 import fs from 'node:fs';
 import path from 'node:path';
 import zlib from 'node:zlib';
 import { fileURLToPath } from 'node:url';
+import sharp from 'sharp';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const SRC = path.join(ROOT, 'art-source');
@@ -81,7 +83,9 @@ const TARGETS = [
   { match: /^ui_spell_[a-z]+$/, width: 256, fit: 'box', trim: true, needsAlpha: true },
   // Animated title / loading screen (art-source/title, see src/objects/TitleBackdrop.js). PreloadScene loads these
   // before anything else, so they're sized close to how big they show on the 1280x720 screen to keep that first load small.
-  { match: /^title_bg$/, width: 1280, trim: false, needsAlpha: false },    // the painted landscape with no characters
+  { match: /^title_bg$/, width: 1280, trim: false, needsAlpha: false },
+  // The village map, one picture per time of day (art-source/map; drawn at MAP.imageWidth x imageHeight).
+  { match: /^game_map_grid(_[a-z]+)?$/, width: 1672, trim: false, needsAlpha: false },    // the painted landscape with no characters
   { match: /^title_logo$/, width: 560, trim: true, needsAlpha: true },
   { match: /^title_(wizard|archer)$/, width: 420, fit: 'box', trim: true, needsAlpha: true },
   { match: /^title_mortar_fire$/, width: 340, trim: true, needsAlpha: true }, // the mortar firing (idle is bld_mortar_lv4_r)
@@ -281,18 +285,37 @@ for (const t of TARGETS.filter((x) => x.trim === 'group')) {
   });
 }
 
+// WebP output: near-identical to the eye. Opaque pictures (the maps, the title landscape) drop the alpha channel.
+const WEBP = { quality: 86, alphaQuality: 95, effort: 6, smartSubsample: true };
+async function encodeWebp(img, opaque) {
+  let s = sharp(img.data, { raw: { width: img.width, height: img.height, channels: 4 } });
+  if (opaque) s = s.removeAlpha();
+  return s.webp(WEBP).toBuffer();
+}
+
+// Wall pillars (bld_wall_lvN, all cropped to one shared box): measure each pillar so the game can stand it
+// on a tile center. visX0..visX1 is the pillar's visible width (its base is that wide), bottom its lowest
+// row (the front corner of its base). Measured from the prepared picture, before it's encoded.
+const WALL_META = path.join(ROOT, 'src', 'wallArtMeta.js');
+function measurePillar(img) {
+  const box = visibleBox(img, 128);
+  return { width: img.width, height: img.height, visX0: box.x0, visX1: box.x1, bottom: box.y1 };
+}
+const wallMeta = {};
+
 let made = 0, skipped = 0;
 for (const file of sources) {
   const key = path.basename(file, '.png');
   const category = path.basename(path.dirname(file));
   const target = TARGETS.find((t) => t.match.test(key));
   if (!target) { console.log(`  skip   ${key} (not used in game)`); continue; }
-  const outFile = path.join(OUT_IMAGES, category, `${key}.png`);
+  const outFile = path.join(OUT_IMAGES, category, `${key}.webp`);
+  const oldPng = path.join(OUT_IMAGES, category, `${key}.png`);
   let img;
   try { img = decodePng(fs.readFileSync(file)); } catch (e) { console.warn(`  ERROR  ${key}: ${e.message}`); skipped++; continue; }
   if (target.needsAlpha && !img.hasAlpha) {
     console.warn(`  WARN   ${key}: no transparency, left out (re-export as a transparent PNG)`);
-    if (fs.existsSync(outFile)) fs.rmSync(outFile);
+    for (const f of [outFile, oldPng]) if (fs.existsSync(f)) fs.rmSync(f);
     skipped++;
     continue;
   }
@@ -301,25 +324,15 @@ for (const file of sources) {
   // fit 'box': the longer side becomes `width` (a tall picture is scaled by its height).
   const outW = target.fit === 'box' && img.height > img.width ? Math.max(1, Math.round(target.width * img.width / img.height)) : target.width;
   img = resize(img, outW);
+  if (/^bld_wall_lv[0-9]+$/.test(key)) wallMeta[key] = measurePillar(img);
   fs.mkdirSync(path.dirname(outFile), { recursive: true });
-  fs.writeFileSync(outFile, encodePng(img));
-  console.log(`  ok     ${category}/${key}.png  ${img.width}x${img.height}`);
+  const webp = await encodeWebp(img, !target.needsAlpha);
+  fs.writeFileSync(outFile, webp);
+  if (fs.existsSync(oldPng)) fs.rmSync(oldPng);
+  console.log(`  ok     ${category}/${key}.webp  ${img.width}x${img.height}  ${Math.round(webp.length / 1024)} KB`);
   made++;
 }
 
-// Wall pillars (bld_wall_lvN, all cropped to one shared box): measure each pillar so the game can stand it
-// on a tile center. visX0..visX1 is the pillar's visible width (its base is that wide), bottom its lowest
-// row (the front corner of its base).
-const WALL_META = path.join(ROOT, 'src', 'wallArtMeta.js');
-function measurePillar(img) {
-  const box = visibleBox(img, 128);
-  return { width: img.width, height: img.height, visX0: box.x0, visX1: box.x1, bottom: box.y1 };
-}
-const wallMeta = {};
-for (const f of walk(path.join(OUT_IMAGES, 'buildings'))) {
-  const key = path.basename(f, '.png');
-  if (/^bld_wall_lv[0-9]+$/.test(key)) wallMeta[key] = measurePillar(decodePng(fs.readFileSync(f)));
-}
 fs.writeFileSync(WALL_META, `// AUTO-GENERATED by scripts/prepare-art.mjs (measured from the wall pillar pictures). Do not edit by hand.
 // Per picture: its size, the pillar's visible width (visX0..visX1) and its lowest row (bottom), in picture
 // pixels. Used by src/objects/WallView.js.
@@ -328,7 +341,7 @@ export const WALL_ART_META = ${JSON.stringify(wallMeta, null, 2)};
 
 // Manifest of every file actually present under public/assets (art-source output plus anything dropped in by hand).
 const rel = (f, base) => path.relative(base, f).split(path.sep).join('/');
-const images = walk(OUT_IMAGES).filter((f) => /\.png$/i.test(f)).sort()
+const images = walk(OUT_IMAGES).filter((f) => /\.(webp|png)$/i.test(f)).sort()
   .map((f) => ({ key: path.basename(f, path.extname(f)), path: `assets/images/${rel(f, OUT_IMAGES)}` }));
 const audio = walk(OUT_AUDIO).filter((f) => /\.(mp3|ogg|wav)$/i.test(f)).sort()
   .map((f) => ({ key: path.basename(f, path.extname(f)), path: `assets/audio/${rel(f, OUT_AUDIO)}` }));

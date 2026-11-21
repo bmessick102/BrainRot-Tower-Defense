@@ -12,7 +12,8 @@ npm run dev        # dev server with hot reload: open the URL it prints (…/Bra
 npm test           # Vitest logic tests
 npm run build      # static site in dist/ (GitHub Pages)
 npm run preview    # serve dist/ locally
-npm run prepare-art   # after adding or changing art in art-source/
+npm run prepare-art   # after adding or changing art in art-source/ (writes WebP to public/assets/images)
+npm run prepare-audio # after adding or changing sounds in art-source/audio/ (then prepare-art if you added or removed one)
 ```
 
 **Controls:** left-click to select, collect, place, and use buttons (a mine showing its coin is collected without opening its panel; click it again, or any time the coin isn't showing, to open the panel) · drag the map to pan · scroll wheel to zoom · Esc to cancel placement, leave edit mode, or pause.
@@ -47,22 +48,25 @@ npm run prepare-art   # after adding or changing art in art-source/
 │   ├── BUILD_CHARTER.md     the full spec
 │   ├── START_HERE.md        the AI build handoff note
 │   └── archive/             the original handoff zip
-├── art-source/              Cole's full-size original art (renamed to texture keys)
-│   ├── buildings/  enemies/  projectiles/  ui/   (enemies/README.md says what to draw)
+├── art-source/              Cole's full-size original art (renamed to texture keys) and the original sounds
+│   ├── buildings/  enemies/  projectiles/  ui/  map/  audio/   (enemies/README.md says what to draw)
 ├── supabase/
 │   ├── schema.sql           database tables, security rules and leaderboard function (run once in Supabase)
 │   └── migration-*.sql      later database changes, each safe to re-run (see Online features)
 ├── scripts/
-│   └── prepare-art.mjs      trims and scales art-source → public/assets, writes src/assetManifest.js
+│   ├── prepare-art.mjs      trims and scales art-source → public/assets (WebP), writes src/assetManifest.js
+│   └── prepare-audio.mjs    art-source/audio → public/assets/audio, smaller copies for phones
 ├── public/assets/
 │   ├── images/              game-ready art: buildings/ projectiles/ ui/ map/
-│   └── audio/               music_*.mp3 and sfx_*.mp3
+│   └── audio/               music_*.mp3, ambient_*.mp3 and sfx_*.mp3 (made by prepare-audio)
 ├── src/
 │   ├── main.js              Phaser config + scene list
 │   ├── config.js            every balance number (from Game_Balance_Sheet.xlsx; do not hand-edit numbers)
 │   ├── mapTiles.js          grass tiles, map origin, town hall spot, spawn points
 │   ├── assetKeys.js         texture and sound key constants
 │   ├── assetManifest.js     AUTO-GENERATED list of files present in public/assets
+│   ├── assetPlan.js         which files load up front and which stream in later (see Loading and phones)
+│   ├── assetLoader.js       streams the rest in while you play (AssetStreamScene runs it)
 │   ├── audio.js             playSfx / playMusic / Music and Effects levels
 │   ├── theme.js             UI colors and text styles
 │   ├── logic/               pure rules, never import Phaser (iso, grid, buildings, economy,
@@ -80,7 +84,7 @@ Dependencies only point downward: scenes → objects → state → logic → con
 
 ## Art and audio naming
 
-Every asset file is named after the texture or sound key the code uses. Drop a file with the right name in, run `npm run prepare-art`, and it replaces the placeholder. No code changes needed.
+Every asset file is named after the texture or sound key the code uses. Drop a file with the right name in, run `npm run prepare-art`, and it replaces the placeholder. No code changes needed. (Originals are PNGs in `art-source/`; the game's copies are WebP files made by prepare-art. The names below are the originals'.)
 
 | Key pattern | What it is | Example |
 | --- | --- | --- |
@@ -129,7 +133,7 @@ The RV Lab (`rvlab`) has one picture per level (`bld_rvlab_lv1`-`lv5`, `LEVELS_P
 
 **Building panel** (the quick bar's Info button): name, level out of 10, and two tabs. **Info** shows the building's description (edit them in [src/buildingText.js](src/buildingText.js)). **Stats** shows a bar for each stat that grows with level (HP, damage, production, capacity). A full bar is the level 10 value, a lighter segment and a green `+N` show what the next upgrade adds, and lost HP is dimmed. Fixed traits (range, fire rate, targets, splash) are listed under the bars. Upgrade, Sell, and Repair stay at the bottom; Sell hides while enemies are attacking.
 
-Sounds live in `public/assets/audio/`, named by key (no prep needed beyond `npm run prepare-art` to refresh the manifest):
+Sounds are kept in `art-source/audio/`, named by key; `npm run prepare-audio` writes the game's copies to `public/assets/audio/` (then `npm run prepare-art` refreshes the manifest if you added or removed one):
 
 | File | Plays when |
 | --- | --- |
@@ -260,6 +264,19 @@ The day/night clock ([src/logic/dayNight.js](src/logic/dayNight.js)) is a cycle 
 
 - **Graphics setting** (Settings and the pause menu: **Auto / High / Low**, saved with the volumes in `ibtd.settings`; [src/quality.js](src/quality.js), [src/objects/GraphicsToggle.js](src/objects/GraphicsToggle.js)). Low draws fewer particles, fog puffs, night glows and floating numbers; Auto switches to Low by itself when the frame rate stays under 30 for 8 s (after a warm-up), and says so.
 - **Speed-ups** for slow devices and late waves: cached circle / arc and triangulation work ([src/phaserPerf.js](src/phaserPerf.js)), a pooled floating-text layer with a cap, health bars that redraw only when they change, a faster gnome lookup, a cap on Da Baby Car's burst, and a guard against a bad frame time (NaN) reaching the simulation.
+
+### Loading and phones (v0.6.2)
+
+The game used to download and decode every picture and sound (about 94 MB) before the title screen; on a phone that meant minutes of loading and, with every sound decoded into memory (about 450 MB), a risk of the browser closing the page. Now:
+
+- **Smaller files.** Pictures are WebP (`npm run prepare-art`, quality 86 via the `sharp` dev dependency): 60 MB of PNGs became 12 MB, looking the same. Sounds go through `npm run prepare-audio` ([scripts/prepare-audio.mjs](scripts/prepare-audio.mjs), `ffmpeg-static`): music at 96 kbps, the ambience beds and long looping effects (Bomber drone, Tower of Rah beam, snore, Diddypult pool) in mono, effects the game only plays the start of trimmed (Patapim's quake, John Pork's call, the Skeleton's bash), the rest at most 128 kbps: 32 MB became 16 MB. The originals stay in `art-source/` (the maps in `art-source/map/`, sounds in `art-source/audio/`).
+- **Core first, the rest later** ([src/assetPlan.js](src/assetPlan.js), [src/assetLoader.js](src/assetLoader.js)). BootScene loads only the core: the UI, maps, enemies, heroes, spells, projectiles, every building's Level 1 picture, rubble, walls, every Village Hall picture, the What's New icons, the sound effects and the title music (about 11 MB). Building pictures past Level 1 and the music / ambience stream in through `AssetStreamScene` (a hidden scene that never stops; a few files at a time, 4 downloads at once, urgent ones first):
+  - the open village's own pictures: asked for as soon as the title screen knows the village, and START GAME waits for them (at most 10 s, saying "Loading village…"; usually they're already in);
+  - then everything its Village Hall can build (each type up to one level past the hall), in the background, and more after each hall upgrade;
+  - anything else the moment it's drawn: `buildingTextureKey` asks for a missing picture and shows the closest lower level until it arrives (building views re-pick their picture every frame; How to Play redraws on `ASSETS_ADDED`);
+  - music and ambience when they first play (`playMusic` / `crossfadeMusic` / `startAmbience` wait for the file, then start if still wanted); the countdown and attack tracks are fetched when a village opens, and the village track (only a fallback for missing ambience) is never fetched. The title music is freed from memory 2 s into a village.
+- **Measured** (production build, a phone on a 4 Mbps connection): about 28 s to the login screen, against about 3 minutes before (the old build was still on its loading bar at 113 s). Decoded sound in a village: about 240 MB at most (all of it in use), against about 450 MB before. The game renders at a fixed 1280x720 and scales to the screen, so a phone draws no more than a laptop.
+- The deploy runs `npm ci --ignore-scripts` (the asset tools aren't needed to build), skipping ffmpeg-static's download.
 
 ## RV Lab and defense abilities
 

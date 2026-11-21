@@ -11,6 +11,7 @@ import { UIScene } from './scenes/UIScene.js';
 import { PauseScene } from './scenes/PauseScene.js';
 import { GameOverScene } from './scenes/GameOverScene.js';
 import { VersionScene } from './scenes/VersionScene.js';
+import { AssetStreamScene } from './scenes/AssetStreamScene.js';
 import { setGameStorage, getStorage } from './state/GameState.js';
 import { session } from './net/account.js';
 import { showLockOverlay } from './objects/LockOverlay.js';
@@ -40,7 +41,8 @@ const game = new Phaser.Game({
   dom: { createContainer: true }, // text boxes on the login screen and name dialogs
   input: { activePointers: 2 },     // two fingers: pinch to zoom the map
   // TitleBackdropScene sits right after PreloadScene so it draws under the loading, login and title screens.
-  scene: [PreloadScene, TitleBackdropScene, BootScene, AuthScene, TitleScene, HowToPlayScene, GameScene, UIScene, PauseScene, GameOverScene, VersionScene]
+  // AssetStreamScene draws nothing: it streams the files that aren't loaded up front (src/assetLoader.js).
+  scene: [PreloadScene, TitleBackdropScene, BootScene, AuthScene, TitleScene, HowToPlayScene, GameScene, UIScene, PauseScene, GameOverScene, VersionScene, AssetStreamScene]
 });
 
 // Graphics 'auto': a game that keeps running under 30 fps (not while loading) switches to low quality.

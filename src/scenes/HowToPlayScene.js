@@ -23,8 +23,9 @@ import { Button } from '../objects/Button.js';
 import { addLeagueRow } from '../objects/LeagueRow.js';
 import { LEAGUES } from '../logic/leagues.js';
 import { session } from '../net/account.js';
-import { buildingTextureKey } from '../objects/BuildingView.js';
-import { TEX, enemyKey } from '../assetKeys.js';
+import { buildingTextureKey, artTier } from '../objects/BuildingView.js';
+import { TEX, enemyKey, buildingLevelKey } from '../assetKeys.js';
+import { ASSETS_ADDED } from '../assetLoader.js';
 import { drawWindow, drawShowcaseCard, drawCardStrip, drawStatBar, drawTag, drawGlossy, fitWidth, fitIcon, addHeroBadge } from '../objects/uiDraw.js';
 import { ENEMY_DESCRIPTIONS, ENEMY_CATEGORIES, ENEMY_ORDER } from '../enemyText.js';
 import { BUILDING_DESCRIPTIONS } from '../buildingText.js';
@@ -268,6 +269,16 @@ export class HowToPlayScene extends Phaser.Scene {
 
   create() {
     const { width, height } = this.scale;
+    // Higher-level building pictures stream in (src/assetPlan.js): when the one this page shows arrives (the Max
+    // level picture, the Upgrades tab's Cannon), draw the page again with it.
+    this.wantedArt = null;
+    const onArt = (keys) => {
+      if (!this.wantedArt || !keys.includes(this.wantedArt)) return;
+      if (this.tab === 'buildings') this.showBuilding(this.browsers.buildings.index, false);
+      else if (this.tab === 'upgrades') this.showTab('upgrades');
+    };
+    this.game.events.on(ASSETS_ADDED, onArt);
+    this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => this.game.events.off(ASSETS_ADDED, onArt));
     showTitleBackdrop(this); // the animated title picture (still running from the title screen), drawn under this scene
     this.add.rectangle(0, 0, width, height, 0x000000, 0.55).setOrigin(0);
 
@@ -485,6 +496,7 @@ export class HowToPlayScene extends Phaser.Scene {
     const exH = 92;
     ex.fillStyle(0xe9e1cf, 1).fillRoundedRect(rx + 18, y, rw - 36, exH, 12);
     this.page.add(ex);
+    this.wantedArt = buildingLevelKey('cannon', artTier(5, 'cannon'));
     const pic = this.add.image(rx + 64, y + exH - 10, buildingTextureKey(this, 'cannon', 5)).setOrigin(0.5, 1);
     fitIcon(pic, 64, 70);
     this.page.add(pic);
@@ -677,6 +689,7 @@ export class HowToPlayScene extends Phaser.Scene {
     const g = this.beginDetail(index);
     const top = maxLevel(type);
     const level = b.artMax ? top : 1;
+    this.wantedArt = buildingLevelKey(type, artTier(level, type));
     const strip = type === 'townHall' ? 'Your base' : formatGold(buildCost(type));
     this.pictureCard(g, buildingTextureKey(this, type, level), index, BUILDING_ORDER.length, strip, type !== 'townHall', animate);
     if (type === 'altar') this.detail.add(addHeroBadge(this, CARD.x + CARD.w - 30, CARD.y + 32, 42)); // the Brisket King's portrait
