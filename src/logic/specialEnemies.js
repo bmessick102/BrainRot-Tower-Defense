@@ -7,6 +7,12 @@
 //                              of his are standing (each has summonerId = his id).
 //   Brr Brr Patapim (patapim) - every quake.every s with a building or wall within quake.radius, he stomps: an
 //                              earthquake that hits every building there (walls quake.wallMult x).
+//   Lirili Larila (lirili)   - the same earthquake (v0.7: Brr Brr Patapim's old ability).
+//   Brr Brr Patapim (patapim) - v0.7: drops a Chimpanzini Bananini (chimp) every spawn.every s while he walks in,
+//                              while fewer than spawn.maxAlive of his are left (stepSpawner).
+//   Frigo Camillo (frigo)    - a cold aura: defenses and the Brisket King within chillAura.radius attack slower
+//                              (b.frigoSlow / hero.frigoSlow, set each step by stepSpecialEnemies).
+//   Bombombini Gusini (bombo) - breathes fire: its target, plus a share on what's right next to it (breatheFire).
 //   La Vaca Saturno (vaca)   - throws boulders that bounce on behind the target (fireBoulderAt / landEnemyShot).
 //   Big Yahu (yahu)          - calls missiles down on a spot, with a warning ring first (fireMissileAt / landEnemyShot).
 // stepEnemyAbility runs inside stepEnemy (enemies.js); stepSpecialEnemies once per step (simulate.js).
@@ -28,7 +34,7 @@ export function buildingsNear(state, x, y, radius) {
   return state.buildings.filter((b) => hittable(b) && distanceToFootprint(b, x, y) <= radius);
 }
 
-/** Once per step: silenced F.L.O.C.K Towers count down. */
+/** Once per step: silenced F.L.O.C.K Towers count down; Frigo Camillo's aura slows what's near it. */
 export function stepSpecialEnemies(state, dt) {
   for (const b of state.buildings) {
     if (b.silencedT > 0) {
@@ -36,6 +42,39 @@ export function stepSpecialEnemies(state, dt) {
       if (!b.silencedT) emit(state, 'flockUnsilenced', { id: b.id });
     }
   }
+  stepChillAuras(state);
+}
+
+/**
+ * Frigo Camillo: every building within chillAura.radius tiles of one (and the Brisket King) gets b.frigoSlow =
+ * that aura's slowPct (the strongest aura wins), read by towerFireInterval, the Tower of Rah's beam and the hero.
+ */
+export function stepChillAuras(state) {
+  const frigos = state.enemies.filter((e) => e.alive && cfgOf(e).chillAura);
+  for (const b of state.buildings) {
+    let slow = 0;
+    if (!b.destroyed) {
+      for (const f of frigos) {
+        const A = cfgOf(f).chillAura;
+        if (A.slowPct > slow && distanceToFootprint(b, f.x, f.y) <= A.radius) slow = A.slowPct;
+      }
+    }
+    b.frigoSlow = slow;
+  }
+  const h = state.hero;
+  if (h) {
+    let slow = 0;
+    for (const f of frigos) {
+      const A = cfgOf(f).chillAura;
+      if (A.slowPct > slow && distance(h.x, h.y, f.x, f.y) <= A.radius) slow = A.slowPct;
+    }
+    h.frigoSlow = slow;
+  }
+}
+
+/** The attack-speed share left under a Frigo Camillo's aura (1 = not slowed). */
+export function chillFactor(slowPct) {
+  return 1 - Math.max(0, Math.min(90, slowPct || 0)) / 100;
 }
 
 /** Is this F.L.O.C.K Tower silenced by John Pork's call right now? */
@@ -50,6 +89,7 @@ export function isSilenced(b) {
  */
 export function stepEnemyAbility(state, e, cfg, dt, rage, damageBuilding, dropTroopsAt) {
   if (e.chillT > 0) e.chillT = Math.max(0, e.chillT - dt);
+  if (cfg.spawn) stepSpawner(state, e, cfg.spawn, dt, dropTroopsAt); // (he keeps walking)
   if (cfg.call) return stepCall(state, e, cfg.call, dt);
   if (cfg.summon) return stepSummon(state, e, cfg.summon, dt, dropTroopsAt);
   if (cfg.quake) return stepQuake(state, e, cfg.quake, dt, rage, damageBuilding);
@@ -107,7 +147,42 @@ export function summonSkeletons(state, e, summon, dropTroopsAt) {
   return raised;
 }
 
-// ---------- Brr Brr Patapim ----------
+// ---------- Brr Brr Patapim (v0.7) ----------
+/**
+ * While he walks in (not attacking, and past the path in from the map edge), a Chimpanzini Bananini every
+ * spawn.every s, as long as fewer than spawn.maxAlive of his are left. They hop out right beside him.
+ */
+function stepSpawner(state, e, spawn, dt, dropTroopsAt) {
+  if (e.entry || e.attacking) return;
+  e.spawnT = (e.spawnT || 0) + dt;
+  if (e.spawnT < spawn.every) return;
+  e.spawnT = 0;
+  const n = Math.min(spawn.count, spawn.maxAlive - livingSummons(state, e));
+  if (n <= 0) return;
+  const out = dropTroopsAt(state, e, spawn.kind, n, e.x, e.y, { landing: 0.25 });
+  for (const t of out) t.summonerId = e.id;
+  emit(state, 'enemySpawnTroops', { id: e.id, x: e.x, y: e.y, troops: out.map((t) => t.id) });
+}
+
+// ---------- Bombombini Gusini (v0.7) ----------
+/**
+ * Fire breath: `damage` to the target, and breath.splashPct% of it to every building and wall within
+ * breath.splashRadius tiles of the target's footprint (the ones right next to it).
+ */
+export function breatheFire(state, e, target, damage, damageBuilding) {
+  const B = cfgOf(e).breath;
+  const c = footprintCenter(target);
+  const half = (target.size || 1) / 2;
+  const near = state.buildings.filter((o) => o !== target && hittable(o) && distanceToFootprint(o, c.x, c.y) <= half + B.splashRadius);
+  emit(state, 'fireBreath', { id: e.id, x: e.x, y: e.y, targetId: target.id, tx: c.x, ty: c.y, splash: near.map((o) => o.id) });
+  damageBuilding(state, target, damage, e);
+  for (const o of near) {
+    if (state.gameOver) return;
+    damageBuilding(state, o, damage * (B.splashPct / 100), e);
+  }
+}
+
+// ---------- Lirili Larila (and Brr Brr Patapim before v0.7): the earthquake ----------
 function stepQuake(state, e, quake, dt, rage, damageBuilding) {
   e.quakeT = (e.quakeT || 0) + dt;
   if (e.stompT > 0) { e.stompT = Math.max(0, e.stompT - dt); e.attacking = false; return true; }

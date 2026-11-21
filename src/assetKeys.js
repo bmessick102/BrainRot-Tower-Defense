@@ -125,7 +125,8 @@ export const SFX = {
   porkCall: 'sfx_pork_call',              // John Pork's call (never over itself)
   skeletonRage: 'sfx_skeleton_rage',      // Rahhh Skeleton's shield bash (as he summons Skeletons)
   skeletonAttack: 'sfx_skeleton_attack',  // ...and his sword swing
-  patapimQuake: 'sfx_patapim_quake'       // Brr Brr Patapim's earthquake (a clip of it per quake)
+  patapimQuake: 'sfx_patapim_quake',      // the earthquake (Lirili Larila since v0.7; Brr Brr Patapim before): a clip per quake
+  bicusArmorBreak: 'sfx_bicus_armor_break' // Bri Bri Bicus Dicus's armor breaking (v0.7)
 };
 
 /** Each Fuel Station spell's cast sound (SpellFx.onCast). */
@@ -158,6 +159,9 @@ export const ENEMY_ATTACK_SFX = {
   pork: SFX.enemyHitSmall,
   skeleton: SFX.skeletonAttack,
   bones: SFX.enemyHitSmall,
+  bicus: SFX.skeletonAttack, // (a sword, like Rahhh Skeleton's)
+  frigo: SFX.enemyHitBig,
+  lirili: SFX.enemyHitBig,
   patapim: SFX.enemyHitBig
 };
 

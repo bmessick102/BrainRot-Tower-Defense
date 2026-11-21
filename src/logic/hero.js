@@ -200,7 +200,8 @@ export function stepHero(state, dt) {
   const altar = getAltar(state);
   const st = heroStats(altar);
   if (h.hp > st.maxHp) h.hp = st.maxHp;
-  h.cooldown = Math.max(0, h.cooldown - dt);
+  // Near a Frigo Camillo his swings come slower (its cold aura, specialEnemies.js).
+  h.cooldown = Math.max(0, h.cooldown - dt * (1 - Math.max(0, Math.min(90, h.frigoSlow || 0)) / 100));
   if (h.boostT > 0) h.boostT = Math.max(0, h.boostT - dt);
   // Royal Decree: defenses in his guard range fire faster while he's awake (read by towerFireInterval).
   const home = footprintCenter(altar);

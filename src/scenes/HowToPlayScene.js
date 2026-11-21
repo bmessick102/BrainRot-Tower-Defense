@@ -56,7 +56,10 @@ const STAT_COLS = 3, STAT_ROW = 40;
 const BUILDING_LAYOUT = { card: CARD, rx: RX, rw: RW, descMax: 66, statX: RX, statW: RW };
 // Enemies: the roster panel on the left; the picked enemy's card and text right of it, its "hit by" row and stats
 // across the whole detail area under them. The roster is as wide as its biggest category's row of tiles.
-const ROSTER = { x: LEFT, y: CONTENT_TOP, h: CONTENT_BOTTOM - CONTENT_TOP, pad: 13, tileW: 54, tileH: 58, gap: 5, head: 28, block: 14 };
+// Tiles shrink to fit every category's row in the panel's height (v0.7: five categories).
+const ROSTER = { x: LEFT, y: CONTENT_TOP, h: CONTENT_BOTTOM - CONTENT_TOP, pad: 13, tileW: 54, tileH: 58, gap: 5, head: 24, block: 9 };
+ROSTER.tileH = Math.min(58, Math.floor((ROSTER.h - ROSTER.pad * 2 - ENEMY_CATEGORIES.length * (ROSTER.head + ROSTER.block) + ROSTER.block) / ENEMY_CATEGORIES.length));
+ROSTER.tileW = Math.min(54, ROSTER.tileH + 2);
 const ROSTER_COLS = Math.max(...ENEMY_CATEGORIES.map((c) => c.kinds.length));
 ROSTER.w = ROSTER.pad * 2 + ROSTER_COLS * ROSTER.tileW + (ROSTER_COLS - 1) * ROSTER.gap;
 const DX = ROSTER.x + ROSTER.w + 24, DW = RIGHT - DX;
@@ -66,7 +69,7 @@ const ENEMY_LAYOUT = {
   descMax: 104, statX: DX, statW: DW
 };
 // A color per enemy category (the roster's headers).
-const CATEGORY_COLORS = { ground: COLORS.button, air: COLORS.buttonBlue, tanks: 0xb03a2e, special: 0x9b59d0 };
+const CATEGORY_COLORS = { ground: COLORS.button, air: COLORS.buttonBlue, tanks: 0xb03a2e, special: 0x9b59d0, summoned: 0x23a99a };
 
 // Buildings in the order a player meets them: the base, economy, walls, then defenses and traps.
 const BUILDING_ORDER = ['townHall', 'mine', 'storage', 'house', 'rvlab', 'dj', 'fuelStation', 'wall', 'cannon', 'archer', 'mortar', 'wizard', 'firework', 'spear', 'ksi', 'flock', 'ra', 'catapult', 'mousetrap', 'altar'];
@@ -762,6 +765,12 @@ export class HowToPlayScene extends Phaser.Scene {
     if (cfg.bounce) tags.push(['Ranged', 0x9b59d0], [`Boulders bounce ${cfg.bounce.count}x`, 0xc98a12]);
     if (cfg.missileRadius) tags.push([`Missile strikes (${cfg.missileRadius} tile blast)`, 0xb03a2e]);
     if (cfg.quake) tags.push(['Earthquakes', 0x8f673d], [`${cfg.quake.wallMult}x quake damage to walls`, 0xc98a12]);
+    // v0.7.
+    if (cfg.spawn) tags.push([`Drops a ${CONFIG.enemies[cfg.spawn.kind].name} every ${cfg.spawn.every} s`, 0xd0583c]);
+    if (cfg.kamikaze) tags.push(['One big hit, then gone', 0xb03a2e]);
+    if (cfg.armor) tags.push([`Armor: ${cfg.armor} before health`, 0x5b7a99]);
+    if (cfg.chillAura) tags.push([`Slows defenses ${cfg.chillAura.slowPct}% (${cfg.chillAura.radius} tiles)`, 0x3d9bff]);
+    if (cfg.breath) tags.push(['Fire breath', 0xd0583c], [`${cfg.breath.splashPct}% to buildings next to it`, 0xc98a12]);
     if (cfg.prefers && cfg.preferredDamageMultiplier) tags.push([`${cfg.preferredDamageMultiplier}x vs ${cfg.prefers.includes('wall') ? 'walls' : cfg.prefers.includes('airDefense') ? 'air defenses' : 'gold buildings'}`, 0xc98a12]);
     const fw = firstWave(kind);
     const dropper = cfg.droppedBy && CONFIG.enemies[cfg.droppedBy];

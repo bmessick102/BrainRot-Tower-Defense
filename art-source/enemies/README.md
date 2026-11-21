@@ -14,9 +14,14 @@ Put the enemy pictures in this folder, then run `npm run prepare-art` from the p
 | `enemy_pork.png` (+ `_attack`, `_call`, `_death`) | John Pork | Phones in to silence F.L.O.C.K Towers | 54 px tall |
 | `enemy_skeleton.png` (+ `_attack`, `_rage`, `_death`) | Rahhh Skeleton | Bashes his shield (`_rage`) to summon Skeletons | 52 px tall |
 | `enemy_bones.png` (+ `_attack`, `_death`) | Skeleton | Summoned by Rahhh Skeletons (drawn facing left) | 38 px tall |
+| `enemy_bicus.png` (+ `_attack`) | Bri Bri Bicus Dicus | Armored legionary: armor before health (idle faces left) | 56 px tall |
+| `enemy_frigo.png` (+ `_attack`, `_death`) | Frigo Camillo | Cold aura that slows defenses (faces left) | 58 px tall |
+| `enemy_bombo.png` (+ `_attack`, `_death`) | Bombombini Gusini | Fire-breathing flyer (draw it flying, no shadow) | 60 px tall |
+| `enemy_lirili.png` (+ `_attack`, `_death`) | Lirili Larila | Earthquake tank (Brr Brr Patapim's old ability) | 82 px tall |
+| `enemy_chimp.png` (+ `_attack`, `_death`) | Chimpanzini Bananini | Dropped by Brr Brr Patapim; dives into a building | 40 px tall |
 | `enemy_vaca.png` (+ `_attack`, `_death`) | La Vaca Saturno | Flyer throwing bouncing boulders (draw it flying, no shadow) | 64 px tall |
 | `enemy_yahu.png` (+ `_attack`, `_death`) | Big Yahu | Calls missiles down | 56 px tall |
-| `enemy_patapim.png` (+ `_attack`, `_death`) | Brr Brr Patapim | Earthquake tank | 82 px tall |
+| `enemy_patapim.png` (+ `_attack`, `_death`) | Brr Brr Patapim | Drops Chimpanzinis as he walks in (v0.7) | 82 px tall |
 
 Optional extras (the enemies' projectiles):
 

@@ -1,18 +1,42 @@
-// The Patch Notes window ("What's New"): this release's changes (src/patchNotes.js) in a Modal, a few entries per page,
-// each with a picture (the building, enemy or spell it's about), a bold title and a short note. The same blue page
-// arrows as the shop and How to Play; "Got it!" closes it. TitleScene opens it once per version and from its button.
+// The Patch Notes window ("What's New"): this release's changes (src/patchNotes.js) in a Modal, grouped in sections
+// (New Features, Changes, Balance, Bug Fixes: a colored heading each, repeated when a section carries onto the next
+// page), each entry with a picture (the building, enemy or spell it's about), a bold title, the version it came in and
+// a short note. The same blue page arrows as the shop and How to Play; "Got it!" closes it. TitleScene opens it once
+// per version and from its button.
 import { Modal } from './Modal.js';
 import { Button } from './Button.js';
-import { drawShowcaseCard, fitIcon, fitWidth, addHeroBadge } from './uiDraw.js';
+import { drawShowcaseCard, drawGlossy, fitIcon, fitWidth, addHeroBadge } from './uiDraw.js';
 import { buildingTextureKey } from './BuildingView.js';
 import { enemyKey, spellArtKey } from '../assetKeys.js';
 import { COLORS, bodyStyle, textStyle } from '../theme.js';
-import { PATCH_NOTES } from '../patchNotes.js';
+import { PATCH_NOTES, PATCH_SECTIONS, PATCH_SECTION_ORDER } from '../patchNotes.js';
 import { readKey, writeKey, SAVE_KEYS } from '../logic/save.js';
 
 const W = 900, H = 600, HEADER = 60;
-const PER_PAGE = 5;
-const ROW_H = 88, ICON = 76;
+const ROW_H = 84, ICON = 72, HEAD_H = 36;
+const ROOM = H - HEADER - 18 - 74; // the page's height for rows (above the footer)
+
+/**
+ * The notes laid out in pages: [[{ section, continued } | { entry }]]. Sections in their fixed order; a section that
+ * starts (or carries on) on a page gets its heading there.
+ */
+export function patchPages(notes = PATCH_NOTES) {
+  const pages = [];
+  let page = [], used = 0;
+  const sections = PATCH_SECTION_ORDER.map((t) => notes.sections.find((s) => s.type === t)).filter((s) => s && s.entries.length);
+  for (const sec of sections) {
+    let headed = false;
+    sec.entries.forEach((entry, i) => {
+      const need = ROW_H + (headed ? 0 : HEAD_H);
+      if (used + need > ROOM && page.length) { pages.push(page); page = []; used = 0; headed = false; }
+      if (!headed) { page.push({ section: sec.type, continued: i > 0 }); used += HEAD_H; headed = true; }
+      page.push({ entry });
+      used += ROW_H;
+    });
+  }
+  if (page.length) pages.push(page);
+  return pages;
+}
 
 /** Has this device seen this release's patch notes? */
 export function patchNotesSeen(storage) {
@@ -28,7 +52,8 @@ export class PatchNotesWindow {
   constructor(scene, { storage = null, onClose = null } = {}) {
     this.scene = scene;
     this.page = 0;
-    this.pages = Math.ceil(PATCH_NOTES.entries.length / PER_PAGE);
+    this.layout = patchPages();
+    this.pages = this.layout.length;
     if (storage) markPatchNotesSeen(storage);
     this.modal = new Modal(scene, { width: W, height: H, title: PATCH_NOTES.title, header: HEADER, depth: 1200, onClose });
     this.show(0);
@@ -53,16 +78,39 @@ export class PatchNotesWindow {
     const m = this.modal, s = this.scene;
     this.page = Math.max(0, Math.min(this.pages - 1, page));
     m.clear();
-    const left = m.x + 34, top = m.y + HEADER + 22, textX = left + ICON + 20, textW = W - (textX - m.x) - 34;
-    PATCH_NOTES.entries.slice(this.page * PER_PAGE, (this.page + 1) * PER_PAGE).forEach((e, i) => {
-      const y = top + i * ROW_H;
+    const left = m.x + 34, textX = left + ICON + 20, textW = W - (textX - m.x) - 34;
+    let y = m.y + HEADER + 18;
+    for (const row of this.layout[this.page] || []) {
+      if (row.section) {
+        // Section heading: a colored tab with its name, and a rule across.
+        const sec = PATCH_SECTIONS[row.section];
+        const label = s.add.text(left + 14, y + HEAD_H / 2 - 2, row.continued ? `${sec.title} (continued)` : sec.title, textStyle(17)).setOrigin(0, 0.5);
+        const g = s.add.graphics();
+        drawGlossy(g, left, y + 3, label.width + 28, HEAD_H - 10, sec.color, { radius: 9, lip: 3, shadow: false });
+        g.fillStyle(sec.color, 0.35).fillRect(left + label.width + 36, y + HEAD_H / 2 - 2, W - 68 - label.width - 36, 2);
+        m.add(g, label);
+        label.setDepth(m.depth + 2); // (over its tab)
+        y += HEAD_H;
+        continue;
+      }
+      const e = row.entry;
       this.icon(m, e, left, y);
-      const t = s.add.text(textX, y + 2, e.title, textStyle(20));
-      fitWidth(t, textW);
-      const body = s.add.text(textX, y + 30, e.text, bodyStyle(14.5, COLORS.ink, { wordWrap: { width: textW }, lineSpacing: 2 }));
-      for (let size = 14; body.height > ROW_H - 30 && size >= 12; size--) body.setFontSize(size);
+      // Title, with the version it came in as a small tag at its end.
+      const tag = e.version ? s.add.text(0, y + 13, `v${e.version.replace(/\.0$/, '')}`, bodyStyle(13, COLORS.text, { fontStyle: 'bold' })).setOrigin(0, 0.5) : null;
+      const t = s.add.text(textX, y + 2, e.title, textStyle(19));
+      fitWidth(t, textW - (tag ? tag.width + 22 : 0));
+      if (tag) {
+        tag.setX(textX + t.displayWidth + 14);
+        const tg = s.add.graphics();
+        tg.fillStyle(COLORS.frame, 0.55).fillRoundedRect(tag.x - 7, y + 3, tag.width + 14, 20, 10);
+        m.add(tg, tag);
+        tag.setDepth(m.depth + 2); // (over its pill)
+      }
+      const body = s.add.text(textX, y + 28, e.text, bodyStyle(14.5, COLORS.ink, { wordWrap: { width: textW }, lineSpacing: 2 }));
+      for (let size = 14; body.height > ROW_H - 28 && size >= 12; size--) body.setFontSize(size);
       m.add(t, body);
-    });
+      y += ROW_H;
+    }
     // Footer: page arrows and count (blue like every pager), and Got it!
     const fy = m.y + H - 44;
     const arrow = { radius: 10, color: COLORS.buttonBlue, disabledColor: COLORS.buttonBlueDisabled };

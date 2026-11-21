@@ -9,7 +9,7 @@ import {
   bonusSlotsFree, nextTakesBonusSlot, bonusTownHall
 } from '../logic/buildings.js';
 import { checkRepair, formatGold, repairCost, hallIncomeRate, mineStockCap } from '../logic/economy.js';
-import { enemiesLeft, nightWaveNumber, nextWaveInfo, wavePlanCounts } from '../logic/waves.js';
+import { enemiesLeft, nightWaveNumber, nextWaveInfo, wavePlanCounts, themeInfo } from '../logic/waves.js';
 import { liveStars, starText } from '../logic/waveStars.js';
 import { isClockRunning, canStartWave, secondsToNextPhase, nightAmount, isDark } from '../logic/dayNight.js';
 import {
@@ -405,14 +405,16 @@ export class UIScene extends Phaser.Scene {
     let texts = [], special = null;
     if (w.phase === 'countdown') {
       // The countdown: how long until it attacks ("!" markers show where from).
-      special = w.special ? CONFIG.specialWaves.types[w.special] : null;
+      special = themeInfo(w.special);
       const s = Math.max(0, Math.ceil(w.countdown));
-      texts = [`Wave ${w.number}${special ? ` · ${special.name}` : ''} attacks in ${s}s`, `Wave ${w.number} in ${s}s`, `${s}s`];
+      texts = [`Wave ${w.number}${special ? ` · ${special.name}` : ''} attacks in ${s}s`, ...(special ? [`${special.name} in ${s}s`] : []), `Wave ${w.number} in ${s}s`, `${s}s`];
     } else if (w.phase === 'active') {
-      special = w.special ? CONFIG.specialWaves.types[w.special] : null;
+      special = themeInfo(w.special);
       const live = liveStars(this.gs); // the rating this wave is on track for
       const left = enemiesLeft(this.gs), stars = live ? `  ${starText(live)}` : '';
+      // (A themed wave keeps its name in the shorter versions too, ahead of the wave number.)
       texts = [`Wave ${w.number}${special ? ` · ${special.name}` : ''} · ${left} enemies left${w.enraged ? ' · Enraged!' : w.restless ? ' · Restless' : ''}${stars}`,
+        ...(special ? [`${special.name} · ${left} left${stars}`, `${special.name} · ${left} left`] : []),
         `Wave ${w.number} · ${left} left${stars}`, `${left} left`];
     } else if (this.gs.tutorialDone && this.gs.townHall && this.gs.townHall.level === 0) texts = ['Rebuild your Village Hall to begin', 'Rebuild your Village Hall'];
     else if (isClockRunning(this.gs)) {
@@ -2039,7 +2041,7 @@ New walls are built at your wall level (${wallLevel(this.gs)}), so one costs wha
     });
     on(['waveCleared'], (d) => {
       const ruins = d.ruins ? ` · ${d.ruins} to rebuild` : '';
-      const sp = d.special ? CONFIG.specialWaves.types[d.special] : null;
+      const sp = themeInfo(d.special);
       const bonus = (d.bonus || 0) + (d.starGold || 0) ? ` (+${formatGold((d.bonus || 0) + (d.starGold || 0))} bonus)` : '';
       const stars = d.stars ? `${starText(d.stars)} ` : '';
       this.showBanner(`${stars}${sp ? `${sp.name} (wave ${d.number})` : `Wave ${d.number}`} cleared! +${formatGold(d.bounty)} gold${bonus} · +${rpText(d.rp || 0)}${ruins}`);
@@ -2076,7 +2078,7 @@ New walls are built at your wall level (${wallLevel(this.gs)}), so one costs wha
     });
     on(['waveCalled'], (d) => {
       this.refreshWave();
-      const sp = this.gs.wave.special ? CONFIG.specialWaves.types[this.gs.wave.special] : null;
+      const sp = themeInfo(this.gs.wave.special);
       const secs = Math.ceil(this.gs.wave.countdown);
       this.showBanner(sp ? `Wave ${d.number}: ${sp.name} in ${secs}s!` : `Wave ${d.number} attacks in ${secs}s!`);
     });

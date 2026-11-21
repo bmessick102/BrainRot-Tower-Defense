@@ -38,9 +38,10 @@ export function beamStage(type, seconds) {
 /** The enemy with the most health in range, skipping `exclude` ids (ties: the first found). */
 function strongestInRange(state, b, exclude) {
   let best = null;
+  const tough = (e) => e.hp + (e.armor || 0); // (armor counts: Bri Bri Bicus Dicus)
   for (const e of state.enemies) {
     if (exclude.has(e.id) || !isValidTarget(b, e)) continue;
-    if (!best || e.hp > best.hp) best = e;
+    if (!best || tough(e) > tough(best)) best = e;
   }
   return best;
 }
@@ -60,7 +61,8 @@ export function stepBeams(state, dt) {
     if (b.destroyed) { b.beams = []; b.beamChains = []; b.beamTargetId = null; b.beamTime = 0; continue; }
     const fx = abilityFx(b);
     const cfg = CONFIG.defenses[b.type];
-    const dps = levelStats(b.type, b.level).dps * towerDamageMult(b);
+    // (Frigo Camillo's cold aura burns it slower too.)
+    const dps = levelStats(b.type, b.level).dps * towerDamageMult(b) * (1 - Math.max(0, Math.min(90, b.frigoSlow || 0)) / 100);
     const heat = 1 + (fx.heatPct || 0) / 100;
 
     // Keep beams whose targets are still valid; fill free beams with the toughest enemies left.

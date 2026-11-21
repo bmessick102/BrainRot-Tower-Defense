@@ -1,7 +1,7 @@
 // Endless play far past where players usually get: waves 100 to 5000 stay finite, capped and playable.
 import { describe, it, expect } from 'vitest';
 import { CONFIG } from '../src/config.js';
-import { nextWaveComposition, triggerWave, queuedCount, stepWaveSpawning, specialWaveType } from '../src/logic/waves.js';
+import { nextWaveComposition, triggerWave, queuedCount, stepWaveSpawning, waveThemeKey } from '../src/logic/waves.js';
 import { ENEMY_KINDS, spawnEnemy, createEnemy, removeDeadEnemies, babyCarBurst, babyCarBurstPack, babyCarBurstSize } from '../src/logic/enemies.js';
 import { waveResearchPoints } from '../src/logic/researchPoints.js';
 import { spellStats, spellConfig } from '../src/logic/spells.js';
@@ -31,7 +31,7 @@ function nonFinite(obj, path = '', out = [], seen = new Set()) {
 }
 
 describe('very high waves', () => {
-  it('each wave plan is finite and capped at the crowd limit (normal and special waves)', () => {
+  it('each wave plan is finite and capped at the crowd limit (plain and themed waves)', () => {
     for (const base of HIGH) for (const n of [base, base + 1, base + 2]) {
       const s = stateAtWave(n);
       const comp = nextWaveComposition(s);
@@ -43,7 +43,7 @@ describe('very high waves', () => {
       expect(total).toBeLessThanOrEqual(CAP + ENEMY_KINDS.length);
       expect(Number.isFinite(comp.hpMultiplier) && comp.hpMultiplier > 1).toBe(true);
       expect(Number.isFinite(comp.pack) && comp.pack >= 1).toBe(true);
-      if (specialWaveType(10, n)) expect(comp.special).toBeTruthy();
+      if (waveThemeKey(10, n)) expect(comp.special).toBeTruthy();
       triggerWave(s, 0);
       expect(queuedCount(s)).toBe(total + (comp.babycar || 0));
     }

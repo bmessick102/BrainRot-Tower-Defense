@@ -178,6 +178,20 @@ export function drawCross(g, cx, cy, size) {
 }
 
 /**
+ * An eye (v0.7, "view this player's village"): a white eye with a blue iris and a glint, on a dark outline.
+ */
+export function drawEye(g, cx, cy, size) {
+  const w = size, h = size * 0.6;
+  g.fillStyle(COLORS.frame, 1).fillEllipse(cx, cy, w + 6, h + 6);
+  g.fillStyle(0xffffff, 1).fillEllipse(cx, cy, w, h);
+  const r = h * 0.44;
+  g.fillStyle(COLORS.frame, 1).fillCircle(cx, cy, r + 2);
+  g.fillStyle(0x3d8bdc, 1).fillCircle(cx, cy, r);
+  g.fillStyle(0x0f1720, 1).fillCircle(cx, cy, r * 0.48);
+  g.fillStyle(0xffffff, 1).fillCircle(cx - r * 0.3, cy - r * 0.32, Math.max(1.5, r * 0.22));
+}
+
+/**
  * Full screen icon: four corner brackets pointing out (or in, when `exit`), white on a dark outline.
  */
 export function drawFullscreenIcon(g, cx, cy, size, exit = false) {

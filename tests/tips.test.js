@@ -36,13 +36,14 @@ describe('first-time tips', () => {
     expect(currentTip(gs)).toBeNull();
   });
 
-  it('warns about what is coming next: a special wave or Da Baby Car', () => {
+  it('warns about what is coming next: themed waves or Da Baby Car', () => {
     const gs = village({ vh: 7 });
-    gs.wavesCleared = CONFIG.specialWaves.every - 1; // a special wave is next
+    gs.wavesCleared = 4; // wave 5: themed
     gs.emit('baseReset', {});
-    expect(gs.tipQueue).toContain('special');
+    expect(gs.tipQueue).toContain('themes');
     const g2 = village({ vh: 7 });
     g2.wavesCleared = 3; // wave 4: a Da Baby Car wave at Village Hall 7
+    g2.tipsSeen = ['themes', 'pork', 'toilet', 'skeleton', 'vaca', 'bicus', 'frigo']; // (those came up already)
     g2.emit('townHallUpgraded', { level: 7 });
     expect(g2.tipQueue).toContain('boss');
     expect(currentTip(g2).text).toMatch(CONFIG.enemies.babycar.name);

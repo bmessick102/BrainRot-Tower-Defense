@@ -29,8 +29,8 @@ import { DayNight } from '../objects/DayNight.js';
 import { Villagers } from '../objects/Villagers.js';
 import { AirHum } from '../objects/AirHum.js';
 import { BeamHum } from '../objects/BeamHum.js';
-import { floatText, rpGainText, splashRing, fireballImpact, frostImpact, fireworkBurst, breakerExplosion } from '../objects/Effects.js';
-import { TEX, SFX, MUSIC, FIRE_SFX, ENEMY_ATTACK_SFX, ENEMY_VOICE } from '../assetKeys.js';
+import { floatText, rpGainText, splashRing, fireballImpact, frostImpact, fireworkBurst, breakerExplosion, fireBreathFx } from '../objects/Effects.js';
+import { TEX, SFX, MUSIC, FIRE_SFX, ENEMY_ATTACK_SFX, ENEMY_VOICE, SPELL_SFX } from '../assetKeys.js';
 import { missileWarningFx, quakeFx, ICE_BLUE } from '../objects/EnemyFx.js';
 import { playSfxClip, playSfx, playSfxCapped, playSfxEndingIn, playVoiceLine, playMusic, pauseMusic, resumeMusic, stopMusic, crossfadeMusic, fadeOutMusic, hasAmbience, startAmbience, updateAmbience, stopAmbience, soundDuration, prefetchMusic, hasMusicFile, releaseMusic } from '../audio.js';
 import { requestAudio, requestImages } from '../assetLoader.js';
@@ -61,6 +61,7 @@ const BEAM_STAGES = [
   { width: 8, color: 0xfff0b0, glow: 0xff5a1a }
 ];
 const FLOCK_SCAN_MS = 2600;
+const FRIGO_SOUND_MS = 3500; // Frigo Camillo's footsteps: the Freeze spell's sound every this long while one walks
 const CHATTER_SECONDS = [6, 14]; // how often an enemy says its voice line while it's on the map // how often a F.L.O.C.K Tower pulses its scan ring during attacks
 /** 120 -> "2:00" */
 
@@ -280,6 +281,15 @@ export class GameScene extends Phaser.Scene {
       this.ringGfx.fillStyle(POOL_COLOR, 0.12).fillEllipse(sc.x, sc.y, rx * 2, ry * 2);
       this.ringGfx.lineStyle(2, POOL_COLOR, 0.45).strokeEllipse(sc.x, sc.y, rx * 2, ry * 2);
     }
+    // Frigo Camillo's cold aura: a frosty ring on the ground around each one.
+    for (const e of this.gs.enemies) {
+      const A = e.alive && CONFIG.enemies[e.kind].chillAura;
+      if (!A) continue;
+      const sc = gridToScreen(e.x, e.y), { rx, ry } = rangeEllipse(A.radius);
+      const pulse = 0.85 + 0.15 * Math.sin(time * 0.004 + e.x);
+      this.ringGfx.fillStyle(0x8fd8ff, 0.1 * pulse).fillEllipse(sc.x, sc.y, rx * 2, ry * 2);
+      this.ringGfx.lineStyle(2, 0xbfeaff, 0.5 * pulse).strokeEllipse(sc.x, sc.y, rx * 2, ry * 2);
+    }
     for (const b of this.gs.buildings) {
       if (b.type !== 'ra' || b.destroyed) continue;
       const bv = this.views.buildings.get(b.id);
@@ -303,6 +313,18 @@ export class GameScene extends Phaser.Scene {
       }
     }
     for (let i = n; i < this.beamGlows.length; i++) this.beamGlows[i].setVisible(false);
+  }
+
+  /**
+   * Frigo Camillo's footsteps: while one walks (not attacking), the Freeze spell's sound now and then (v0.7), quietly,
+   * never more than one at once.
+   */
+  frigoSounds(delta) {
+    this.frigoSoundT = (this.frigoSoundT || 0) + delta;
+    if (this.frigoSoundT < FRIGO_SOUND_MS) return;
+    this.frigoSoundT = 0;
+    if (!isWaveActive(this.gs) || !this.gs.enemies.some((e) => e.alive && e.kind === 'frigo' && !e.attacking)) return;
+    playSfxCapped(this, SPELL_SFX.freeze, 1, { volume: 0.45 });
   }
 
   /** During attacks each F.L.O.C.K Tower sends out a faint scan ring to the edge of its range now and then. */
@@ -332,6 +354,7 @@ export class GameScene extends Phaser.Scene {
     this.beamHum.update(this.endingGame ? [] : this.gs.buildings, delta / 1000);
     this.flockScan(delta);
     this.drawBeams(time);
+    this.frigoSounds(delta);
     this.enemyChatter(delta);
     // Follow the pointer every frame: a move that leaves a UI element can be consumed by UIScene.
     if (this.placement && !this.touchMode) {
@@ -1448,6 +1471,48 @@ export class GameScene extends Phaser.Scene {
       floatText(this, s.x, s.y - 90, 'QUAKE!', '#e8c890', 20);
       this.cameras.main.shake(320, 0.009);
       playSfxClip(this, SFX.patapimQuake, { maxAtOnce: 2, minGapMs: 400, maxSeconds: 2.2, fadeMs: 500 });
+    });
+    // v0.7 enemies.
+    // Bri Bri Bicus Dicus's armor breaks: steel shards, a callout and its sound.
+    on('armorBroken', (d) => {
+      const v = this.views.enemies.get(d.id);
+      const s = v && v.sprite ? { x: v.sprite.x, y: v.sprite.y - v.sprite.displayHeight * 0.6 } : enemyPos(d);
+      const shards = this.add.particles(s.x, s.y, TEX.light, {
+        speed: { min: 50, max: 160 }, angle: { min: 0, max: 360 }, lifespan: { min: 300, max: 600 }, scale: { start: 0.09, end: 0 },
+        alpha: { start: 1, end: 0 }, tint: [0xffffff, 0xd6e2ec, 0x9fb3c6, 0x6f8499], gravityY: 200, emitting: false
+      }).setDepth(2720);
+      shards.explode(18);
+      this.time.delayedCall(800, () => shards.destroy());
+      floatText(this, s.x, s.y - 26, 'Armor broken!', '#dfe8f0', 15);
+      playSfxCapped(this, SFX.bicusArmorBreak, 3);
+    });
+    // Bombombini Gusini breathes fire: a stream from its beak to the target, bursts there and next to it.
+    on('fireBreath', (d) => {
+      const v = this.views.enemies.get(d.id);
+      if (!v || !v.sprite) return;
+      const beak = { x: v.sprite.x + (v.movingLeft ? -0.42 : 0.42) * v.sprite.displayWidth, y: v.sprite.y - v.sprite.displayHeight * 0.62 };
+      const bv = this.views.buildings.get(d.targetId);
+      const t = bv && bv.sprite ? { x: bv.sprite.x, y: bv.sprite.y - bv.sprite.displayHeight * 0.45 } : gridToScreen(d.tx, d.ty);
+      const splash = (d.splash || []).map((id) => {
+        const o = this.views.buildings.get(id), b = this.gs.getBuilding(id);
+        if (o && o.sprite) return { x: o.sprite.x, y: o.sprite.y - Math.min(40, o.sprite.displayHeight * 0.4) };
+        return b ? gridToScreen(b.col + 0.5, b.row + 0.5) : null;
+      }).filter(Boolean);
+      fireBreathFx(this, beak, t, splash, TEX.light);
+      playSfxCapped(this, SFX.wizardFire, 2, { volume: 0.7 });
+    });
+    // A Chimpanzini Bananini dives into a building: a banana splat, and its death picture.
+    on('enemyDive', (d) => {
+      const v = this.views.enemies.get(d.id);
+      if (v) v.spawnCorpse();
+      const s = enemyPos(d);
+      splashRing(this, s.x, s.y, 0.6, 0xffd23f, { duration: 380, depth: 2710 });
+      playSfxCapped(this, SFX.enemyHitBig, ENEMY_HIT_MAX);
+    });
+    // Brr Brr Patapim drops a Chimpanzini: a puff of leaves.
+    on('enemySpawnTroops', (d) => {
+      const s = gridToScreen(d.x, d.y);
+      splashRing(this, s.x, s.y, 0.7, 0x7ab84a, { duration: 420, depth: 2709 });
     });
     // La Vaca Saturno's boulder lands, then each bounce.
     on('boulderLanded', (d) => {

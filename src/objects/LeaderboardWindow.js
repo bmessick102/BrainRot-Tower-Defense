@@ -1,19 +1,23 @@
 // Leaderboard: the top players by furthest wave survived (one row per player: their best village), each
 // with their league badge (src/logic/leagues.js), your own row highlighted, and added at the bottom if
-// you're not in the top list. The footer shows your league and what the next one takes.
+// you're not in the top list. The footer shows your league and what the next one takes. v0.7: click a row for that
+// player's card (PlayerCardWindow); the eye button goes straight to their best village.
 import { Modal } from './Modal.js';
 import { Button } from './Button.js';
 import { COLORS, bodyStyle, textStyle } from '../theme.js';
 import { leagueFor, nextLeague } from '../logic/leagues.js';
-import { fitIcon } from './uiDraw.js';
+import { fitIcon, fitWidth } from './uiDraw.js';
+import { eyeButton } from './PlayerCardWindow.js';
 
 const W = 640, H = 640, TOP = 40, TOP_N = 10, ROW_H = 38, ROW_GAP = 4;
 const MEDALS = [0xffc83a, 0xc9d1da, 0xd08a4a];
 
 export class LeaderboardWindow {
-  constructor(scene, { session, onClose = null }) {
+  constructor(scene, { session, onClose = null, onOpenPlayer = null, onVisitBest = null }) {
     this.scene = scene;
     this.session = session;
+    this.onOpenPlayer = onOpenPlayer;
+    this.onVisitBest = onVisitBest;
     this.modal = new Modal(scene, { width: W, height: H, title: 'Leaderboard', y: TOP, onClose });
     this.load();
   }
@@ -46,7 +50,7 @@ export class LeaderboardWindow {
     m.clear();
     m.add(s.add.text(m.cx, m.y + 84, 'Furthest wave survived', bodyStyle(18, COLORS.inkDim)).setOrigin(0.5));
     const left = m.x + 28, w = W - 56;
-    const cols = { rank: left + 34, badge: left + 82, name: left + 110, hall: left + w - 190, wave: left + w - 60 };
+    const cols = { rank: left + 34, badge: left + 82, name: left + 110, hall: left + w - 220, wave: left + w - 110 };
     const hy = m.y + 116;
     m.add(s.add.text(cols.rank, hy, 'Rank', bodyStyle(14, COLORS.inkDim)).setOrigin(0.5));
     m.add(s.add.text(cols.name, hy, 'Player', bodyStyle(14, COLORS.inkDim)).setOrigin(0, 0.5));
@@ -85,7 +89,9 @@ export class LeaderboardWindow {
     g.fillStyle(r.isMe ? 0xfff1c4 : r.rank % 2 ? 0xe6e0d2 : 0xdcd5c5, 1).fillRoundedRect(x, y, w, ROW_H, 9);
     if (r.isMe) g.lineStyle(3, COLORS.button, 1).strokeRoundedRect(x, y, w, ROW_H, 9);
     const cy = y + ROW_H / 2;
-    if (r.rank <= 3) {
+    if (r.rank <= 3 && s.textures.exists(`ui_medal_${r.rank}`)) {
+      fitIcon(m.add(s.add.image(cols.rank, cy, `ui_medal_${r.rank}`)), ROW_H + 2); // v0.7: the gold / silver / bronze medal
+    } else if (r.rank <= 3) {
       g.fillStyle(COLORS.frame, 1).fillCircle(cols.rank, cy + 1, 15);
       g.fillStyle(MEDALS[r.rank - 1], 1).fillCircle(cols.rank, cy, 13);
       m.add(s.add.text(cols.rank, cy, String(r.rank), textStyle(16)).setOrigin(0.5));
@@ -101,8 +107,17 @@ export class LeaderboardWindow {
       fitIcon(img, 32);
     }
     const name = m.add(s.add.text(cols.name, cy, r.username, bodyStyle(18)).setOrigin(0, 0.5));
-    if (r.isMe) m.add(s.add.text(cols.name + name.width + 8, cy, '(you)', bodyStyle(15, COLORS.inkAccent)).setOrigin(0, 0.5));
+    fitWidth(name, cols.hall - cols.name - 110);
+    if (r.isMe) m.add(s.add.text(cols.name + name.displayWidth + 8, cy, '(you)', bodyStyle(15, COLORS.inkAccent)).setOrigin(0, 0.5));
     m.add(s.add.text(cols.hall, cy, String(r.bestTownHall || '-'), bodyStyle(18, COLORS.ink)).setOrigin(0.5));
     m.add(s.add.text(cols.wave, cy, String(wave), textStyle(22, COLORS.textGold)).setOrigin(0.5));
+    // v0.7: the row opens the player's card; the eye looks at their best village.
+    if (this.onOpenPlayer) {
+      const zone = m.add(s.add.zone(x, y, w - 56, ROW_H).setOrigin(0).setInteractive({ useHandCursor: true }));
+      zone.on('pointerup', () => this.onOpenPlayer(r.username));
+    }
+    if (this.onVisitBest) m.add(eyeButton(s, x + w - 24, cy + 1, 32, () => this.onVisitBest(r.username)));
   }
+
+  close() { this.modal.close(); }
 }

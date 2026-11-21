@@ -1,0 +1,151 @@
+// A player's card (v0.7), from the leaderboard or player search: their league badge and name, four stat tiles
+// (furthest wave, Village Hall, rank, achievements), the achievements they've earned, and their villages (best first)
+// with an eye button each to go and look at it. A player who hides their villages shows a note instead.
+import { Modal } from './Modal.js';
+import { Button } from './Button.js';
+import { COLORS, bodyStyle, textStyle } from '../theme.js';
+import { leagueFor } from '../logic/leagues.js';
+import { ACHIEVEMENTS } from '../logic/achievements.js';
+import { drawGlossy, drawEye, fitIcon, fitWidth } from './uiDraw.js';
+
+import { TEX } from '../assetKeys.js';
+
+const TROPHY = TEX.achievementIcon;
+
+const W = 660, H = 620, ACH_SHOWN = 8;
+
+/** The circular eye button: "look at this village". */
+export function eyeButton(scene, x, y, size, onClick) {
+  return new Button(scene, x, y, size, size, '', onClick, { circle: true, color: COLORS.buttonBlue, icon: 'eye' });
+}
+
+export class PlayerCardWindow {
+  /**
+   * @param {object} o
+   * @param {object} o.session  the account session (session.backend.playerProfile)
+   * @param {string} o.username
+   * @param {(profile, baseId) => void} o.onVisit  look at one of their villages
+   * @param {() => void} [o.onClose]
+   */
+  constructor(scene, { session, username, onVisit, onClose = null }) {
+    this.scene = scene;
+    this.session = session;
+    this.username = username;
+    this.onVisit = onVisit;
+    this.modal = new Modal(scene, { width: W, height: H, title: username, onClose });
+    this.load();
+  }
+
+  async load() {
+    this.message('Loading…');
+    try {
+      const p = await this.session.backend.playerProfile(this.username);
+      if (!this.modal.frame) return;
+      if (!p) { this.message('That player couldn’t be found.', true); return; }
+      this.render(p);
+    } catch (e) {
+      if (this.modal.frame) this.message(e.message || 'Couldn’t load that player.', true);
+    }
+  }
+
+  message(text, error = false) {
+    const m = this.modal, s = this.scene;
+    if (!m.frame) return;
+    m.clear();
+    m.add(s.add.text(m.cx, m.y + H / 2 - 20, text, bodyStyle(20, error ? COLORS.inkBad : COLORS.inkDim, { align: 'center', wordWrap: { width: W - 80 } })).setOrigin(0.5));
+    if (error) m.add(new Button(s, m.cx, m.y + H / 2 + 46, 200, 52, 'Retry', () => this.load(), { color: COLORS.buttonBlue, fontSize: 21 }));
+  }
+
+  render(p) {
+    const m = this.modal, s = this.scene;
+    m.clear();
+    m.setTitle(p.username);
+    const left = m.x + 28, w = W - 56;
+    // Name row: league badge, league name, joined date.
+    const league = leagueFor(p.bestWave);
+    let y = m.y + 80;
+    if (league && s.textures.exists(league.texture)) fitIcon(m.add(s.add.image(left + 30, y + 22, league.texture)), 58);
+    const nx = left + 70;
+    m.add(s.add.text(nx, y, league ? `${league.name} League` : 'No league yet', textStyle(22, league ? COLORS.textGold : COLORS.text)));
+    const joined = p.joinedAt ? new Date(p.joinedAt) : null;
+    const sub = [p.isMe ? 'This is you' : null, joined && !Number.isNaN(joined.getTime()) ? `Playing since ${joined.toLocaleDateString(undefined, { month: 'long', year: 'numeric' })}` : null].filter(Boolean).join('  ·  ');
+    m.add(s.add.text(nx, y + 30, sub, bodyStyle(16, COLORS.inkDim)));
+
+    // Stat tiles.
+    y += 66;
+    const tiles = [
+      ['Furthest wave', p.bestWave > 0 ? String(p.bestWave) : '-'],
+      ['Village Hall', p.bestTownHall > 0 ? String(p.bestTownHall) : '-'],
+      ['Rank', p.bestWave > 0 && p.rank ? `#${p.rank}` : '-'],
+      ['Achievements', `${p.achievements.length} / ${ACHIEVEMENTS.length}`]
+    ];
+    const tw = (w - 3 * 10) / 4;
+    const g = m.add(s.add.graphics());
+    tiles.forEach(([label, value], i) => {
+      const tx = left + i * (tw + 10);
+      g.fillStyle(COLORS.frame, 0.25).fillRoundedRect(tx, y, tw, 70, 12);
+      g.fillStyle(COLORS.tray, 1).fillRoundedRect(tx + 2, y + 3, tw - 4, 65, 11);
+      m.add(s.add.text(tx + tw / 2, y + 26, value, textStyle(26, COLORS.textGold)).setOrigin(0.5));
+      m.add(s.add.text(tx + tw / 2, y + 54, label, bodyStyle(14, COLORS.inkDim)).setOrigin(0.5));
+    });
+
+    // Achievements: the newest ones as chips (with the trophy), and how many more.
+    y += 88;
+    m.add(s.add.text(left, y, 'Achievements', textStyle(19)));
+    y += 30;
+    const byId = new Map(ACHIEVEMENTS.map((a) => [a.id, a]));
+    const earned = [...p.achievements].sort((a, b) => String(b.earnedAt).localeCompare(String(a.earnedAt))).map((a) => byId.get(a.id)).filter(Boolean);
+    if (!earned.length) m.add(s.add.text(left, y + 4, 'None yet.', bodyStyle(16, COLORS.inkDim)));
+    const cw = (w - 10) / 2, ch = 30;
+    earned.slice(0, ACH_SHOWN).forEach((a, i) => {
+      const cx = left + (i % 2) * (cw + 10), cy = y + Math.floor(i / 2) * (ch + 6);
+      g.fillStyle(0xe9e1cf, 1).fillRoundedRect(cx, cy, cw, ch, 9);
+      if (s.textures.exists(TROPHY)) fitIcon(m.add(s.add.image(cx + 17, cy + ch / 2, TROPHY)), 22);
+      const t = m.add(s.add.text(cx + 34, cy + ch / 2, a.name, bodyStyle(15, COLORS.ink, { fontStyle: 'bold' })).setOrigin(0, 0.5));
+      fitWidth(t, cw - 44);
+    });
+    const rows = Math.min(ACH_SHOWN, Math.max(1, earned.length));
+    y += Math.ceil(rows / 2) * (ch + 6);
+    if (earned.length > ACH_SHOWN) { m.add(s.add.text(left + w, y - 2, `+${earned.length - ACH_SHOWN} more`, bodyStyle(14, COLORS.inkDim)).setOrigin(1, 0)); }
+
+    // Villages (best first), each with an eye.
+    y += 14;
+    m.add(s.add.text(left, y, 'Villages', textStyle(19)));
+    y += 30;
+    const bottom = m.y + H - 92;
+    if (!p.bases.length) {
+      const why = p.publicBases || p.isMe ? 'No villages to show yet.' : `${p.username} keeps their villages private.`;
+      m.add(s.add.text(left, y + 4, why, bodyStyle(16, COLORS.inkDim)));
+    }
+    const rowH = 38;
+    p.bases.forEach((b, i) => {
+      const ry = y + i * (rowH + 4);
+      if (ry + rowH > bottom) return;
+      g.fillStyle(i === 0 ? 0xfff1c4 : 0xe6e0d2, 1).fillRoundedRect(left, ry, w, rowH, 9);
+      if (i === 0) g.lineStyle(2, COLORS.button, 1).strokeRoundedRect(left, ry, w, rowH, 9);
+      const name = m.add(s.add.text(left + 14, ry + rowH / 2, b.name, bodyStyle(17, COLORS.ink, { fontStyle: 'bold' })).setOrigin(0, 0.5));
+      fitWidth(name, w - 300);
+      if (i === 0) m.add(s.add.text(name.x + name.displayWidth + 8, ry + rowH / 2, 'Best', bodyStyle(13, COLORS.inkAccent, { fontStyle: 'bold' })).setOrigin(0, 0.5));
+      m.add(s.add.text(left + w - 56, ry + rowH / 2, `Village Hall ${b.townHall || '-'}  ·  Wave ${Math.max(b.bestWave || 0, 0)}`, bodyStyle(15, COLORS.inkDim)).setOrigin(1, 0.5));
+      m.add(eyeButton(s, left + w - 24, ry + rowH / 2 + 1, 34, () => this.visit(p, b.id)));
+    });
+
+    // The big button: their best village.
+    const best = p.bases[0];
+    const btn = m.add(new Button(s, m.cx, m.y + H - 46, 330, 56, best ? 'View Best Village' : 'No Village to View', () => best && this.visit(p, best.id), { color: COLORS.buttonBlue, fontSize: 21 }));
+    if (best) {
+      // An eye at the button's left end.
+      const eg = s.add.graphics();
+      drawGlossy(eg, -165 + 12, -22, 40, 40, 0x2a6fb8, { circle: true, lip: 2, shadow: false });
+      drawEye(eg, -165 + 32, -4, 24);
+      btn.add(eg);
+    } else btn.setEnabled(false);
+  }
+
+  visit(profile, baseId) {
+    this.modal.destroy();
+    this.onVisit(profile, baseId);
+  }
+
+  destroy() { this.modal.destroy(); }
+}

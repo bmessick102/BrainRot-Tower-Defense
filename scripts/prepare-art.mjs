@@ -54,7 +54,7 @@ const TARGETS = [
   // exported at twice the usual width to stay sharp there; in game it's scaled to the same height as before.
   { match: /^enemy_tank$/, width: 320, trim: true, needsAlpha: true },
   // v0.6 heavies, drawn bigger in game (and Brr Brr Patapim / La Vaca Saturno also stand on the title screen).
-  { match: /^enemy_(patapim|vaca)(_[a-z]+)?$/, width: 256, trim: true, needsAlpha: true },
+  { match: /^enemy_(patapim|vaca|lirili|bombo)(_[a-z]+)?$/, width: 256, trim: true, needsAlpha: true },
   { match: /^enemy_/, width: 160, trim: true, needsAlpha: true },
   // The gnome's working pose (busy at a building: mining, repairing, building). Wider than the standing gnome (an arm
   // out), so it's exported wider to keep the same detail; the game sizes both to the same height.
@@ -77,6 +77,7 @@ const TARGETS = [
   { match: /^ui_(shop|settings|edit_layout)_button$/, width: 160, trim: true, needsAlpha: true },
   { match: /^ui_start_button$/, width: 480, trim: true, needsAlpha: true },
   { match: /^ui_league_[a-z]+$/, width: 160, trim: true, needsAlpha: true }, // leaderboard league badges
+  { match: /^ui_medal_[123]$/, width: 96, trim: true, needsAlpha: true }, // leaderboard 1st / 2nd / 3rd place medals (v0.7)
   { match: /^ui_achievement$/, width: 160, trim: true, needsAlpha: true }, // achievement cards, header and unlock toast
   // Fuel Station spell icons (art-source/spells): hotbar, Fuel Station window, How to Play and the cast on the map.
   // Some are tall (a carton, a can), so they fit a 256 px box by their longer side instead of by width.

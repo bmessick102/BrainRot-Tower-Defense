@@ -58,8 +58,12 @@ export class HealthBar {
     this.drawnKey = '';
   }
 
-  /** (x, y) is the top-center of the bar. Tracks damage even while hidden so the first visible hit animates. */
-  draw(x, y, fraction, visible = true, level = null) {
+  /**
+   * (x, y) is the top-center of the bar. Tracks damage even while hidden so the first visible hit animates.
+   * `armor` (0..1, or null): an armored enemy's armor left (Bri Bri Bicus Dicus): a steel bar over the health bar
+   * and a shield at its end while any is left.
+   */
+  draw(x, y, fraction, visible = true, level = null, armor = null) {
     const now = this.scene.time.now;
     const dt = Math.min(100, Math.max(0, now - this.lastTime));
     this.lastTime = now;
@@ -87,13 +91,14 @@ export class HealthBar {
 
     // Redrawn only when something moves by a pixel (or the flash by a tenth): a busy wave has hundreds of bars.
     const px = (v) => (v > 0 ? Math.round(v * this.width) + 1 : 0); // (any health left still shows a sliver)
-    const key = `${px(f)}|${px(this.trail)}|${flash.toFixed(1)}|${level}`;
+    const a = armor == null ? null : Math.max(0, Math.min(1, armor));
+    const key = `${px(f)}|${px(this.trail)}|${flash.toFixed(1)}|${level}|${a == null ? '-' : px(a)}`;
     if (key === this.drawnKey) return;
     this.drawnKey = key;
-    this.redraw(f, flash, level);
+    this.redraw(f, flash, level, a);
   }
 
-  redraw(f, flash, level) {
+  redraw(f, flash, level, armor = null) {
     const g = this.gfx;
     const w = this.width, h = this.height;
     const x = -w / 2, y = -h / 2, r = h / 2;
@@ -118,6 +123,20 @@ export class HealthBar {
       g.fillStyle(shade(face, 0.7), 1).fillRoundedRect(ix, iy, fw, ih, ir);        // darker underside
       g.fillStyle(face, 1).fillRoundedRect(ix, iy, fw, ih - lip, Math.min(ir, (ih - lip) / 2));
       if (fw > ih) g.fillStyle(0xffffff, 0.4).fillRect(ix + ir, iy + 1, fw - ih, Math.max(1, Math.round(ih * 0.28))); // shine
+    }
+
+    // Armor (Bri Bri Bicus Dicus): a steel bar riding on top of the health bar, and a shield at its right end.
+    if (armor > 0) {
+      const sh = Math.max(4, Math.round(h * 0.45)), sy = y - sh + 1;
+      g.fillStyle(COLORS.frame, 1).fillRoundedRect(ix - 1, sy - 1, iw + 2, sh + 2, (sh + 2) / 2);
+      g.fillStyle(0x2c261f, 1).fillRoundedRect(ix, sy, iw, sh, sh / 2);
+      g.fillStyle(0xb9c9d8, 1).fillRoundedRect(ix, sy, Math.max(sh, iw * armor), sh, sh / 2);
+      g.fillStyle(0xffffff, 0.45).fillRect(ix + sh / 2, sy + 1, Math.max(0, iw * armor - sh), 1);
+      // Shield: a small kite shape past the bar's right end.
+      const cx = x + w + 6, cy = y + h / 2 - 1, s = h * 0.95;
+      g.fillStyle(COLORS.frame, 1).fillPoints([{ x: cx - s * 0.62, y: cy - s * 0.72 }, { x: cx + s * 0.62, y: cy - s * 0.72 }, { x: cx + s * 0.62, y: cy - s * 0.05 }, { x: cx, y: cy + s * 0.85 }, { x: cx - s * 0.62, y: cy - s * 0.05 }], true);
+      g.fillStyle(0x8fa6bd, 1).fillPoints([{ x: cx - s * 0.45, y: cy - s * 0.55 }, { x: cx + s * 0.45, y: cy - s * 0.55 }, { x: cx + s * 0.45, y: cy - s * 0.08 }, { x: cx, y: cy + s * 0.6 }, { x: cx - s * 0.45, y: cy - s * 0.08 }], true);
+      g.fillStyle(0xe6eef5, 1).fillRect(cx - 1, cy - s * 0.5, 2, s * 0.95);
     }
 
     if (this.badgeText && this.badgeStyle === 'crown') {

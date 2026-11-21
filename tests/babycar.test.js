@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest';
 import { CONFIG } from '../src/config.js';
 import { createEnemy, stepEnemy, removeDeadEnemies, babyCarBurst } from '../src/logic/enemies.js';
 import { damageEnemy } from '../src/logic/combat.js';
-import { babyCarCount, nextWaveComposition, buildSpawnQueues } from '../src/logic/waves.js';
+import { babyCarCount, nextWaveComposition, buildSpawnQueues, themesAt, waveThemeKey } from '../src/logic/waves.js';
 import { maxHp } from '../src/logic/buildings.js';
 import { makeStateWithTownHall, addBuilding } from './helpers.js';
 
@@ -32,14 +32,19 @@ describe('Da Baby Car (raid boss)', () => {
     expect(CAR.researchPoints).toBe(40); // v0.5 rebalance (was 25)
   });
 
-  it('comes in every 2nd normal wave from Village Hall 6 (2 cars from Village Hall 9), never in special waves', () => {
+  it('comes every 2nd wave from Village Hall 6 (2 cars from Village Hall 9), never in pure themed waves', () => {
     expect(babyCarCount(5, 2)).toBe(0);
     expect(babyCarCount(B.fromTownHall, 2)).toBe(1);
     expect(babyCarCount(B.fromTownHall, 3)).toBe(0);
     expect(babyCarCount(9, 4)).toBe(2);
-    const s = makeStateWithTownHall({ tutorialDone: true, tutorialStep: 10, wavesCleared: 3 }, 7); // next: wave 4
+    // A headliner theme on an even wave brings one; a pure theme (the old special waves) never does.
+    const T = CONFIG.waveThemes, list = themesAt(7);
+    const waveOf = (pred) => { for (let n = 2; n < 60; n += 2) { const k = waveThemeKey(7, n); if (n % T.boss.every && k && pred(T.types[k])) return n; } return null; };
+    const mixed = waveOf((t) => !t.pure), pure = waveOf((t) => t.pure);
+    expect(list.length).toBeGreaterThan(2);
+    const s = makeStateWithTownHall({ tutorialDone: true, tutorialStep: 10, wavesCleared: mixed - 1 }, 7);
     expect(nextWaveComposition(s).babycar).toBe(1);
-    s.wavesCleared = 5; // wave 6: a special wave (every 3rd)
+    s.wavesCleared = pure - 1;
     expect(nextWaveComposition(s).special).toBeTruthy();
     expect(nextWaveComposition(s).babycar || 0).toBe(0);
     // It leads its path's queue.

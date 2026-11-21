@@ -20,7 +20,7 @@ describe('crowd cap', () => {
     expect(count(raw)).toBeGreaterThan(1500);
     const c = applyCrowdCap(raw);
     expect(count(c)).toBeLessThanOrEqual(CAP + ENEMY_KINDS.length); // rounding can add a few
-    expect(c.pack).toBeGreaterThan(4);
+    expect(c.pack).toBeGreaterThan(3); // (v0.7: fewer, tougher late enemies, so a little less packing)
     // Same total health: fewer enemies, each `pack` times tougher.
     expect((waveStrength(c) * c.pack) / waveStrength(raw)).toBeCloseTo(1, 2); // within rounding of the pack factor
     for (const k of ENEMY_KINDS) if (raw[k] > 0) expect(c[k]).toBeGreaterThan(0); // every kind still comes

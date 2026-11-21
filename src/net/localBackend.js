@@ -63,7 +63,7 @@ export class LocalBackend {
     if (d.users.some((u) => u.email.toLowerCase() === email.toLowerCase())) throw new Error('That email already has an account. Log in instead.');
     if (d.users.some((u) => u.username.toLowerCase() === username.toLowerCase())) throw new Error('That username is taken or not allowed.');
     if (password.length < 8 || !/[A-Za-z]/.test(password) || !/[0-9]/.test(password)) throw new Error('Password must be at least 8 characters, with a letter and a number.');
-    const u = { id: uuid(), email, username, password: await hash(password) };
+    const u = { id: uuid(), email, username, password: await hash(password), createdAt: now(), publicBases: true };
     d.users.push(u);
     d.stats.push({ userId: u.id, bestWave: 0, bestTownHall: 0, counters: {}, reachedAt: null });
     this.write(d);
@@ -196,5 +196,66 @@ export class LocalBackend {
         return { rank: i + 1, username: u ? u.username : '?', bestWave: s.bestWave, bestTownHall: s.bestTownHall, isMe: s.userId === this.userId };
       });
     return rows.filter((r) => r.rank <= limit || r.isMe);
+  }
+
+  // ---------- other players (v0.7): search, player cards, visiting villages ----------
+  /** Players matching the search: [{ username, bestWave, bestTownHall, achievements, isMe }] (like search_players). */
+  async searchPlayers({ query = '', minWave = 0, maxWave = null, townHall = null, sort = 'wave', limit = 30 } = {}) {
+    await wait();
+    const d = this.db();
+    this.me(d);
+    const q = String(query || '').trim().toLowerCase();
+    const rows = d.users.map((u) => {
+      const s = d.stats.find((x) => x.userId === u.id) || { bestWave: 0, bestTownHall: 0 };
+      return { username: u.username, bestWave: s.bestWave, bestTownHall: s.bestTownHall, achievements: d.achievements.filter((a) => a.userId === u.id).length, isMe: u.id === this.userId };
+    }).filter((r) => (!q || r.username.toLowerCase().includes(q)) && r.bestWave >= (minWave || 0)
+      && (maxWave == null || r.bestWave <= maxWave) && (townHall == null || r.bestTownHall === townHall));
+    const key = sort === 'hall' ? 'bestTownHall' : sort === 'achievements' ? 'achievements' : 'bestWave';
+    rows.sort((a, b) => b[key] - a[key] || b.bestWave - a.bestWave || a.username.localeCompare(b.username));
+    return rows.slice(0, Math.max(1, Math.min(50, limit)));
+  }
+
+  /** A player's card, or null: stats, rank, achievements, and their villages (best first) unless they hide them. */
+  async playerProfile(username) {
+    await wait();
+    const d = this.db();
+    this.me(d);
+    const u = d.users.find((x) => x.username.toLowerCase() === String(username).toLowerCase());
+    if (!u) return null;
+    const s = d.stats.find((x) => x.userId === u.id) || { bestWave: 0, bestTownHall: 0 };
+    const isMe = u.id === this.userId, open = u.publicBases !== false;
+    return {
+      username: u.username, joinedAt: u.createdAt || null, publicBases: open, isMe,
+      bestWave: s.bestWave, bestTownHall: s.bestTownHall,
+      rank: d.stats.filter((x) => x.bestWave > s.bestWave).length + 1,
+      achievements: d.achievements.filter((a) => a.userId === u.id).map((a) => ({ id: a.id, earnedAt: a.earnedAt })),
+      bases: open || isMe ? d.bases.filter((b) => b.userId === u.id && b.save)
+        .sort((a, b) => b.bestWave - a.bestWave || b.townHall - a.townHall)
+        .map((b) => ({ id: b.id, name: b.name, townHall: b.townHall, bestWave: b.bestWave, wave: b.wave })) : []
+    };
+  }
+
+  /** One village to look at: { id, name, username, townHall, bestWave, save }; refused if its owner hides them. */
+  async playerBase(id) {
+    await wait();
+    const d = this.db();
+    this.me(d);
+    const b = d.bases.find((x) => x.id === id);
+    const u = b && d.users.find((x) => x.id === b.userId);
+    if (!b || !u || (u.publicBases === false && u.id !== this.userId)) throw new Error('That village can’t be viewed.');
+    return { id: b.id, name: b.name, username: u.username, townHall: b.townHall, bestWave: b.bestWave, save: b.save };
+  }
+
+  /** Whether others can view your villages (Settings). */
+  async getPublicBases() {
+    await wait();
+    return this.me(this.db()).publicBases !== false;
+  }
+
+  async setPublicBases(on) {
+    await wait();
+    const d = this.db();
+    this.me(d).publicBases = !!on;
+    this.write(d);
   }
 }

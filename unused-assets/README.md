@@ -99,3 +99,26 @@ v0.6 drops (KSI Tower, the five v0.6 enemies, the Skeleton, spell sounds); sound
 
 - `docs/archive/` and `docs/branding/` are already archives (old art versions, the original logo the icons are made from).
 - `dist/` is build output.
+
+v0.7 drops (Bri Bri Bicus Dicus, Frigo Camillo, Bombombini Gusini, Lirili Larila, Chimpanzini Bananini):
+
+| Dropped file | Installed as |
+| --- | --- |
+| `Chimanzini bananini Death Pose.png` | `art-source/enemies/enemy_chimp_death.png` |
+| `Chimpanzini Bananini Image.png` | `art-source/enemies/enemy_chimp.png` |
+| `Chimpanzini bananini Attack Image.png` | `art-source/enemies/enemy_chimp_attack.png` |
+| `Frigo Camillo Death Pose.png` | `art-source/enemies/enemy_frigo_death.png` |
+| `Frigo Camillo Idle Image.png` | `art-source/enemies/enemy_frigo.png` |
+| `Frigo Camillo attack Pose.png` | `art-source/enemies/enemy_frigo_attack.png` |
+| `Lirili Larila Attack Pose Image.png` | `art-source/enemies/enemy_lirili_attack.png` |
+| `Lirili Larila Death pose.png` | `art-source/enemies/enemy_lirili_death.png` |
+| `Lirili Larila Idle Image.png` | `art-source/enemies/enemy_lirili.png` |
+| `bombombini gusini Attack Pose.png` | `art-source/enemies/enemy_bombo_attack.png` |
+| `bombombini gusini Death pose.png` | `art-source/enemies/enemy_bombo_death.png` |
+| `bombombini gusini idle image.png` | `art-source/enemies/enemy_bombo.png` |
+| `bri bri bicus dicus attack pose image.png` | `art-source/enemies/enemy_bicus_attack.png` |
+| `bri bri bicus dicus idle image.png` | `art-source/enemies/enemy_bicus.png` |
+| `bri bri bicus dicus armor break sound.mp3` | `art-source/audio/sfx_bicus_armor_break.mp3` |
+| `Leaderboard 1st Gold Medal Icon.png` | `art-source/ui/ui_medal_1.png` |
+| `Leaderboard 2nd Silver Medal Icon.png` | `art-source/ui/ui_medal_2.png` |
+| `Leaderboard 3rd bronze medal icon.png` | `art-source/ui/ui_medal_3.png` |

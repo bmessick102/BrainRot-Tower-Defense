@@ -381,6 +381,8 @@ export class BuildingView {
       const moon = this.scene.ambientTint ?? 0xffffff;
       if (b.sprung) this.sprite.setTint(0x7a7a7a); // a sprung trap looks spent until it resets
       else if (b.silencedT > 0 && !b.destroyed) this.sprite.setTint(0x8a8a8a); // silenced by John Pork: switched off, grey
+      // Slowed by a Frigo Camillo's cold aura (v0.7): a frosty blue, gently shimmering.
+      else if (b.frigoSlow > 0 && !b.destroyed && CONFIG.defenses[b.type]) this.sprite.setTint(lerpColor(0x9fd8ff, 0xd6f0ff, 0.5 + 0.5 * Math.sin(time * 0.008)));
       // Boosted by DJ Babyface's Drop the Beat: the defense pulses between pink and cyan party lights.
       else if (b.djBoostT > 0 && !b.destroyed) this.sprite.setTint(Math.sin(time * 0.02) > 0 ? 0xffc8f4 : 0xc8f4ff);
       // Under a Rage spell (spells.js): an angry red pulse. Healing: a soft green one.

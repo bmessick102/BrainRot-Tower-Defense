@@ -1,11 +1,11 @@
 // A glossy, beveled UI button with an optional second line (used for prices and "why it's disabled").
 // Fires on pointerdown so panels that refresh between press and release never swallow a click.
-// opts: color, hoverColor, disabledColor (default: the shared grey), fontSize, radius, circle (round button), icon: 'x' | 'left' | 'right' | 'fullscreen' |
+// opts: color, hoverColor, disabledColor (default: the shared grey), fontSize, radius, circle (round button), icon: 'x' | 'left' | 'right' | 'eye' | 'fullscreen' |
 // 'exitFullscreen' (drawn instead of text), onRelease (fire when the press ends instead: browsers only allow some
 // things, like full screen, from a finished tap or click).
 import Phaser from 'phaser';
 import { COLORS, shade, textStyle } from '../theme.js';
-import { drawGlossy, drawCross, drawArrow, drawFullscreenIcon } from './uiDraw.js';
+import { drawGlossy, drawCross, drawArrow, drawFullscreenIcon, drawEye } from './uiDraw.js';
 import { playSfx } from '../audio.js';
 import { SFX } from '../assetKeys.js';
 import { IS_TOUCH } from '../device.js';
@@ -75,6 +75,7 @@ export class Button extends Phaser.GameObjects.Container {
     if (this.icon === 'x') drawCross(g, 0, -LIP / 2, Math.min(this.btnW, this.btnH) * 0.42);
     if (this.icon === 'fullscreen' || this.icon === 'exitFullscreen') drawFullscreenIcon(g, 0, -LIP / 2, Math.min(this.btnW, this.btnH) * 0.5, this.icon === 'exitFullscreen');
     if (this.icon === 'left' || this.icon === 'right') drawArrow(g, 0, -LIP / 2, Math.min(this.btnW, this.btnH) * 0.4, this.icon === 'left' ? -1 : 1);
+    if (this.icon === 'eye') drawEye(g, 0, -LIP / 2, Math.min(this.btnW, this.btnH) * 0.62);
     const faceMid = -LIP / 2; // text sits on the face, above the lip
     const hasSub = this.sub.text.length > 0;
     this.label.setY(hasSub ? faceMid - this.btnH * 0.15 : faceMid);

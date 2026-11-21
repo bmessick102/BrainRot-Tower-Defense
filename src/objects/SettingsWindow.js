@@ -21,9 +21,12 @@ export class SettingsWindow {
    * @param {() => void} o.onDeleteSave deletes the save (the caller owns save handling)
    * @param {() => void} o.onClose
    */
-  constructor(scene, { storage, hasSave, onDeleteSave, onClose, account = null }) {
+  constructor(scene, { storage, hasSave, onDeleteSave, onClose, account = null, backend = null, onFindPlayers = null }) {
     this.scene = scene;
     this.account = account;
+    this.backend = backend;             // v0.7: the account's backend ("Let others view my villages")
+    this.onFindPlayers = onFindPlayers; // v0.7: Find Players
+    this.publicBases = null;            // (loaded when the Options tab opens)
     this.storage = storage;
     this.hasSave = hasSave;
     this.onDeleteSave = onDeleteSave;
@@ -87,9 +90,13 @@ export class SettingsWindow {
 
     const by = this.py + H - 62;
     if (this.account) {
-      this.add(s.add.text(cx, this.py + 378, `Signed in as ${this.account.username}`, bodyStyle(20)).setOrigin(0.5));
-      this.add(s.add.text(cx, this.py + 406, this.account.email || '', bodyStyle(16, COLORS.inkDim)).setOrigin(0.5));
-      this.add(s.add.text(cx, this.py + H - 40, 'Make, switch or delete villages from Villages on the title screen.', bodyStyle(15, COLORS.inkDim)).setOrigin(0.5));
+      this.add(s.add.text(this.px + 30, this.py + 372, `Signed in as ${this.account.username}`, bodyStyle(19)).setOrigin(0, 0.5));
+      this.add(s.add.text(this.px + 30, this.py + 396, this.account.email || '', bodyStyle(15, COLORS.inkDim)).setOrigin(0, 0.5));
+      // v0.7: Find Players, and whether others can look at your villages.
+      if (this.onFindPlayers) {
+        this.add(new Button(s, this.px + W - 30 - 100, this.py + 382, 200, 44, 'Find Players', () => { const go = this.onFindPlayers; this.close(); go(); }, { color: COLORS.buttonBlue, fontSize: 19 }));
+      }
+      if (this.backend && this.backend.getPublicBases) this.buildPrivacy(by + 16);
       return;
     }
     if (this.confirming) {
@@ -103,6 +110,35 @@ export class SettingsWindow {
     const del = new Button(s, cx, by, 300, 54, 'Delete Saved Game', () => { this.confirming = true; this.show('settings'); }, { color: COLORS.buttonDanger, fontSize: 21 });
     del.setEnabled(this.hasSave);
     this.add(del);
+  }
+
+  /** "Let others view my villages: On / Off" (v0.7), from the account. */
+  buildPrivacy(y) {
+    const s = this.scene;
+    this.add(s.add.text(this.px + 30, y, 'Let others view my villages', bodyStyle(18)).setOrigin(0, 0.5));
+    const label = this.publicBases === null ? '…' : this.publicBases ? 'On' : 'Off';
+    const btn = new Button(s, this.px + W - 30 - 70, y, 140, 46, label, async () => {
+      if (this.publicBases === null) return;
+      const next = !this.publicBases;
+      btn.setEnabled(false);
+      try {
+        await this.backend.setPublicBases(next);
+        this.publicBases = next;
+      } catch (e) {
+        this.privacyNote = e.message || 'Couldn’t change that right now.';
+      }
+      if (this.tab === 'settings' && this.frame.length) this.show('settings');
+    }, { color: this.publicBases === false ? COLORS.buttonDark : COLORS.buttonGood, fontSize: 19 });
+    btn.setEnabled(this.publicBases !== null);
+    this.add(btn);
+    if (this.privacyNote) this.add(s.add.text(this.px + 30, y + 30, this.privacyNote, bodyStyle(14, COLORS.inkBad)).setOrigin(0, 0.5));
+    if (this.publicBases === null && !this.loadingPrivacy) {
+      this.loadingPrivacy = true;
+      this.backend.getPublicBases()
+        .then((on) => { this.publicBases = on; })
+        .catch(() => { this.privacyNote = 'Not available until the server is updated.'; })
+        .finally(() => { this.loadingPrivacy = false; if (this.tab === 'settings' && this.frame.length) this.show('settings'); });
+    }
   }
 
   buildCredits() {

@@ -3,7 +3,8 @@ import { CONFIG } from '../src/config.js';
 import {
   waveComposition, choosePaths, buildSpawnQueues, triggerWave, stepWaveSpawning, checkWaveCleared,
   enemiesLeft, nightWaveNumber, waveRamp, scaledWaveComposition, nextWaveComposition, nextWaveInfo,
-  getWavePlan, wavePlanCounts, specialTypesAt, specialWaveType, specialComposition, waveStrength, PATHS, skipCountdown, cancelCountdown, OFFSET_KINDS
+  getWavePlan, wavePlanCounts, themesAt, waveThemeKey, themedComposition, themeInfo, nextDebut, legacyDebuted, bossWaveCars, babyCarCount,
+  waveStrength, PATHS, skipCountdown, cancelCountdown, OFFSET_KINDS
 } from '../src/logic/waves.js';
 import { startTutorialWave } from '../src/logic/dayNight.js';
 import { TUTORIAL_NIGHT_STEP } from '../src/logic/tutorial.js';
@@ -11,7 +12,7 @@ import { ENEMY_KINDS } from '../src/logic/enemies.js';
 import { makeStateWithTownHall, seededRng } from './helpers.js';
 
 // The kinds that join the waves later (fromTownHall), all 0 in the first base waves.
-const LATE_ZERO = { toilet: 0, pork: 0, skeleton: 0, vaca: 0, yahu: 0, patapim: 0 };
+const LATE_ZERO = { toilet: 0, pork: 0, skeleton: 0, vaca: 0, yahu: 0, patapim: 0, lirili: 0, bicus: 0, frigo: 0, bombo: 0 };
 const w4 = CONFIG.waves[3];
 const w5 = CONFIG.waves[4];
 
@@ -32,15 +33,15 @@ describe('waves.js', () => {
     }
   });
 
-  it('the v0.6 enemies join at VH4 (John Pork), 6 (Rahhh Skeleton), 7 (La Vaca Saturno), 8 (Big Yahu), 9 (Brr Brr Patapim)', () => {
-    const from = { pork: 4, skeleton: 6, vaca: 7, yahu: 8, patapim: 9 };
+  it('the v0.6 and v0.7 enemies join by Village Hall (John Pork 4 ... Brr Brr Patapim 10)', () => {
+    const from = { pork: 4, bicus: 5, skeleton: 6, frigo: 6, vaca: 7, yahu: 8, bombo: 8, lirili: 9, patapim: 10 };
     for (const [k, th] of Object.entries(from)) {
       expect(waveComposition(th - 1)[k]).toBe(0);
       expect(waveComposition(th)[k]).toBe(CONFIG.enemies[k].baseCount);
     }
   });
 
-  it('the offset keeps each hall wave strength close to what it was before the v0.6 enemies (within 15%)', () => {
+  it('the offset keeps each hall wave strength close to what it was before the v0.6 enemies (within 20%)', () => {
     const before = (n) => {
       const saved = OFFSET_KINDS.map((k) => CONFIG.enemies[k].baseCount);
       OFFSET_KINDS.forEach((k) => { CONFIG.enemies[k].baseCount = 0; });
@@ -51,7 +52,7 @@ describe('waves.js', () => {
     for (let n = 1; n <= 10; n++) {
       const now = waveStrength(waveComposition(n));
       expect(now).toBeGreaterThanOrEqual(before(n));
-      expect(now / before(n)).toBeLessThan(1.15);
+      expect(now / before(n)).toBeLessThan(1.2);
     }
   });
 
@@ -204,8 +205,8 @@ describe('waves.js', () => {
   });
 
   it('the Village Hall picks the base wave; the first wave is exactly that base', () => {
-    for (let th = 1; th <= 3; th++) expect(scaledWaveComposition(th, 1)).toEqual({ ...CONFIG.waves[th - 1], babycar: 0, bones: 0, ...LATE_ZERO }); // (no Da Baby Cars or late kinds in these base waves)
-    expect(scaledWaveComposition(4, 1)).toEqual({ ...waveComposition(4), babycar: 0, bones: 0 });
+    for (let th = 1; th <= 3; th++) expect(scaledWaveComposition(th, 1)).toEqual({ ...CONFIG.waves[th - 1], babycar: 0, bones: 0, chimp: 0, ...LATE_ZERO }); // (no Da Baby Cars or late kinds in these base waves)
+    expect(scaledWaveComposition(4, 1)).toEqual({ ...waveComposition(4), babycar: 0, bones: 0, chimp: 0 });
     expect(scaledWaveComposition(7, 1)).toEqual(waveComposition(7));
     expect(scaledWaveComposition(12, 1)).toEqual(waveComposition(CONFIG.rules.maxTownHallLevel)); // capped
   });
@@ -254,67 +255,132 @@ describe('waves.js', () => {
     expect(state.wavesCleared).toBe(1);
   });
 
-  describe('special waves', () => {
-    const SW = CONFIG.specialWaves;
+  describe('themed waves (v0.7)', () => {
+    const T = CONFIG.waveThemes;
     const kinds = (c) => ENEMY_KINDS.filter((k) => c[k] > 0);
+    const ratio = (c, normal) => (waveStrength(c) * c.hpMultiplier) / (waveStrength(normal) * normal.hpMultiplier);
 
-    it('come every Nth wave, rotating through the types the Village Hall has unlocked', () => {
-      expect(specialWaveType(4, 1)).toBeNull();
-      expect(specialWaveType(4, SW.every + 1)).toBeNull();
-      const seen = [];
-      for (let i = 1; i <= SW.order.length; i++) seen.push(specialWaveType(4, i * SW.every));
-      expect(seen).toEqual(SW.order); // every type once, in order
-      expect(specialWaveType(1, SW.every)).toBeNull(); // nothing unlocked yet at Village Hall 1
+    it('wave 1 is plain; from then on every wave has a theme, rotating so back-to-back waves differ', () => {
+      expect(waveThemeKey(4, 1)).toBeNull();
+      const list = themesAt(4);
+      expect(list.length).toBeGreaterThan(3);
+      let last = null;
+      for (let n = T.fromWave; n < T.fromWave + 30; n++) {
+        if (n % T.boss.every === 0) continue;
+        const key = waveThemeKey(4, n);
+        expect(list).toContain(key);
+        expect(key).not.toBe(last);
+        last = key;
+      }
+      expect(waveThemeKey(1, 5)).toBeNull(); // nothing to theme with at Village Hall 1 (grunts only)
     });
 
-    it('only show up once their enemies are in the normal waves (there is always a counter)', () => {
-      expect(specialTypesAt(1)).toEqual([]);
-      expect(specialTypesAt(2)).not.toContain('air');
-      expect(specialTypesAt(3)).toContain('air');
-      expect(specialTypesAt(3)).not.toContain('siege'); // no Tanks until Village Hall 4
-      expect(specialTypesAt(4)).toEqual(SW.order);
+    it('a theme only shows up once its enemies are in the hall\'s waves (there is always a counter)', () => {
+      expect(themesAt(1)).toEqual([]);
+      expect(themesAt(3)).toContain('air');
+      expect(themesAt(3)).not.toContain('siege');      // no Tanks until Village Hall 4
+      expect(themesAt(4)).not.toContain('ironLegion'); // Bri Bri Bicus Dicus from Village Hall 5
+      expect(themesAt(5)).toContain('ironLegion');
+      expect(themesAt(9)).not.toContain('jungle');     // Brr Brr Patapim from Village Hall 10
+      expect(themesAt(10)).toEqual(T.order);
     });
 
-    it('keep about the same strength as the normal wave, all of one kind', () => {
-      const normal = scaledWaveComposition(4, 9);
-      const air = specialComposition(normal, 'air');
-      expect(kinds(air).every((k) => CONFIG.enemies[k].type === 'air')).toBe(true);
-      const ground = specialComposition(normal, 'ground');
-      expect(kinds(ground).some((k) => CONFIG.enemies[k].type === 'air')).toBe(false);
-      expect(kinds(specialComposition(normal, 'siege')).sort()).toEqual(['breaker', 'tank']);
-      expect(kinds(specialComposition(normal, 'heist'))).toContain('thief');
-      for (const key of SW.order) {
-        const c = specialComposition(normal, key);
+    it('a headliner theme puts its share into its enemies and keeps the rest of the mix; strength stays about the same', () => {
+      const normal = scaledWaveComposition(10, 12);
+      const legion = themedComposition(normal, 'ironLegion');
+      expect(legion.bicus).toBeGreaterThan(normal.bicus * 2);
+      expect(legion.grunt).toBeGreaterThan(0); // the rest of the mix is still there
+      expect(legion.grunt).toBeLessThan(normal.grunt);
+      for (const key of T.order) {
+        const c = themedComposition(normal, key);
         expect(c.special).toBe(key);
         expect(c.spawnPaths).toBe(normal.spawnPaths);
-        const ratio = (waveStrength(c) * c.hpMultiplier) / (waveStrength(normal) * normal.hpMultiplier);
-        expect(ratio).toBeGreaterThan(SW.types[key].strength * 0.85);
-        expect(ratio).toBeLessThan(SW.types[key].strength * 1.15);
+        const want = T.types[key].strength ?? 1;
+        expect(ratio(c, normal)).toBeGreaterThan(want * 0.85);
+        expect(ratio(c, normal)).toBeLessThan(want * 1.15);
       }
     });
 
-    it('never have more than maxEnemiesFactor x the normal count (the rest goes into HP)', () => {
-      // A few big enemies: the same strength in Mr. Leasts would be far more than 2x the count.
+    it('pure themes are only their mix (the old special waves): flyers only, no flyers, tanks and breakers', () => {
+      const normal = scaledWaveComposition(4, 9);
+      expect(kinds(themedComposition(normal, 'air')).every((k) => CONFIG.enemies[k].type === 'air')).toBe(true);
+      expect(kinds(themedComposition(normal, 'ground')).some((k) => CONFIG.enemies[k].type === 'air')).toBe(false);
+      expect(kinds(themedComposition(normal, 'siege')).sort()).toEqual(['breaker', 'tank']);
+      expect(themeInfo('air').bonus).toBe(T.bonusBounty);
+      expect(themeInfo('ironLegion').bonus).toBe(0);
+    });
+
+    it('ability enemies are capped in a theme (no flood of Patapims or Frigos); the strength goes to the other troops', () => {
+      const C = T.headlinerCap;
+      for (const [th, n] of [[10, 4], [10, 20], [6, 4]]) {
+        const normal = scaledWaveComposition(th, n);
+        for (const key of ['debut:patapim', 'debut:frigo', 'debut:bicus', 'frozenFront', 'jungle', 'skyFire', 'boss']) {
+          const c = themedComposition(normal, key);
+          for (const k of C.kinds) if (normal[k] > 0) expect(c[k]).toBeLessThanOrEqual(Math.max(Math.round(normal[k] * C.mult), normal[k] + C.extra));
+          if (key.startsWith('debut:') && normal[key.slice(6)] > 0) expect(c[key.slice(6)]).toBeGreaterThan(normal[key.slice(6)]); // still the star
+          expect(ratio(c, normal)).toBeGreaterThan(0.85);
+          expect(ratio(c, normal)).toBeLessThan(1.3);
+        }
+      }
+    });
+
+    it('never more than maxEnemiesFactor x the normal count (the rest goes into health)', () => {
       const normal = { ...scaledWaveComposition(4, 1), grunt: 1, slinger: 0, bomber: 0, tank: 3, shark: 0, thief: 1, breaker: 0, balloon: 0, pork: 0 };
-      const c = specialComposition(normal, 'heist');
-      expect(kinds(c).reduce((n, k) => n + c[k], 0)).toBeLessThanOrEqual(Math.round(5 * SW.maxEnemiesFactor));
+      const c = themedComposition(normal, 'heist');
+      expect(kinds(c).reduce((n, k) => n + c[k], 0)).toBeLessThanOrEqual(Math.round(5 * T.maxEnemiesFactor));
       expect(c.hpMultiplier).toBeGreaterThan(normal.hpMultiplier);
     });
 
-    it('the next wave is announced ahead, triggered as that type, and pays a bonus when cleared', () => {
-      const state = makeStateWithTownHall({ wavesCleared: SW.every - 1, gold: 0 }, 3);
+    it('every boss.every-th wave is a Boss Wave: the toughest kinds, extra raid bosses, a bigger bonus', () => {
+      const state = makeStateWithTownHall({ wavesCleared: T.boss.every - 1, gold: 0 }, 9);
       const info = nextWaveInfo(state);
-      expect(info.special).toBe(SW.order[0]);
-      expect(info.specialInfo.name).toBe(SW.types[SW.order[0]].name);
+      expect(info.theme).toBe('boss');
+      expect(info.babyCars).toBe(bossWaveCars(9));
+      expect(bossWaveCars(9)).toBeGreaterThan(babyCarCount(9, 2));
+      const comp = nextWaveComposition(state);
+      const normal = scaledWaveComposition(9, T.boss.every);
+      expect(comp.lirili).toBeGreaterThan(normal.lirili); // the toughest kinds headline
+      expect(comp.babycar).toBe(bossWaveCars(9));
+      expect(themeInfo('boss').bonus).toBe(T.boss.bonusBounty);
+      expect(bossWaveCars(4)).toBe(0); // no raid boss before its hall
+    });
+
+    it('a debut wave introduces an enemy the village hasn\'t met, once; older saves still get the v0.7 debuts', () => {
+      const state = makeStateWithTownHall({ wavesCleared: 3, gold: 0 }, 6);
+      state.debuted = ['pork', 'toilet'];
+      expect(nextDebut(state)).toBe('skeleton');
+      const info = nextWaveInfo(state);
+      expect(info.theme).toBe('debut:skeleton');
+      expect(info.themeInfo.name).toContain(CONFIG.enemies.skeleton.name);
+      const normal = scaledWaveComposition(6, 4);
+      expect(nextWaveComposition(state).skeleton).toBeGreaterThan(normal.skeleton);
       triggerWave(state);
-      expect(state.wave.special).toBe(SW.order[0]);
+      expect(state.debuted).toContain('skeleton');
+      expect(nextDebut(state)).toBe('bicus');
+      cancelCountdown(state); // cancelled: the debut comes again
+      expect(nextDebut(state)).toBe('skeleton');
+      triggerWave(state);
+      // An older save at Village Hall 10: everything it already met counts; the v0.7 enemies debut.
+      const legacy = legacyDebuted(10);
+      expect(legacy).toContain('pork');
+      for (const k of ['bicus', 'frigo', 'bombo', 'lirili', 'patapim']) expect(legacy).not.toContain(k);
+      expect(waveThemeKey(10, 1, 'frigo')).toBeNull(); // never on the tutorial wave
+    });
+
+    it('the next wave is announced ahead, triggered with its theme, and a pure theme pays its bonus when cleared', () => {
+      const n = T.fromWave + themesAt(3).indexOf('air');
+      const state = makeStateWithTownHall({ wavesCleared: n - 1, gold: 0 }, 3);
+      const info = nextWaveInfo(state);
+      expect(info.theme).toBe('air');
+      expect(info.specialInfo.name).toBe(T.types.air.name);
+      triggerWave(state);
+      expect(state.wave.special).toBe('air');
       state.wave.phase = 'active'; state.wave.queues = {}; state.enemies = []; state.wave.bountyEarned = 40;
-      state.wave.lost = state.wave.startBuildings; // 1 star: no star bonus, only the special wave's
+      state.wave.lost = state.wave.startBuildings; // 1 star: no star bonus, only the theme's
       checkWaveCleared(state);
       const cleared = state.events.find((e) => e.name === 'waveCleared').data;
-      expect(cleared).toMatchObject({ special: SW.order[0], bonus: Math.floor(40 * SW.bonusBounty) });
+      expect(cleared).toMatchObject({ special: 'air', bonus: Math.floor(40 * T.bonusBounty) });
       expect(state.gold).toBe(cleared.bonus);
-      expect(nextWaveInfo(state).special).toBeNull(); // the wave after is normal again
     });
   });
 

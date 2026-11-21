@@ -29,7 +29,7 @@ export function waveComposition(n) {
  * The v0.6 kinds (OFFSET_KINDS) make room for themselves: rules.lateKindOffset of their total health comes back out of
  * the regular troops (rules.lateKindPool, each cut by the same share, never more than rules.lateKindMaxCut).
  */
-export const OFFSET_KINDS = ['pork', 'skeleton', 'vaca', 'yahu', 'patapim'];
+export const OFFSET_KINDS = ['pork', 'skeleton', 'vaca', 'yahu', 'patapim', 'lirili', 'bicus', 'frigo', 'bombo'];
 
 function withLateKinds(comp, n) {
   let added = 0;
@@ -123,7 +123,7 @@ function countQueues(queues) {
  * instead of one type arriving back-to-back.
  */
 // Every kind a wave queues (Neegies only come from balloons), in the order their shares are dealt to the paths.
-const QUEUE_ORDER = ['babycar', 'patapim', 'tank', 'breaker', 'skeleton', 'pork', 'grunt', 'slinger', 'yahu', 'thief', 'toilet', 'shark', 'bomber', 'vaca', 'balloon'];
+const QUEUE_ORDER = ['babycar', 'patapim', 'lirili', 'tank', 'frigo', 'bicus', 'breaker', 'skeleton', 'pork', 'grunt', 'slinger', 'yahu', 'thief', 'toilet', 'shark', 'bomber', 'bombo', 'vaca', 'balloon'];
 
 export function buildSpawnQueues(comp, paths) {
   const share = Object.fromEntries(paths.map((p) => [p, Object.fromEntries(ENEMY_KINDS.map((k) => [k, 0]))]));
@@ -193,52 +193,113 @@ export function scaledWaveComposition(th, n) {
   return comp;
 }
 
-// ---------- special waves (CONFIG.specialWaves) ----------
-const SW = () => CONFIG.specialWaves;
+// ---------- themed waves (CONFIG.waveThemes, v0.7) ----------
+const WT = () => CONFIG.waveThemes;
 const clampHall = (th) => Math.max(1, Math.min(th, CONFIG.rules.maxTownHallLevel));
+// Enemies that debut in v0.7 (new, or Brr Brr Patapim's new ability): an older save that already met every enemy at
+// its hall still gets their debut waves (legacyDebuted).
+const V07_DEBUTS = ['bicus', 'frigo', 'bombo', 'lirili', 'patapim'];
 
-/** Total enemy HP of a composition (before its hpMultiplier): the strength a special wave keeps. */
+/** Total enemy HP of a composition (before its hpMultiplier): the strength a themed wave keeps. */
 export function waveStrength(comp) {
   return ENEMY_KINDS.reduce((sum, k) => sum + (comp[k] || 0) * CONFIG.enemies[k].hp, 0);
 }
 
-/** Special wave types possible at Village Hall th: those whose `needs` kinds are in its base wave. */
-export function specialTypesAt(th) {
+/** The rotating themes possible at Village Hall th: those whose `needs` kinds are in its base wave, in `order`. */
+export function themesAt(th) {
   const base = waveComposition(clampHall(th));
-  return SW().order.filter((key) => SW().types[key].needs.every((k) => (base[k] || 0) > 0));
+  return WT().order.filter((key) => WT().types[key].needs.every((k) => (base[k] || 0) > 0));
 }
 
-/** The special wave type (a key of specialWaves.types) wave n at Village Hall th is, or null if normal. */
-export function specialWaveType(th, n) {
-  const every = SW().every;
-  if (!every || n % every !== 0) return null;
-  const types = specialTypesAt(th);
-  return types.length ? types[(n / every - 1) % types.length] : null;
+/** Kinds that join the waves by Village Hall (fromTownHall), in ENEMY_KINDS order: the ones that get a debut wave. */
+export function debutKindsAt(th) {
+  return ENEMY_KINDS.filter((k) => { const c = CONFIG.enemies[k]; return c.fromTownHall && c.baseCount && c.fromTownHall <= th; });
+}
+
+/** For a save from before debut waves: every debut kind of its hall counts as met, except the v0.7 ones. */
+export function legacyDebuted(th) {
+  return debutKindsAt(th).filter((k) => !V07_DEBUTS.includes(k));
+}
+
+/** The enemy whose debut wave is next for this village (or null): the first debut kind of its hall it hasn't met. */
+export function nextDebut(state) {
+  if (!Array.isArray(state.debuted)) return null; // (only a real village keeps the list; GameState always has one)
+  const met = new Set(state.debuted);
+  return debutKindsAt(townHallLevel(state)).find((k) => !met.has(k)) || null;
 }
 
 /**
- * A normal wave re-mixed into special type `key`: the same total enemy HP (x the type's strength) split
- * over the type's mix, same HP multiplier and spawn corners. Too many enemies -> fewer, tougher ones.
+ * The theme key of wave n at Village Hall th (null = a plain wave): 'debut:<kind>' if `debutKind` is due, else
+ * 'boss' every boss.every-th wave, else the next rotating theme. Wave 1 (and anything before fromWave) is plain.
  */
-export function specialComposition(normal, key) {
-  const t = SW().types[key];
+export function waveThemeKey(th, n, debutKind = null) {
+  if (n < WT().fromWave) return null;
+  if (debutKind) return `debut:${debutKind}`;
+  if (WT().boss.every && n % WT().boss.every === 0) return 'boss';
+  const list = themesAt(th);
+  return list.length ? list[(n - WT().fromWave) % list.length] : null;
+}
+
+/** A theme's { name, hint, pure, bonus } (bonus: share of the bounty paid on top when the wave is cleared). */
+export function themeInfo(key) {
+  if (!key) return null;
+  if (key === 'boss') { const B = WT().boss; return { name: B.name, hint: B.hint, pure: false, bonus: B.bonusBounty }; }
+  if (key.startsWith('debut:')) {
+    const cfg = CONFIG.enemies[key.slice(6)];
+    return cfg ? { name: `New: ${cfg.name}`, hint: `A new enemy joins the raid: ${cfg.role}`, pure: false, bonus: 0, debut: key.slice(6) } : null;
+  }
+  const t = WT().types[key];
+  return t ? { name: t.name, hint: t.hint, pure: !!t.pure, bonus: t.pure ? WT().bonusBounty : 0 } : null;
+}
+
+/** The theme's mix, share and strength (boss and debut themes are built from the wave itself). */
+function themeSpec(normal, key) {
+  if (key === 'boss') {
+    const B = WT().boss;
+    const kinds = ENEMY_KINDS.filter((k) => (normal[k] || 0) > 0 && !CONFIG.enemies[k].boss)
+      .sort((a, b) => CONFIG.enemies[b].hp - CONFIG.enemies[a].hp).slice(0, B.headliners);
+    return { mix: Object.fromEntries(kinds.map((k) => [k, 1])), share: B.share, strength: B.strength };
+  }
+  if (key.startsWith('debut:')) return { mix: { [key.slice(6)]: 1 }, share: WT().debut.share, strength: 1 };
+  const t = WT().types[key];
+  return { mix: t.mix, share: t.pure ? 1 : t.share, strength: t.strength ?? 1, pure: !!t.pure };
+}
+
+/**
+ * A normal wave re-mixed into theme `key`: `share` of its total enemy HP (x the theme's strength) goes to the theme's
+ * mix (kinds the wave has; a pure theme with `mix: null` = its ground kinds in their own proportions), and the rest
+ * of the normal mix stays at (1 - share). Same HP multiplier and spawn corners. Too many enemies -> fewer, tougher ones.
+ */
+export function themedComposition(normal, key) {
+  const spec = themeSpec(normal, key);
   const hp = (k) => CONFIG.enemies[k].hp;
-  // Weights: the type's mix (kinds the normal wave has), or for `mix: null` every ground kind it has,
-  // weighted by its share of the strength (so the troops just multiply up).
   const weights = {};
-  if (t.mix) {
-    for (const [k, w] of Object.entries(t.mix)) if ((normal[k] || 0) > 0) weights[k] = w;
+  if (spec.mix) {
+    for (const [k, w] of Object.entries(spec.mix)) if ((normal[k] || 0) > 0) weights[k] = w;
   } else {
     for (const k of ENEMY_KINDS) if ((normal[k] || 0) > 0 && CONFIG.enemies[k].type !== 'air') weights[k] = normal[k] * hp(k);
   }
   const totalW = Object.values(weights).reduce((a, b) => a + b, 0);
   if (!totalW) return { ...normal };
-  const budget = waveStrength(normal) * t.strength;
+  const budget = waveStrength(normal) * spec.strength * spec.share;
   const comp = { ...normal, special: key };
-  for (const k of ENEMY_KINDS) comp[k] = 0;
-  for (const [k, w] of Object.entries(weights)) comp[k] = Math.max(1, Math.round((budget * w) / totalW / hp(k)));
+  for (const k of ENEMY_KINDS) comp[k] = spec.pure ? 0 : Math.round((normal[k] || 0) * (1 - spec.share));
+  for (const [k, w] of Object.entries(weights)) comp[k] += Math.max(1, Math.round((budget * w) / totalW / hp(k)));
+  // Ability enemies are capped (waveThemes.headlinerCap); what they'd have had goes to the other troops.
+  const cap = WT().headlinerCap;
+  let spare = 0;
+  if (cap) {
+    for (const k of cap.kinds) {
+      if (!(comp[k] > 0)) continue;
+      const max = Math.max(Math.round((normal[k] || 0) * cap.mult), (normal[k] || 0) + cap.extra);
+      if (comp[k] > max) { spare += (comp[k] - max) * hp(k); comp[k] = max; }
+    }
+    const others = ENEMY_KINDS.filter((k) => comp[k] > 0 && !cap.kinds.includes(k) && !CONFIG.enemies[k].boss);
+    const pool = others.reduce((a, k) => a + comp[k] * hp(k), 0);
+    if (spare > 0 && pool > 0) for (const k of others) comp[k] = Math.round(comp[k] * (1 + spare / pool));
+  }
   const count = (c) => ENEMY_KINDS.reduce((n, k) => n + (c[k] || 0), 0);
-  const total = count(comp), max = Math.max(1, Math.round(count(normal) * SW().maxEnemiesFactor));
+  const total = count(comp), max = Math.max(1, Math.round(count(normal) * WT().maxEnemiesFactor));
   if (total > max) {
     const f = max / total;
     for (const k of ENEMY_KINDS) if (comp[k] > 0) comp[k] = Math.max(1, Math.floor(comp[k] * f));
@@ -247,16 +308,26 @@ export function specialComposition(normal, key) {
   return comp;
 }
 
-/** The village's next wave: special type (or null), Village Hall level and wave number. */
+/** The village's next wave: its theme (key and info, or null), Village Hall level, wave number and raid bosses. */
 export function nextWaveInfo(state) {
   const th = townHallLevel(state), n = nightWaveNumber(state);
-  const special = specialWaveType(th, n);
-  return { number: n, th, special, specialInfo: special ? SW().types[special] : null, babyCars: special ? 0 : babyCarCount(th, n) };
+  const theme = waveThemeKey(th, n, n >= WT().fromWave ? nextDebut(state) : null);
+  const info = themeInfo(theme);
+  const babyCars = theme === 'boss' ? bossWaveCars(th) : info && info.pure ? 0 : babyCarCount(th, n);
+  // (`special` / `specialInfo`: the theme under the names the HUD and tips have always read.)
+  return { number: n, th, theme, themeInfo: info, special: theme, specialInfo: info, babyCars };
+}
+
+/** Da Baby Cars on a Boss Wave: one more than its hall's usual count (none before the hall that has them). */
+export function bossWaveCars(th) {
+  const B = CONFIG.rules.babyCar;
+  if (!B || th < B.fromTownHall) return 0;
+  return (th >= B.lateTownHall ? B.countLate : B.count) + 1;
 }
 
 /**
- * How many Da Baby Cars (raid bosses) normal wave n at Village Hall th brings (rules.babyCar): from
- * fromTownHall, every `every`th wave; more from lateTownHall. Special waves never have them.
+ * How many Da Baby Cars (raid bosses) wave n at Village Hall th brings on its own schedule (rules.babyCar): from
+ * fromTownHall, every `every`th wave; more from lateTownHall. (Pure themes never have them; Boss Waves bring more.)
  */
 export function babyCarCount(th, n) {
   const B = CONFIG.rules.babyCar;
@@ -283,12 +354,12 @@ export function applyCrowdCap(comp) {
   return out;
 }
 
-/** The composition of the village's next wave (special waves included), capped at the crowd limit. */
+/** The composition of the village's next wave (its theme included), capped at the crowd limit. */
 export function nextWaveComposition(state) {
-  const { number, th, special, babyCars } = nextWaveInfo(state);
+  const { number, th, theme, babyCars } = nextWaveInfo(state);
   const normal = { ...scaledWaveComposition(th, number), babycar: 0 };
-  if (special) return applyCrowdCap(specialComposition(normal, special));
-  return applyCrowdCap({ ...normal, babycar: babyCars });
+  const comp = theme ? themedComposition(normal, theme) : normal;
+  return applyCrowdCap({ ...comp, babycar: babyCars });
 }
 
 /**
@@ -312,11 +383,14 @@ export function triggerWave(state, countdown = CONFIG.rules.waveCountdown) {
     hpMultiplier: comp.hpMultiplier,
     pack: comp.pack || 1, // crowd cap: each (non-boss) enemy counts this many times over (applyCrowdCap)
     bountyEarned: 0,
-    special: comp.special || null,
+    special: comp.special || null, // its theme key (waveThemes); the HUD names it
     // Wave stars: buildings standing as it starts (not walls), and how many get destroyed during it.
     startBuildings: countedBuildings(state),
     lost: 0
   };
+  // A debut wave: this village has now met that enemy (no debut for it again).
+  const info = themeInfo(state.wave.special);
+  if (info && info.debut && !(state.debuted || []).includes(info.debut)) state.debuted = [...(state.debuted || []), info.debut];
   emit(state, 'waveTriggered', { number: n, paths, special: state.wave.special });
   return state.wave;
 }
@@ -340,6 +414,9 @@ export function cancelCountdown(state) {
   const w = state.wave;
   if (!w || w.phase !== 'countdown') return false;
   const number = w.number;
+  // A cancelled debut wave gives the debut back (it comes again when the wave is started for real).
+  const info = themeInfo(w.special);
+  if (info && info.debut && Array.isArray(state.debuted)) state.debuted = state.debuted.filter((k) => k !== info.debut);
   state.wave = createIdleWave();
   state.sinceWaveCleared = Infinity;
   emit(state, 'waveCancelled', { number });
@@ -438,8 +515,9 @@ export function checkWaveCleared(state) {
   // No working mine and too broke to rebuild one: the gnomes salvage the cheapest for free.
   const salvaged = salvageMine(state);
   if (salvaged) ruins--;
-  // A special wave pays a bonus on top of its bounty (up to storage capacity).
-  let bonus = w.special ? addGold(state, Math.floor((w.bountyEarned || 0) * SW().bonusBounty)) : 0;
+  // A pure theme (the old special waves) or a Boss Wave pays a bonus on top of its bounty (up to storage capacity).
+  const theme = themeInfo(w.special);
+  let bonus = theme && theme.bonus ? addGold(state, Math.floor((w.bountyEarned || 0) * theme.bonus)) : 0;
   // Economy perks: Compound Interest / Night Dividend (Storage), Insurance (Storage), After Party (DJ Babyface).
   bonus += economyWavePayout(state, w);
   const cleared = { number: w.number, bounty: w.bountyEarned, rp: w.rpEarned || 0, ruins, salvaged: salvaged ? salvaged.id : null, special: w.special || null, bonus,

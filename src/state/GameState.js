@@ -9,7 +9,7 @@ import {
   checkBuy, checkUpgrade, planSwap, checkWallUpgrade, wallLevel, createBuilding, applyLevelUp, buildCost, footprintDims, getTownHall, townHallLevel, DEFENSE_TYPES
 } from '../logic/buildings.js';
 import { getCapacity, spendGold, addGold, setGold, collectMine, sellRefund, repairBuilding } from '../logic/economy.js';
-import { createIdleWave, skipCountdown, cancelCountdown } from '../logic/waves.js';
+import { createIdleWave, skipCountdown, cancelCountdown, legacyDebuted } from '../logic/waves.js';
 import { advanceTutorial, applyStarterBase, canSkipTutorial, TUTORIAL_DONE_STEP, TUTORIAL_NIGHT_STEP } from '../logic/tutorial.js';
 import { createClock, startTutorialWave, resumeClockOnLoad, startGrace, startNextWave } from '../logic/dayNight.js';
 import { simulate } from '../logic/simulate.js';
@@ -102,6 +102,7 @@ export class GameState {
     this.wallLevel = 1;          // every wall's level (Upgrade Walls raises them all; new walls start at it), saved
     this.wave = createIdleWave();
     this.wavePlan = null;        // the next wave's spawn corners ({ number, paths }, waves.js), saved
+    this.debuted = [];           // enemies whose debut wave this village has had (waves.js themed waves), saved
     this.wavesCleared = 0;      // nights survived
     this.nightsAtMaxTownHall = 0;
     this.clock = createClock();
@@ -142,6 +143,8 @@ export class GameState {
     this.fuelGuide = data.fuelGuide || 0;
     this.wavesCleared = data.wavesCleared;
     this.nightsAtMaxTownHall = data.nightsAtMaxTownHall;
+    // An older save already met its hall's enemies, except the ones new (or reworked) in v0.7.
+    this.debuted = data.debuted || legacyDebuted(this.townHallLevel);
     this.clock = data.clock;
     this.tutorialStep = Math.min(Math.max(1, data.tutorialStep), TUTORIAL_DONE_STEP);
     this.tutorialDone = data.tutorialDone || this.tutorialStep >= TUTORIAL_DONE_STEP;

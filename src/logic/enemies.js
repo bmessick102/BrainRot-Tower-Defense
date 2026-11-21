@@ -11,7 +11,7 @@ import { getNav, distanceField, nextStep } from './pathfinding.js';
 import { emit, nextId, random } from './util.js';
 import { enrageFactor } from './enrage.js';
 import { walkToward, moveToward } from './motion.js';
-import { stepEnemyAbility } from './specialEnemies.js';
+import { stepEnemyAbility, breatheFire } from './specialEnemies.js';
 
 /** A Village Hall's base wave (scripted for the first ones, the last scripted one grown after that). */
 function baseWaveFor(th) {
@@ -27,7 +27,7 @@ function baseWaveFor(th) {
 // Re-exported: they live in combat.js so a Wall Breaker can blow up from any death (being shot included).
 export { matchesTypes, enemyDamageVs, explode };
 
-export const ENEMY_KINDS = ['grunt', 'slinger', 'bomber', 'tank', 'shark', 'thief', 'breaker', 'balloon', 'neegy', 'babycar', 'toilet', 'pork', 'skeleton', 'bones', 'vaca', 'yahu', 'patapim'];
+export const ENEMY_KINDS = ['grunt', 'slinger', 'bomber', 'tank', 'shark', 'thief', 'breaker', 'balloon', 'neegy', 'babycar', 'toilet', 'pork', 'skeleton', 'bones', 'vaca', 'yahu', 'patapim', 'lirili', 'chimp', 'bicus', 'frigo', 'bombo'];
 // A Neegy dropped by a balloon floats down for this long (no moving or attacking) before it lands.
 export const LANDING_SECONDS = 0.7;
 
@@ -92,6 +92,7 @@ export function createEnemy(state, kind, spawnX, spawnY, hpMultiplier = 1) {
   const angle = random(state) * Math.PI * 2;
   const radius = Math.sqrt(random(state)) * SPAWN_JITTER;
   const hp = Math.round(cfg.hp * hpMultiplier);
+  const armor = cfg.armor ? Math.round(cfg.armor * hpMultiplier) : 0; // Bri Bri Bicus Dicus: broken before health
   return {
     id: nextId(state, 'e'),
     kind,
@@ -104,6 +105,7 @@ export function createEnemy(state, kind, spawnX, spawnY, hpMultiplier = 1) {
     alive: true,
     hit: false,
     attacking: false,
+    ...(armor ? { armor, maxArmor: armor } : {}),
     ...(cfg.invisibleUntilJump ? { hidden: true } : {}),
     ...(cfg.burrows ? { underground: true } : {}), // Skibidi Toilet: starts out tunneling
     ...(cfg.drops ? { dropTimer: null } : {})
@@ -344,6 +346,22 @@ export function stepEnemy(state, e, dt, nav = null) {
     e.cooldown = cfg.attackInterval;
     if (cfg.explodes) { explode(state, e, cfg); return; }
     revealEnemy(state, e); // so does its first hit (a base with no walls in its way)
+    if (cfg.kamikaze) {
+      // Chimpanzini Bananini: one hit on the building it reached, then it's gone (no bounty: nobody shot it).
+      const dealt = enemyDamageVs(cfg, attackTarget) * rage.damage * (e.pack || 1) * (1 - enemyWeaken(e));
+      e.alive = false;
+      e.hp = 0;
+      e.dived = true;
+      emit(state, 'enemyDive', { id: e.id, kind: e.kind, x: e.x, y: e.y, targetId: attackTarget.id });
+      damageBuilding(state, attackTarget, dealt, e);
+      return;
+    }
+    if (cfg.breath) {
+      // Bombombini Gusini: fire on its target, and a share of it on the buildings right next to it.
+      breatheFire(state, e, attackTarget, enemyDamageVs(cfg, attackTarget) * rage.damage * (e.pack || 1) * (1 - enemyWeaken(e)), damageBuilding);
+      emit(state, 'enemyAttack', { id: e.id, kind: e.kind, targetId: attackTarget.id });
+      return;
+    }
     if (cfg.type === 'ground') {
       // Jammed / melted enemies hit softer; Spiked Plating hits back.
       const dealt = enemyDamageVs(cfg, attackTarget) * rage.damage * (e.pack || 1) * (1 - enemyWeaken(e));
@@ -393,7 +411,8 @@ function stepBabyCar(state, e, cfg, hall, step, dt, rage) {
  * Wall Breakers, flyers, bosses and tunnelers never stop for him. Returns true if it dealt with him this step.
  */
 function fightHero(state, e, cfg, step, rage) {
-  if (!heroAwake(state) || cfg.type === 'air' || cfg.explodes || cfg.ramsToHall || cfg.burrows || e.entry || e.hackedT > 0) return false;
+  // (Chimpanzinis only go for buildings: they never stop for him.)
+  if (!heroAwake(state) || cfg.type === 'air' || cfg.explodes || cfg.ramsToHall || cfg.burrows || cfg.kamikaze || e.entry || e.hackedT > 0) return false;
   const h = state.hero;
   const d = distance(e.x, e.y, h.x, h.y);
   const reach = cfg.attackRange <= MELEE_REACH ? MELEE_REACH + 0.3 : cfg.attackRange;

@@ -60,6 +60,7 @@ export function serializeGame(state, now = new Date()) {
     spells: serializeSpells(state),    // Fuel Station spells brewed and waiting ("rage,heal"); missing in older saves
     fuelGuide: state.fuelGuide || 0,   // Fuel Station guide step (spells.js); missing in older saves
     wallLevel: wallLevel(state), // every wall's level (walls upgrade all at once); missing in older saves
+    debuted: [...(state.debuted || [])], // enemies whose debut wave this village has had (waves.js); missing in older saves
     buildings: state.buildings.map((b) => {
       const out = { id: b.id, type: b.type, level: b.level, col: b.col, row: b.row };
       if (b.type === 'mine') out.stock = Math.round((b.stock || 0) * 100) / 100;
@@ -265,6 +266,8 @@ export function deserializeGame(obj) {
     spells: deserializeSpells(obj.spells),
     fuelGuide: obj.fuelGuide || 0,
     wallLevel: walls,
+    // null = a save from before debut waves (GameState fills it in for its hall: waves.js legacyDebuted).
+    debuted: Array.isArray(obj.debuted) ? obj.debuted.filter((k) => typeof k === 'string' && CONFIG.enemies[k]) : null,
     buildings,
     nextId: maxId + 1
   };

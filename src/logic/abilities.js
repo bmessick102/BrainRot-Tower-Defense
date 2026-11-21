@@ -184,7 +184,9 @@ export function towerFireInterval(b) {
     + (b.djBoostT > 0 ? b.djBoostPct || 0 : 0)                             // DJ Babyface's Drop the Beat
     + (b.spellRageT > 0 ? b.spellRagePct || 0 : 0)                         // a Rage spell (spells.js)
     + (b._heroDecree || 0);                                                // the Brisket King's Royal Decree
-  return cfg.fireInterval / (1 + pct / 100) / lastStand;
+  // Frigo Camillo's cold aura (specialEnemies.js): slower shots while one is near.
+  const chill = 1 - Math.max(0, Math.min(90, b.frigoSlow || 0)) / 100;
+  return cfg.fireInterval / (1 + pct / 100) / lastStand / chill;
 }
 
 // ---------- checks (reasons are shown on the buttons) ----------

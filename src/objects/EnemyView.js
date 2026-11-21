@@ -16,20 +16,22 @@ const ENEMY_BADGE = 0x8e1f2a; // level badge on enemy health bars (buildings' is
 // On-screen height in pixels for real enemy art at zoom 1 (a 2x2 building is 128 px wide).
 const DISPLAY_HEIGHT = {
   grunt: 40, slinger: 44, bomber: 46, tank: 62, shark: 50, thief: 50, breaker: 46, balloon: 84, neegy: 48, babycar: 78, toilet: 50,
-  pork: 54, skeleton: 52, bones: 38, vaca: 64, yahu: 56, patapim: 82
+  pork: 54, skeleton: 52, bones: 38, vaca: 64, yahu: 56, patapim: 82,
+  lirili: 82, chimp: 40, bicus: 56, frigo: 58, bombo: 60 // v0.7
 };
 // A dropped Neegy starts this far up (px) and floats down over its landing time.
 const DROP_HEIGHT = 95;
 // Real flyer art floats this far above its shadow (the placeholder has the shadow built in).
 const FLY_HEIGHT = 24;
 // Some flyers float higher (the Neegy Balloon drifts well above the building it drops onto).
-const FLY_HEIGHT_BY_KIND = { balloon: 80, vaca: 46 };
+const FLY_HEIGHT_BY_KIND = { balloon: 80, vaca: 46, bombo: 44 };
 // Pictures drawn facing left, by texture key (the rest face right or front). Each pose has its own
 // picture, so facing is per picture: enemies always face where they're going.
 const FACES_LEFT = new Set([
   'enemy_bomber', 'enemy_shark', 'enemy_balloon', 'enemy_babycar',
   'enemy_shark_attack', 'enemy_shark_death', 'enemy_tank_death', 'enemy_thief_death',
-  'enemy_bones', 'enemy_bones_attack'
+  'enemy_bones', 'enemy_bones_attack',
+  'enemy_bicus', 'enemy_frigo', 'enemy_frigo_attack', 'enemy_frigo_death' // v0.7
 ]);
 // Extra poses: enemy_<kind>_attack / enemy_<kind>_death in art-source/enemies/, used when present. v0.6 abilities have
 // their own: enemy_pork_call (John Pork on the phone, while he calls) and enemy_skeleton_rage (Rahhh Skeleton's shield
@@ -161,7 +163,9 @@ export class EnemyView {
       this.applyFacing();
     }
     this.lastX = s.x;
-    this.hpBar.draw(s.x, s.y - this.lift - this.sprite.displayHeight - 10, e.hp / e.maxHp, e.hit && e.alive && !(tunneling && !e.flockSeen), enemyLevel(e));
+    // Armored (Bri Bri Bicus Dicus): its bar shows from the start, with the armor bar and shield while it holds.
+    const armor = e.maxArmor ? e.armor / e.maxArmor : null;
+    this.hpBar.draw(s.x, s.y - this.lift - this.sprite.displayHeight - 10, e.hp / e.maxHp, (e.hit || armor > 0) && e.alive && !(tunneling && !e.flockSeen), enemyLevel(e), armor);
     // Marked by a F.L.O.C.K Tower: an eye floats over its head (above the HP bar once it shows).
     const marked = (e.markBonus || 0) > 0 && e.alive;
     this.eye.setVisible(marked);

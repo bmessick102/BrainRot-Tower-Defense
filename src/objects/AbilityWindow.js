@@ -9,7 +9,7 @@
 import { Modal, confirmDialog } from './Modal.js';
 import { Button } from './Button.js';
 import { buildingTextureKey } from './BuildingView.js';
-import { drawBadge, fitWidth, fitIcon, addHeroBadge } from './uiDraw.js';
+import { drawBadge, fitWidth, fitIcon } from './uiDraw.js';
 import { COLORS, bodyStyle, textStyle, mix, RP_TEXT_COLOR } from '../theme.js';
 import { rpText } from '../logic/researchPoints.js';
 import { PATH_COLORS, PATH_TEXT_COLORS } from '../abilityConfig.js';
@@ -280,10 +280,14 @@ export function openResearchWindow(scene, gs, { onClose = null, startType = null
       g.fillStyle(COLORS.frame, 1).fillRoundedRect(tx, ty, tw, 30, 9);
       g.fillStyle(on ? 0x6cbf2c : 0x4a4f5a, 1).fillRoundedRect(tx + 2, ty + 2, tw - 4, 25, 8);
       g.fillStyle(0xffffff, 0.18).fillRoundedRect(tx + 5, ty + 4, tw - 10, 7, 4);
-      m.add(scene.add.text(tx + tw / 2, ty + 14, tb.label, textStyle(15)).setOrigin(0.5));
-      if (tb.types.some((t) => canResearchFor(gs, t))) {
-        drawBadge(g, tx + tw - 2, ty + 5, 8); // on the tab's top corner, clear of its label
-        m.add(scene.add.text(tx + tw - 2, ty + 4, '!', textStyle(12)).setOrigin(0.5));
+      // A red "!" inside the tab's right end (not over its corner, where it ran into the next tab); the label
+      // moves left to make room.
+      const ready = tb.types.some((t) => canResearchFor(gs, t));
+      const label = m.add(scene.add.text(tx + (ready ? (tw - 18) / 2 + 2 : tw / 2), ty + 14, tb.label, textStyle(15)).setOrigin(0.5));
+      fitWidth(label, tw - (ready ? 28 : 12));
+      if (ready) {
+        drawBadge(g, tx + tw - 13, ty + 14, 7);
+        m.add(scene.add.text(tx + tw - 13, ty + 13, '!', textStyle(11)).setOrigin(0.5));
       }
       const zone = m.add(scene.add.zone(tx, ty, tw, 30).setOrigin(0).setInteractive({ useHandCursor: true }));
       zone.on('pointerdown', () => {
@@ -299,29 +303,41 @@ export function openResearchWindow(scene, gs, { onClose = null, startType = null
     const balanceLeft = balance(scene, m, gs, true, m.x + W - 22, m.y + INFO_Y);
     drawPips(pg, balanceLeft - 14 - (18 * MAX_TIER + 8) / 2, m.y + INFO_Y, labPicks(gs, type)); // just left of the RP pill, whatever its width
 
-    // The tab's buildings: picture, name, its five tiers as squares colored by pick, "!" when research is ready.
+    // The tab's buildings: its picture in a small tile, then its name over its five tiers (slim bars colored by
+    // pick), centered together in the row, and a "!" badge on the right when research is ready. Everything is
+    // placed from the row's height (12 defenses make short rows), so nothing overlaps.
     const types = TABS.find((tb) => tb.key === tab).types;
-    const lx = m.x + 22, ly = m.y + TOP, itemH = Math.min(58, Math.floor((GRID_H + 4) / types.length));
+    const lx = m.x + 22, ly = m.y + TOP, itemH = Math.min(58, Math.floor((GRID_H + RESPEC_H + 4) / types.length)); // (down past the tree, beside its Reset path row)
     types.forEach((t, i) => {
       const y = ly + i * itemH, sel = t === type;
+      const top = y + 2, inner = itemH - 8; // the row's face
       const g = m.add(scene.add.graphics());
       g.fillStyle(COLORS.frame, sel ? 1 : 0.2).fillRoundedRect(lx, y, LIST_W, itemH - 4, 9);
-      g.fillStyle(sel ? 0x6cbf2c : 0xf3ecdd, 1).fillRoundedRect(lx + 2, y + 2, LIST_W - 4, itemH - 8, 8);
-      const pic = m.add(scene.add.image(lx + 24, y + itemH - 8, buildingTextureKey(scene, t, 1)).setOrigin(0.5, 1));
-      fitIcon(pic, 36, itemH - 10);
-      if (t === 'altar') m.add(addHeroBadge(scene, lx + 36, y + 13, 20)); // the Brisket King's portrait
-      const name = m.add(scene.add.text(lx + 48, y + 3, buildingName(t), sel ? textStyle(14) : bodyStyle(13.5, COLORS.ink, { fontStyle: 'bold' })));
-      fitWidth(name, LIST_W - 80); // ends before the "!" badge
+      g.fillStyle(sel ? 0x6cbf2c : 0xf3ecdd, 1).fillRoundedRect(lx + 2, top, LIST_W - 4, inner, 8);
+      // Picture tile.
+      const tileW = 32, tileX = lx + 5;
+      g.fillStyle(sel ? 0x4f9a22 : 0xe3dac6, 1).fillRoundedRect(tileX, top + 2, tileW, inner - 4, 6);
+      const pic = m.add(scene.add.image(tileX + tileW / 2, top + inner / 2, buildingTextureKey(scene, t, 1)));
+      fitIcon(pic, tileW - 4, inner - 6);
+      // Name over the tier bars, as one block centered in the row.
+      const ready = canResearchFor(gs, t);
+      const nx = tileX + tileW + 7, barH = Math.max(4, Math.min(6, Math.round(inner / 7)));
+      const name = m.add(scene.add.text(nx, 0, buildingName(t), sel ? textStyle(13.5) : bodyStyle(13, COLORS.ink, { fontStyle: 'bold' })));
+      fitWidth(name, lx + LIST_W - nx - (ready ? 30 : 10)); // ends before the "!" badge
+      const blockH = name.displayHeight + 2 + barH;
+      name.setY(top + (inner - blockH) / 2);
+      const barY = name.y + name.displayHeight + 2, barW = 15, barGap = 3;
       const picks = labPicks(gs, t);
       for (let d = 0; d < MAX_TIER; d++) {
-        g.fillStyle(picks[d] ? PATH_COLORS[picks[d]] : sel ? 0x3f7a1c : 0xcfc6b3, 1).fillRect(lx + 50 + d * 13, y + itemH - 16, 10, 6);
+        g.fillStyle(picks[d] ? PATH_COLORS[picks[d]] : sel ? 0x3f7a1c : 0xcfc6b3, 1).fillRoundedRect(nx + d * (barW + barGap), barY, barW, barH, barH / 2);
       }
-      if (canResearchFor(gs, t)) {
-        drawBadge(g, lx + LIST_W - 14, y + 14, 10);
-        m.add(scene.add.text(lx + LIST_W - 14, y + 13, '!', textStyle(14)).setOrigin(0.5));
+      if (ready) {
+        const r = Math.min(9, inner / 2 - 2), bx = lx + LIST_W - 15, by = top + inner / 2;
+        drawBadge(g, bx, by, r);
+        m.add(scene.add.text(bx, by - 1, '!', textStyle(Math.round(r * 1.4))).setOrigin(0.5));
       }
       const hover = m.add(scene.add.graphics().setVisible(false));
-      hover.fillStyle(0xffffff, 0.2).fillRoundedRect(lx + 2, y + 2, LIST_W - 4, itemH - 8, 8);
+      hover.fillStyle(0xffffff, 0.2).fillRoundedRect(lx + 2, top, LIST_W - 4, inner, 8);
       const zone = m.add(scene.add.zone(lx, y, LIST_W, itemH - 4).setOrigin(0).setInteractive({ useHandCursor: true }));
       zone.on('pointerover', () => hover.setVisible(!sel));
       zone.on('pointerout', () => hover.setVisible(false));

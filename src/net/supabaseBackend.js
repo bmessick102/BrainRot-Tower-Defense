@@ -223,4 +223,40 @@ export class SupabaseBackend {
       rank: Number(r.rank), username: r.username, bestWave: r.best_wave, bestTownHall: r.best_town_hall, isMe: !!r.is_me
     }));
   }
+
+  // ---------- other players (v0.7; supabase/migration-2026-11-21-player-profiles.sql) ----------
+  /** Players matching the search: [{ username, bestWave, bestTownHall, achievements, isMe }]. */
+  async searchPlayers({ query = '', minWave = 0, maxWave = null, townHall = null, sort = 'wave', limit = 30 } = {}) {
+    const rows = check(await this.db.rpc('search_players', { q: query || '', min_wave: minWave || 0, max_wave: maxWave, hall: townHall, sort, lim: limit }));
+    return (rows || []).map((r) => ({ username: r.username, bestWave: r.best_wave, bestTownHall: r.best_town_hall, achievements: r.achievements, isMe: !!r.is_me }));
+  }
+
+  /** A player's card, or null (see LocalBackend.playerProfile). */
+  async playerProfile(username) {
+    const r = check(await this.db.rpc('get_player_profile', { name: username }));
+    if (!r) return null;
+    return {
+      username: r.username, joinedAt: r.joined_at, publicBases: !!r.public_bases, isMe: !!r.is_me,
+      bestWave: r.best_wave || 0, bestTownHall: r.best_town_hall || 0, rank: Number(r.rank) || null,
+      achievements: (r.achievements || []).map((a) => ({ id: a.id, earnedAt: a.earned_at })),
+      bases: (r.bases || []).map((b) => ({ id: b.id, name: b.name, townHall: b.town_hall, bestWave: b.best_wave, wave: b.wave }))
+    };
+  }
+
+  /** One village to look at: { id, name, username, townHall, bestWave, save }; refused if its owner hides them. */
+  async playerBase(id) {
+    const r = check(await this.db.rpc('get_player_base', { base: id }));
+    if (!r) throw new Error('That village can’t be viewed.');
+    return { id: r.id, name: r.name, username: r.username, townHall: r.town_hall, bestWave: r.best_wave, save: r.save };
+  }
+
+  /** Whether others can view your villages (Settings). */
+  async getPublicBases() {
+    const r = check(await this.db.from('profiles').select('public_bases').eq('id', this.userId).maybeSingle());
+    return !r || r.public_bases !== false;
+  }
+
+  async setPublicBases(on) {
+    check(await this.db.rpc('set_public_bases', { on_: !!on }));
+  }
 }

@@ -69,7 +69,7 @@ export const CONFIG = {
     // the same strength while the new threats join it.
     lateKindOffset: 0.7,
     lateKindPool: ['grunt', 'slinger', 'bomber', 'tank', 'shark', 'thief'],
-    lateKindMaxCut: 0.35,
+    lateKindMaxCut: 0.55, // v0.7: 0.35 -> 0.55 so Village Halls 9-11 make room for Lirili Larila, the new Patapim and Bombombini too
     endlessHpGrowth: 1.14,
     maxTownHallLevel: 11,
     // Bonus Slots (v0.6.1, user, 2026-11-21; replaced v0.6.0's shared building pool): from Village Hall `fromTownHall`
@@ -920,11 +920,12 @@ export const CONFIG = {
       bounty: 32,
       researchPoints: 8
     },
-    // Tank with an earthquake: every quake.every s, while a building or wall is within quake.radius tiles, he stomps
-    // (quake.stompSeconds, standing still) and every building within quake.radius takes quake.damage (walls
-    // quake.wallMult x). Strong, not an instant win: Level 1 walls break in one quake, Level 8 walls take 7.
-    patapim: {
-      name: "Brr Brr Patapim",
+    // Tank with an earthquake (Brr Brr Patapim's ability until v0.7): every quake.every s, while a building or wall is
+    // within quake.radius tiles, it stomps (quake.stompSeconds, standing still) and every building within quake.radius
+    // takes quake.damage (walls quake.wallMult x). Strong, not an instant win: Level 1 walls break in one quake,
+    // Level 8 walls take 7. Uses Patapim's quake sound.
+    lirili: {
+      name: "Lirili Larila",
       role: "Earthquake Tank",
       radius: 0.5,
       type: "ground",
@@ -938,26 +939,145 @@ export const CONFIG = {
       attackRange: 0.6,
       bounty: 60,
       researchPoints: 14
+    },
+    // v0.7: a big, slow summoner. While he walks in (not while he's attacking, nor on the path in from the map edge)
+    // he drops a Chimpanzini Bananini (spawn.kind) every spawn.every s, as long as fewer than spawn.maxAlive of his
+    // are left. They're as tough as he is for the wave (his health multiplier and crowd-cap pack).
+    patapim: {
+      name: "Brr Brr Patapim",
+      role: "Jungle Caller",
+      radius: 0.5,
+      type: "ground",
+      spawn: { kind: "chimp", every: 3, count: 1, maxAlive: 8 },
+      fromTownHall: 10,
+      baseCount: 1,
+      hp: 2400,
+      speed: 0.45,
+      damage: 60,
+      attackInterval: 2,
+      attackRange: 0.6,
+      bounty: 60,
+      researchPoints: 14
+    },
+    // Dropped by Brr Brr Patapim (never in a wave's queue): runs at the nearest building (never walls), leaping over
+    // walls on the way, and hits the first building it reaches once (`kamikaze`: damage, then it's gone, no bounty).
+    chimp: {
+      name: "Chimpanzini Bananini",
+      role: "Banana Diver",
+      radius: 0.22,
+      type: "ground",
+      droppedBy: "patapim",
+      jumpsWalls: true,
+      kamikaze: true,
+      hp: 110,
+      speed: 1.5,
+      damage: 90,
+      attackInterval: 1,
+      attackRange: 0.5,
+      bounty: 3,
+      researchPoints: 1
+    },
+    // v0.7: a melee legionary in armor. `armor` (scaled like its health) takes every hit first; only once it's broken
+    // does its health go down, and the hit that breaks it is spent on the armor (its leftover damage is lost). Its
+    // health bar shows a steel armor bar and a shield while the armor holds.
+    bicus: {
+      name: "Bri Bri Bicus Dicus",
+      role: "Armored Legionary",
+      radius: 0.27,
+      type: "ground",
+      armor: 450,
+      fromTownHall: 5,
+      baseCount: 2,
+      hp: 300,
+      speed: 0.8,
+      damage: 26,
+      attackInterval: 1.2,
+      attackRange: 0.5,
+      bounty: 22,
+      researchPoints: 6
+    },
+    // v0.7: a slow walker in a cold aura. Every defense (and the Brisket King) within chillAura.radius tiles of it
+    // attacks chillAura.slowPct% slower (the strongest aura wins; they don't stack). Its footsteps play the Freeze
+    // spell's sound now and then.
+    frigo: {
+      name: "Frigo Camillo",
+      role: "Frost Walker",
+      radius: 0.3,
+      type: "ground",
+      chillAura: { radius: 2.5, slowPct: 35 },
+      fromTownHall: 6,
+      baseCount: 1,
+      hp: 750,
+      speed: 0.6,
+      damage: 22,
+      attackInterval: 1.2,
+      attackRange: 0.5,
+      bounty: 26,
+      researchPoints: 7
+    },
+    // v0.7: a fire-breathing flyer (like Clash's Dragon). From attackRange tiles it breathes fire on its target for full
+    // damage, and the flames lick breath.splashPct% of that onto every building and wall within breath.splashRadius
+    // tiles of the target. Only air-capable defenses can hit it.
+    bombo: {
+      name: "Bombombini Gusini",
+      role: "Fire Breather",
+      radius: 0.42,
+      type: "air",
+      breath: { splashRadius: 1, splashPct: 35 },
+      fromTownHall: 8,
+      baseCount: 1,
+      hp: 1100,
+      speed: 0.75,
+      damage: 55,
+      attackInterval: 1.6,
+      attackRange: 2.5,
+      bounty: 40,
+      researchPoints: 9
     }
   },
-  // Special waves (src/logic/waves.js): every `every`th wave is one of these, rotating through `order`
-  // (skipping types whose `needs` kinds aren't in that Village Hall's base wave yet, so there's always a
-  // counter). A special wave has about the same strength as the normal wave it replaces (its total enemy
-  // HP x `strength`), split over `mix` (weights; null = every ground kind of the normal wave, in the same
-  // proportions). Above `maxEnemiesFactor` x the normal wave's enemy count the counts shrink and the HP
-  // grows to match. Clearing one pays
-  // `bonusBounty` x the wave's bounty on top.
-  specialWaves: {
-    every: 3,
+  // Themed waves (v0.7, src/logic/waves.js; replaced v0.6's special wave every 3rd wave). From wave `fromWave` every
+  // wave has a theme, rotating through `order` and skipping themes whose `needs` kinds aren't in that Village Hall's
+  // base wave yet, so back-to-back waves differ. Each keeps about the strength of the normal wave it re-mixes (its
+  // total enemy HP x `strength`, default 1):
+  //   - a headliner theme gives `share` of that strength to its `mix` (weights over the kinds the wave has) and keeps
+  //     the rest of the normal mix at (1 - share);
+  //   - a `pure` theme is only its mix (null = every ground kind of the normal wave) and pays `bonusBounty` x the
+  //     wave's bounty on top when cleared (the old special waves).
+  // Above `maxEnemiesFactor` x the normal wave's enemy count the counts shrink and the health grows to match.
+  // Two waves come first: a debut (the first wave at which an enemy that joins by Village Hall can come, if the
+  // village hasn't had its debut: `debut.share` of the wave is that enemy), then every boss.every-th wave, the
+  // Boss Wave (the boss.headliners toughest kinds the wave has, Da Baby Car(s) when the hall has them, and
+  // boss.bonusBounty x the bounty on top). Da Baby Cars also keep their own schedule (rules.babyCar) on headliner
+  // and debut waves; pure themes never have them.
+  waveThemes: {
+    fromWave: 2,
     bonusBounty: 0.5,
     maxEnemiesFactor: 2,
-    order: ['swarm', 'air', 'ground', 'heist', 'siege'],
+    debut: { share: 0.45 },
+    // Enemies with abilities that pile up badly (auras, summoners, artillery...): a theme never brings more than
+    // `mult` x the normal wave's count of one (or `extra` more, whichever is higher); the health budget it would have
+    // had goes to the wave's other troops instead, so the strength stays the same.
+    headlinerCap: { mult: 3, extra: 2, kinds: ['toilet', 'pork', 'skeleton', 'vaca', 'yahu', 'patapim', 'lirili', 'bicus', 'frigo', 'bombo'] },
+    boss: { every: 10, name: 'Boss Wave', hint: 'The toughest enemies you have met, led by the raid boss', headliners: 4, share: 0.6, strength: 1.15, bonusBounty: 1 },
+    order: ['swarm', 'sneak', 'ironLegion', 'air', 'boneMarch', 'heist', 'frozenFront', 'bombSquad', 'skyFire', 'ground',
+      'signalLost', 'earthshaker', 'underground', 'artillery', 'jungle', 'siege'],
     types: {
-      swarm: { name: 'Swarm', hint: 'Hordes of weak enemies', mix: { grunt: 0.6, thief: 0.4 }, needs: ['thief'], strength: 0.8 },
-      air: { name: 'Air Raid', hint: 'Flyers only: build anti-air', mix: { bomber: 0.7, balloon: 0.15, vaca: 0.15 }, needs: ['bomber'], strength: 0.7 },
-      ground: { name: 'Ground Assault', hint: 'No flyers: more troops instead', mix: null, needs: ['bomber'], strength: 1 },
-      heist: { name: 'Heist', hint: 'A gang of Mr. Leasts after your gold', mix: { thief: 0.85, grunt: 0.15 }, needs: ['thief'], strength: 0.6 },
-      siege: { name: 'Siege', hint: 'Tanks and Wall Breakers', mix: { tank: 0.8, patapim: 0.12, breaker: 0.08 }, needs: ['tank'], strength: 1 }
+      swarm: { name: 'Swarm', hint: 'Hordes of weak enemies', pure: true, mix: { grunt: 0.6, thief: 0.4 }, needs: ['thief'], strength: 0.8 },
+      sneak: { name: 'Sneak Attack', hint: 'Sharks and thieves leap your walls', mix: { shark: 0.6, thief: 0.4 }, needs: ['shark'], share: 0.55 },
+      ironLegion: { name: 'Iron Legion', hint: 'Armored legionaries and Tanks: heavy hitters break armor', mix: { bicus: 0.7, tank: 0.3 }, needs: ['bicus'], share: 0.55 },
+      air: { name: 'Air Raid', hint: 'Flyers only: build anti-air', pure: true, mix: { bomber: 0.6, balloon: 0.15, vaca: 0.12, bombo: 0.13 }, needs: ['bomber'], strength: 0.7 },
+      boneMarch: { name: 'Bone March', hint: 'Rahhh Skeletons raise the dead beside armored legionaries', mix: { skeleton: 0.6, bicus: 0.4 }, needs: ['skeleton'], share: 0.55 },
+      heist: { name: 'Heist', hint: 'A gang of Mr. Leasts after your gold', pure: true, mix: { thief: 0.85, grunt: 0.15 }, needs: ['thief'], strength: 0.6 },
+      frozenFront: { name: 'Frozen Front', hint: 'Frigo Camillo slows your defenses as Tanks push in', mix: { frigo: 0.4, tank: 0.4, bicus: 0.2 }, needs: ['frigo'], share: 0.55 },
+      bombSquad: { name: 'Bomb Squad', hint: 'Wall Breakers blow a way in for the horde', mix: { breaker: 0.45, grunt: 0.55 }, needs: ['breaker'], share: 0.5 },
+      skyFire: { name: 'Sky Fire', hint: 'Fire-breathing geese and boulder-throwing cows', mix: { bombo: 0.5, vaca: 0.3, bomber: 0.2 }, needs: ['bombo'], share: 0.55 },
+      ground: { name: 'Ground Assault', hint: 'No flyers: more troops instead', pure: true, mix: null, needs: ['bomber'], strength: 1 },
+      signalLost: { name: 'Signal Lost', hint: 'John Pork jams your F.L.O.C.K Towers as thieves slip in', mix: { pork: 0.6, thief: 0.4 }, needs: ['pork'], share: 0.5 },
+      earthshaker: { name: 'Earthshaker', hint: 'Earthquakes crack your walls for Wall Breakers and Tanks', mix: { lirili: 0.5, tank: 0.3, breaker: 0.2 }, needs: ['lirili'], share: 0.55 },
+      underground: { name: 'Underground', hint: 'Skibidi Toilets tunnel under everything', mix: { toilet: 0.7, grunt: 0.3 }, needs: ['toilet'], share: 0.55 },
+      artillery: { name: 'Artillery', hint: 'Missiles and stones from long range', mix: { yahu: 0.5, slinger: 0.5 }, needs: ['yahu'], share: 0.55 },
+      jungle: { name: 'Jungle Stampede', hint: 'Brr Brr Patapim drops diving Chimpanzinis while Sharks run ahead', mix: { patapim: 0.6, shark: 0.4 }, needs: ['patapim'], share: 0.55 },
+      siege: { name: 'Siege', hint: 'Tanks and Wall Breakers', pure: true, mix: { tank: 0.8, lirili: 0.12, breaker: 0.08 }, needs: ['tank'], strength: 1 }
     }
   },
   // Rebalanced in v0.5 (R group, from headless runs of a maxed base per hall: scratch sim): VH2-4 were far harder

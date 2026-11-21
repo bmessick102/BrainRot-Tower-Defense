@@ -429,7 +429,15 @@ export function damageEnemy(state, e, amount, source = null) {
   amount *= 1 + mark + (e.vulnTimer > 0 ? e.vuln || 0 : 0);
   // F.L.O.C.K Exposed: a marked enemy sometimes takes double.
   if (e.exposedChance && random(state) < e.exposedChance) { amount *= e.exposedMult || 2; if (!source) source = 'crit'; }
-  e.hp -= amount;
+  // Bri Bri Bicus Dicus: while its armor holds, every hit goes into the armor. The hit that breaks it does no
+  // health damage at all: whatever was left over is lost (user, v0.7). Only later hits reach its health.
+  let toHp = amount;
+  if (e.armor > 0) {
+    e.armor -= amount;
+    toHp = 0;
+    if (e.armor <= 0) { e.armor = 0; emit(state, 'armorBroken', { id: e.id, kind: e.kind, x: e.x, y: e.y }); }
+  }
+  e.hp -= toHp;
   e.hit = true;
   emit(state, 'enemyHit', { id: e.id, amount, x: e.x, y: e.y, source });
   if (e.hp <= 0) {

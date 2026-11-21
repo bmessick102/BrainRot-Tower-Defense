@@ -198,13 +198,13 @@ describe('Select Row (edit mode)', () => {
 
 describe('the v0.6 enemies', () => {
   it('are in every list an enemy needs: kinds, descriptions, How to Play categories (each exactly once)', () => {
-    for (const k of ['pork', 'skeleton', 'vaca', 'yahu', 'patapim']) {
+    for (const k of ['pork', 'skeleton', 'vaca', 'yahu', 'patapim', 'lirili', 'chimp', 'bicus', 'frigo', 'bombo']) {
       expect(ENEMY_KINDS).toContain(k);
       expect(ENEMY_DESCRIPTIONS[k]).toBeTruthy();
     }
     expect([...ENEMY_ORDER].sort()).toEqual([...ENEMY_KINDS].sort());
     expect(new Set(ENEMY_ORDER).size).toBe(ENEMY_ORDER.length);
-    expect(ENEMY_CATEGORIES.map((c) => c.key)).toEqual(['ground', 'air', 'tanks', 'special']);
+    expect(ENEMY_CATEGORIES.map((c) => c.key)).toEqual(['ground', 'air', 'tanks', 'special', 'summoned']);
   });
 
   it('John Pork: a F.L.O.C.K that sees him from beyond 5 tiles is still silenced by his call', () => {
@@ -289,13 +289,13 @@ describe('the v0.6 enemies', () => {
     for (let th = 1; th <= CONFIG.rules.maxTownHallLevel; th++) expect(waveComposition(th * 3).bones || 0).toBe(0);
   });
 
-  it('Brr Brr Patapim: his quake hits every building and wall within its radius (walls harder), every few seconds', () => {
+  it('Lirili Larila (Brr Brr Patapim before v0.7): its quake hits every building and wall within its radius (walls harder)', () => {
     const s = attack(9);
-    const Q = CONFIG.enemies.patapim.quake;
+    const Q = CONFIG.enemies.lirili.quake;
     const wall = addBuilding(s, 'wall', 12, 10, 8);
     const store = addBuilding(s, 'storage', 12, 12, 10);
     const farStore = addBuilding(s, 'storage', 25, 25, 1);
-    const pat = tough(s, 'patapim', 11, 11);
+    const pat = tough(s, 'lirili', 11, 11);
     pat.quakeT = Q.every; // ready
     run(s, 0.05);
     expect(s.events.some((e) => e.name === 'quake')).toBe(true);

@@ -2,6 +2,29 @@
 
 The version shows in the bottom-left corner of every screen (`package.json` `version` plus the commit). Details for everything below are in [README.md](README.md).
 
+## 0.7.0
+
+"iBTD fixes and features 3": other players' villages, five new enemies, Brr Brr Patapim reworked, themed waves, a grouped What's New. Saves load as they are (still save version 7; a new optional `debuted` list). **Database:** run [supabase/migration-2026-11-21-player-profiles.sql](supabase/migration-2026-11-21-player-profiles.sql) (or all of schema.sql) for player search, player cards and visiting villages; without it those windows show an error and the rest of the game is unaffected. From this release on, this file and the What's New use the same four groups (format: [CLAUDE.md](CLAUDE.md)).
+
+### New Features
+- **Other players' villages.** Leaderboard rows open a player's card and their eye button visits their best village; Settings has **Find Players** (name search, League filter as a wave range, Village Hall filter, sort by furthest wave / Village Hall / achievements; `PlayerSearchWindow.js`). The card (`PlayerCardWindow.js`) shows league, joined date, furthest wave, Village Hall, rank, achievements (newest 8) and their villages best first, each with an eye. Visiting (`VisitScene.js` + `VisitHudScene.js`) draws their saved village read only with the game's building views: pan, zoom, tap a building for its level and perks, switch between their villages, Back reopens the card. "Let others view my villages" in Settings (`profiles.public_bases`, on by default). Server: `search_players`, `get_player_profile`, `get_player_base`, `set_public_bases` (security definer, login required, read only); the local backend has the same.
+- **Themed waves** (`CONFIG.waveThemes`, waves.js; replaces `specialWaves`). From wave 2 every wave has a theme rotating through the 16 the hall has unlocked (`order`, `needs`): headliner themes give `share` (about 55%) of the wave's strength to their mix and keep the rest of the normal mix; the 5 old special waves are `pure` themes and keep their +50% bonus. Every 10th wave is a **Boss Wave** (the 4 toughest kinds the wave has at 60%, x1.15 strength, one more Da Baby Car than usual, +100% bonus). A **debut wave** (45% of the wave) introduces each enemy that joins by Village Hall the first time the village can meet it (`state.debuted`, saved; older saves count their hall's enemies as met except the v0.7 ones). Da Baby Cars keep their schedule except on pure themes. Enemies with stacking abilities are capped per theme at 3x their normal count (or +2; `headlinerCap`), the rest of the budget going to the other troops, so a theme never floods the map with Patapims or Frigos. The tip about special waves became a "themes" tip.
+- **Bri Bri Bicus Dicus** (`bicus`, VH5): melee legionary with `armor` 450 (scaled like health). While armor is left every hit goes into it, and the hit that breaks it does no health damage (its leftover is lost); `armorBroken` plays `sfx_bicus_armor_break` with steel shards. Its health bar shows a steel armor bar and a shield (HealthBar `armor`). Sword sound = Rahhh Skeleton's. The Tower of Rah counts armor as toughness.
+- **Frigo Camillo** (`frigo`, VH6): a cold aura (`chillAura` 2.5 tiles, 35%): defenses fire slower (`towerFireInterval`), the Tower of Rah burns slower and the Brisket King swings slower within it (`b.frigoSlow`, `hero.frigoSlow`, `stepChillAuras`). Slowed defenses shimmer icy blue; a frosty ring follows it; its footsteps play the Freeze spell's sound every 3.5 s (at most one at once).
+- **Bombombini Gusini** (`bombo`, VH8): a flyer that breathes fire from 2.5 tiles: full damage to its target, 35% to every building and wall within 1 tile of it (`breatheFire`, `fireBreathFx`).
+- **Lirili Larila** (`lirili`, VH9): the earthquake tank (Brr Brr Patapim's old `quake`, numbers and sound unchanged).
+- **Chimpanzini Bananini** (`chimp`): dropped by Brr Brr Patapim; targets the nearest building (never walls), jumps walls, hits once (90) and is gone (`kamikaze`, `enemyDive`, no bounty).
+
+### Changes
+- **Brr Brr Patapim** reworked and moved to Village Hall 10: he drops a Chimpanzini every 3 s while walking in (not on the path in, not while attacking), up to 8 of his alive (`spawn`). 2,400 HP (was 2,800).
+- **How to Play:** every new enemy has its entry, tags and description; a fifth group, **Summoned** (Neegy, Skeleton, Chimpanzini); roster tiles size themselves to fit five groups.
+- **Leaderboard medals:** ranks 1-3 show the gold, silver and bronze medal pictures (`ui_medal_1`-`3`, art-source/ui) instead of colored circles (kept as the fallback).
+- **What's New is grouped** into New Features / Changes / Balance / Bug Fixes (colored headings, repeated on the next page), each entry tagged with its version (`PATCH_NOTES.sections`). The format guide for agents is in CLAUDE.md.
+- **RV Lab building list tidied:** no Brisket King portrait beside the Brisket King Altar any more; each row has its picture in a small tile, its name over slim tier bars (they overlapped the name in the short rows of the 12-defense list), and its "!" inside the row. The list uses the window's full height, and the Defenses / Economy tabs' "!" sits inside the tab instead of over its corner.
+
+### Balance
+- **Late waves make room for the new enemies:** `rules.lateKindMaxCut` 0.35 -> 0.55, so each hall's base wave stays within about 5% of its v0.6.3 strength (Village Halls 9-11 would otherwise be 11-18% stronger). Air Raids can bring Bombombini; Sieges bring Lirili Larila instead of Patapim.
+
 ## 0.6.3
 
 Saves load as they are (still save version 7).

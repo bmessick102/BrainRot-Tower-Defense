@@ -278,6 +278,43 @@ export function frostImpact(scene, x, y, radiusTiles, lightKey) {
   }
 }
 
+// ---------- Bombombini Gusini's fire breath (v0.7) ----------
+/**
+ * A stream of fire from `from` (its beak) to `to` (the target), a burst on the target and small flames on the
+ * buildings right next to it (`splash`: screen points). All in screen coordinates.
+ */
+export function fireBreathFx(scene, from, to, splash, lightKey) {
+  const dx = to.x - from.x, dy = to.y - from.y, dist = Math.hypot(dx, dy) || 1;
+  const angle = Phaser_angle(dx, dy);
+  const life = 260;
+  const stream = scene.add.particles(from.x, from.y, lightKey, {
+    speed: { min: dist / (life / 1000) * 0.85, max: dist / (life / 1000) * 1.05 },
+    angle: { min: angle - 7, max: angle + 7 },
+    lifespan: life,
+    scale: { start: 0.07, end: 0.2 },
+    alpha: { start: 1, end: 0.15 },
+    tint: FIRE_COLORS,
+    blendMode: 'ADD',
+    frequency: 12,
+    quantity: 3
+  }).setDepth(FX_DEPTH + 2);
+  scene.time.delayedCall(240, () => stream.stop());
+  scene.time.delayedCall(240 + life + 60, () => stream.destroy());
+  const burst = (p, size, delay) => scene.time.delayedCall(delay, () => {
+    const f = scene.add.image(p.x, p.y, lightKey).setBlendMode('ADD').setTint(0xff8a2a).setDepth(FX_DEPTH + 1).setScale(size);
+    scene.tweens.add({ targets: f, scale: size * 1.8, alpha: 0, duration: 360, ease: 'Cubic.easeOut', onComplete: () => f.destroy() });
+    const sparks = scene.add.particles(p.x, p.y, lightKey, {
+      speed: { min: 30, max: 110 }, angle: { min: 200, max: 340 }, lifespan: { min: 260, max: 520 },
+      scale: { start: 0.08, end: 0 }, alpha: { start: 1, end: 0 }, tint: FIRE_COLORS, blendMode: 'ADD', gravityY: 90, emitting: false
+    }).setDepth(FX_DEPTH + 2);
+    sparks.explode(Math.round(10 * size / 0.3));
+    scene.time.delayedCall(700, () => sparks.destroy());
+  });
+  burst(to, 0.32, 200);
+  for (const p of splash) burst(p, 0.18, 260);
+}
+const Phaser_angle = (dx, dy) => (Math.atan2(dy, dx) * 180) / Math.PI;
+
 // ---------- Firework rocket ----------
 export const FIREWORK_COLORS = [0xff3b5c, 0xffd23f, 0x3df5a7, 0x4cc9ff, 0xb46bff, 0xffffff];
 

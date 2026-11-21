@@ -23,6 +23,8 @@ import { BASE_NAME_MAX } from '../net/session.js';
 import { VillagesWindow } from '../objects/VillagesWindow.js';
 import { AchievementsWindow } from '../objects/AchievementsWindow.js';
 import { LeaderboardWindow } from '../objects/LeaderboardWindow.js';
+import { PlayerCardWindow } from '../objects/PlayerCardWindow.js';
+import { PlayerSearchWindow } from '../objects/PlayerSearchWindow.js';
 import { confirmDialog, promptDialog } from '../objects/Modal.js';
 import { drawBadge } from '../objects/uiDraw.js';
 import { leagueFor } from '../logic/leagues.js';
@@ -46,6 +48,7 @@ export class TitleScene extends Phaser.Scene {
     this.windowOpen = false;
     this.offline = !!(data && data.offline) || !session.configured; // no server set up: always offline
     this.justLoggedIn = !!(data && data.justLoggedIn);
+    this.reopenPlayer = (data && data.reopenPlayer) || null; // back from visiting a village: that player's card again
     this.notice = (data && data.notice) || '';
   }
 
@@ -137,6 +140,7 @@ export class TitleScene extends Phaser.Scene {
     }
 
     playMusic(this, MUSIC.title);
+    if (this.online && this.reopenPlayer && !this.windowOpen) { this.openPlayerCard(this.reopenPlayer); return; }
     // Patch notes, once per version: returning players see what changed; a brand-new player has nothing to compare
     // (their notes are just marked seen).
     if (!patchNotesSeen(this.storage)) {
@@ -208,7 +212,55 @@ export class TitleScene extends Phaser.Scene {
 
   openLeaderboard() {
     this.windowOpen = true;
-    new LeaderboardWindow(this, { session, onClose: () => { this.windowOpen = false; } });
+    this.leaderboard = new LeaderboardWindow(this, {
+      session, onClose: () => { this.windowOpen = false; this.leaderboard = null; },
+      onOpenPlayer: (name) => this.openPlayerCard(name),
+      onVisitBest: (name) => this.visitBest(name)
+    });
+  }
+
+  // ---------- other players (v0.7) ----------
+  /** A player's card, over whatever window opened it. */
+  openPlayerCard(username) {
+    this.windowOpen = true;
+    if (this.search) this.search.setFieldVisible(false);
+    new PlayerCardWindow(this, {
+      session, username,
+      onVisit: (profile, baseId) => this.visitVillage(profile.username, baseId, profile.bases),
+      onClose: () => {
+        if (this.search) this.search.setFieldVisible(true);
+        this.windowOpen = !!(this.search || this.leaderboard);
+      }
+    });
+  }
+
+  /** The eye button: straight to a player's best village (their card if none can be shown). */
+  async visitBest(username) {
+    if (this.opening) return;
+    try {
+      const p = await session.backend.playerProfile(username);
+      if (!this.sys.isActive()) return;
+      if (p && p.bases.length) { this.visitVillage(p.username, p.bases[0].id, p.bases); return; }
+    } catch { /* the card says why */ }
+    this.openPlayerCard(username);
+  }
+
+  /** Look at a village (VisitScene). */
+  visitVillage(username, baseId, bases) {
+    if (this.opening) return;
+    this.opening = true;
+    this.scene.start('VisitScene', { baseId, username, bases });
+  }
+
+  /** Find Players (from Settings). */
+  openSearch() {
+    this.windowOpen = true;
+    this.search = new PlayerSearchWindow(this, {
+      session, filters: this.lastSearch,
+      onOpenPlayer: (name) => this.openPlayerCard(name),
+      onVisitBest: (name) => this.visitBest(name),
+      onClose: () => { if (this.search) this.lastSearch = this.search.filters; this.search = null; this.windowOpen = false; }
+    });
   }
 
   /** START GAME (online): the current village, or make the first one. */
@@ -340,6 +392,9 @@ export class TitleScene extends Phaser.Scene {
       storage: this.storage,
       hasSave: this.hasSave,
       account: this.online ? { username: session.user.username, email: session.user.email } : null,
+      // v0.7: Find Players and "Let others view my villages" (online only).
+      backend: this.online && !session.offline ? session.backend : null,
+      onFindPlayers: this.online && !session.offline ? () => this.openSearch() : null,
       onDeleteSave: () => { deleteGame(this.storage); deleted = true; },
       onClose: () => {
         this.settings = null;
