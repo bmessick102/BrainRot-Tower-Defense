@@ -4,9 +4,17 @@
 // icon: what to draw beside an entry: { building: type } (its Level 1 picture), { enemy: kind }, { spell: kind },
 // { hero: true } (the Brisket King's badge) or { texture: key }.
 export const PATCH_NOTES = {
-  version: '0.6.0',
-  title: "What's New in v0.6",
+  version: '0.6.1',
+  title: "What's New in v0.6.1",
   entries: [
+    {
+      icon: { enemy: 'bones' }, title: 'Rahhh Skeleton now summons Skeletons (from Village Hall 6)',
+      text: 'Near your base, Rahhh Skeleton now bashes his shield and three Skeletons climb out of the ground around him, then more every few seconds (up to six of his at once). Take him out before he gets close! He no longer enrages the enemies around him.'
+    },
+    {
+      icon: { building: 'townHall', level: 11 }, title: 'New: Village Hall 11 and Bonus Slots',
+      text: "A new top Village Hall. You keep all your building limits, and get 5 Bonus Slots on top: each is one more building of any kind past its limit, at the normal price. Pick any mix, even five more Towers of Rah! Sell one to free its slot. It also allows 12 more walls."
+    },
     {
       icon: { building: 'ksi' }, title: 'New defense: KSI Tower',
       text: 'Unlocks at Village Hall 5. It throws ice-cold bottles that splash ground and air enemies and chill them: chilled enemies slow down and turn icy blue. Its RV Lab paths: Blizzard, Fully Frozen and Snowball.'
@@ -14,10 +22,6 @@ export const PATCH_NOTES = {
     {
       icon: { enemy: 'pork' }, title: 'New enemy: John Pork (from Village Hall 4)',
       text: 'When a F.L.O.C.K Tower spots him, he makes a phone call that silences the F.L.O.C.K Towers around him for a few seconds: no marks, no reveals.'
-    },
-    {
-      icon: { enemy: 'skeleton' }, title: 'New enemy: Rahhh Skeleton (from Village Hall 6)',
-      text: 'He bashes his shield to send himself and every enemy around him into a rage: they hit harder and move faster for a while.'
     },
     {
       icon: { enemy: 'vaca' }, title: 'New enemy: La Vaca Saturno (from Village Hall 7)',
@@ -30,10 +34,6 @@ export const PATCH_NOTES = {
     {
       icon: { enemy: 'patapim' }, title: 'New enemy: Brr Brr Patapim (from Village Hall 9)',
       text: 'A huge, slow tank whose earthquakes shake every building and wall around him. Walls take extra damage.'
-    },
-    {
-      icon: { building: 'townHall', level: 11 }, title: 'New: Village Hall 11 and one building limit',
-      text: "A new top Village Hall. At Village Hall 11, each building's limit becomes one shared limit for your village: build any mix, even five Towers of Rah! Copies past a building's usual limit cost 50% more each. It also allows 12 more walls."
     },
     {
       icon: { building: 'wall' }, title: 'Move a whole row of walls',
@@ -53,7 +53,7 @@ export const PATCH_NOTES = {
     },
     {
       icon: { texture: 'ui_shop_button' }, title: 'Smaller things',
-      text: 'The shop\'s page arrows are blue now. Brr Brr Patapim, John Pork and Rahhh Skeleton joined the title screen.'
+      text: 'The shop\'s page arrows are blue now. Brr Brr Patapim, John Pork, Rahhh Skeleton and La Vaca Saturno joined the title screen, with La Vaca flying in over the heroes.'
     },
     {
       icon: { building: 'mortar', level: 7 }, title: 'Fixed: mortar firing while loading',

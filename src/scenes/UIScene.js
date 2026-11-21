@@ -5,7 +5,8 @@ import { CONFIG } from '../config.js';
 import { IS_TOUCH } from '../device.js';
 import {
   DEFENSE_TYPES, ECONOMY_TYPES, WALL_TYPES, buildableCount, buildCost, buildingName, checkBuy, checkUpgrade, countOwned, isDefense,
-  levelStats, limitFor, maxHp, maxLevel, typeConfig, footprintDims, wallLevel, isPooled, poolActive, poolSize, poolUsed, roomFor, poolTownHall
+  levelStats, limitFor, maxHp, maxLevel, typeConfig, footprintDims, wallLevel, takesBonusSlot, bonusActive, bonusSlotCount, bonusSlotsUsed,
+  bonusSlotsFree, nextTakesBonusSlot, bonusTownHall
 } from '../logic/buildings.js';
 import { checkRepair, formatGold, repairCost, hallIncomeRate, mineStockCap } from '../logic/economy.js';
 import { enemiesLeft, nightWaveNumber, nextWaveInfo, wavePlanCounts } from '../logic/waves.js';
@@ -855,7 +856,7 @@ export class UIScene extends Phaser.Scene {
     // Footer: hint on the left, gold / capacity in a dark pill in the middle.
     const fy = FOOTER.y + FOOTER.h / 2 - 2;
     c.add(this.add.text(TRAY.x + 18, fy, IS_TOUCH ? 'Tap a building, drag it where you want it, then tap Place' : 'Pick a building, then click the map to place it', textStyle(15)).setOrigin(0, 0.5));
-    // Village Hall 11: how full the shared building pool is (center of the footer).
+    // Village Hall 11: how many of its Bonus Slots are used (center of the footer).
     this.footerPool = this.add.text(SHOP_W / 2 - 40, fy, '', textStyle(16)).setOrigin(0.5);
     c.add(this.footerPool);
     this.footerPill = this.add.graphics();
@@ -868,8 +869,8 @@ export class UIScene extends Phaser.Scene {
 
   refreshShopFooter() {
     const fy = FOOTER.y + FOOTER.h / 2 - 2;
-    const pool = poolActive(this.gs.townHallLevel);
-    this.footerPool.setVisible(pool).setText(pool ? `Buildings ${poolUsed(this.gs.buildings)} / ${poolSize()}` : '');
+    const bonus = bonusActive(this.gs.townHallLevel);
+    this.footerPool.setVisible(bonus).setText(bonus ? `Bonus Slots ${bonusSlotsUsed(this.gs)} / ${bonusSlotCount(this.gs.townHallLevel)}` : '');
     this.footerGold.setText(`${formatSpaced(this.gs.gold)} / ${formatSpaced(this.gs.capacity)}`);
     const w = this.footerGold.width + 56, right = SHOP_W - TRAY.x - 40;
     this.footerPill.clear().fillStyle(0x000000, 0.4).fillRoundedRect(right - w, fy - 13, w, 26, 13);
@@ -878,15 +879,12 @@ export class UIScene extends Phaser.Scene {
   }
 
   /**
-   * How many more of this tab's buildings the Village Hall level still allows. At the top hall (the shared pool) a
-   * pooled type counts the copies still under its old cap (the ones at the normal price), never more than the pool's room.
+   * How many more of this tab's buildings the Village Hall level still allows under their caps. (Village Hall 11's
+   * Bonus Slots aren't counted per tab: they're shared by every tab, and the footer shows them.)
    */
   tabBuildable(types) {
     const th = this.gs.townHallLevel;
-    if (!poolActive(th)) return types.reduce((n, t) => n + Math.max(0, limitFor(t, th) - countOwned(this.gs.buildings, t)), 0);
-    const room = Math.max(0, poolSize() - poolUsed(this.gs.buildings));
-    const pooled = types.filter(isPooled).reduce((n, t) => n + Math.max(0, limitFor(t, th) - countOwned(this.gs.buildings, t)), 0);
-    return Math.min(room, pooled) + types.filter((t) => !isPooled(t)).reduce((n, t) => n + roomFor(this.gs, t), 0);
+    return types.reduce((n, t) => n + Math.max(0, limitFor(t, th) - countOwned(this.gs.buildings, t)), 0);
   }
 
   setShopTab(tab) {
@@ -1016,9 +1014,9 @@ export class UIScene extends Phaser.Scene {
     const rowY = h - 40;
     const trait = this.add.text(10, rowY, this.cardTrait(type, w < 130), textStyle(13)).setOrigin(0, 1);
     const builtLabel = this.add.text(w - 10, rowY - 17, type === 'wall' ? 'Walls:' : 'Built:', textStyle(11)).setOrigin(1, 1);
-    // (Village Hall 11: pooled types share the footer's "Buildings n / N"; the card just counts its own.)
-    const pooledNow = isPooled(type) && poolActive(th);
-    const built = this.add.text(w - 10, rowY + 1, pooledNow ? `${countOwned(this.gs.buildings, type)}` : `${countOwned(this.gs.buildings, type)}/${limitFor(type, th)}`, textStyle(16)).setOrigin(1, 1);
+    // (Village Hall 11: copies past the cap are in Bonus Slots; the count turns gold.)
+    const owned = countOwned(this.gs.buildings, type), cap = limitFor(type, th);
+    const built = this.add.text(w - 10, rowY + 1, `${owned}/${cap}`, textStyle(16, owned > cap && type !== 'wall' ? COLORS.textGold : COLORS.text)).setOrigin(1, 1);
     // Narrow cards (a full Defenses tab): wrap the trait onto a second line (growing upward) so it never runs
     // into the Built count.
     const room = w - 10 - Math.max(built.width, builtLabel.width) - 6 - 10;
@@ -1031,6 +1029,15 @@ export class UIScene extends Phaser.Scene {
     cost.setX(w / 2 - pw / 2 + cost.width / 2);
     coin.setX(w / 2 + pw / 2 - 12);
     card.add([g, icon, name, trait, builtLabel, built, cost, coin]);
+    // Village Hall 11: at its cap, the next one goes in a Bonus Slot (a gold tag over the bottom of the picture; also
+    // while the card is locked for gold or a wave, below that lock's pill).
+    if (nextTakesBonusSlot(this.gs, type) && bonusSlotsFree(this.gs) > 0) {
+      const tag = this.add.text(cx, rowY - 37, `Bonus Slot · ${bonusSlotsFree(this.gs)} left`, textStyle(13, COLORS.text)).setOrigin(0.5);
+      fitWidth(tag, w - 26);
+      const tg = this.add.graphics();
+      drawGlossy(tg, cx - tag.displayWidth / 2 - 9, tag.y - 11, tag.displayWidth + 18, 22, 0xf2b632, { radius: 11, lip: 2, shadow: false });
+      card.add([tg, tag]);
+    }
     // The Brisket King's altar: his portrait beside it.
     if (type === 'altar') { const hb = addHeroBadge(this, w - 30, tileY - 22, 38); if (locked) hb.setAlpha(0.55); card.add(hb); }
     if (locked) {
@@ -1078,15 +1085,13 @@ export class UIScene extends Phaser.Scene {
     const unlock = typeConfig(type).unlockTownHall ?? 1;
     const limitNow = limitFor(type, th);
     const allowed = th < unlock ? `Unlocks at VH${unlock}`
-      : isPooled(type) && poolActive(th) ? `Built ${countOwned(this.gs.buildings, type)} · village ${poolUsed(this.gs.buildings)} / ${poolSize()} buildings`
-        : `${type === 'wall' ? 'Walls' : 'Built'} ${countOwned(this.gs.buildings, type)} / ${limitNow} at VH${th}`;
+      : `${type === 'wall' ? 'Walls' : 'Built'} ${countOwned(this.gs.buildings, type)} / ${limitNow} at VH${th}`;
     const costText = type === 'wall' ? `Cost ${formatGold(buildCost(type, this.gs))} (Level ${wallLevel(this.gs)})` : `Cost ${formatGold(buildCost(type, this.gs))}`;
     c.add(this.add.text(18, header + 16, `${costText} · ${allowed}`, bodyStyle(14, COLORS.inkAccent)));
-    // Village Hall 11's shared pool: how extra copies work for this type.
-    const cap = limitFor(type, poolTownHall());
-    const poolNote = isPooled(type) && poolActive(th)
+    // Village Hall 11's Bonus Slots: how extra copies of this type work.
+    const poolNote = takesBonusSlot(type) && bonusActive(th) && limitNow > 0
       ? `
-Village Hall ${poolTownHall()}: build any mix of buildings up to ${poolSize()} in all. Each ${buildingName(type)} past ${cap} costs ${Math.round((CONFIG.rules.buildingPool.extraCostGrowth - 1) * 100)}% more than the one before.` : '';
+Bonus Slots: past ${limitNow}, each ${buildingName(type)} takes one of your ${bonusSlotCount(th)} Bonus Slots (${bonusSlotsFree(this.gs)} free), at the normal price. Sell one to free its slot.` : '';
     const desc = this.add.text(18, header + 40, (BUILDING_DESCRIPTIONS[type] || '') + poolNote, bodyStyle(14, COLORS.ink, { wordWrap: { width: W - 36 }, lineSpacing: 3 }));
     c.add(desc);
     const top = desc.y + desc.height + 14;
@@ -1372,8 +1377,8 @@ Village Hall ${poolTownHall()}: build any mix of buildings up to ${poolSize()} i
     if (b.type === 'townHall') {
       const rate = hallIncomeRate(b.level);
       const next = nextWaveInfo(this.gs);
-      // The level before the pool's: say what the next upgrade brings.
-      const poolNext = b.level === poolTownHall() - 1 ? [`Level ${poolTownHall()}: one shared building limit (${poolSize()}, any mix)`] : [];
+      // The level before the Bonus Slots': say what the next upgrade brings.
+      const poolNext = b.level === bonusTownHall() - 1 ? [`Level ${bonusTownHall()}: ${CONFIG.rules.bonusSlots.count} Bonus Slots (extra buildings of any kind)`] : [];
       return [`Next attack: wave ${next.number}${next.specialInfo ? ` (${next.specialInfo.name})` : ''}`, ...(rate > 0 ? [`Makes ${rate} gold / s on its own`] : []), ...poolNext];
     }
     return [];

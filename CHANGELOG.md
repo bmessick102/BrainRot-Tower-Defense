@@ -2,6 +2,19 @@
 
 The version shows in the bottom-left corner of every screen (`package.json` `version` plus the commit). Details for everything below are in [README.md](README.md).
 
+## 0.6.1
+
+Saves load as they are (still save version 7). Details in [README.md](README.md) under the enemy list.
+
+### Changed
+- **Village Hall 11 reworked: Bonus Slots instead of the shared building limit.** Every building keeps its Village Hall 10 limit, and Village Hall 11 adds 5 Bonus Slots on top: each is one more building of any kind (not unique buildings or walls) past its limit, at the normal price, any mix. Selling a copy frees its slot. The shop shows a gold "Bonus Slot · n left" tag on capped cards and "Bonus Slots n / 5" in its footer. The +50% price for extra copies is gone. Villages already more than 5 past their limits keep everything but can't add more extras.
+- **Rahhh Skeleton reworked:** instead of enraging the enemies around him, he summons. Within 4 tiles of the building he's after he bashes his shield and 3 **Skeletons** climb out of the ground around him, then more every 10 s while fewer than 6 of his are standing. They're as tough as he is for the wave. His enrage (+40% damage, +25% speed) and its red tint are gone.
+- How to Play's enemy roster is as wide as its biggest category's row, so the 6 Special enemies fit.
+
+### New
+- **Skeleton** (`bones`): the summoned minion, with its own walk, attack and death pictures. Weak and quick (80 HP, 10 per hit, speed 1.2), worth 2 gold and 1 Burger.
+- La Vaca Saturno flies in on the title screen over the heroes, left of the logo.
+
 ## 0.6.0
 
 A feature release (the 13-item "Fixes & Features Batch 2"). Details in [README.md](README.md): KSI Tower, Village Hall 11, and the enemy list under Walls and pathfinding. Saves load as they are (still save version 7). **Database:** run [supabase/migration-2026-11-21-village-hall-11.sql](supabase/migration-2026-11-21-village-hall-11.sql) (or all of schema.sql) so the leaderboard counts Village Hall 11; the game works without it.
@@ -9,7 +22,7 @@ A feature release (the 13-item "Fixes & Features Batch 2"). Details in [README.m
 ### New
 - **KSI Tower** (Village Hall 5): an ice tower that splashes ground and air enemies and chills them (30-50% slower, icy blue). Slows never stack (the strongest wins); bosses take half. Perk paths Blizzard, Fully Frozen and Snowball.
 - **Five new enemies:** John Pork (VH4, silences F.L.O.C.K Towers with a phone call), Rahhh Skeleton (VH6, a shield bash that enrages enemies around him), La Vaca Saturno (VH7, a tanky flyer whose boulders bounce 3 times), Big Yahu (VH8, missiles with a red target ring first), Brr Brr Patapim (VH9, earthquakes that hit every building and wall around him).
-- **Village Hall 11** (250,000 gold), the new top level, with **the shared building limit:** the per-type caps become one pool of 56 buildings (any mix); copies past a type's cap cost +50% each (compounding). Unique buildings and walls keep their caps; Village Hall 11 adds 12 walls. Village Hall 10 keeps the usual caps. The shop shows "Buildings n / 56".
+- **Village Hall 11** (250,000 gold), the new top level, with **the shared building limit:** the per-type caps become one pool of 56 buildings (any mix); copies past a type's cap cost +50% each (compounding). Unique buildings and walls keep their caps; Village Hall 11 adds 12 walls. Village Hall 10 keeps the usual caps. The shop shows "Buildings n / 56". (Replaced by Bonus Slots in 0.6.1.)
 - **Select Row** in edit mode: a toggle beside the Shift pad; tap a wall to pick up its whole straight row and move it.
 - **Spell sounds:** each spell has its own cast sound (repeat casts within half a second stay quiet, at most two of one at once).
 - **How to Play:** the Enemies tab is a new roster: every enemy as a picture card on one panel, grouped into Ground, Air, Tanks & Bosses and Special, with the picked enemy's details beside it. KSI Tower and the new enemies have entries.

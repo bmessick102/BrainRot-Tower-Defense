@@ -122,7 +122,7 @@ export const SFX = {
   ksiImpact: 'sfx_ksi_impact',            // a KSI Tower bottle bursts
   vacaImpact: 'sfx_vaca_impact',          // La Vaca Saturno's boulder lands or bounces
   porkCall: 'sfx_pork_call',              // John Pork's call (never over itself)
-  skeletonRage: 'sfx_skeleton_rage',      // Rahhh Skeleton's shield bash
+  skeletonRage: 'sfx_skeleton_rage',      // Rahhh Skeleton's shield bash (as he summons Skeletons)
   skeletonAttack: 'sfx_skeleton_attack',  // ...and his sword swing
   patapimQuake: 'sfx_patapim_quake'       // Brr Brr Patapim's earthquake (a clip of it per quake)
 };
@@ -156,6 +156,7 @@ export const ENEMY_ATTACK_SFX = {
   neegy: SFX.neegyHit,
   pork: SFX.enemyHitSmall,
   skeleton: SFX.skeletonAttack,
+  bones: SFX.enemyHitSmall,
   patapim: SFX.enemyHitBig
 };
 

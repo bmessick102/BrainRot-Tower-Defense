@@ -2,8 +2,9 @@
 //   John Pork (pork)         - inside a standing F.L.O.C.K Tower's range he stops and calls: the towers that see him
 //                              and every other F.L.O.C.K within call.radius of him go silent for call.seconds
 //                              (b.silencedT: no marks, reveals or auras).
-//   Rahhh Skeleton (skeleton) - bashes his shield the first time he reaches a building, then every rage.cooldown s:
-//                              he and every enemy within rage.radius are enraged (e.rageT: enrage.js enrageFactor).
+//   Rahhh Skeleton (skeleton) - near a building he bashes his shield and summon.count Skeletons (bones) climb out of
+//                              the ground around him; again every summon.cooldown s while fewer than summon.maxAlive
+//                              of his are standing (each has summonerId = his id).
 //   Brr Brr Patapim (patapim) - every quake.every s with a building or wall within quake.radius, he stomps: an
 //                              earthquake that hits every building there (walls quake.wallMult x).
 //   La Vaca Saturno (vaca)   - throws boulders that bounce on behind the target (fireBoulderAt / landEnemyShot).
@@ -44,14 +45,13 @@ export function isSilenced(b) {
 
 /**
  * Timers and abilities of the special enemies, inside stepEnemy. Returns true while the enemy is busy with its
- * ability this step (calling, bashing, stomping: it stands still and doesn't attack). `rage` = enrageFactor;
- * `damageBuilding` is combat.js's (passed in, so this module needs no import loop).
+ * ability this step (calling, summoning, stomping: it stands still and doesn't attack). `rage` = enrageFactor;
+ * `damageBuilding` is combat.js's and `dropTroopsAt` enemies.js's (passed in, so this module needs no import loop).
  */
-export function stepEnemyAbility(state, e, cfg, dt, rage, damageBuilding) {
-  if (e.rageT > 0) e.rageT = Math.max(0, e.rageT - dt);
+export function stepEnemyAbility(state, e, cfg, dt, rage, damageBuilding, dropTroopsAt) {
   if (e.chillT > 0) e.chillT = Math.max(0, e.chillT - dt);
   if (cfg.call) return stepCall(state, e, cfg.call, dt);
-  if (cfg.rage) return stepBash(state, e, cfg.rage, dt);
+  if (cfg.summon) return stepSummon(state, e, cfg.summon, dt, dropTroopsAt);
   if (cfg.quake) return stepQuake(state, e, cfg.quake, dt, rage, damageBuilding);
   return false;
 }
@@ -75,24 +75,36 @@ function stepCall(state, e, call, dt) {
 }
 
 // ---------- Rahhh Skeleton ----------
-function stepBash(state, e, rage, dt) {
-  if (e.bashCd > 0) e.bashCd = Math.max(0, e.bashCd - dt);
+/** How many of the Skeletons this Rahhh Skeleton raised are still standing. */
+export function livingSummons(state, e) {
+  return state.enemies.reduce((n, o) => n + (o.alive && o.summonerId === e.id ? 1 : 0), 0);
+}
+
+function stepSummon(state, e, summon, dt, dropTroopsAt) {
+  if (e.summonCd > 0) e.summonCd = Math.max(0, e.summonCd - dt);
   if (e.bashT > 0) { e.bashT = Math.max(0, e.bashT - dt); e.attacking = false; return true; }
-  // The first bash waits until he reaches a building (e.attacking from his last step); after that it's on a timer.
-  if (!e.bashed ? !e.attacking : e.bashCd > 0) return false;
-  bash(state, e, rage);
+  if (e.summonCd > 0 || e.entry) return false;
+  // Only near your base: within summon.range tiles of the building he's going for.
+  const target = e.targetId && state.buildings.find((b) => b.id === e.targetId);
+  if (!target || target.destroyed || distanceToFootprint(target, e.x, e.y) > summon.range) return false;
+  if (livingSummons(state, e) >= summon.maxAlive) return false;
+  summonSkeletons(state, e, summon, dropTroopsAt);
   return true;
 }
 
-/** The shield bash: he and every enemy within rage.radius are enraged (a fresh bash refreshes, never stacks). */
-export function bash(state, e, rage = cfgOf(e).rage) {
-  e.bashed = true;
-  e.bashT = rage.bashSeconds;
-  e.bashCd = rage.cooldown;
+/**
+ * The shield bash: Skeletons climb out of the ground around him (summon.count, or fewer so no more than
+ * summon.maxAlive of his stand at once), and the cooldown starts. Returns the new Skeletons.
+ */
+export function summonSkeletons(state, e, summon, dropTroopsAt) {
+  e.bashT = summon.poseSeconds;
+  e.summonCd = summon.cooldown;
   e.attacking = false;
-  const hit = state.enemies.filter((o) => o.alive && distance(e.x, e.y, o.x, o.y) <= rage.radius);
-  for (const o of hit) o.rageT = Math.max(o.rageT || 0, rage.seconds);
-  emit(state, 'skeletonBash', { id: e.id, x: e.x, y: e.y, radius: rage.radius, ids: hit.map((o) => o.id) });
+  const n = Math.max(0, Math.min(summon.count, summon.maxAlive - livingSummons(state, e)));
+  const raised = dropTroopsAt(state, e, summon.kind, n, e.x, e.y, { landing: summon.riseSeconds });
+  for (const t of raised) { t.summonerId = e.id; t.rising = true; }
+  emit(state, 'skeletonSummon', { id: e.id, x: e.x, y: e.y, troops: raised.map((t) => ({ id: t.id, x: t.x, y: t.y })) });
+  return raised;
 }
 
 // ---------- Brr Brr Patapim ----------

@@ -27,7 +27,7 @@ function baseWaveFor(th) {
 // Re-exported: they live in combat.js so a Wall Breaker can blow up from any death (being shot included).
 export { matchesTypes, enemyDamageVs, explode };
 
-export const ENEMY_KINDS = ['grunt', 'slinger', 'bomber', 'tank', 'shark', 'thief', 'breaker', 'balloon', 'neegy', 'babycar', 'toilet', 'pork', 'skeleton', 'vaca', 'yahu', 'patapim'];
+export const ENEMY_KINDS = ['grunt', 'slinger', 'bomber', 'tank', 'shark', 'thief', 'breaker', 'balloon', 'neegy', 'babycar', 'toilet', 'pork', 'skeleton', 'bones', 'vaca', 'yahu', 'patapim'];
 // A Neegy dropped by a balloon floats down for this long (no moving or attacking) before it lands.
 export const LANDING_SECONDS = 0.7;
 
@@ -291,8 +291,8 @@ export function stepEnemy(state, e, dt, nav = null) {
   if (cfg.ramsToHall) { stepBabyCar(state, e, cfg, target, step, dt, rage); return; }
   // The Skibidi Toilet: tunnels to its target and pops up to attack.
   if (cfg.burrows) { stepBurrower(state, e, cfg, target, step, dt, rage); return; }
-  // v0.6 abilities (specialEnemies.js): John Pork's call, Rahhh Skeleton's shield bash, Brr Brr Patapim's quake.
-  if (stepEnemyAbility(state, e, cfg, dt, rage, damageBuilding)) return;
+  // v0.6 abilities (specialEnemies.js): John Pork's call, Rahhh Skeleton's summons, Brr Brr Patapim's quake.
+  if (stepEnemyAbility(state, e, cfg, dt, rage, damageBuilding, dropTroopsAt)) return;
   // The Brisket King in reach (or taunting it): fight him instead of going on.
   if (fightHero(state, e, cfg, step, rage)) return;
   // Cheese Bait (a Mousetrap ability): lured straight onto the trap until it snaps. A building or wall in
@@ -478,7 +478,7 @@ export function babyCarBurst(state, cfg, waveNumber, baseComp) {
   const d = cfg.deathSpawn;
   const count = Math.min(babyCarBurstSize(cfg, waveNumber), d.maxCount || Infinity);
   const weights = ENEMY_KINDS
-    .filter((k) => k !== 'babycar' && k !== 'neegy' && !isAirKind(k) && (baseComp[k] || 0) > 0)
+    .filter((k) => k !== 'babycar' && !CONFIG.enemies[k].droppedBy && !isAirKind(k) && (baseComp[k] || 0) > 0)
     .map((k) => [k, baseComp[k]]);
   const total = weights.reduce((s, [, w]) => s + w, 0);
   const out = {};

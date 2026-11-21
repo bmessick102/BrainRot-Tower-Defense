@@ -14,7 +14,7 @@ import { CONFIG } from '../config.js';
 import { IS_TOUCH } from '../device.js';
 import {
   DEFENSE_TYPES, buildingName, typeConfig, maxLevel, levelStats, limitFor, unlockTownHall, footprintDims, buildCost,
-  totalSpent, isDefense, isSupport, isPooled, poolSize, poolTownHall
+  totalSpent, isDefense, isSupport, takesBonusSlot, bonusTownHall
 } from '../logic/buildings.js';
 import { ENEMY_KINDS } from '../logic/enemies.js';
 import { formatGold } from '../logic/economy.js';
@@ -54,8 +54,10 @@ const STAT_COLS = 3, STAT_ROW = 40;
 // descriptions than descMax drop to a smaller font) and the stat grid.
 const BUILDING_LAYOUT = { card: CARD, rx: RX, rw: RW, descMax: 66, statX: RX, statW: RW };
 // Enemies: the roster panel on the left; the picked enemy's card and text right of it, its "hit by" row and stats
-// across the whole detail area under them.
-const ROSTER = { x: LEFT, y: CONTENT_TOP, w: 330, h: CONTENT_BOTTOM - CONTENT_TOP, pad: 13, tileW: 56, tileH: 58, gap: 6, head: 28, block: 14 };
+// across the whole detail area under them. The roster is as wide as its biggest category's row of tiles.
+const ROSTER = { x: LEFT, y: CONTENT_TOP, h: CONTENT_BOTTOM - CONTENT_TOP, pad: 13, tileW: 54, tileH: 58, gap: 5, head: 28, block: 14 };
+const ROSTER_COLS = Math.max(...ENEMY_CATEGORIES.map((c) => c.kinds.length));
+ROSTER.w = ROSTER.pad * 2 + ROSTER_COLS * ROSTER.tileW + (ROSTER_COLS - 1) * ROSTER.gap;
 const DX = ROSTER.x + ROSTER.w + 24, DW = RIGHT - DX;
 const ENEMY_CARD = { x: DX + 24, y: CONTENT_TOP + 4, w: 196, h: 226 };
 const ENEMY_LAYOUT = {
@@ -251,8 +253,8 @@ function buildingTags(type) {
   }
   if (type !== 'townHall') {
     tags.push([`Unlocks at VH${unlockTownHall(type)}`, COLORS.buttonDark]);
-    // (Pooled types: that many at the usual price, more from Village Hall 11's shared limit.)
-    tags.push([`Up to ${limitFor(type, CONFIG.rules.maxTownHallLevel)}${type === 'wall' ? ' walls' : isPooled(type) ? `, more at VH${poolTownHall()}` : ''}`, COLORS.buttonDark]);
+    // (Bonus Slot types: up to their cap, more with Village Hall 11's Bonus Slots.)
+    tags.push([`Up to ${limitFor(type, CONFIG.rules.maxTownHallLevel)}${type === 'wall' ? ' walls' : takesBonusSlot(type) ? `, more with VH${bonusTownHall()} Bonus Slots` : ''}`, COLORS.buttonDark]);
   }
   const { w, h } = footprintDims(type);
   tags.push([`${w}x${h} tile${w * h === 1 ? '' : 's'}`, COLORS.buttonDark]);
@@ -451,7 +453,7 @@ export class HowToPlayScene extends Phaser.Scene {
       'A building cannot be a higher level than your Village Hall.',
       'Each level adds health and power. Buildings get bigger and get new art every few levels.',
       'Upgrading the Village Hall unlocks new buildings and lets you build more of each. But the attacks get harder too.',
-      `At Village Hall ${poolTownHall()} the limits per building become one shared limit (${poolSize()} buildings): build any mix you like. Copies past a building's usual limit cost ${Math.round((CONFIG.rules.buildingPool.extraCostGrowth - 1) * 100)}% more each.`,
+      `Village Hall ${bonusTownHall()} adds ${CONFIG.rules.bonusSlots.count} Bonus Slots: each is one more building of any kind past its usual limit, at the normal price. Sell one to free its slot.`,
       'Walls share one level: "Upgrade Walls" raises every wall at once, and new walls are built at that level.',
       `After you beat a wave, destroyed buildings are rebuilt free. During a wave you can Rebuild one early for ${Math.round(CONFIG.rules.rebuildCostShare * 100)}% of its cost.`,
       `Selling gives back ${Math.round(CONFIG.rules.sellRefund * 100)}% of the gold you spent on a building.`
@@ -743,7 +745,7 @@ export class HowToPlayScene extends Phaser.Scene {
     if (cfg.burrows) tags.push(['Tunnels underground', 0x8f673d], ['F.L.O.C.K sees it', 0x6c7a89]);
     // v0.6 abilities.
     if (cfg.call) tags.push([`Silences F.L.O.C.K Towers (${cfg.call.seconds} s)`, 0xd0583c]);
-    if (cfg.rage) tags.push([`Rages nearby enemies (+${cfg.rage.damagePct}% damage)`, 0xb03a2e]);
+    if (cfg.summon) tags.push([`Summons ${cfg.summon.count} Skeletons every ${cfg.summon.cooldown} s`, 0xb03a2e]);
     if (cfg.bounce) tags.push(['Ranged', 0x9b59d0], [`Boulders bounce ${cfg.bounce.count}x`, 0xc98a12]);
     if (cfg.missileRadius) tags.push([`Missile strikes (${cfg.missileRadius} tile blast)`, 0xb03a2e]);
     if (cfg.quake) tags.push(['Earthquakes', 0x8f673d], [`${cfg.quake.wallMult}x quake damage to walls`, 0xc98a12]);

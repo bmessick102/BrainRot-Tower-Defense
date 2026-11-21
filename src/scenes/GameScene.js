@@ -1404,13 +1404,16 @@ export class GameScene extends Phaser.Scene {
       }
       playSfxClip(this, SFX.porkCall, { maxAtOnce: 1, minGapMs: 800, maxSeconds: 3.5 });
     });
-    // Rahhh Skeleton's shield bash: a red shockwave over everyone it enrages.
-    on('skeletonBash', (d) => {
+    // Rahhh Skeleton's summoning bash: a bone-white ring around him and a puff of dirt where each Skeleton climbs out.
+    on('skeletonSummon', (d) => {
       const s = gridToScreen(d.x, d.y);
-      splashRing(this, s.x, s.y, d.radius, 0xff4a3a, { duration: 600, depth: 2710 });
-      splashRing(this, s.x, s.y, d.radius * 0.5, 0xffb0a0, { duration: 400, depth: 2710 });
-      floatText(this, s.x, s.y - 70, 'RAHHH!', '#ff7a6a', 20);
-      this.cameras.main.shake(90, 0.003);
+      splashRing(this, s.x, s.y, 1.2, 0xe8dcc0, { duration: 550, depth: 2710 });
+      floatText(this, s.x, s.y - 70, 'RAHHH!', '#f0e2c4', 20);
+      for (const t of d.troops) {
+        const p = gridToScreen(t.x, t.y);
+        splashRing(this, p.x, p.y, 0.35, 0x8f673d, { duration: 500, depth: 2709 });
+      }
+      this.cameras.main.shake(80, 0.002);
       playSfxClip(this, SFX.skeletonRage, { maxAtOnce: 2, minGapMs: 250, maxSeconds: 2.5 });
     });
     // Brr Brr Patapim's earthquake: cracks across the ground, a heavy jolt and his stomp.

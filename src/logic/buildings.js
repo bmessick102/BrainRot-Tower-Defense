@@ -139,10 +139,7 @@ export function unlockTownHall(type) {
 export function buildCost(type, state = null) {
   if (type === 'wall' && state) return wallBuildCost(state);
   if (type === 'townHall') return 0;
-  const base = typeConfig(type).levels[0].cost;
-  // Village Hall 11's shared pool: copies past the type's old cap cost more each (extraCostGrowth).
-  const extra = state ? poolExtraCopies(state, type) : 0;
-  return extra > 0 ? Math.round(base * CONFIG.rules.buildingPool.extraCostGrowth ** extra) : base;
+  return typeConfig(type).levels[0].cost; // (a copy in a Bonus Slot costs the same)
 }
 
 /** Price to go from `level` to `level + 1`, or null at max level. */
@@ -164,7 +161,7 @@ export function upgradeCurrency(type, level) {
   return (next && next.costCurrency) || 'gold';
 }
 
-/** How many of a type are allowed at a town hall level (from Village Hall 11, a pooled type's own cap: see poolSize). */
+/** How many of a type are allowed at a town hall level (its cap; Village Hall 11's Bonus Slots come on top: roomFor). */
 export function limitFor(type, townHallLevel) {
   return CONFIG.limits[type][townHallLevel - 1] ?? 0;
 }
@@ -173,59 +170,62 @@ export function countOwned(buildings, type) {
   return buildings.filter((b) => b.type === type).length;
 }
 
-// ---------- Village Hall 11's shared building pool (CONFIG.rules.buildingPool) ----------
-/** Does this type share the pool (instead of its own cap) from Village Hall 11? */
-export function isPooled(type) {
-  return CONFIG.rules.buildingPool.pooled.includes(type);
+// ---------- Village Hall 11's Bonus Slots (CONFIG.rules.bonusSlots) ----------
+/** Can a copy of this type go in a Bonus Slot (past its own cap) from Village Hall 11? */
+export function takesBonusSlot(type) {
+  return CONFIG.rules.bonusSlots.types.includes(type);
 }
 
-/** The Village Hall level the shared pool starts at (11). */
-export function poolTownHall() {
-  return CONFIG.rules.buildingPool.fromTownHall;
+/** The Village Hall level the Bonus Slots come with (11). */
+export function bonusTownHall() {
+  return CONFIG.rules.bonusSlots.fromTownHall;
 }
 
-/** Is the shared pool in force at this Village Hall level (Village Hall 11)? */
-export function poolActive(townHallLevelNow) {
-  return townHallLevelNow >= poolTownHall();
+/** Does this Village Hall level have Bonus Slots (Village Hall 11)? */
+export function bonusActive(townHallLevelNow) {
+  return townHallLevelNow >= bonusTownHall();
 }
 
-/** The pool's size: every pooled type's cap at the pool's Village Hall, added up. */
-export function poolSize() {
-  const top = poolTownHall();
-  return CONFIG.rules.buildingPool.pooled.reduce((n, t) => n + limitFor(t, top), 0);
+/** How many Bonus Slots a village has at this Village Hall level (0 before Village Hall 11). */
+export function bonusSlotCount(townHallLevelNow) {
+  return bonusActive(townHallLevelNow) ? CONFIG.rules.bonusSlots.count : 0;
 }
 
-/** How many pooled buildings the village has (all of them count, whatever their type). */
-export function poolUsed(buildings) {
-  return buildings.filter((b) => isPooled(b.type)).length;
-}
-
-/**
- * How many copies of `type` the village already has past its cap at Village Hall 11 (what makes the next one pricier),
- * plus one for the copy being bought when it is past the cap too. 0 when the pool isn't in force.
- */
-export function poolExtraCopies(state, type) {
-  if (!isPooled(type) || !poolActive(townHallLevel(state))) return 0;
-  const cap = limitFor(type, poolTownHall());
-  return Math.max(0, countOwned(state.buildings, type) + 1 - cap);
-}
-
-/** How many more of `type` this village may build now (the pool's room for pooled types from Village Hall 11). */
-export function roomFor(state, type) {
+/** Bonus Slots in use: every copy of a slot type past its own cap, all types added up. */
+export function bonusSlotsUsed(state) {
   const th = townHallLevel(state);
-  if (isPooled(type) && poolActive(th)) return Math.max(0, poolSize() - poolUsed(state.buildings));
-  return Math.max(0, limitFor(type, th) - countOwned(state.buildings, type));
+  return CONFIG.rules.bonusSlots.types.reduce((n, t) => n + Math.max(0, countOwned(state.buildings, t) - limitFor(t, th)), 0);
+}
+
+/** Bonus Slots still free (0 when a village has more extras than slots, e.g. one from v0.6.0's shared pool). */
+export function bonusSlotsFree(state) {
+  return Math.max(0, bonusSlotCount(townHallLevel(state)) - bonusSlotsUsed(state));
+}
+
+/** Would the next copy of `type` take a Bonus Slot (it's at its cap, at Village Hall 11)? */
+export function nextTakesBonusSlot(state, type) {
+  const th = townHallLevel(state);
+  return takesBonusSlot(type) && bonusActive(th) && limitFor(type, th) > 0 && countOwned(state.buildings, type) >= limitFor(type, th);
+}
+
+/** How many more of `type` its own cap allows (no Bonus Slots). */
+function roomUnderCap(state, type) {
+  return Math.max(0, limitFor(type, townHallLevel(state)) - countOwned(state.buildings, type));
+}
+
+/** How many more of `type` this village may build now: its cap's room, plus the free Bonus Slots from Village Hall 11. */
+export function roomFor(state, type) {
+  const room = roomUnderCap(state, type);
+  if (!takesBonusSlot(type) || !bonusActive(townHallLevel(state)) || limitFor(type, townHallLevel(state)) <= 0) return room;
+  return room + bonusSlotsFree(state);
 }
 
 /**
- * How many more buildings and wall segments the Town Hall level allows (shop badge). At the top hall the pooled
- * types count once as the pool's room, not once per type.
+ * How many more buildings and wall segments the Town Hall level allows (shop badge): every type's room under its
+ * cap, plus the free Bonus Slots once (they're shared by every type).
  */
 export function buildableCount(state) {
-  const th = townHallLevel(state);
-  const single = BUILDING_TYPES.filter((t) => t !== 'townHall' && !(poolActive(th) && isPooled(t)))
-    .reduce((n, t) => n + roomFor(state, t), 0);
-  return single + (poolActive(th) ? Math.max(0, poolSize() - poolUsed(state.buildings)) : 0);
+  return BUILDING_TYPES.filter((t) => t !== 'townHall').reduce((n, t) => n + roomUnderCap(state, t), 0) + bonusSlotsFree(state);
 }
 
 export function getTownHall(state) {
@@ -249,7 +249,7 @@ export function checkBuy(state, type) {
   if (roomFor(state, type) <= 0) {
     // Limit is 0 at this TH level even though the type is "unlocked": point at the next TH that allows one.
     if (limitFor(type, th) === 0) return { ok: false, reason: `Requires VH${th + 1}` };
-    return { ok: false, reason: isPooled(type) && poolActive(th) ? 'Village full' : 'Limit reached' };
+    return { ok: false, reason: takesBonusSlot(type) && bonusActive(th) ? 'No Bonus Slots left' : 'Limit reached' };
   }
   if (isWaveActive(state)) return { ok: false, reason: 'Not during a wave' };
   const cost = buildCost(type, state);

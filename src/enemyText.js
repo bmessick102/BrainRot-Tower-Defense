@@ -12,7 +12,8 @@ export const ENEMY_DESCRIPTIONS = {
   babycar: 'A raid boss. It drives straight at your Village Hall and smashes through everything. When it is destroyed it bursts into troops, so keep defenses near your hall.',
   toilet: 'Tunnels under your walls to the nearest building, then pops up to attack. Only a F.L.O.C.K Tower can see it while it is underground.',
   pork: 'A sturdy brawler with a phone. When a F.L.O.C.K Tower spots him he stops to make a call, and every F.L.O.C.K Tower near him goes silent for a few seconds: no marks, no reveals.',
-  skeleton: 'Bashes his shield when he reaches your base, and again every few seconds: he and every enemy around him rage, hitting harder and moving faster.',
+  skeleton: 'Near your base he bashes his shield and three Skeletons climb out of the ground around him, then more every few seconds (up to six of his at once). Take him out early.',
+  bones: 'A little sword-swinging Skeleton raised by a Rahhh Skeleton. Weak on its own, but they keep coming while he stands.',
   vaca: 'A tough flyer that throws boulders from range. Each boulder bounces on behind its target three times, hitting everything it lands on for a bit less each bounce.',
   yahu: 'Calls missiles down from long range. A red target shows where each one will land; when it hits, every building and wall in the blast is damaged.',
   patapim: 'A huge, slow tank. Every few seconds he stomps an earthquake that hits every building and wall around him, and walls take extra damage.',
@@ -25,6 +26,6 @@ export const ENEMY_CATEGORIES = [
   { key: 'ground', label: 'Ground', kinds: ['grunt', 'slinger', 'shark', 'thief', 'neegy'] },
   { key: 'air', label: 'Air', kinds: ['bomber', 'balloon', 'vaca'] },
   { key: 'tanks', label: 'Tanks & Bosses', kinds: ['tank', 'patapim', 'babycar'] },
-  { key: 'special', label: 'Special', kinds: ['breaker', 'toilet', 'pork', 'skeleton', 'yahu'] }
+  { key: 'special', label: 'Special', kinds: ['breaker', 'toilet', 'pork', 'skeleton', 'bones', 'yahu'] }
 ];
 export const ENEMY_ORDER = ENEMY_CATEGORIES.flatMap((c) => c.kinds);

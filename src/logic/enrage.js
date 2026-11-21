@@ -27,10 +27,7 @@ export function enrageFactor(state, e = null) {
   const w = state.wave;
   const E = CONFIG.rules.enrage;
   const N = isRestless(state) && !(e && e.calmed) ? CONFIG.rules.night : { damage: 1, speed: 1 };
-  // Raged by a Rahhh Skeleton's shield bash (e.rageT, specialEnemies.js): on top of the rest.
-  const R = e && e.rageT > 0 ? CONFIG.enemies.skeleton.rage : null;
-  const rd = R ? 1 + R.damagePct / 100 : 1, rs = R ? 1 + R.speedPct / 100 : 1;
-  if (!w || w.phase !== 'active' || !w.stallTime || w.stallTime <= E.after) return { damage: N.damage * rd, speed: N.speed * rs };
+  if (!w || w.phase !== 'active' || !w.stallTime || w.stallTime <= E.after) return { damage: N.damage, speed: N.speed };
   const r = (w.stallTime - E.after) / E.ramp;
-  return { damage: Math.min(E.maxDamage, 1 + r) * N.damage * rd, speed: Math.min(E.maxSpeed, 1 + 0.5 * r) * N.speed * rs };
+  return { damage: Math.min(E.maxDamage, 1 + r) * N.damage, speed: Math.min(E.maxSpeed, 1 + 0.5 * r) * N.speed };
 }

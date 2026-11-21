@@ -16,7 +16,7 @@ const ENEMY_BADGE = 0x8e1f2a; // level badge on enemy health bars (buildings' is
 // On-screen height in pixels for real enemy art at zoom 1 (a 2x2 building is 128 px wide).
 const DISPLAY_HEIGHT = {
   grunt: 40, slinger: 44, bomber: 46, tank: 62, shark: 50, thief: 50, breaker: 46, balloon: 84, neegy: 48, babycar: 78, toilet: 50,
-  pork: 54, skeleton: 52, vaca: 64, yahu: 56, patapim: 82
+  pork: 54, skeleton: 52, bones: 38, vaca: 64, yahu: 56, patapim: 82
 };
 // A dropped Neegy starts this far up (px) and floats down over its landing time.
 const DROP_HEIGHT = 95;
@@ -28,11 +28,12 @@ const FLY_HEIGHT_BY_KIND = { balloon: 80, vaca: 46 };
 // picture, so facing is per picture: enemies always face where they're going.
 const FACES_LEFT = new Set([
   'enemy_bomber', 'enemy_shark', 'enemy_balloon', 'enemy_babycar',
-  'enemy_shark_attack', 'enemy_shark_death', 'enemy_tank_death', 'enemy_thief_death'
+  'enemy_shark_attack', 'enemy_shark_death', 'enemy_tank_death', 'enemy_thief_death',
+  'enemy_bones', 'enemy_bones_attack'
 ]);
 // Extra poses: enemy_<kind>_attack / enemy_<kind>_death in art-source/enemies/, used when present. v0.6 abilities have
 // their own: enemy_pork_call (John Pork on the phone, while he calls) and enemy_skeleton_rage (Rahhh Skeleton's shield
-// bash: it flashes BASH_FLASHES times while the bash lasts).
+// bash as he summons: it flashes BASH_FLASHES times while the bash lasts).
 const ATTACK_POSE_MS = 320;          // the attack picture shows this long after each hit
 const BASH_FLASHES = 3;
 const POSE_HEIGHT = { walk: 1, attack: 1, call: 1, rage: 1, death: 0.85 }; // share of DISPLAY_HEIGHT (lying down is lower)
@@ -48,7 +49,6 @@ const HIDDEN_SHIMMER = 0.07;
 // Enemies of a wave that has stalled too long (see src/logic/enrage.js) are tinted this red.
 const ENRAGED_TINT = 0xff7a6a;
 const RESTLESS_TINT = 0xffc2b8; // night attackers (restless nights)
-const RAGED_TINT = 0xff6a5a;    // raged by a Rahhh Skeleton's shield bash
 const CHILL_TINT = 0xa8dcff;    // chilled by a KSI Tower (frozen solid is the Ice Bag's deeper 0x8fd8ff)
 /** Multiply two 0xRRGGBB colors channel by channel. */
 function mulColor(a, b) {
@@ -99,15 +99,31 @@ export class EnemyView {
     this.sync(e, 0);
   }
 
+  /**
+   * A summoned Skeleton climbing out of the ground (e.rising while e.landing counts down): only the part of the
+   * picture above the ground shows, growing from nothing to all of it. Returns how far down (px) to draw the sprite
+   * so that part stands on the ground.
+   */
+  riseCrop(e) {
+    const s = this.sprite, f = s.frame;
+    if (!(e.landing > 0)) { this.rose = true; s.setCrop(); return 0; }
+    const total = CONFIG.enemies.skeleton.summon.riseSeconds;
+    const shown = Math.min(1, Math.max(0.05, 1 - e.landing / total));
+    s.setCrop(0, 0, f.width, f.height * shown);
+    return s.displayHeight * (1 - shown);
+  }
+
   sync(e, time) {
     const s = gridToScreen(e.x, e.y);
     const bob = this.air ? Math.sin(time * 0.004 + this.phase) * 2 : -Math.abs(Math.sin(time * 0.012 + this.phase)) * 2;
     this.hop += ((e.overWall ? HOP_HEIGHT : 0) - this.hop) * 0.3;
-    const fall = e.landing > 0 ? (e.landing / LANDING_SECONDS) * DROP_HEIGHT : 0; // a dropped Neegy floating down
+    // A dropped Neegy floating down; a summoned Skeleton climbing out of the ground instead (riseCrop below).
+    const fall = e.landing > 0 && !e.rising ? (e.landing / LANDING_SECONDS) * DROP_HEIGHT : 0;
+    const sink = this.sink = e.rising && !this.rose ? this.riseCrop(e) : 0;
     // Firework Grounding Burst: a flyer knocked down drops to the ground (and floats back up after).
     this.groundedLift = this.groundedLift ?? 0;
     this.groundedLift += ((e.grounded > 0 ? this.lift : 0) - this.groundedLift) * 0.25;
-    this.sprite.setPosition(s.x, s.y + bob - this.lift + this.groundedLift - this.hop - fall);
+    this.sprite.setPosition(s.x, s.y + bob - this.lift + this.groundedLift - this.hop - fall + sink);
     // Ground enemies use the shared draw-order rule so they never vanish behind a building they're in front of.
     const depth = this.air ? e.x + e.y + 1000 : groundDepth(this.scene.gs ? this.scene.gs.buildings : [], e.x, e.y);
     this.sprite.setDepth(depth);
@@ -129,12 +145,12 @@ export class EnemyView {
     this.alpha += (wantAlpha - this.alpha) * 0.2;
     this.sprite.setAlpha(this.alpha);
     if (this.shadow) this.shadow.setPosition(s.x, s.y).setDepth(depth - 0.5);
-    // Pose: John Pork on the phone while he calls; Rahhh Skeleton's bash flashing between his rage picture and his
-    // stance; the attack picture right after a hit (or while Brr Brr Patapim stomps); otherwise walking.
+    // Pose: John Pork on the phone while he calls; Rahhh Skeleton's summoning bash flashing between his rage picture
+    // and his stance; the attack picture right after a hit (or while Brr Brr Patapim stomps); otherwise walking.
     let pose = this.keys.attack && (time < this.attackUntil || e.stompT > 0) ? 'attack' : 'walk';
     if (this.keys.call && e.callT > 0 && e.alive) pose = 'call';
     if (this.keys.rage && e.bashT > 0 && e.alive) {
-      const total = CONFIG.enemies[e.kind].rage.bashSeconds;
+      const total = CONFIG.enemies[e.kind].summon?.poseSeconds || 0.8;
       const step = Math.floor(((total - e.bashT) / total) * BASH_FLASHES * 2); // rage, stance, rage, stance, rage, stance
       pose = step % 2 === 0 ? 'rage' : 'walk';
     }
@@ -157,7 +173,6 @@ export class EnemyView {
       // Hacked by a F.L.O.C.K Override: purple. Dazzled by Showstopper: a pale flicker.
       if (e.frozenT > 0) this.sprite.setTint(mulColor(base, 0x8fd8ff)); // held by a Freeze spell (or frozen solid by a KSI Tower): icy blue
       else if (e.chillT > 0) this.sprite.setTint(mulColor(base, CHILL_TINT)); // chilled by a KSI Tower: a paler icy blue
-      else if (e.rageT > 0) this.sprite.setTint(mulColor(base, RAGED_TINT));   // raged by a Rahhh Skeleton: angry red
       else if (e.hackedT > 0) this.sprite.setTint(mulColor(base, 0xc58cff));
       else if (e.disarmT > 0 && Math.sin(time * 0.03) > 0) this.sprite.setTint(mulColor(base, 0xfff3b0));
       else {
@@ -212,7 +227,7 @@ export class EnemyView {
     const key = this.keys.death;
     if (!key || !this.realArt) return;
     const scene = this.scene;
-    const img = scene.add.image(this.sprite.x, this.sprite.y + this.hop, key).setOrigin(0.5, 1).setDepth(this.sprite.depth);
+    const img = scene.add.image(this.sprite.x, this.sprite.y + this.hop - (this.sink || 0), key) // (on the ground, even mid-rise).setOrigin(0.5, 1).setDepth(this.sprite.depth);
     const scale = this.poseHeight('death') / img.frame.height;
     const artFacesLeft = FACES_LEFT.has(key);
     img.setFlipX(artFacesLeft ? !this.movingLeft : this.movingLeft).setTint(scene.ambientTint ?? 0xffffff).setScale(scale * 1.1).setAlpha(this.alpha);

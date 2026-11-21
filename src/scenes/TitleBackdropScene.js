@@ -10,7 +10,8 @@
 //
 // Layout follows unused-assets/public/assets/images/ui/ui_title_background.png (a layout reference only; never shown):
 // logo top center; the wizard, archer and a worker gnome at the left with the mortar in front of them; the enemies grouped at
-// the right facing left; the crocodile plane and the balloon up top; the bottom center kept clear for the bar
+// the right facing left; the crocodile plane and the balloon up top, La Vaca Saturno hovering over the heroes left of
+// the logo (as the mortar's man hovers over the enemies right of it); the bottom center kept clear for the bar
 // and tips. Draw order (back to front) is DEPTH below. Design size 1280x720.
 import Phaser from 'phaser';
 import { isLowQuality, onQualityChange } from '../quality.js';
@@ -27,7 +28,8 @@ const ART = {
   flyer: 'title_flyer',            // the man shot out of the mortar
   flyerPose: 'title_flyer_pose',   // ...arms out, hovering at the top of his last arc once loading is done
   bomber: 'enemy_bomber',          // crocodile plane
-  balloon: 'enemy_balloon'
+  balloon: 'enemy_balloon',
+  vaca: 'enemy_vaca'               // La Vaca Saturno (v0.6), flying over the heroes
 };
 /** Every texture the backdrop shows; PreloadScene loads these before the loading screen appears. */
 export const TITLE_ART_KEYS = [
@@ -104,6 +106,11 @@ const PLANE = {
   tiltDeg: -5,                     // nose slightly up
   bobPx: 6
 };
+
+// La Vaca Saturno (v0.6): flies in from the left once the logo has dropped and hovers in the open sky between the
+// castle tower and the logo, above the archer's bow: the enemy side's flyer over the heroes, mirroring the mortar's man
+// over the enemies (about his size). x, y: her center.
+const VACA = { x: 302, y: 154, h: 138, fromX: -170, inDelayMs: LOGO_DROP_DELAY_MS + 700, inMs: 1900, bobPx: 8, bobMs: 1900, swayDeg: 4 };
 
 // ---------- mortar (bottom left, in front of the heroes) ----------
 // x, y: the bottom tip of its stone base. The firing picture is drawn so its base sits exactly on the idle one.
@@ -257,6 +264,17 @@ export class TitleBackdropScene extends Phaser.Scene {
       b.setScale(BALLOON.h / b.frame.height);
       this.tweens.add({ targets: b, y: BALLOON.y + BALLOON.bobPx, duration: BALLOON.bobMs, ease: 'Sine.easeInOut', yoyo: true, repeat: -1 });
       this.tweens.add({ targets: b, angle: BALLOON.swayDeg, duration: BALLOON.bobMs * 1.7, ease: 'Sine.easeInOut', yoyo: true, repeat: -1 });
+    }
+    if (this.has(ART.vaca)) {
+      const v = this.add.image(VACA.fromX, VACA.y, ART.vaca).setDepth(DEPTH.flyers + 1).setAngle(-VACA.swayDeg);
+      v.setScale(VACA.h / v.frame.height);
+      this.tweens.add({
+        targets: v, x: VACA.x, delay: VACA.inDelayMs, duration: VACA.inMs, ease: 'Sine.easeOut',
+        onComplete: () => {
+          this.tweens.add({ targets: v, y: VACA.y + VACA.bobPx, duration: VACA.bobMs, ease: 'Sine.easeInOut', yoyo: true, repeat: -1 });
+          this.tweens.add({ targets: v, angle: VACA.swayDeg, duration: VACA.bobMs * 1.6, ease: 'Sine.easeInOut', yoyo: true, repeat: -1 });
+        }
+      });
     }
     if (this.has(ART.bomber)) {
       // The plane art faces left: mirrored, it flies left to right.

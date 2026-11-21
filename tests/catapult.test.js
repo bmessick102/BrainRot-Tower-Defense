@@ -90,11 +90,11 @@ describe('Catapult', () => {
     expect(checkBuy(s, 'catapult').ok).toBe(true);
     addBuilding(s, 'catapult', 2, 2);
     expect(checkBuy(s, 'catapult')).toEqual({ ok: false, reason: 'Limit reached' }); // Village Hall 10: one
-    // v0.6: Village Hall 11's shared pool allows more, each past the cap of 1 at +50% (compounding).
+    // Village Hall 11's Bonus Slots allow more, at the normal price.
     const s11 = makeStateWithTownHall({ gold: 9999999 }, 11);
     addBuilding(s11, 'catapult', 2, 2);
     expect(checkBuy(s11, 'catapult').ok).toBe(true);
-    expect(buildCost('catapult', s11)).toBe(Math.round(cfg.levels[0].cost * 1.5));
+    expect(buildCost('catapult', s11)).toBe(cfg.levels[0].cost);
     // Last in the shop too.
     expect(DEFENSE_TYPES[DEFENSE_TYPES.length - 1]).toBe('catapult');
     for (const t of DEFENSE_TYPES) expect(CONFIG.defenses[t].unlockTownHall).toBeLessThanOrEqual(cfg.unlockTownHall);

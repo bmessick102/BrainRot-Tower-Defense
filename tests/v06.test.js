@@ -1,13 +1,15 @@
-// v0.6: KSI Tower, Village Hall 11 and its shared building pool, Select Row, and the five new enemies.
+// v0.6: KSI Tower, Village Hall 11 and its Bonus Slots (v0.6.1), Select Row, and the five new enemies.
 import { describe, it, expect } from 'vitest';
 import { CONFIG } from '../src/config.js';
 import {
-  checkBuy, buildCost, limitFor, poolSize, poolUsed, isPooled, buildableCount, DEFENSE_TYPES, BUILDING_TYPES, unlockTownHall, maxLevel, poolActive
+  checkBuy, buildCost, limitFor, buildableCount, DEFENSE_TYPES, BUILDING_TYPES, unlockTownHall, maxLevel, takesBonusSlot, bonusActive,
+  bonusSlotsUsed, bonusSlotsFree, nextTakesBonusSlot, roomFor
 } from '../src/logic/buildings.js';
 import { fireDefense, stepProjectiles, stepPools, damageEnemy, chillEnemy } from '../src/logic/combat.js';
 import { stepFlockTowers } from '../src/logic/flock.js';
 import { stepEnemies, createEnemy, ENEMY_KINDS } from '../src/logic/enemies.js';
 import { stepSpecialEnemies } from '../src/logic/specialEnemies.js';
+import { waveComposition } from '../src/logic/waves.js';
 import { enrageFactor } from '../src/logic/enrage.js';
 import { createLayoutDraft, wallRun, checkGroupMove, moveGroupInDraft, draftBuildings } from '../src/logic/layout.js';
 import { ABILITIES } from '../src/abilityConfig.js';
@@ -77,43 +79,75 @@ describe('KSI Tower', () => {
   });
 });
 
-describe('Village Hall 10: one shared building limit', () => {
-  it('the pool is every pooled type\'s VH10 cap added up; unique buildings and walls keep their own caps', () => {
-    const sum = CONFIG.rules.buildingPool.pooled.reduce((n, t) => n + CONFIG.limits[t][9], 0);
-    expect(poolSize()).toBe(sum);
-    for (const t of ['townHall', 'rvlab', 'fuelStation', 'dj', 'altar', 'wall']) expect(isPooled(t)).toBe(false);
+describe('Village Hall 11: Bonus Slots', () => {
+  const S = () => CONFIG.rules.bonusSlots;
+  const fill = (s, type, n, start = [0, 6]) => {
+    let [c, r] = start;
+    for (let i = 0; i < n; i++) { addBuilding(s, type, c, r); c += 3; if (c > 30) { c = 0; r += 3; } }
+  };
+
+  it('5 slots for any non-unique building; unique buildings and walls can\'t use them; caps stay VH10\'s', () => {
+    expect(S().count).toBe(5);
+    for (const t of ['townHall', 'rvlab', 'fuelStation', 'dj', 'altar', 'wall']) expect(takesBonusSlot(t)).toBe(false);
+    for (const t of ['mine', 'storage', 'house', 'cannon', 'ra', 'catapult', 'ksi', 'mousetrap', 'flock']) expect(takesBonusSlot(t)).toBe(true);
+    for (const t of S().types) expect(limitFor(t, 11)).toBe(limitFor(t, 10));
   });
 
-  it('any mix is allowed (5 Towers of Rah), each past the old cap at +50% compounding, until the pool is full', () => {
+  it('past its cap a building takes a slot at the normal price; all 5 can be one type (5 more Towers of Rah)', () => {
     const s = makeStateWithTownHall({ gold: 1e9 }, 11);
-    const base = CONFIG.defenses.ra.levels[0].cost;
-    expect(buildCost('ra', s)).toBe(base);
-    let col = 2;
-    for (let i = 0; i < 2; i++) { addBuilding(s, 'ra', col, 2); col += 3; }
-    expect(buildCost('ra', s)).toBe(Math.round(base * 1.5));
-    addBuilding(s, 'ra', col, 2); col += 3;
-    expect(buildCost('ra', s)).toBe(Math.round(base * 1.5 ** 2));
-    addBuilding(s, 'ra', col, 2); col += 3;
-    expect(checkBuy(s, 'ra').ok).toBe(true); // the 5th
-    // Fill the pool with mines: then nothing pooled can be bought, but walls still can.
-    let r = 6, c = 0;
-    while (poolUsed(s.buildings) < poolSize()) { addBuilding(s, 'mine', c, r); c += 2; if (c > 30) { c = 0; r += 2; } }
-    expect(checkBuy(s, 'ra')).toEqual({ ok: false, reason: 'Village full' });
+    const base = CONFIG.defenses.ra.levels[0].cost, cap = limitFor('ra', 11);
+    fill(s, 'ra', cap);
+    expect(bonusSlotsUsed(s)).toBe(0);
+    expect(nextTakesBonusSlot(s, 'ra')).toBe(true);
+    expect(roomFor(s, 'ra')).toBe(S().count);
+    for (let i = 0; i < S().count; i++) {
+      expect(checkBuy(s, 'ra').ok).toBe(true);
+      expect(buildCost('ra', s)).toBe(base);
+      fill(s, 'ra', 1, [3 * i, 20]);
+    }
+    expect(bonusSlotsUsed(s)).toBe(S().count);
+    expect(checkBuy(s, 'ra')).toEqual({ ok: false, reason: 'No Bonus Slots left' });
+    // Other buildings still fill their own caps, walls and unique buildings too.
+    expect(nextTakesBonusSlot(s, 'cannon')).toBe(false);
+    expect(checkBuy(s, 'cannon').ok).toBe(true);
     expect(checkBuy(s, 'wall').ok).toBe(true);
     expect(checkBuy(s, 'altar').ok).toBe(true);
+    // Selling a Tower of Rah frees a slot.
+    s.buildings.splice(s.buildings.findIndex((b) => b.type === 'ra'), 1);
+    expect(bonusSlotsFree(s)).toBe(1);
+    expect(checkBuy(s, 'ra').ok).toBe(true);
   });
 
-  it('below Village Hall 11 (Village Hall 10 included) nothing changes; the shop badge counts the pool once at VH11', () => {
+  it('slots are shared by every type (any mix)', () => {
+    const s = makeStateWithTownHall({ gold: 1e9 }, 11);
+    fill(s, 'mine', limitFor('mine', 11) + 2);
+    fill(s, 'catapult', limitFor('catapult', 11) + 1, [0, 24]);
+    expect(bonusSlotsUsed(s)).toBe(3);
+    expect(roomFor(s, 'ra')).toBe(limitFor('ra', 11) + 2);
+  });
+
+  it('a village with more extras than slots (from v0.6.0\'s shared pool) keeps them but can\'t add more', () => {
+    const s = makeStateWithTownHall({ gold: 1e9 }, 11);
+    fill(s, 'ra', limitFor('ra', 11) + 7);
+    expect(bonusSlotsUsed(s)).toBe(7);
+    expect(bonusSlotsFree(s)).toBe(0);
+    expect(checkBuy(s, 'ra').ok).toBe(false);
+    expect(checkBuy(s, 'mine').ok).toBe(true); // still under its own cap
+  });
+
+  it('below Village Hall 11 (Village Hall 10 included) nothing changes; the shop badge counts the slots once at VH11', () => {
     for (const th of [9, 10]) {
       const s = makeStateWithTownHall({ gold: 1e9 }, th);
       addBuilding(s, 'ra', 2, 2); addBuilding(s, 'ra', 5, 2);
       expect(checkBuy(s, 'ra')).toEqual({ ok: false, reason: 'Limit reached' });
-      expect(buildCost('ra', s)).toBe(CONFIG.defenses.ra.levels[0].cost);
-      expect(poolActive(th)).toBe(false);
+      expect(bonusActive(th)).toBe(false);
+      expect(bonusSlotsFree(s)).toBe(0);
     }
-    expect(poolActive(11)).toBe(true);
-    const t = makeStateWithTownHall({ gold: 0 }, 11);
-    expect(buildableCount(t)).toBe(poolSize() + CONFIG.limits.wall[10] + 4); // + RV Lab, DJ, Fuel Station, altar
+    expect(bonusActive(11)).toBe(true);
+    const t = makeStateWithTownHall({ gold: 0 }, 11), t10 = makeStateWithTownHall({ gold: 0 }, 10);
+    const capsRoom = (s, th) => BUILDING_TYPES.filter((x) => x !== 'townHall').reduce((n, x) => n + Math.max(0, limitFor(x, th) - s.buildings.filter((b) => b.type === x).length), 0);
+    expect(buildableCount(t)).toBe(capsRoom(t, 11) + S().count);
+    expect(buildableCount(t10)).toBe(capsRoom(t10, 10));
   });
 
   it('Village Hall 11 is the top level: costs no more than 5 top storages hold, tougher than VH10', () => {
@@ -199,23 +233,54 @@ describe('the v0.6 enemies', () => {
     expect(pork.callCd).toBeGreaterThan(0); // the next call waits for the cooldown
   });
 
-  it('Rahhh Skeleton: reaching a building he bashes, enraging himself and enemies within 3 tiles (refreshed, never stacked)', () => {
+  it('Rahhh Skeleton: near a building he summons Skeletons that climb out of the ground, scaled to him', () => {
     const s = attack(6);
-    const R = CONFIG.enemies.skeleton.rage;
+    const S = CONFIG.enemies.skeleton.summon;
     addBuilding(s, 'storage', 10, 10, 1);
+    const sk = addEnemy(s, 'skeleton', 9.6 - S.range - 2, 10.5, { hp: 1e6, maxHp: CONFIG.enemies.skeleton.hp * 3 });
+    const bones = () => s.enemies.filter((o) => o.kind === 'bones');
+    run(s, 0.1);
+    expect(bones()).toHaveLength(0); // too far from your base yet
+    for (let i = 0; i < 200 && !bones().length; i++) run(s, 0.05);
+    expect(bones()).toHaveLength(S.count);
+    expect(s.events.some((e) => e.name === 'skeletonSummon')).toBe(true);
+    expect(sk.bashT).toBeGreaterThan(0); // standing still, bashing his shield
+    const [b] = bones();
+    expect(b.summonerId).toBe(sk.id);
+    expect(b.rising && b.landing > 0).toBe(true); // can't move or attack while it climbs out
+    expect(b.maxHp).toBe(CONFIG.enemies.bones.hp * 3); // as tough as he is for the wave
+    const x0 = b.x;
+    run(s, S.riseSeconds * 0.5);
+    expect(b.x).toBeCloseTo(x0, 0);
+    expect(sk.summonCd).toBeGreaterThan(0);
+  });
+
+  it('Rahhh Skeleton: summons again after the cooldown, never more than maxAlive of his at once', () => {
+    const s = attack(6);
+    const S = CONFIG.enemies.skeleton.summon;
+    const store = addBuilding(s, 'storage', 10, 10, 1);
+    store.hp = store.maxHp = 1e9; // stands the whole test
     const sk = tough(s, 'skeleton', 9.6, 10.5);
-    const buddy = tough(s, 'grunt', 8.5, 10.5);
-    const far = tough(s, 'grunt', 3, 3);
-    run(s, 0.2); // reaches the storage and attacks
-    run(s, 0.2); // then bashes
-    expect(s.events.some((e) => e.name === 'skeletonBash')).toBe(true);
-    expect(sk.rageT).toBeGreaterThan(0);
-    expect(buddy.rageT).toBeGreaterThan(0);
-    expect(far.rageT || 0).toBe(0);
-    const f = enrageFactor(s, buddy);
-    expect(f.damage).toBeCloseTo(1 + R.damagePct / 100);
-    expect(f.speed).toBeCloseTo(1 + R.speedPct / 100);
-    expect(buddy.rageT).toBeLessThanOrEqual(R.seconds);
+    const mine = () => s.enemies.filter((o) => o.alive && o.summonerId === sk.id);
+    run(s, 0.1);
+    expect(mine()).toHaveLength(S.count);
+    for (const o of mine()) { o.hp = 1e6; o.maxHp = 1e6; }
+    run(s, S.cooldown + 0.2);
+    expect(mine()).toHaveLength(Math.min(S.maxAlive, S.count * 2));
+    for (const o of mine()) { o.hp = 1e6; o.maxHp = 1e6; }
+    run(s, S.cooldown * 2 + 0.2);
+    expect(mine()).toHaveLength(S.maxAlive); // full: no more until some fall
+    for (const o of mine().slice(0, 2)) o.alive = false;
+    s.enemies = s.enemies.filter((o) => o.alive);
+    run(s, S.cooldown + 0.2);
+    expect(mine()).toHaveLength(S.maxAlive); // tops back up to the cap, not past it
+    expect(enrageFactor(s, sk).damage).toBe(1); // no more rage
+  });
+
+  it('Skeletons are never in a wave and say who raises them', () => {
+    expect(CONFIG.enemies.bones.droppedBy).toBe('skeleton');
+    expect(CONFIG.enemies.bones.fromTownHall).toBeUndefined();
+    for (let th = 1; th <= CONFIG.rules.maxTownHallLevel; th++) expect(waveComposition(th * 3).bones || 0).toBe(0);
   });
 
   it('Brr Brr Patapim: his quake hits every building and wall within its radius (walls harder), every few seconds', () => {

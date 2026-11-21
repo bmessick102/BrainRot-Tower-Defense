@@ -204,8 +204,8 @@ describe('waves.js', () => {
   });
 
   it('the Village Hall picks the base wave; the first wave is exactly that base', () => {
-    for (let th = 1; th <= 3; th++) expect(scaledWaveComposition(th, 1)).toEqual({ ...CONFIG.waves[th - 1], babycar: 0, ...LATE_ZERO }); // (no Da Baby Cars or late kinds in these base waves)
-    expect(scaledWaveComposition(4, 1)).toEqual({ ...waveComposition(4), babycar: 0 });
+    for (let th = 1; th <= 3; th++) expect(scaledWaveComposition(th, 1)).toEqual({ ...CONFIG.waves[th - 1], babycar: 0, bones: 0, ...LATE_ZERO }); // (no Da Baby Cars or late kinds in these base waves)
+    expect(scaledWaveComposition(4, 1)).toEqual({ ...waveComposition(4), babycar: 0, bones: 0 });
     expect(scaledWaveComposition(7, 1)).toEqual(waveComposition(7));
     expect(scaledWaveComposition(12, 1)).toEqual(waveComposition(CONFIG.rules.maxTownHallLevel)); // capped
   });

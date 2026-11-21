@@ -72,15 +72,16 @@ export const CONFIG = {
     lateKindMaxCut: 0.35,
     endlessHpGrowth: 1.14,
     maxTownHallLevel: 11,
-    // v0.6 (user, 2026-11-21): from Village Hall `fromTownHall` (11, the top one; Village Hall 10 keeps the usual caps)
-    // the per-type caps (limits[type]) become one shared pool for the `pooled` types: any mix of them, up to the sum
-    // of their caps at that hall (e.g. 5 Towers of Rah). Each copy of a type past its own cap costs extraCostGrowth x
-    // more than the one before (1.5: +50% compounding).
-    // Unique buildings (Village Hall, RV Lab, Fuel Station, DJ Babyface, altar) and walls keep their own caps.
-    buildingPool: {
+    // Bonus Slots (v0.6.1, user, 2026-11-21; replaced v0.6.0's shared building pool): from Village Hall `fromTownHall`
+    // (11, the top one) every building keeps its own cap (limits[type]), and on top of that the village gets `count`
+    // Bonus Slots: each is one more copy of any of the `types`, past that type's cap, at the normal price. Any mix
+    // (all 5 can be Towers of Rah). Nothing marks which copy is the bonus one: slots in use = copies past the caps,
+    // so selling one frees a slot. Unique buildings (Village Hall, RV Lab, Fuel Station, DJ Babyface, altar) and walls
+    // can't use them.
+    bonusSlots: {
       fromTownHall: 11,
-      pooled: ['mine', 'storage', 'house', 'cannon', 'archer', 'mortar', 'wizard', 'firework', 'spear', 'ksi', 'mousetrap', 'flock', 'ra', 'catapult'],
-      extraCostGrowth: 1.5
+      count: 5,
+      types: ['mine', 'storage', 'house', 'cannon', 'archer', 'mortar', 'wizard', 'firework', 'spear', 'ksi', 'mousetrap', 'flock', 'ra', 'catapult']
     },
     mineCoinIconThreshold: 0.1,
     buildingGap: 0
@@ -121,7 +122,7 @@ export const CONFIG = {
       { upgradeCost: 40000, hp: 5724, capacity: 3500 },
       { upgradeCost: 80000, hp: 7155, capacity: 4000 },
       { upgradeCost: 160000, hp: 8944, capacity: 4500 },
-      // v0.6: Village Hall 11 (the shared building limit, +12 walls). 250,000 fits in 5 top storages (305,000).
+      // v0.6: Village Hall 11 (5 Bonus Slots since v0.6.1, +12 walls). 250,000 fits in 5 top storages (305,000).
       { upgradeCost: 250000, hp: 11180, capacity: 5000 }
     ]
   },
@@ -589,8 +590,8 @@ export const CONFIG = {
       ]
     }
   },
-  // Per Village Hall level (1-11). Village Hall 11 adds 12 walls; its other caps are Village Hall 10's (and the pooled
-  // types share them: rules.buildingPool).
+  // Per Village Hall level (1-11). Village Hall 11 adds 12 walls; its other caps are Village Hall 10's (plus its
+  // Bonus Slots: rules.bonusSlots).
   limits: {
     mine: [1, 2, 3, 3, 4, 4, 5, 5, 6, 6, 6],
     storage: [1, 1, 2, 2, 3, 3, 4, 4, 5, 5, 5],
@@ -840,15 +841,17 @@ export const CONFIG = {
       bounty: 18,
       researchPoints: 5
     },
-    // Melee rager. The first time he reaches a building he bashes his shield (rage.bashSeconds, standing still), then
-    // again every rage.cooldown s: he and every enemy within rage.radius tiles are enraged for rage.seconds (+damagePct
-    // damage, +speedPct speed). Another bash refreshes it; it never stacks.
+    // Melee summoner. The first time he gets within summon.range tiles of the building he's after he bashes his
+    // shield (summon.poseSeconds, standing still) and summon.count Skeletons (summon.kind) climb out of the ground
+    // around him (summon.riseSeconds: they can't move or attack yet); then again every summon.cooldown s, as long as
+    // fewer than summon.maxAlive of his are still standing. They're as tough as he is for the wave (his health
+    // multiplier and crowd-cap pack).
     skeleton: {
       name: "Rahhh Skeleton",
-      role: "Battle Rager",
+      role: "Skeleton Summoner",
       radius: 0.26,
       type: "ground",
-      rage: { radius: 3, seconds: 6, damagePct: 40, speedPct: 25, cooldown: 12, bashSeconds: 0.6 },
+      summon: { kind: "bones", count: 3, range: 4, cooldown: 10, maxAlive: 6, poseSeconds: 0.8, riseSeconds: 0.6 },
       fromTownHall: 6,
       baseCount: 2,
       hp: 520,
@@ -858,6 +861,21 @@ export const CONFIG = {
       attackRange: 0.5,
       bounty: 20,
       researchPoints: 5
+    },
+    // Raised by Rahhh Skeletons (never in a wave's queue): weak, quick sword fighters that come in threes.
+    bones: {
+      name: "Skeleton",
+      role: "Summoned Minion",
+      radius: 0.2,
+      type: "ground",
+      droppedBy: "skeleton",
+      hp: 80,
+      speed: 1.2,
+      damage: 10,
+      attackInterval: 0.9,
+      attackRange: 0.5,
+      bounty: 2,
+      researchPoints: 1
     },
     // Tanky ranged flyer: hovers attackRange tiles from its target and throws a boulder (projectiles.vaca). It lands on
     // the target for full damage, then bounces on bounce.count times, each bounce.step tiles further along the throw,
