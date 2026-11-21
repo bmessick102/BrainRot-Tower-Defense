@@ -150,3 +150,61 @@ export function applyLayout(state, draft) {
   }
   return { ok: true, reason: '', moved };
 }
+
+// ---------- Select Row: a straight run of walls moved together ----------
+/**
+ * The straight run of placed walls through wall `id` in the draft: every wall touching it in a line along the
+ * columns (axis 'x') or the rows ('y'), stopping at the first gap. The longer of the two runs is taken (ties go to
+ * 'x'). Returns { ids, axis, col, row, w, h } (col / row / w / h: the run's footprint), or null if `id` isn't a
+ * placed wall.
+ */
+export function wallRun(state, draft, id) {
+  const placed = draftBuildings(state, draft);
+  const start = placed.find((b) => b.id === id);
+  if (!start || start.type !== 'wall') return null;
+  const at = new Map();
+  for (const b of placed) if (b.type === 'wall') at.set(`${b.col},${b.row}`, b);
+  const run = (dc, dr) => {
+    const out = [start];
+    for (const s of [1, -1]) {
+      for (let k = 1; ; k++) {
+        const w = at.get(`${start.col + dc * k * s},${start.row + dr * k * s}`);
+        if (!w) break;
+        out.push(w);
+      }
+    }
+    return out;
+  };
+  const xs = run(1, 0), ys = run(0, 1);
+  const axis = ys.length > xs.length ? 'y' : 'x';
+  const walls = axis === 'x' ? xs : ys;
+  const col = Math.min(...walls.map((b) => b.col)), row = Math.min(...walls.map((b) => b.row));
+  return { ids: walls.map((b) => b.id), axis, col, row, w: axis === 'x' ? walls.length : 1, h: axis === 'y' ? walls.length : 1 };
+}
+
+/**
+ * Can the buildings `ids` all move (dc, dr) tiles in the draft? Each lands on grass and clear of everything that
+ * isn't moving with it. { ok, reason }.
+ */
+export function checkGroupMove(state, draft, ids, dc, dr) {
+  const moving = new Set(ids);
+  const others = draftBuildings(state, draft).filter((b) => !moving.has(b.id));
+  for (const id of ids) {
+    const p = draft.pos[id];
+    if (!p || isStored(draft, id)) return { ok: false, reason: 'Missing' };
+    const spot = canPlaceRect(others, p.col + dc, p.row + dr, p.w, p.h);
+    if (!spot.ok) return spot;
+  }
+  return { ok: true, reason: '' };
+}
+
+/** Move the buildings `ids` (dc, dr) tiles in the draft if they can all go there. Returns the check. */
+export function moveGroupInDraft(state, draft, ids, dc, dr) {
+  const check = checkGroupMove(state, draft, ids, dc, dr);
+  if (!check.ok) return check;
+  for (const id of ids) {
+    const p = draft.pos[id];
+    draft.pos[id] = { ...p, col: p.col + dc, row: p.row + dr };
+  }
+  return check;
+}

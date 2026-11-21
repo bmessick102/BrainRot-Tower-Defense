@@ -78,6 +78,33 @@ export function playSfxCapped(scene, key, maxAtOnce, config = undefined) {
   playSfx(scene, key, config);
 }
 
+/**
+ * A sound effect that may be long (a spell's cast, John Pork's call, Brr Brr Patapim's quake): played through the SFX
+ * level like playSfx (skipped while the browser still blocks audio or the SFX slider is at 0), but
+ *   - skipped if the same sound started less than `minGapMs` ago (casting the same spell twice quickly) or
+ *     `maxAtOnce` copies are already playing, and
+ *   - cut after `maxSeconds` (when given) with a `fadeMs` fade-out, so a long file works as a short clip.
+ */
+const clipStarts = new Map();
+export function playSfxClip(scene, key, { maxSeconds = 0, fadeMs = 400, maxAtOnce = 2, minGapMs = 300, volume = 1 } = {}) {
+  if (!key || !scene.cache.audio.exists(key) || audioLocked(scene) || sfxLevel <= 0) return null;
+  const now = performance.now();
+  if (now - (clipStarts.get(key) || -Infinity) < minGapMs) return null;
+  if (scene.sound.getAll(key).filter((s) => s.isPlaying).length >= maxAtOnce) return null;
+  clipStarts.set(key, now);
+  const snd = scene.sound.add(key, { volume: sfxVolume(volume) });
+  snd.once('complete', () => destroySound(snd));
+  snd.play();
+  if (maxSeconds > 0 && soundDuration(scene, key) > maxSeconds) {
+    scene.time.delayedCall(Math.max(0, maxSeconds * 1000 - fadeMs), () => {
+      if (!isAlive(snd)) return;
+      const v = { value: snd.volume };
+      scene.tweens.add({ targets: v, value: 0, duration: fadeMs, onUpdate: () => { if (isAlive(snd)) snd.setVolume(v.value); }, onComplete: () => destroySound(snd) });
+    });
+  }
+  return snd;
+}
+
 /** Length of a loaded sound in seconds (0 if missing). */
 export function soundDuration(scene, key) {
   if (!scene.cache.audio.exists(key)) return 0;

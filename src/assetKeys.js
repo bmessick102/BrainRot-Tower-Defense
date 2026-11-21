@@ -47,6 +47,10 @@ export const PROJECTILE_KEYS = {
   spear: 'proj_spear',
   slinger: 'proj_slinger',
   bomb: 'proj_bomb',
+  ksi: 'proj_ksi',          // the KSI Tower's bottle
+  ksiBounce: 'proj_ksi',    // ...bouncing on (KSI Avalanche)
+  vaca: 'proj_vaca',        // La Vaca Saturno's boulder
+  missile: 'proj_bomb',     // Big Yahu's missile: the Bomber's bomb, falling from the sky
   // RV Lab ability shots reuse existing pictures: Grapeshot pellets and Boulders are cannonballs,
   // Cluster Shell bomblets are small mortar shells.
   pellet: 'proj_cannon',
@@ -113,7 +117,24 @@ export const SFX = {
   waveCountdown: 'sfx_wave_countdown', // Start Wave pressed: the countdown begins
   waveClear: 'sfx_wave_clear',
   achievement: 'sfx_achievement',   // an achievement unlocks (optional: the wave-clear fanfare plays without it)
-  gameOver: 'sfx_game_over'
+  gameOver: 'sfx_game_over',
+  // v0.6
+  ksiImpact: 'sfx_ksi_impact',            // a KSI Tower bottle bursts
+  vacaImpact: 'sfx_vaca_impact',          // La Vaca Saturno's boulder lands or bounces
+  porkCall: 'sfx_pork_call',              // John Pork's call (never over itself)
+  skeletonRage: 'sfx_skeleton_rage',      // Rahhh Skeleton's shield bash
+  skeletonAttack: 'sfx_skeleton_attack',  // ...and his sword swing
+  patapimQuake: 'sfx_patapim_quake'       // Brr Brr Patapim's earthquake (a clip of it per quake)
+};
+
+/** Each Fuel Station spell's cast sound (SpellFx.onCast). */
+export const SPELL_SFX = {
+  rage: 'sfx_spell_rage',
+  heal: 'sfx_spell_heal',
+  freeze: 'sfx_spell_freeze',
+  heat: 'sfx_spell_heat',
+  invisibility: 'sfx_spell_invisibility',
+  lightning: 'sfx_spell_lightning'
 };
 
 export const MUSIC = {
@@ -132,7 +153,10 @@ export const ENEMY_ATTACK_SFX = {
   thief: SFX.enemyHitSmall,
   toilet: SFX.enemyHitSmall,
   tank: SFX.enemyHitBig,
-  neegy: SFX.neegyHit
+  neegy: SFX.neegyHit,
+  pork: SFX.enemyHitSmall,
+  skeleton: SFX.skeletonAttack,
+  patapim: SFX.enemyHitBig
 };
 
 /** Enemies that say their line now and then while they're on the map (see GameScene.enemyChatter). */

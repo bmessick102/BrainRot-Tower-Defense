@@ -479,3 +479,34 @@ registerPerkTree('fuelStation', {
     t('Fuel Depot', '+1 spell slot, and brewing costs 10% fewer Burgers.', { spellSlotsAdd: 1, brewCostPct: -10 })
   ] }
 }, 'economy');
+
+// ---------- KSI Tower (ice; fx read by combat.js fireDefense / landSplash / chillEnemy and abilityEffects.js) ----------
+// chillSlowAdd / chillSecondsAdd: a stronger / longer chill on every enemy its bottles splash. iceRadius / iceSeconds /
+// iceSlow: the burst leaves an icy patch (a pool, ground enemies only) that slows. freezeChance / freezeSeconds: an enemy
+// splashed may freeze solid (held in place, icy blue; bosses are only chilled); frozenVuln: frozen enemies take more
+// damage from everything. chilledBonus: its bottles hit chilled enemies harder. bounce / bounceDist: the bottle bounces
+// on once (like the Mortar's Seismic Charge). blizzardEvery / blizzardSlow / blizzardSeconds / blizzardMult: a blizzard
+// over its whole range on a timer.
+registerPerkTree('ksi', {
+  a: { name: 'Blizzard', tiers: [
+    t('Cold Snap', 'Bottles splash 0.35 tile wider.', { splashAdd: 0.35 }),
+    t('Frost Patch', 'Each burst leaves an icy patch (1 tile) that slows ground enemies 40% for 3 s.', { iceRadius: 1, iceSeconds: 3, iceSlow: 0.4 }),
+    t('Wind Chill', 'Splashes 0.5 tile wider and the chill lasts 1 s longer.', { splashAdd: 0.5, chillSecondsAdd: 1 }),
+    t('Permafrost', 'Icy patches grow to 1.4 tiles, last 5 s and slow 50%.', { iceRadius: 1.4, iceSeconds: 5, iceSlow: 0.5 }),
+    t('Polar Vortex', 'Every 10 s, a blizzard hits every enemy in range for 150% damage and slows it 60% for 3 s.', { blizzardEvery: 10, blizzardSlow: 0.6, blizzardSeconds: 3, blizzardMult: 1.5 })
+  ] },
+  b: { name: 'Fully Frozen', tiers: [
+    t('Brain Freeze', 'Enemies splashed have a 15% chance to freeze solid for 1 s.', { freezeChance: 0.15, freezeSeconds: 1 }),
+    t('Deep Chill', 'The chill slows 10% more and lasts 1.5 s longer.', { chillSlowAdd: 0.1, chillSecondsAdd: 1.5 }),
+    t('Flash Freeze', 'A 25% chance to freeze enemies solid for 1.5 s.', { freezeChance: 0.25, freezeSeconds: 1.5 }),
+    t('Ice Shatter', 'Frozen enemies take 30% more damage from everything.', { frozenVuln: 0.3 }),
+    t('Frozen Solid', 'A 35% chance to freeze enemies solid for 2 s.', { freezeChance: 0.35, freezeSeconds: 2 })
+  ] },
+  c: { name: 'Snowball', tiers: [
+    t('Packed Snow', '+20% damage.', { damagePct: 20 }),
+    t('Snowball Effect', 'Bottles deal 30% more damage to enemies that are already chilled.', { chilledBonus: 0.3 }),
+    t('Rapid Chill', 'Throws 25% faster.', { fireRatePct: 25 }),
+    t('Avalanche', 'Each bottle bounces on 1.5 tiles and splashes again for 60% damage.', { bounce: 0.6, bounceDist: 1.5 }),
+    t('Mega Snowball', '+40% damage and +1 tile range.', { damagePct: 40, rangeAdd: 1 })
+  ] }
+});

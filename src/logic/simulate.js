@@ -10,6 +10,7 @@ import { stepWaveSpawning, checkWaveCleared } from './waves.js';
 import { stepEnemies, removeDeadEnemies } from './enemies.js';
 import { stepDefenses, stepProjectiles, stepPools } from './combat.js';
 import { stepFlockTowers } from './flock.js';
+import { stepSpecialEnemies } from './specialEnemies.js';
 import { stepTraps } from './traps.js';
 import { stepBeams } from './beams.js';
 import { stepSpecials, stepStrikes, stepEnemyStatus, stepAbilityBuildings } from './abilityEffects.js';
@@ -36,6 +37,7 @@ export function simulate(state, dt) {
   stepEnemies(state, dt);
   if (!state.gameOver) stepHero(state, dt); // the Brisket King guards his altar (hero.js)
   if (!state.gameOver) stepTraps(state, dt); // ground enemies stepping onto set Mousetraps spring them (+ re-arm, lures)
+  stepSpecialEnemies(state, dt); // F.L.O.C.K Towers silenced by John Pork's call count down
   stepFlockTowers(state); // mark + reveal enemies in F.L.O.C.K Tower range before the defenses fire
   stepDj(state, dt, DEFENSE_TYPES); // DJ Babyface: boosts run down, light show, its perks (Auto-DJ, VIP Lounge...)
   if (!state.gameOver) stepSpells(state, dt); // Fuel Station spells in play: Rage, Heal, Freeze, Invisibility, Heat Field

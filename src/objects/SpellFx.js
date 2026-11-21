@@ -8,8 +8,8 @@ import { splashRing, floatText } from './Effects.js';
 import { chainLightningFx } from './AbilityFx.js';
 import { SPELL_COLORS, spellIconTexture } from './SpellIcons.js';
 import { fitIcon } from './uiDraw.js';
-import { TEX, SFX } from '../assetKeys.js';
-import { playSfx } from '../audio.js';
+import { TEX, SFX, SPELL_SFX } from '../assetKeys.js';
+import { playSfx, playSfxClip } from '../audio.js';
 import { spellName } from '../logic/spells.js';
 
 const ZONE_DEPTH = 4880;  // with the range circles: over the ground and buildings, under labels
@@ -73,6 +73,17 @@ export class SpellFx {
     });
   }
 
+  /**
+   * The spell's own cast sound (SPELL_SFX), through the SFX level. Casting the same spell again within half a second
+   * stays quiet, and at most two of one spell play at once, so quick casts don't pile up. Returns false without a file.
+   */
+  castSound(kind) {
+    const key = SPELL_SFX[kind];
+    if (!key || !this.scene.cache.audio.exists(key)) return false;
+    playSfxClip(this.scene, key, { maxAtOnce: 2, minGapMs: 500, maxSeconds: 5, fadeMs: 600 });
+    return true;
+  }
+
   onCast(d) {
     const s = gridToScreen(d.x, d.y);
     const color = SPELL_COLORS[d.kind] || 0xffffff;
@@ -91,10 +102,10 @@ export class SpellFx {
       }
       if (!(d.targets || []).length) chainLightningFx(this.scene, [{ x: s.x, y: s.y - 360 }, { x: s.x, y: s.y }], TEX.light);
       this.scene.cameras.main.shake(200, 0.006);
-      playSfx(this.scene, SFX.mortarImpact);
+      if (!this.castSound(d.kind)) playSfx(this.scene, SFX.mortarImpact);
       return;
     }
-    playSfx(this.scene, this.scene.cache.audio.exists(SFX.abilityUnlocked) ? SFX.abilityUnlocked : SFX.upgrade);
+    if (!this.castSound(d.kind)) playSfx(this.scene, this.scene.cache.audio.exists(SFX.abilityUnlocked) ? SFX.abilityUnlocked : SFX.upgrade);
     this.zones.set(d.id, { g: this.scene.add.graphics().setDepth(ZONE_DEPTH), kind: d.kind, nextPuff: 0 });
   }
 

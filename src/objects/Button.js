@@ -1,6 +1,6 @@
 // A glossy, beveled UI button with an optional second line (used for prices and "why it's disabled").
 // Fires on pointerdown so panels that refresh between press and release never swallow a click.
-// opts: color, hoverColor, fontSize, radius, circle (round button), icon: 'x' | 'left' | 'right' | 'fullscreen' |
+// opts: color, hoverColor, disabledColor (default: the shared grey), fontSize, radius, circle (round button), icon: 'x' | 'left' | 'right' | 'fullscreen' |
 // 'exitFullscreen' (drawn instead of text), onRelease (fire when the press ends instead: browsers only allow some
 // things, like full screen, from a finished tap or click).
 import Phaser from 'phaser';
@@ -30,6 +30,7 @@ export class Button extends Phaser.GameObjects.Container {
     this.btnH = height;
     this.color = opts.color ?? COLORS.button;
     this.hoverColor = opts.hoverColor ?? null; // null = a lighter shade of `color`
+    this.disabledColor = opts.disabledColor ?? COLORS.buttonDisabled;
     this.fontSize = opts.fontSize ?? 18;
     this.radius = opts.radius ?? 12;
     this.circle = !!opts.circle;
@@ -67,7 +68,7 @@ export class Button extends Phaser.GameObjects.Container {
 
   redraw() {
     const g = this.bg;
-    const base = !this.enabled ? COLORS.buttonDisabled : this.color;
+    const base = !this.enabled ? this.disabledColor : this.color;
     const fill = this.enabled && this.hover ? (this.hoverColor ?? shade(base, 1.12)) : base;
     g.clear();
     drawGlossy(g, -this.btnW / 2, -this.btnH / 2, this.btnW, this.btnH, fill, { radius: this.radius, lip: LIP, circle: this.circle });

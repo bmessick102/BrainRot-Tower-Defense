@@ -11,6 +11,11 @@ Put the enemy pictures in this folder, then run `npm run prepare-art` from the p
 | `enemy_bomber.png` | Bomber | Flies over everything and drops bombs | 46 px tall |
 | `enemy_tank.png` | Tank | Big, slow, very tough melee bruiser | 62 px tall |
 | `enemy_shark.png` | Sneaker Shark | Fast raider that leaps over walls | 50 px tall |
+| `enemy_pork.png` (+ `_attack`, `_call`, `_death`) | John Pork | Phones in to silence F.L.O.C.K Towers | 54 px tall |
+| `enemy_skeleton.png` (+ `_attack`, `_rage`, `_death`) | Rahhh Skeleton | Shield bash that enrages enemies nearby | 52 px tall |
+| `enemy_vaca.png` (+ `_attack`, `_death`) | La Vaca Saturno | Flyer throwing bouncing boulders (draw it flying, no shadow) | 64 px tall |
+| `enemy_yahu.png` (+ `_attack`, `_death`) | Big Yahu | Calls missiles down | 56 px tall |
+| `enemy_patapim.png` (+ `_attack`, `_death`) | Brr Brr Patapim | Earthquake tank | 82 px tall |
 
 Optional extras (the enemies' projectiles):
 

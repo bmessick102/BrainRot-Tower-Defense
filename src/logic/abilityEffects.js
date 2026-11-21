@@ -10,7 +10,8 @@
 import { ABILITY_RULES } from '../abilityConfig.js';
 import { levelStats, maxHp } from './buildings.js';
 import { abilityFx, towerDamageMult, towerRange } from './abilities.js';
-import { applySplash, areaDamage, areaPack, createPool, damageEnemy, fireDefense, isShooter, validTargets, createStrike, poisonEnemy, applySlow, applyStun, enemyIsAir, fireLine } from './combat.js';
+import { applySplash, areaDamage, areaPack, createPool, damageEnemy, fireDefense, isShooter, validTargets, createStrike, poisonEnemy, applySlow, applyStun, enemyIsAir, fireLine, chillEnemy } from './combat.js';
+import { CONFIG } from '../config.js';
 import { footprintCenter, distanceToFootprint } from './grid.js';
 import { knockback } from './motion.js';
 import { typeConfig } from './buildings.js';
@@ -89,14 +90,14 @@ export function stepSpecials(state, dt) {
   if (!isWaveActive(state)) return;
   for (const b of state.buildings) {
     if (b.destroyed) continue;
-    if (b.type === 'flock') { stepSupportSpecials(state, b, dt); continue; }
+    if (b.type === 'flock') { if (!(b.silencedT > 0)) stepSupportSpecials(state, b, dt); continue; } // (silenced by John Pork: nothing)
     if (!isShooter(b)) continue;
     const fx = abilityFx(b);
     if (!fx.stormEvery && !fx.meteorEvery && !fx.salvoEvery && !fx.cloudEvery && !fx.quakeEvery && !fx.warpEvery && !fx.starfallEvery
-      && !fx.flakEvery && !fx.broadsideEvery && !fx.volleyEvery && !fx.decoyEvery && !fx.showEvery && !fx.floodEvery) continue;
+      && !fx.blizzardEvery && !fx.flakEvery && !fx.broadsideEvery && !fx.volleyEvery && !fx.decoyEvery && !fx.showEvery && !fx.floodEvery) continue;
     stepTowerSpecials(state, b, fx, dt);
     if (state.gameOver) return;
-    if (!fx.stormEvery && !fx.meteorEvery && !fx.salvoEvery && !fx.cloudEvery && !fx.quakeEvery && !fx.warpEvery && !fx.starfallEvery) continue;
+    if (!fx.stormEvery && !fx.meteorEvery && !fx.salvoEvery && !fx.cloudEvery && !fx.quakeEvery && !fx.warpEvery && !fx.starfallEvery && !fx.blizzardEvery) continue;
     const dmg = levelStats(b.type, b.level).damage * towerDamageMult(b);
     if (fx.stormEvery && charge(b, 'stormT', fx.stormEvery, dt)) {
       const t = crowdTarget(state, b, fx.stormRadius);
@@ -141,6 +142,20 @@ export function stepSpecials(state, dt) {
         b.quakeT = 0;
         areaFx(state, b, 'earthquake', range);
         for (const e of hit) { applyStun(e, fx.quakeStun); areaDamage(state, e, dmg * fx.quakeMult, 'quake'); }
+        if (state.gameOver) return;
+      }
+    }
+    // KSI Tower Polar Vortex: a blizzard over its whole range (damage, and a strong chill).
+    if (fx.blizzardEvery && charge(b, 'blizzardT', fx.blizzardEvery, dt)) {
+      const range = towerRange(b);
+      const hit = inRange(state, b, range);
+      if (hit.length) {
+        b.blizzardT = 0;
+        areaFx(state, b, 'blizzard', range);
+        for (const e of hit) {
+          areaDamage(state, e, dmg * fx.blizzardMult, 'blizzard');
+          chillEnemy(e, { slow: fx.blizzardSlow, seconds: fx.blizzardSeconds, bossShare: CONFIG.defenses.ksi.chill.bossShare });
+        }
         if (state.gameOver) return;
       }
     }

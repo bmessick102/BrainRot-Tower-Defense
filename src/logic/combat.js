@@ -13,11 +13,12 @@ import { enrageFactor, nightLootMult } from './enrage.js';
 import { addHype } from './dj.js';
 import { knockback, applySlow, applyStun } from './motion.js';
 import { addResearchPoints, killResearchPoints } from './researchPoints.js';
+import { fireBoulderAt, fireMissileAt, stepEnemyShot } from './specialEnemies.js';
 
 export { applySlow, applyStun };
 
 // Which projectile config each defense uses (CONFIG.projectiles keys).
-const DEFENSE_PROJECTILE = { cannon: 'cannon', archer: 'archer', mortar: 'mortar', wizard: 'wizard', firework: 'firework', catapult: 'catapult', spear: 'spear' };
+const DEFENSE_PROJECTILE = { cannon: 'cannon', archer: 'archer', mortar: 'mortar', wizard: 'wizard', firework: 'firework', catapult: 'catapult', spear: 'spear', ksi: 'ksi' };
 
 // Pools (Catapult): damage is dealt in ticks of this many seconds (poolDps x POOL_TICK per tick).
 export const POOL_TICK = 0.5;
@@ -139,6 +140,8 @@ export function fireDefense(state, b, target, opts = {}) {
     splashRadius: opts.splash ?? ((cfg.splashRadius || 0) + (fx.splashAdd || 0)),
     // Catapult: what the shot leaves behind where it lands.
     pool,
+    // KSI Tower: the chill its splash leaves on every enemy hit (chillEnemy).
+    chill: cfg.chill ? ksiChill(cfg, lvl, fx) : null,
     range: towerRange(b),  // Locklair Bullseye measures against it
     star: !!opts.star,     // Firework Star Shells
     hitsGround: towerHits(b).ground,
@@ -204,6 +207,39 @@ function fireSpear(state, b, target, damage, cfg, pcfg, opts) {
     hitRadius: 0.55, damage, hitsGround: !air && !!cfg.hitsGround, hitsAir: air && !!cfg.hitsAir, fx,
     source: opts.source || 'spear'
   });
+}
+
+/** A KSI Tower bottle's chill: its level's slow and the type's duration, with the Blizzard / Fully Frozen perks. */
+function ksiChill(cfg, lvl, fx) {
+  return {
+    slow: Math.min(0.9, lvl.slow + (fx.chillSlowAdd || 0)),
+    seconds: cfg.chill.seconds + (fx.chillSecondsAdd || 0),
+    bossShare: cfg.chill.bossShare
+  };
+}
+
+/**
+ * Chill an enemy (KSI Tower): slowed by `slow` for `seconds` (the strongest slow on it wins: slows never stack) and
+ * drawn icy blue while it lasts (e.chillT). Bosses only take bossShare of the slow.
+ */
+export function chillEnemy(e, chill) {
+  if (!e.alive || !chill) return;
+  const boss = !!CONFIG.enemies[e.kind].boss;
+  applySlow(e, chill.slow * (boss ? chill.bossShare : 1), chill.seconds);
+  e.chillT = Math.max(e.chillT || 0, chill.seconds);
+}
+
+/**
+ * KSI Tower Fully Frozen: frozen solid for `seconds` (held in place, the Ice Bag spell's icy look; e.frozenT is run
+ * down by spells.js, so state._spellMarks keeps that going). Bosses can't be frozen. Ice Shatter: frozenVuln.
+ */
+export function freezeEnemy(state, e, seconds, vuln = 0) {
+  if (!e.alive || CONFIG.enemies[e.kind].boss) return;
+  applyStun(e, seconds);
+  e.frozenT = Math.max(e.frozenT || 0, seconds);
+  state._spellMarks = true;
+  if (vuln) applyVuln(e, vuln, seconds);
+  emit(state, 'enemyFrozen', { id: e.id, x: e.x, y: e.y });
 }
 
 /** A Catapult shot's pool with the Toxic path applied. */
@@ -529,6 +565,10 @@ export function damageBuilding(state, b, amount, attacker = null) {
 /** Create an enemy's projectile: a Slinger shot (flies) or a Bomber bomb (drops). */
 export function fireEnemyProjectile(state, e, building) {
   const cfg = CONFIG.enemies[e.kind];
+  const dmg = cfg.damage * enrageFactor(state, e).damage * (e.pack || 1) * (1 - enemyWeaken(e));
+  // La Vaca Saturno's bouncing boulder and Big Yahu's missile (specialEnemies.js).
+  if (cfg.bounce) return fireBoulderAt(state, e, building, dmg);
+  if (cfg.missileRadius) return fireMissileAt(state, e, building, dmg);
   const p = {
     id: nextId(state, 'p'),
     owner: 'enemy',
@@ -536,7 +576,7 @@ export function fireEnemyProjectile(state, e, building) {
     x: e.x, y: e.y,
     startX: e.x, startY: e.y,
     targetId: building.id,
-    damage: cfg.damage * enrageFactor(state, e).damage * (e.pack || 1) * (1 - enemyWeaken(e)),
+    damage: dmg,
     done: false
   };
   if (cfg.type === 'air') {
@@ -622,6 +662,16 @@ function landSplash(state, p, x, y, primary) {
   const hit = applySplash(state, x, y, radius, p.damage, p.hitsGround, p.hitsAir, p.kind,
     { groundMult: p.groundMult ?? 1, source: p.source, perEnemy: (e) => hitMult(p, e, x, y) });
   for (const e of hit) if (e.alive) hitEffects(state, p, e, dirFrom(x, y, e, travel), true);
+  // KSI Tower: everything splashed is chilled, and may freeze solid (Fully Frozen).
+  if (p.chill) {
+    for (const e of hit) {
+      if (!e.alive) continue;
+      chillEnemy(e, p.chill);
+      if (fx.freezeChance && random(state) < fx.freezeChance) freezeEnemy(state, e, fx.freezeSeconds || 1, fx.frozenVuln || 0);
+    }
+    // Frost Patch / Permafrost: an icy patch where it burst.
+    if (fx.iceRadius && !p.bounced) createPool(state, x, y, { radius: fx.iceRadius, duration: fx.iceSeconds || 3, dps: 0, slow: fx.iceSlow || 0.4 }, 'ice');
+  }
   if (state.gameOver) return;
   for (const e of hit) if (!e.alive) onTowerKill(state, p, e);
   if (state.gameOver) return;
@@ -632,7 +682,7 @@ function landSplash(state, p, x, y, primary) {
   if (fx.bounce && main) {
     const len = Math.hypot(travel.x, travel.y) || 1;
     const tx = x + (travel.x / len) * fx.bounceDist, ty = y + (travel.y / len) * fx.bounceDist;
-    fireBomblet(state, p, x, y, tx, ty, p.damage * fx.bounce, { bounced: true, splash: p.splashRadius, flightTime: 0.5, fx });
+    fireBomblet(state, p, x, y, tx, ty, p.damage * fx.bounce, { bounced: true, splash: p.splashRadius, flightTime: 0.5, fx, kind: p.kind === 'ksi' ? 'ksiBounce' : 'bomblet', chill: p.chill });
   }
   // Mortar Fault Line: cracks in the ground running back toward the mortar.
   if (fx.crack && main) {
@@ -707,6 +757,7 @@ function hitMult(p, e, x, y) {
   if (fx.bigBonus && (e.kind === 'tank' || e.kind === 'breaker')) m += fx.bigBonus;
   if (fx.burningBonus && (e.burnTime > 0 || e.inFireT > 0)) m += fx.burningBonus;
   if (fx.poolBonus && e.inPoolT > 0) m += fx.poolBonus;
+  if (fx.chilledBonus && e.chillT > 0) m += fx.chilledBonus;   // KSI Snowball Effect
   return m;
 }
 
@@ -776,7 +827,7 @@ export function fireLine(state, x, y, dx, dy, o) {
 function fireBomblet(state, parent, x, y, tx, ty, damage, o = {}) {
   const f = parent.fx || {};
   state.projectiles.push({
-    id: nextId(state, 'p'), kind: 'bomblet', owner: 'tower', sourceId: parent.sourceId || null, tower: parent.tower, fromBlast: true,
+    id: nextId(state, 'p'), kind: o.kind || 'bomblet', owner: 'tower', sourceId: parent.sourceId || null, tower: parent.tower, fromBlast: true, chill: o.chill || null,
     x, y, startX: x, startY: y, targetId: null, targetX: tx, targetY: ty,
     homing: false, elapsed: 0, flightTime: o.flightTime ?? BOMBLET.flightTime, damage, bounced: !!o.bounced,
     splashRadius: o.splash ?? BOMBLET.splash, hitsGround: parent.hitsGround, hitsAir: parent.hitsAir, groundMult: 1,
@@ -956,6 +1007,8 @@ export function stepPools(state, dt) {
 }
 
 function stepEnemyProjectile(state, p, dt) {
+  // Boulders and missiles fly to a spot: they land even if their target falls first.
+  if (p.kind === 'vaca' || p.kind === 'missile') { stepEnemyShot(state, p, dt, damageBuilding); return; }
   const b = findBuilding(state, p.targetId);
   if (!b || b.destroyed) { p.done = true; p.fizzled = true; return; }
   if (p.homing) {

@@ -119,7 +119,7 @@ declare
   credit int := 0;
   supported int;
 begin
-  th := least(greatest(coalesce((new.save ->> 'townHallLevel')::int, 0), 0), 10);
+  th := least(greatest(coalesce((new.save ->> 'townHallLevel')::int, 0), 0), 11); -- Village Hall 11 is the top level (v0.6)
   cleared := greatest(coalesce((new.save ->> 'wavesCleared')::int, 0), 0);
   new.town_hall := th;
   if tg_op = 'INSERT' then
@@ -188,7 +188,7 @@ begin
   select coalesce(max(best_wave), 0), coalesce(max(town_hall), 0) into cap_wave, cap_hall
     from public.bases where user_id = new.user_id;
   new.best_wave := least(greatest(new.best_wave, 0), cap_wave);
-  new.best_town_hall := least(greatest(new.best_town_hall, 0), cap_hall, 10);
+  new.best_town_hall := least(greatest(new.best_town_hall, 0), cap_hall, 11);
   if tg_op = 'INSERT' then
     new.reached_at := case when new.best_wave > 0 then now() end;
   elsif new.best_wave > old.best_wave then

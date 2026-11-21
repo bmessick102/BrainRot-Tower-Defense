@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest';
 import { CONFIG } from '../src/config.js';
 import { isValidTarget, fireDefense, stepProjectiles, stepPools, createPool, POOL_TICK } from '../src/logic/combat.js';
 import { stepEnemy } from '../src/logic/enemies.js';
-import { checkBuy, limitFor, maxLevel, DEFENSE_TYPES } from '../src/logic/buildings.js';
+import { checkBuy, limitFor, maxLevel, buildCost, DEFENSE_TYPES } from '../src/logic/buildings.js';
 import { footprintCenter } from '../src/logic/grid.js';
 import { makeStateWithTownHall, addBuilding, addEnemy } from './helpers.js';
 
@@ -80,7 +80,7 @@ describe('Catapult', () => {
     expect(slowed / normal).toBeCloseTo(1 - cfg.pool.slow, 1);
   });
 
-  it('is the last unlock: Village Hall 10 only, one allowed, and has 5 levels', () => {
+  it('is the last unlock: from Village Hall 10, one at the normal price, and has 5 levels', () => {
     expect(cfg.unlockTownHall).toBe(10);
     expect(Math.max(...CONFIG.limits.catapult)).toBe(1);
     expect(limitFor('catapult', 9)).toBe(0);
@@ -89,7 +89,12 @@ describe('Catapult', () => {
     const s = makeStateWithTownHall({ gold: 9999999 }, 10);
     expect(checkBuy(s, 'catapult').ok).toBe(true);
     addBuilding(s, 'catapult', 2, 2);
-    expect(checkBuy(s, 'catapult').ok).toBe(false);
+    expect(checkBuy(s, 'catapult')).toEqual({ ok: false, reason: 'Limit reached' }); // Village Hall 10: one
+    // v0.6: Village Hall 11's shared pool allows more, each past the cap of 1 at +50% (compounding).
+    const s11 = makeStateWithTownHall({ gold: 9999999 }, 11);
+    addBuilding(s11, 'catapult', 2, 2);
+    expect(checkBuy(s11, 'catapult').ok).toBe(true);
+    expect(buildCost('catapult', s11)).toBe(Math.round(cfg.levels[0].cost * 1.5));
     // Last in the shop too.
     expect(DEFENSE_TYPES[DEFENSE_TYPES.length - 1]).toBe('catapult');
     for (const t of DEFENSE_TYPES) expect(CONFIG.defenses[t].unlockTownHall).toBeLessThanOrEqual(cfg.unlockTownHall);

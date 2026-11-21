@@ -51,6 +51,8 @@ const TARGETS = [
   // The fish giant's walking picture is also the biggest figure on the title screen (TitleBackdropScene), so it's
   // exported at twice the usual width to stay sharp there; in game it's scaled to the same height as before.
   { match: /^enemy_tank$/, width: 320, trim: true, needsAlpha: true },
+  // v0.6 heavies, drawn bigger in game (and Brr Brr Patapim / La Vaca Saturno also stand on the title screen).
+  { match: /^enemy_(patapim|vaca)(_[a-z]+)?$/, width: 256, trim: true, needsAlpha: true },
   { match: /^enemy_/, width: 160, trim: true, needsAlpha: true },
   // The gnome's working pose (busy at a building: mining, repairing, building). Wider than the standing gnome (an arm
   // out), so it's exported wider to keep the same detail; the game sizes both to the same height.
@@ -59,6 +61,9 @@ const TARGETS = [
   { match: /^proj_(slinger|bomb)$/, width: 48, trim: true, needsAlpha: true },
   { match: /^proj_cannon$/, width: 48, trim: true, needsAlpha: true },
   { match: /^proj_mortar$/, width: 64, trim: true, needsAlpha: true },
+  // KSI Tower's bottle (tall: fit by its longer side) and La Vaca Saturno's boulder.
+  { match: /^proj_ksi$/, width: 72, fit: 'box', trim: true, needsAlpha: true },
+  { match: /^proj_vaca$/, width: 72, trim: true, needsAlpha: true },
   { match: /^proj_(arrow|wizard|spear)$/, width: 96, trim: true, needsAlpha: true },
   { match: /^ui_coin$/, width: 96, trim: true, needsAlpha: true },
   { match: /^ui_research_point$/, width: 128, trim: true, needsAlpha: true }, // the Burger (research points, shown as Burgers)

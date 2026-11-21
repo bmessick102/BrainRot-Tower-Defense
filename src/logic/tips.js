@@ -17,6 +17,11 @@ export const TIPS = {
   restless: () => `Night attack! In the dark, enemies are restless: they hit harder and move faster, but pay +${pct(CONFIG.rules.night.lootBonus)} gold and Burgers. Start waves by day for an easier fight, or at night for more loot.`,
   boss: () => `${CONFIG.enemies.babycar.name} comes next wave! This raid boss drives straight at your Village Hall and smashes through walls. Keep strong defenses near your hall, and be ready for the troops it bursts into.`,
   toilet: () => `${CONFIG.enemies.toilet.name}s come next wave! They tunnel under your walls to the nearest building and pop up to attack. Underground, only a F.L.O.C.K Tower's sight lets your defenses hit them.`,
+  pork: () => `${CONFIG.enemies.pork.name} comes next wave! When a F.L.O.C.K Tower spots him he makes a call that silences every F.L.O.C.K Tower near him for ${CONFIG.enemies.pork.call.seconds} s. Keep other defenses covering your F.L.O.C.K Towers.`,
+  skeleton: () => `${CONFIG.enemies.skeleton.name} comes next wave! His shield bash enrages every enemy around him (+${CONFIG.enemies.skeleton.rage.damagePct}% damage, +${CONFIG.enemies.skeleton.rage.speedPct}% speed). Take him out before he reaches your base.`,
+  vaca: () => `${CONFIG.enemies.vaca.name} comes next wave! This tough flyer throws boulders that bounce on behind their target. Only defenses that hit air can stop it.`,
+  yahu: () => `${CONFIG.enemies.yahu.name} comes next wave! Missiles get called down from long range: a red target shows where each will land. Spread your buildings out.`,
+  patapim: () => `${CONFIG.enemies.patapim.name} comes next wave! His earthquakes hit every building and wall around him. Slow him down and hit him hard before he reaches your walls.`,
   hero: () => 'The Brisket King guards his altar, clubbing ground enemies nearby. In a wave, use Brisket Feast on the hotbar at the bottom (or press its number key) to heal, boost and slam. He naps after waves to heal.',
   dj: () => 'DJ Babyface\'s hype is full! In a wave, use Drop the Beat on the hotbar at the bottom (or press its number key): every defense in its range fires much faster for a few seconds. Defeating enemies fills it again.',
   fuel: () => 'The Fuel Station (Shop, Economy tab) brews spells with Burgers: click it and press Brew. During waves, brewed spells sit on the hotbar at the bottom: click one (or press its number), then click the map to cast it. Each is used up when cast, and your Village Hall level sets how many you can carry.',
@@ -28,6 +33,8 @@ export const TIPS = {
   walls: () => 'Walls all share one level. Click any wall and press Upgrade Walls to raise every wall at once (each wall costs the new level\'s price). New walls are built at your current wall level.'
 };
 export const TIP_KEYS = Object.keys(TIPS);
+// Enemies with a "comes next wave" tip, the first time a wave brings them.
+const NEW_ENEMY_TIPS = ['toilet', 'pork', 'skeleton', 'vaca', 'yahu', 'patapim'];
 
 /** Which tips an event brings up (if not seen yet). */
 function tipsForEvent(state, name, data) {
@@ -53,7 +60,8 @@ function tipsForEvent(state, name, data) {
     const info = nextWaveInfo(state);
     if (info.special) out.push('special');
     if (info.babyCars) out.push('boss');
-    if ((nextWaveComposition(state).toilet || 0) > 0) out.push('toilet');
+    const comp = nextWaveComposition(state);
+    for (const k of NEW_ENEMY_TIPS) if ((comp[k] || 0) > 0) out.push(k);
   }
   return out;
 }

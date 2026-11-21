@@ -30,7 +30,8 @@ const AURA_KEYS = { auraFireRatePct: 'fireRatePct', auraRangeAdd: 'rangeAdd', au
 
 /** Mark (and reveal) every enemy inside a tower's range; unmark the rest; set Commander auras. Runs every step. */
 export function stepFlockTowers(state) {
-  const towers = state.buildings.filter((b) => b.type === 'flock' && !b.destroyed).map((b) => {
+  // A tower silenced by John Pork's call (b.silencedT, specialEnemies.js) marks, reveals and boosts nothing.
+  const towers = state.buildings.filter((b) => b.type === 'flock' && !b.destroyed && !(b.silencedT > 0)).map((b) => {
     const fx = abilityFx(b);
     return { b, fx, c: footprintCenter(b), range: towerRange(b), bonus: flockBonus(b.level) + (fx.markAdd || 0) / 100, seen: 0 };
   });

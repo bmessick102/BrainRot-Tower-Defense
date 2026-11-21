@@ -2,6 +2,29 @@
 
 The version shows in the bottom-left corner of every screen (`package.json` `version` plus the commit). Details for everything below are in [README.md](README.md).
 
+## 0.6.0
+
+A feature release (the 13-item "Fixes & Features Batch 2"). Details in [README.md](README.md): KSI Tower, Village Hall 11, and the enemy list under Walls and pathfinding. Saves load as they are (still save version 7). **Database:** run [supabase/migration-2026-11-21-village-hall-11.sql](supabase/migration-2026-11-21-village-hall-11.sql) (or all of schema.sql) so the leaderboard counts Village Hall 11; the game works without it.
+
+### New
+- **KSI Tower** (Village Hall 5): an ice tower that splashes ground and air enemies and chills them (30-50% slower, icy blue). Slows never stack (the strongest wins); bosses take half. Perk paths Blizzard, Fully Frozen and Snowball.
+- **Five new enemies:** John Pork (VH4, silences F.L.O.C.K Towers with a phone call), Rahhh Skeleton (VH6, a shield bash that enrages enemies around him), La Vaca Saturno (VH7, a tanky flyer whose boulders bounce 3 times), Big Yahu (VH8, missiles with a red target ring first), Brr Brr Patapim (VH9, earthquakes that hit every building and wall around him).
+- **Village Hall 11** (250,000 gold), the new top level, with **the shared building limit:** the per-type caps become one pool of 56 buildings (any mix); copies past a type's cap cost +50% each (compounding). Unique buildings and walls keep their caps; Village Hall 11 adds 12 walls. Village Hall 10 keeps the usual caps. The shop shows "Buildings n / 56".
+- **Select Row** in edit mode: a toggle beside the Shift pad; tap a wall to pick up its whole straight row and move it.
+- **Spell sounds:** each spell has its own cast sound (repeat casts within half a second stay quiet, at most two of one at once).
+- **How to Play:** the Enemies tab is a new roster: every enemy as a picture card on one panel, grouped into Ground, Air, Tanks & Bosses and Special, with the picked enemy's details beside it. KSI Tower and the new enemies have entries.
+- **The Brisket King's portrait** on his altar in the shop card and info, How to Play, the building panel, the edit hotbar and the RV Lab list. His Hero tab lines its stats up like the Stats tab (values on the right, the next level's gain in green) and shows Brisket Feast as a card with its crown icon, and the altar's shop info has a full-width "Open Brisket King" button (it overlapped the picture).
+- **Patch Notes:** a What's New window on the title screen, shown once per version to returning players.
+- The title screen gained Brr Brr Patapim, John Pork and Rahhh Skeleton.
+
+### Changed
+- The shop's page arrows are blue (greyed-down blue at the first / last page).
+- The KSI Tower grows with its level like the other defenses: its later pictures are squatter, so each is sized to stand about 4% taller than the one before (`TIER_GROWTH` in BuildingView.js); Level 10 had been drawn shorter than Level 5.
+
+### Fixed
+- The title screen's mortar fired every few seconds while the game was still loading (several shots on a slow phone). It now waits idle and fires once, when loading is done.
+- Enemies in a pose without a set size (John Pork's call, the Skeleton's bash) were drawn at no size; found and fixed before release.
+
 ## 0.5.1
 
 - The wave's "!" warning now sits on each attacking path's corner marker, out at the back of the path, instead of floating over the village.

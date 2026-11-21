@@ -11,7 +11,7 @@ import { AchievementTracker } from '../net/AchievementTracker.js';
 import { gridToScreen, screenToGrid, rangeEllipse } from '../logic/iso.js';
 import { canPlaceRect, footprintCenter, fpW, fpH, rectTiles } from '../logic/grid.js';
 import { checkBuy, footprintDims, isDefense, typeConfig, defenseRange, wallLevel } from '../logic/buildings.js';
-import { createLayoutDraft, draftBuildings, layoutChanged, isStored, storeAll, storeBuilding, hotbarGroups, checkDraftPlacement, placeInDraft, shiftLayout } from '../logic/layout.js';
+import { createLayoutDraft, draftBuildings, layoutChanged, isStored, storeAll, storeBuilding, hotbarGroups, checkDraftPlacement, placeInDraft, shiftLayout, wallRun, checkGroupMove, moveGroupInDraft } from '../logic/layout.js';
 import { tutorialAllows } from '../logic/tutorial.js';
 import { isWaveActive, isWaveInProgress, clamp } from '../logic/util.js';
 import { mineShowsCoin } from '../logic/economy.js';
@@ -31,7 +31,8 @@ import { AirHum } from '../objects/AirHum.js';
 import { BeamHum } from '../objects/BeamHum.js';
 import { floatText, rpGainText, splashRing, fireballImpact, fireworkBurst, breakerExplosion } from '../objects/Effects.js';
 import { TEX, SFX, MUSIC, FIRE_SFX, ENEMY_ATTACK_SFX, ENEMY_VOICE } from '../assetKeys.js';
-import { playSfx, playSfxCapped, playSfxEndingIn, playVoiceLine, playMusic, pauseMusic, resumeMusic, stopMusic, crossfadeMusic, fadeOutMusic, hasAmbience, startAmbience, updateAmbience, stopAmbience, soundDuration } from '../audio.js';
+import { missileWarningFx, quakeFx, frostBurstFx, ICE_BLUE } from '../objects/EnemyFx.js';
+import { playSfxClip, playSfx, playSfxCapped, playSfxEndingIn, playVoiceLine, playMusic, pauseMusic, resumeMusic, stopMusic, crossfadeMusic, fadeOutMusic, hasAmbience, startAmbience, updateAmbience, stopAmbience, soundDuration } from '../audio.js';
 import { COLORS } from '../theme.js';
 import { abilityFx, towerRange, towerMinRange } from '../logic/abilities.js';
 import { chainLightningFx, arrowStormFx, meteorFx, solarFlareFx, sparklerFx, drawFireRing } from '../objects/AbilityFx.js';
@@ -741,8 +742,9 @@ export class GameScene extends Phaser.Scene {
     if (this.spellAim) { this.castAimedSpell(px, py); return; }
     const b = this.pickBuilding(w.x, w.y);
     if (this.editMode) {
-      // Edit mode: clicking a building picks it up to move; nothing else happens.
-      if (b) { playSfx(this, SFX.buildingSelect); this.beginMove(b.id); }
+      // Edit mode: clicking a building picks it up to move; nothing else happens. With Select Row on, a wall
+      // brings its whole straight run along.
+      if (b) { playSfx(this, SFX.buildingSelect); if (this.rowSelect && b.type === 'wall') this.beginRowMove(b.id); else this.beginMove(b.id); }
       return;
     }
     // Clicking the Brisket King or his altar only selects (Brisket Feast is the explicit button in the UI).
@@ -852,6 +854,7 @@ export class GameScene extends Phaser.Scene {
     if (this.placement) this.cancelPlacement();
     this.editMode = on;
     this.layout = on ? createLayoutDraft(this.gs) : null;
+    this.rowSelect = false; // Select Row starts off every time
     this.select(null);
     this.syncViews(this.time.now);
     this.drawEditOutlines();
@@ -942,7 +945,7 @@ export class GameScene extends Phaser.Scene {
     g.clear();
     if (!this.editMode) return;
     for (const b of this.layoutBuildings()) {
-      if (this.placement && this.placement.id === b.id) continue;
+      if (this.placement && (this.placement.id === b.id || (this.placement.ids && this.placement.ids.includes(b.id)))) continue;
       const pts = [
       gridToScreen(b.col, b.row), gridToScreen(b.col + fpW(b), b.row),
       gridToScreen(b.col + fpW(b), b.row + fpH(b)), gridToScreen(b.col, b.row + fpH(b))
@@ -992,6 +995,35 @@ export class GameScene extends Phaser.Scene {
     this.updateGhost(p.x, p.y);
   }
 
+  /** Select Row (edit mode): on, clicking a wall picks up its whole straight run of walls. */
+  setRowSelect(on) {
+    if (!this.editMode) return;
+    this.rowSelect = !!on;
+    if (this.placement && this.placement.mode === 'row' && !on) this.cancelPlacement();
+    this.gs.emit('rowSelectChanged', { active: this.rowSelect });
+  }
+
+  /** Pick up the straight run of walls through wall `id` (Select Row): they move together, keeping their shape. */
+  beginRowMove(id) {
+    if (!this.editMode || !this.layout || isWaveActive(this.gs)) return;
+    const run = wallRun(this.gs, this.layout, id);
+    if (!run) return;
+    if (this.placement) this.endPlacement();
+    this.select(null);
+    const b = this.gs.getBuilding(id);
+    this.placement = {
+      mode: 'row', id, ids: run.ids, base: { col: run.col, row: run.row }, type: 'wall', level: b.level,
+      orient: run.axis, w: run.w, h: run.h, col: run.col, row: run.row, valid: true
+    };
+    for (const wid of run.ids) this.views.buildings.get(wid)?.setAlpha(0.3);
+    this.createGhost();
+    this.drawEditOutlines();
+    this.gs.emit('placementChanged', { active: true, type: 'wall', row: run.ids.length });
+    if (this.touchMode) { this.ghostToGrid(run.col, run.row); return; }
+    const p = this.input.activePointer;
+    this.updateGhost(p.x, p.y);
+  }
+
   /** Touch, laying walls in a row: the next segment's ghost starts right after the one just placed. */
   continueWallRow(prev) {
     if (!this.touchMode || !this.placement || this.placement.type !== 'wall') return;
@@ -1031,7 +1063,10 @@ export class GameScene extends Phaser.Scene {
     pl.col = Math.round(g.x - pl.w / 2);
     pl.row = Math.round(g.y - pl.h / 2);
     let spot, swap = null;
-    if (pl.mode === 'move' && this.layout) {
+    if (pl.mode === 'row' && this.layout) {
+      // Select Row: every wall of the run moves by the same step; all of them must land clear and on grass.
+      spot = checkGroupMove(this.gs, this.layout, pl.ids, pl.col - pl.base.col, pl.row - pl.base.row);
+    } else if (pl.mode === 'move' && this.layout) {
       // Edit mode: checked against the draft layout. Dropped onto exactly one other building, the two
       // trade places: snap onto it and preview the swap.
       const check = checkDraftPlacement(this.gs, this.layout, pl.id, pl.col, pl.row, pl.orient);
@@ -1109,6 +1144,13 @@ export class GameScene extends Phaser.Scene {
     const pl = this.placement;
     if (!pl) return;
     if (!pl.valid) { playSfx(this, SFX.invalid); return; }
+    if (pl.mode === 'row' && this.layout) {
+      if (!moveGroupInDraft(this.gs, this.layout, pl.ids, pl.col - pl.base.col, pl.row - pl.base.row).ok) { playSfx(this, SFX.invalid); return; }
+      playSfx(this, SFX.place);
+      this.endPlacement();
+      this.layoutUpdated();
+      return;
+    }
     if (pl.mode === 'move' && this.layout) {
       // Edit mode: drop it into the draft layout (the village changes on Save).
       if (!placeInDraft(this.gs, this.layout, pl.id, pl.col, pl.row, pl.orient).ok) { playSfx(this, SFX.invalid); return; }
@@ -1149,6 +1191,7 @@ export class GameScene extends Phaser.Scene {
       const view = this.views.buildings.get(pl.id);
       if (view) view.setAlpha(1);
     }
+    if (pl.mode === 'row') for (const id of pl.ids) this.views.buildings.get(id)?.setAlpha(1);
     this.clearSwapPreview();
     if (this.ghost) {
       this.ghost.tiles.destroy();
@@ -1323,6 +1366,10 @@ export class GameScene extends Phaser.Scene {
         playSfx(this, SFX.mortarImpact);
       } else if (d.kind === 'arrowStorm' || d.kind === 'meteor') {
         // Already drawn when they were called down (strikeIncoming).
+      } else if (d.kind === 'ksi' || d.kind === 'ksiBounce') {
+        // A KSI Tower bottle bursts: an icy ring (its splash) and flakes.
+        frostBurstFx(this, s.x, s.y, d.radius);
+        playSfxCapped(this, SFX.ksiImpact, 4);
       } else if (d.kind === 'catapult') {
         // The bottle bursts: a pink splash ring and droplets; the pool itself is a PoolView.
         splashRing(this, s.x, s.y, d.radius, POOL_COLOR, { duration: 450, depth: 2710 });
@@ -1335,9 +1382,54 @@ export class GameScene extends Phaser.Scene {
     });
     on('bombExploded', (d) => {
       const s = gridToScreen(d.x, d.y);
-      splashRing(this, s.x, s.y, 0.6, 0xff8a3c);
+      splashRing(this, s.x, s.y, d.radius || 0.6, 0xff8a3c, d.missile ? { duration: 450, depth: 2710 } : undefined);
+      // Big Yahu's missile is the Bomber's bomb, bigger: the same blast ring and sound, its whole radius, and a jolt.
+      if (d.missile) { splashRing(this, s.x, s.y, d.radius * 0.5, 0xffe08a, { duration: 320, depth: 2710 }); this.cameras.main.shake(160, 0.004); }
       playSfxCapped(this, SFX.bombExplode, BOMB_IMPACT_MAX); // long rumble: a few at once is plenty
     });
+    // ---------- v0.6 enemies ----------
+    // Big Yahu: the red target where his missile will land, until it does.
+    on('missileIncoming', (d) => { const s = gridToScreen(d.x, d.y); missileWarningFx(this, s.x, s.y, d.radius, d.delay * 1000); });
+    // John Pork's call: his phone rings out over the F.L.O.C.K Towers it silences.
+    on('porkCall', (d) => {
+      const s = gridToScreen(d.x, d.y);
+      splashRing(this, s.x, s.y, d.radius, 0xff6b6b, { duration: 650, depth: 2710 });
+      floatText(this, s.x, s.y - 70, d.ids.length ? 'RING RING!' : 'Ring ring?', '#ffd0d0', 18);
+      for (const id of d.ids) {
+        const v = this.views.buildings.get(id);
+        if (!v) continue;
+        const t = v.topCenter();
+        floatText(this, t.x, t.y - 10, 'Silenced!', '#ff8a8a', 15);
+        v.pop();
+      }
+      playSfxClip(this, SFX.porkCall, { maxAtOnce: 1, minGapMs: 800, maxSeconds: 3.5 });
+    });
+    // Rahhh Skeleton's shield bash: a red shockwave over everyone it enrages.
+    on('skeletonBash', (d) => {
+      const s = gridToScreen(d.x, d.y);
+      splashRing(this, s.x, s.y, d.radius, 0xff4a3a, { duration: 600, depth: 2710 });
+      splashRing(this, s.x, s.y, d.radius * 0.5, 0xffb0a0, { duration: 400, depth: 2710 });
+      floatText(this, s.x, s.y - 70, 'RAHHH!', '#ff7a6a', 20);
+      this.cameras.main.shake(90, 0.003);
+      playSfxClip(this, SFX.skeletonRage, { maxAtOnce: 2, minGapMs: 250, maxSeconds: 2.5 });
+    });
+    // Brr Brr Patapim's earthquake: cracks across the ground, a heavy jolt and his stomp.
+    on('quake', (d) => {
+      const s = gridToScreen(d.x, d.y);
+      quakeFx(this, s.x, s.y, d.radius);
+      floatText(this, s.x, s.y - 90, 'QUAKE!', '#e8c890', 20);
+      this.cameras.main.shake(320, 0.009);
+      playSfxClip(this, SFX.patapimQuake, { maxAtOnce: 2, minGapMs: 400, maxSeconds: 2.2, fadeMs: 500 });
+    });
+    // La Vaca Saturno's boulder lands, then each bounce.
+    on('boulderLanded', (d) => {
+      const s = gridToScreen(d.x, d.y);
+      splashRing(this, s.x, s.y, d.radius, 0xb8a080, { duration: 380, depth: 2710 });
+      if (!d.bounce) this.cameras.main.shake(100, 0.003);
+      playSfxCapped(this, SFX.vacaImpact, 3);
+    });
+    // KSI Tower Fully Frozen: an enemy freezes solid.
+    on('enemyFrozen', (d) => { const s = enemyPos(d); splashRing(this, s.x, s.y - 4, 0.45, 0xffffff, { duration: 360, depth: 2710 }); });
     // Melee hits: a horde swinging at once would be a wall of noise, so only a few overlap.
     on('enemyAttack', (d) => {
       const view = this.views.enemies.get(d.id);
@@ -1421,7 +1513,8 @@ export class GameScene extends Phaser.Scene {
       earthquake: { color: 0xb08a5a, text: 'Earthquake!', shake: true },
       timeWarp: { color: 0x9fb8ff, text: 'Time Warp!' },
       starfall: { color: 0xffe066, text: 'Starfall!' },
-      systemCrash: { color: 0x4cd6ff, text: 'System Crash!' }
+      systemCrash: { color: 0x4cd6ff, text: 'System Crash!' },
+      blizzard: { color: ICE_BLUE, text: 'Polar Vortex!', shake: true } // KSI Tower
     };
     on('areaSpecial', (d) => {
       const look = AREA_FX[d.kind];

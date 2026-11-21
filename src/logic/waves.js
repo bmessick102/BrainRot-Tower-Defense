@@ -26,12 +26,24 @@ export function waveComposition(n) {
 /**
  * Enemy kinds that join the waves from a Village Hall level (fromTownHall on the enemy, e.g. the Skibidi
  * Toilet): baseCount at that hall, growing by rules.endlessCountGrowth per hall after it.
+ * The v0.6 kinds (OFFSET_KINDS) make room for themselves: rules.lateKindOffset of their total health comes back out of
+ * the regular troops (rules.lateKindPool, each cut by the same share, never more than rules.lateKindMaxCut).
  */
+export const OFFSET_KINDS = ['pork', 'skeleton', 'vaca', 'yahu', 'patapim'];
+
 function withLateKinds(comp, n) {
+  let added = 0;
   for (const k of ENEMY_KINDS) {
     const cfg = CONFIG.enemies[k];
     if (!cfg.fromTownHall || !cfg.baseCount) continue;
     comp[k] = n >= cfg.fromTownHall ? Math.round(cfg.baseCount * CONFIG.rules.endlessCountGrowth ** (n - cfg.fromTownHall)) : 0;
+    if (OFFSET_KINDS.includes(k)) added += comp[k] * cfg.hp;
+  }
+  if (added > 0) {
+    const R = CONFIG.rules;
+    const pool = R.lateKindPool.reduce((sum, k) => sum + (comp[k] || 0) * CONFIG.enemies[k].hp, 0);
+    const cut = pool > 0 ? Math.min(R.lateKindMaxCut, (added * R.lateKindOffset) / pool) : 0;
+    for (const k of R.lateKindPool) if (comp[k] > 0) comp[k] = Math.max(1, Math.round(comp[k] * (1 - cut)));
   }
   return comp;
 }
@@ -110,10 +122,13 @@ function countQueues(queues) {
  * lead; the rest are interleaved in proportion to their numbers, so several troop types attack at once
  * instead of one type arriving back-to-back.
  */
+// Every kind a wave queues (Neegies only come from balloons), in the order their shares are dealt to the paths.
+const QUEUE_ORDER = ['babycar', 'patapim', 'tank', 'breaker', 'skeleton', 'pork', 'grunt', 'slinger', 'yahu', 'thief', 'toilet', 'shark', 'bomber', 'vaca', 'balloon'];
+
 export function buildSpawnQueues(comp, paths) {
   const share = Object.fromEntries(paths.map((p) => [p, Object.fromEntries(ENEMY_KINDS.map((k) => [k, 0]))]));
   let rotate = 0; // remainders rotate across paths so totals stay balanced
-  for (const kind of ['babycar', 'tank', 'breaker', 'grunt', 'slinger', 'thief', 'toilet', 'shark', 'bomber', 'balloon']) {
+  for (const kind of QUEUE_ORDER) {
     const count = comp[kind] || 0;
     const base = Math.floor(count / paths.length);
     let rem = count % paths.length;
@@ -126,7 +141,7 @@ export function buildSpawnQueues(comp, paths) {
     const q = [];
     for (let i = 0; i < s.babycar; i++) q.push('babycar'); // the Da Baby Car leads its path
     // Smooth proportional interleave: each step takes the kind that is furthest behind its fair share.
-    const kinds = ['tank', 'breaker', 'grunt', 'slinger', 'thief', 'toilet', 'shark', 'bomber', 'balloon'].filter((k) => s[k] > 0);
+    const kinds = QUEUE_ORDER.filter((k) => k !== 'babycar' && s[k] > 0);
     const total = kinds.reduce((n, k) => n + s[k], 0);
     const left = Object.fromEntries(kinds.map((k) => [k, s[k]]));
     const credit = Object.fromEntries(kinds.map((k) => [k, 0]));

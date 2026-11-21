@@ -9,7 +9,7 @@
 import { Modal, confirmDialog } from './Modal.js';
 import { Button } from './Button.js';
 import { buildingTextureKey } from './BuildingView.js';
-import { drawBadge, fitWidth, fitIcon } from './uiDraw.js';
+import { drawBadge, fitWidth, fitIcon, addHeroBadge } from './uiDraw.js';
 import { COLORS, bodyStyle, textStyle, mix, RP_TEXT_COLOR } from '../theme.js';
 import { rpText } from '../logic/researchPoints.js';
 import { PATH_COLORS, PATH_TEXT_COLORS } from '../abilityConfig.js';
@@ -309,6 +309,7 @@ export function openResearchWindow(scene, gs, { onClose = null, startType = null
       g.fillStyle(sel ? 0x6cbf2c : 0xf3ecdd, 1).fillRoundedRect(lx + 2, y + 2, LIST_W - 4, itemH - 8, 8);
       const pic = m.add(scene.add.image(lx + 24, y + itemH - 8, buildingTextureKey(scene, t, 1)).setOrigin(0.5, 1));
       fitIcon(pic, 36, itemH - 10);
+      if (t === 'altar') m.add(addHeroBadge(scene, lx + 36, y + 13, 20)); // the Brisket King's portrait
       const name = m.add(scene.add.text(lx + 48, y + 3, buildingName(t), sel ? textStyle(14) : bodyStyle(13.5, COLORS.ink, { fontStyle: 'bold' })));
       fitWidth(name, LIST_W - 80); // ends before the "!" badge
       const picks = labPicks(gs, t);

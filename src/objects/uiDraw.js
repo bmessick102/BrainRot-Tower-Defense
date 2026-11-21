@@ -205,3 +205,26 @@ export function fitWidth(obj, maxW) {
 export function fitIcon(img, w, h = w) {
   return img.setScale(Math.min(w / img.frame.width, h / img.frame.height));
 }
+
+// The Brisket King's portrait: his head (crown included) out of his standing picture, in hero_brisket.png pixels.
+const HERO_FACE = { key: 'hero_brisket', x: 44, y: 0, w: 100, h: 96 };
+
+/**
+ * The Brisket King's badge, shown wherever his altar is (shop card and info, How to Play, building info, RV Lab
+ * list): a gold glossy chip with his portrait, centered on (x, y), `size` px square. Returns a container (empty if
+ * his art isn't loaded) for the caller to add to its layer.
+ */
+export function addHeroBadge(scene, x, y, size = 40) {
+  const c = scene.add.container(x, y);
+  if (!scene.textures.exists(HERO_FACE.key)) return c;
+  const g = scene.add.graphics();
+  drawGlossy(g, -size / 2, -size / 2, size, size, 0xe0a82e, { radius: Math.round(size * 0.28), lip: 3 });
+  g.fillStyle(0x3a2412, 1).fillRoundedRect(-size / 2 + 4, -size / 2 + 4, size - 8, size - 11, Math.round(size * 0.2));
+  const img = scene.add.image(0, 0, HERO_FACE.key).setOrigin(0, 0);
+  const f = HERO_FACE, inner = size - 10;
+  const scale = Math.min(inner / f.w, inner / f.h);
+  img.setCrop(f.x, f.y, f.w, f.h).setScale(scale);
+  img.setPosition(-(f.x + f.w / 2) * scale, -(f.y + f.h / 2) * scale - 2);
+  c.add([g, img]);
+  return c;
+}

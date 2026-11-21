@@ -26,6 +26,7 @@ const BUILDING_LOOK = {
   firework: { color: 0xc0392b, label: 'F' },
   catapult: { color: 0xe86aa8, label: 'Ca' },
   spear: { color: 0x9a6b3a, label: 'Sp' },
+  ksi: { color: 0x3fa9f5, label: 'KS' },
   flock: { color: 0x4a6a8a, label: 'FT' },
   mousetrap: { color: 0x8a6a3a, label: 'MT' },
   ra: { color: 0xd4a537, label: 'Ra' },
@@ -185,6 +186,22 @@ export class BootScene extends Phaser.Scene {
     this.canvasTexture(enemyKey('tank'), 28, 28, (ctx) => {
       ctx.fillStyle = '#8b1a1a'; ctx.strokeStyle = '#2e0606'; ctx.lineWidth = 2;
       ctx.fillRect(1, 1, 26, 26); ctx.strokeRect(1, 1, 26, 26);
+    });
+
+    // La Vaca Saturno's fallback if her flying picture (enemy_vaca) fails to load:
+    // a ringed planet with horns, with its shadow built in like the Bomber's (her attack and death pictures are real).
+    this.canvasTexture(enemyKey('vaca'), 48, 76, (ctx) => {
+      ctx.fillStyle = 'rgba(0,0,0,0.35)';
+      ctx.beginPath(); ctx.ellipse(24, 70, 16, 5, 0, 0, Math.PI * 2); ctx.fill();
+      const cy = 70 - 40;
+      ctx.fillStyle = '#e8d9b8'; ctx.strokeStyle = '#3a2a1a'; ctx.lineWidth = 2;
+      ctx.beginPath(); ctx.arc(24, cy, 13, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
+      ctx.fillStyle = '#2b2b2b'; ctx.beginPath(); ctx.arc(19, cy - 3, 4, 0, Math.PI * 2); ctx.arc(30, cy + 4, 3, 0, Math.PI * 2); ctx.fill();
+      ctx.strokeStyle = '#b89a6a'; ctx.lineWidth = 3;
+      ctx.beginPath(); ctx.ellipse(24, cy + 2, 22, 6, -0.25, 0, Math.PI * 2); ctx.stroke();
+      ctx.fillStyle = '#e8a050'; ctx.strokeStyle = '#3a2a1a'; ctx.lineWidth = 1.5;
+      ctx.beginPath(); ctx.moveTo(14, cy - 9); ctx.lineTo(8, cy - 20); ctx.lineTo(18, cy - 12); ctx.closePath(); ctx.fill(); ctx.stroke();
+      ctx.beginPath(); ctx.moveTo(34, cy - 9); ctx.lineTo(40, cy - 20); ctx.lineTo(30, cy - 12); ctx.closePath(); ctx.fill(); ctx.stroke();
     });
 
     // Projectiles

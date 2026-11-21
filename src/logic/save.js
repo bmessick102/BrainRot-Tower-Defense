@@ -26,7 +26,10 @@ export const SAVE_KEYS = {
   save: 'ibtd.save', checkpoint: 'ibtd.checkpoint', settings: 'ibtd.settings',
   // New Game moves the old save and checkpoint here instead of deleting them, so a village can be recovered
   // (e.g. a save the game failed to read because of a bug). One slot each: the most recent replaced game.
-  backup: 'ibtd.save.backup', checkpointBackup: 'ibtd.checkpoint.backup'
+  backup: 'ibtd.save.backup', checkpointBackup: 'ibtd.checkpoint.backup',
+  // The last release whose patch notes this device has seen (PatchNotesWindow.js): its own key, since saveSettings
+  // rewrites the settings object.
+  patchNotes: 'ibtd.patchNotes'
 };
 export const DEFAULT_SETTINGS = { music: 0.7, sfx: 0.7 };
 const CLOCK_PHASES = ['day', 'dusk', 'night', 'dawn'];

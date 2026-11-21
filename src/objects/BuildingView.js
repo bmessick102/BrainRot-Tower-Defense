@@ -1,4 +1,5 @@
 // Draws one building: sprite, level badge, HP bar (only when damaged), and a mine's coin icon.
+import { CONFIG } from '../config.js';
 import { gridToScreen } from '../logic/iso.js';
 import { fpW, fpH } from '../logic/grid.js';
 import { maxHp, maxLevel, BUILDING_TYPES } from '../logic/buildings.js';
@@ -36,7 +37,7 @@ const BUILDING_LIT_TOP = 0xe2e6f8;
 const BUILDING_LIT_WARMTH = 0.2;
 const LIGHT_COLORS = {
   townHall: 0xffa23c, mine: 0xffa23c, storage: 0xffb43c, house: 0xffc86b, cannon: 0xff8a3c,
-  archer: 0xff9a3c, mortar: 0xff7a3c, wizard: 0xb066ff, firework: 0xff4d6d, catapult: 0xff5fa8, spear: 0xc98a4a, flock: 0x4cd6ff, mousetrap: 0xffc24a, ra: 0xff7a2a, rvlab: 0xffd27a, dj: 0xc070ff, altar: 0xffb04a, fuelStation: 0xffc24a
+  archer: 0xff9a3c, mortar: 0xff7a3c, wizard: 0xb066ff, firework: 0xff4d6d, catapult: 0xff5fa8, spear: 0xc98a4a, ksi: 0x6cc8ff, flock: 0x4cd6ff, mousetrap: 0xffc24a, ra: 0xff7a2a, rvlab: 0xffd27a, dj: 0xc070ff, altar: 0xffb04a, fuelStation: 0xffc24a
 };
 
 // Shared rubble art for any building without its own bld_<type>_destroyed picture. Every variant that
@@ -119,7 +120,8 @@ const DEFAULT_SPRITE_SCALE = 0.75;
 // Mousetrap: a flat 1-tile trap, drawn a little wider than its tile.
 // Tower of Rah: a tall, slim tower, drawn narrower than its footprint (it starts small and grows a lot).
 // RV Lab: a long RV on its own paved pad; 0.77 of its 2x2 footprint (10% bigger than the earlier 0.7).
-const SPRITE_SCALE = { mortar: 0.65, cannon: 0.63, firework: 0.52, catapult: 0.66, spear: 0.66, flock: 1.28, mousetrap: 1.1, ra: 0.54, rvlab: 0.77, dj: 0.77, altar: 0.66, fuelStation: 0.8 };
+// KSI Tower: a tall, slim tower like the Locklair's, a little narrower than the default.
+const SPRITE_SCALE = { mortar: 0.65, cannon: 0.63, firework: 0.52, catapult: 0.66, spear: 0.66, ksi: 0.62, flock: 1.28, mousetrap: 1.1, ra: 0.54, rvlab: 0.77, dj: 0.77, altar: 0.66, fuelStation: 0.8 };
 
 // Buildings grow as they level up: this share of their normal size at Level 1, up to LEVEL_SIZE.max at
 // their top level (Level 10, or the type's own top level). They only grow on upgrades that keep the same
@@ -142,6 +144,23 @@ export function levelSizeFactor(level, topLevel = LEVEL_SIZE.maxLevel, type = nu
   return LEVEL_SIZE.min + (LEVEL_SIZE.max - LEVEL_SIZE.min) * t;
 }
 
+// Pictures drawn in different shapes: each picture is drawn at the same width, so a later picture that's squatter
+// than the one before would make a higher level look smaller (the KSI Tower's Level 7-8 and 9-10 art are squatter
+// than its Level 5-6). For these types every picture is sized so the building stands TIER_GROWTH taller per picture
+// than Level 1's (on top of LEVEL_SIZE's growth between pictures).
+export const TIER_GROWTH = { ksi: 0.04 };
+
+/** Size multiplier for the picture a sprite shows (1 unless its type is in TIER_GROWTH and its art is loaded). */
+export function tierSizeFactor(sprite, type) {
+  const grow = type && TIER_GROWTH[type];
+  if (!grow || !sprite.scene) return 1;
+  const m = /_lv(\d+)$/.exec(sprite.texture.key);
+  const first = buildingLevelKey(type, 1), textures = sprite.scene.textures;
+  if (!m || sprite.texture.key !== buildingLevelKey(type, Number(m[1])) || !textures.exists(first)) return 1;
+  const f1 = textures.getFrame(first), f = sprite.frame;
+  return ((f1.height / f1.width) * (1 + grow) ** (Number(m[1]) - 1)) / (f.height / f.width);
+}
+
 /** The building's top level, for size growth (10 unless the type has fewer levels). */
 function topLevelOf(type) {
   return type && BUILDING_TYPES.includes(type) ? maxLevel(type) : LEVEL_SIZE.maxLevel;
@@ -162,7 +181,7 @@ export function spriteScale(type) {
  * footprint's center and front corner. Returns that base point (bottom-center of the sprite).
  */
 export function placeBuildingSprite(sprite, col, row, size, type = null, level = 1) {
-  const k = spriteScale(type) * levelSizeFactor(level, topLevelOf(type), type);
+  const k = spriteScale(type) * levelSizeFactor(level, topLevelOf(type), type) * tierSizeFactor(sprite, type);
   const center = gridToScreen(col + size / 2, row + size / 2);
   const front = gridToScreen(col + size, row + size);
   const f = Math.min(1, k); // art wider than its footprint still stands inside it, not past the front corner
@@ -251,6 +270,8 @@ export class BuildingView {
     this.researchIcon = b.type === 'rvlab' && readyKey
       ? scene.add.image(0, 0, readyKey).setDepth(OVERLAY_DEPTH + 1).setVisible(false) : null;
     this.researchCheckAt = 0;
+    // F.L.O.C.K Tower silenced by John Pork's call: a red "no signal" badge over it (drawn, no art needed).
+    this.silencedGfx = b.type === 'flock' ? scene.add.graphics().setDepth(OVERLAY_DEPTH + 1).setVisible(false) : null;
     this.researchReady = false;
     this.flashUntil = 0;
     this.light = scene.add.image(0, 0, TEX.light).setBlendMode(LIGHT_BLEND).setDepth(LIGHT_DEPTH)
@@ -329,6 +350,7 @@ export class BuildingView {
     }
 
     if (this.hypeGfx) this.drawHype(b, front.x, top - 12, time, labels || damaged, labels);
+    if (this.silencedGfx) this.drawSilenced(b, front.x, top - 36, time);
 
     if (this.coin) {
       const show = mineShowsCoin(b) && !isWaveActive(this.scene.gs); // no collecting while a wave attacks
@@ -348,6 +370,7 @@ export class BuildingView {
     if (!this.flashUntil) {
       const moon = this.scene.ambientTint ?? 0xffffff;
       if (b.sprung) this.sprite.setTint(0x7a7a7a); // a sprung trap looks spent until it resets
+      else if (b.silencedT > 0 && !b.destroyed) this.sprite.setTint(0x8a8a8a); // silenced by John Pork: switched off, grey
       // Boosted by DJ Babyface's Drop the Beat: the defense pulses between pink and cyan party lights.
       else if (b.djBoostT > 0 && !b.destroyed) this.sprite.setTint(Math.sin(time * 0.02) > 0 ? 0xffc8f4 : 0xc8f4ff);
       // Under a Rage spell (spells.js): an angry red pulse. Healing: a soft green one.
@@ -527,6 +550,27 @@ export class BuildingView {
     this.sprite.setAlpha(this.baseAlpha * f);
   }
 
+  /**
+   * John Pork's call: over a silenced F.L.O.C.K Tower, a red round badge with a crossed-out signal (three bars and a
+   * slash), bobbing a little, and a ring that runs down with the time left.
+   */
+  drawSilenced(b, x, y, time) {
+    const g = this.silencedGfx;
+    const on = b.silencedT > 0 && !b.destroyed;
+    g.setVisible(on);
+    if (!on) return;
+    const cy = y + Math.sin(time * 0.006) * 2, r = 13;
+    const left = Math.min(1, b.silencedT / CONFIG.enemies.pork.call.seconds);
+    g.clear();
+    g.fillStyle(0x000000, 0.35).fillCircle(x, cy + 2, r + 1);
+    g.fillStyle(0xd8343a, 1).fillCircle(x, cy, r);
+    g.lineStyle(2, 0xffffff, 0.9).strokeCircle(x, cy, r);
+    g.lineStyle(3, 0xffd0d0, 1).beginPath().arc(x, cy, r + 4, -Math.PI / 2, -Math.PI / 2 + Math.PI * 2 * left).strokePath();
+    g.fillStyle(0xffffff, 1);
+    for (let i = 0; i < 3; i++) g.fillRect(x - 7 + i * 5, cy + 5 - (i + 1) * 4, 3, (i + 1) * 4);
+    g.lineStyle(3, 0xffffff, 1).lineBetween(x - 8, cy - 8, x + 8, cy + 8);
+  }
+
   /** Top-center of the sprite in world pixels (for tutorial arrows and labels). */
   topCenter() {
     return { x: this.sprite.x, y: this.sprite.y - this.sprite.displayHeight };
@@ -546,5 +590,6 @@ export class BuildingView {
     if (this.coin) this.coin.destroy();
     if (this.hypeGfx) { this.hypeGfx.destroy(); this.hypeReady.destroy(); }
     if (this.researchIcon) this.researchIcon.destroy();
+    if (this.silencedGfx) this.silencedGfx.destroy();
   }
 }

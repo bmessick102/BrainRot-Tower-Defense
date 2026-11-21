@@ -15,6 +15,7 @@ import { IMAGE_FILES } from '../assetManifest.js';
 import { playMusic, playSfx } from '../audio.js';
 import { drawWindow, drawHudPill, fitIcon } from '../objects/uiDraw.js';
 import { SettingsWindow } from '../objects/SettingsWindow.js';
+import { PatchNotesWindow, patchNotesSeen, markPatchNotesSeen } from '../objects/PatchNotesWindow.js';
 import { nightWaveNumber } from '../logic/waves.js';
 import { COLORS, bodyStyle, textStyle } from '../theme.js';
 import { session } from '../net/account.js';
@@ -74,6 +75,8 @@ export class TitleScene extends Phaser.Scene {
 
     this.buildStartButton(width / 2, 478);
     addFullscreenButton(this, width - 36, 34);
+    // What's New: this release's patch notes (they also open by themselves once per version, below).
+    new Button(this, width - 36 - 34 - 12 - 80, 34, 160, 44, "What's New", () => { if (!this.windowOpen) this.openPatchNotes(); }, { color: COLORS.buttonBlue, fontSize: 18, radius: 10 });
     // Say what START GAME does (and where you are); a broken save gets a warning.
     let caption, bad = save.status === 'invalid';
     if (this.notice) { caption = this.notice; bad = true; }
@@ -126,6 +129,13 @@ export class TitleScene extends Phaser.Scene {
     }
 
     playMusic(this, MUSIC.title);
+    // Patch notes, once per version: returning players see what changed; a brand-new player has nothing to compare
+    // (their notes are just marked seen).
+    if (!patchNotesSeen(this.storage)) {
+      const returning = this.hasSave || (this.online && session.bases.length > 0);
+      if (returning && !this.windowOpen) this.openPatchNotes();
+      else if (!returning) markPatchNotesSeen(this.storage);
+    }
   }
 
   // ---------- account (online) ----------
@@ -305,6 +315,12 @@ export class TitleScene extends Phaser.Scene {
         }
       });
     });
+  }
+
+  /** The Patch Notes window (PatchNotesWindow.js); opening it marks this version's notes as seen. */
+  openPatchNotes() {
+    this.windowOpen = true;
+    this.patchNotes = new PatchNotesWindow(this, { storage: this.storage, onClose: () => { this.windowOpen = false; this.patchNotes = null; } });
   }
 
   openSettings() {

@@ -10,6 +10,7 @@ export const BUILDING_DESCRIPTIONS = {
   wizard: "Throws fireballs that burst on impact, hurting ground and air enemies in an area. Short range.",
   firework: "Fires fireworks that hurt every flyer in the blast. It can't hit ground enemies, and it is fragile.",
   spear: "A long-range sniper that throws heavy spears at ground and air enemies. Each spear pierces: it hits the first enemy for full damage and the ones lined up behind it for less (a spear thrown at a flyer only pierces flyers, one thrown at a ground enemy only ground enemies). Slow to reload.",
+  ksi: "Lobs ice-cold bottles that burst in a splash, hurting ground and air enemies and chilling them: chilled enemies move slower and turn icy blue. Slows don't stack (the strongest one counts), and bosses only take half the slow.",
   catapult: "Lobs baby oil far away. It leaves a pink pool that hurts and slows ground enemies. It can't hit flyers or close enemies.",
   mousetrap: "A hidden trap. When a ground enemy steps on it, it snaps, hurts nearby ground enemies and holds them. It resets after each wave.",
   ra: "Burns the toughest enemy in range with a beam. The longer it keeps the beam on one enemy, the more damage it does. Hits ground and air.",

@@ -5,7 +5,7 @@ import { CONFIG } from '../config.js';
 import { IS_TOUCH } from '../device.js';
 import {
   DEFENSE_TYPES, ECONOMY_TYPES, WALL_TYPES, buildableCount, buildCost, buildingName, checkBuy, checkUpgrade, countOwned, isDefense,
-  levelStats, limitFor, maxHp, maxLevel, typeConfig, footprintDims, wallLevel
+  levelStats, limitFor, maxHp, maxLevel, typeConfig, footprintDims, wallLevel, isPooled, poolActive, poolSize, poolUsed, roomFor, poolTownHall
 } from '../logic/buildings.js';
 import { checkRepair, formatGold, repairCost, hallIncomeRate, mineStockCap } from '../logic/economy.js';
 import { enemiesLeft, nightWaveNumber, nextWaveInfo, wavePlanCounts } from '../logic/waves.js';
@@ -18,7 +18,7 @@ import { isWaveActive } from '../logic/util.js';
 import { gnomeStats, gnomeTier } from '../logic/villagers.js';
 import { Button } from '../objects/Button.js';
 import { ResourceBar, formatSpaced } from '../objects/ResourceBar.js';
-import { drawWindow, drawGlossy, drawHudPill, drawRibbon, drawBadge, drawShowcaseCard, drawCardStrip, drawAngledArrow, fitWidth, fitIcon } from '../objects/uiDraw.js';
+import { drawWindow, drawGlossy, drawHudPill, drawRibbon, drawBadge, drawShowcaseCard, drawCardStrip, drawAngledArrow, fitWidth, fitIcon, addHeroBadge } from '../objects/uiDraw.js';
 import {
   TOP_ROW_CY, topRowY, GOLD_BAR, RP_BAR, CLOCK, clockRect, PROFILE, WAVE_CX, waveSpan,
   fitInSpan, fitPill, liftClear, rectsOverlap, findOverlaps, SCREEN
@@ -38,7 +38,7 @@ import { SPELL_KINDS, spellConfig, spellFullName, spellSlots, brewedSpells } fro
 import { rpCap, rpText } from '../logic/researchPoints.js';
 import { heroStats, getAltar } from '../logic/hero.js';
 import { djStats, hypeNeeded } from '../logic/dj.js';
-import { hotbarGroups } from '../logic/layout.js';
+import { hotbarGroups, isStored as isStoredIn } from '../logic/layout.js';
 import { hasAbilities, canResearchFor, labLevel, towerRange, towerMinRange, towerFireInterval } from '../logic/abilities.js';
 import { openResearchWindow, abilitySummary } from '../objects/AbilityWindow.js';
 import { currentTip } from '../logic/tips.js';
@@ -106,6 +106,8 @@ const SPECIAL_BTN_MAX = 300; // the widest the button grows for a long hint
 const HOTBAR = { x: 16, y: 598, w: 988, h: 114 };
 const HOTBAR_CARD = { w: 84, h: 92, gap: 8 };
 const SHIFT_PAD = { x: 96, y: 474, dx: 34, dy: 26 }; // center of the layout shift pad and its buttons' offsets
+// Select Row (edit mode): a toggle right of the shift pad; while it's on, clicking a wall picks up its whole run.
+const ROW_BTN = { x: 248, y: 474, w: 150, h: 48 };
 
 export class UIScene extends Phaser.Scene {
   constructor() {
@@ -619,7 +621,8 @@ export class UIScene extends Phaser.Scene {
     const touch = active && this.world.touchMode;
     if (this.world.touchMode) this.rotateBtn.setLabel('Rotate');
     // Moving a building in edit mode, Cancel puts it back where it was.
-    this.cancelPlaceBtn.setLabel(this.world.placement && this.world.placement.mode === 'move' ? 'Put Back' : 'Cancel');
+    const mode = this.world.placement && this.world.placement.mode;
+    this.cancelPlaceBtn.setLabel(mode === 'move' || mode === 'row' ? 'Put Back' : 'Cancel');
     const row = [touch && this.cancelPlaceBtn, rotate && this.rotateBtn, touch && this.placeBtn].filter(Boolean);
     for (const b of [this.rotateBtn, this.placeBtn, this.cancelPlaceBtn]) if (!row.includes(b)) b.setVisible(false).setY(-500);
     const gap = 14, rowW = row.reduce((t, b) => t + b.btnW, 0) + gap * (row.length - 1);
@@ -680,6 +683,19 @@ export class UIScene extends Phaser.Scene {
     this.layoutRemoveAll = new Button(this, right - 70 - 150 - 170, ay, 160, 46, 'Remove All', () => this.world.storeAllBuildings(), { color: COLORS.button, fontSize: 20, radius: 12 });
     for (const b of [this.layoutSave, this.layoutCancel, this.layoutRemoveAll]) b.setDepth(601).setVisible(false);
     this.buildShiftPad();
+    // Select Row: green while on (like a selected tab).
+    this.rowBtn = new Button(this, ROW_BTN.x, ROW_BTN.y, ROW_BTN.w, ROW_BTN.h, 'Select Row', () => this.world.setRowSelect(!this.world.rowSelect),
+      { color: COLORS.buttonDark, fontSize: 19, radius: 12 });
+    this.rowBtn.setDepth(601).setVisible(false);
+  }
+
+  /** The Select Row toggle's look (green + "On" while on) and the hint that goes with it. */
+  refreshRowSelect() {
+    const on = !!this.world.rowSelect;
+    this.rowBtn.color = on ? COLORS.buttonGood : COLORS.buttonDark;
+    this.rowBtn.setLabel('Select Row', on ? 'On: click a wall' : '');
+    this.editHint.setText(on ? 'Click a wall to pick up its whole row · click again to drop it'
+      : 'Click a building to pick it up · click the hotbar to store it');
   }
 
   /**
@@ -714,6 +730,10 @@ export class UIScene extends Phaser.Scene {
     // The shift pad, while anything is placed (it moves out of the way when hidden so it never blocks clicks).
     const canShift = on && world.layout.stored.length < this.gs.buildings.length;
     this.shiftPad.setVisible(canShift).setY(canShift ? SHIFT_PAD.y : -500);
+    // Select Row, while any wall is placed.
+    const walls = on && this.gs.buildings.some((b) => b.type === 'wall' && !isStoredIn(world.layout, b.id));
+    this.rowBtn.setVisible(walls).setY(walls ? ROW_BTN.y : -500);
+    if (on) this.refreshRowSelect();
     for (const b of [this.layoutSave, this.layoutCancel, this.layoutRemoveAll]) b.setY(on ? HOTBAR.y - 32 : -500);
     this.hotbarCards.removeAll(true);
     if (!on) return;
@@ -766,7 +786,9 @@ export class UIScene extends Phaser.Scene {
       if (this.world.placement && !this.world.placement.fromHotbar) this.world.storeHeld();
       this.world.pickFromHotbar(grp.type, grp.level);
     });
-    card.add([g, icon, lv, hover, badge, count, zone]);
+    card.add([g, icon, lv, hover, badge, count]);
+    if (grp.type === 'altar') card.add(addHeroBadge(this, 16, 18, 24)); // the Brisket King's portrait
+    card.add(zone);
     return card;
   }
 
@@ -820,9 +842,11 @@ export class UIScene extends Phaser.Scene {
     // Page arrows (shown only when a tab has more cards than fit), left of the close button.
     this.shopPage = 0;
     const pgY = headerMid - 2;
-    this.shopPrev = new Button(this, 884, pgY, 44, 40, '', () => { this.shopPage--; this.refreshShop(); }, { icon: 'left', radius: 10, color: COLORS.buttonDark });
+    // Blue like every other paging arrow (How to Play); greyed-down blue at the first / last page.
+    const arrow = { radius: 10, color: COLORS.buttonBlue, disabledColor: COLORS.buttonBlueDisabled };
+    this.shopPrev = new Button(this, 884, pgY, 44, 40, '', () => { this.shopPage--; this.refreshShop(); }, { icon: 'left', ...arrow });
     this.shopPageText = this.add.text(948, pgY, '', textStyle(18)).setOrigin(0.5);
-    this.shopNext = new Button(this, 1012, pgY, 44, 40, '', () => { this.shopPage++; this.refreshShop(); }, { icon: 'right', radius: 10, color: COLORS.buttonDark });
+    this.shopNext = new Button(this, 1012, pgY, 44, 40, '', () => { this.shopPage++; this.refreshShop(); }, { icon: 'right', ...arrow });
     c.add([this.shopPrev, this.shopPageText, this.shopNext]);
 
     this.cardLayer = this.add.container(0, 0);
@@ -831,6 +855,9 @@ export class UIScene extends Phaser.Scene {
     // Footer: hint on the left, gold / capacity in a dark pill in the middle.
     const fy = FOOTER.y + FOOTER.h / 2 - 2;
     c.add(this.add.text(TRAY.x + 18, fy, IS_TOUCH ? 'Tap a building, drag it where you want it, then tap Place' : 'Pick a building, then click the map to place it', textStyle(15)).setOrigin(0, 0.5));
+    // Village Hall 11: how full the shared building pool is (center of the footer).
+    this.footerPool = this.add.text(SHOP_W / 2 - 40, fy, '', textStyle(16)).setOrigin(0.5);
+    c.add(this.footerPool);
     this.footerPill = this.add.graphics();
     this.footerGold = this.add.text(0, fy, '', textStyle(18)).setOrigin(1, 0.5);
     this.footerCoin = this.add.image(0, fy, TEX.coin);
@@ -841,6 +868,8 @@ export class UIScene extends Phaser.Scene {
 
   refreshShopFooter() {
     const fy = FOOTER.y + FOOTER.h / 2 - 2;
+    const pool = poolActive(this.gs.townHallLevel);
+    this.footerPool.setVisible(pool).setText(pool ? `Buildings ${poolUsed(this.gs.buildings)} / ${poolSize()}` : '');
     this.footerGold.setText(`${formatSpaced(this.gs.gold)} / ${formatSpaced(this.gs.capacity)}`);
     const w = this.footerGold.width + 56, right = SHOP_W - TRAY.x - 40;
     this.footerPill.clear().fillStyle(0x000000, 0.4).fillRoundedRect(right - w, fy - 13, w, 26, 13);
@@ -848,10 +877,16 @@ export class UIScene extends Phaser.Scene {
     this.footerGold.setX(right - 26);
   }
 
-  /** How many more of this tab's buildings the Village Hall level still allows. */
+  /**
+   * How many more of this tab's buildings the Village Hall level still allows. At the top hall (the shared pool) a
+   * pooled type counts the copies still under its old cap (the ones at the normal price), never more than the pool's room.
+   */
   tabBuildable(types) {
     const th = this.gs.townHallLevel;
-    return types.reduce((n, t) => n + Math.max(0, limitFor(t, th) - countOwned(this.gs.buildings, t)), 0);
+    if (!poolActive(th)) return types.reduce((n, t) => n + Math.max(0, limitFor(t, th) - countOwned(this.gs.buildings, t)), 0);
+    const room = Math.max(0, poolSize() - poolUsed(this.gs.buildings));
+    const pooled = types.filter(isPooled).reduce((n, t) => n + Math.max(0, limitFor(t, th) - countOwned(this.gs.buildings, t)), 0);
+    return Math.min(room, pooled) + types.filter((t) => !isPooled(t)).reduce((n, t) => n + roomFor(this.gs, t), 0);
   }
 
   setShopTab(tab) {
@@ -932,6 +967,7 @@ export class UIScene extends Phaser.Scene {
     if (type === 'flock') return narrow ? 'Reveals' : 'Reveals & marks';
     if (type === 'mousetrap') return 'Hidden trap';
     if (type === 'ra') return narrow ? 'Beam' : 'Beam · Ground & Air';
+    if (type === 'ksi') return narrow ? 'Slows' : 'Slows · Ground & Air';
     if (isDefense(type)) {
       const cfg = typeConfig(type);
       return cfg.hitsGround && cfg.hitsAir ? 'Ground & Air' : cfg.hitsAir ? 'Air only' : 'Ground only';
@@ -980,7 +1016,9 @@ export class UIScene extends Phaser.Scene {
     const rowY = h - 40;
     const trait = this.add.text(10, rowY, this.cardTrait(type, w < 130), textStyle(13)).setOrigin(0, 1);
     const builtLabel = this.add.text(w - 10, rowY - 17, type === 'wall' ? 'Walls:' : 'Built:', textStyle(11)).setOrigin(1, 1);
-    const built = this.add.text(w - 10, rowY + 1, `${countOwned(this.gs.buildings, type)}/${limitFor(type, th)}`, textStyle(16)).setOrigin(1, 1);
+    // (Village Hall 11: pooled types share the footer's "Buildings n / N"; the card just counts its own.)
+    const pooledNow = isPooled(type) && poolActive(th);
+    const built = this.add.text(w - 10, rowY + 1, pooledNow ? `${countOwned(this.gs.buildings, type)}` : `${countOwned(this.gs.buildings, type)}/${limitFor(type, th)}`, textStyle(16)).setOrigin(1, 1);
     // Narrow cards (a full Defenses tab): wrap the trait onto a second line (growing upward) so it never runs
     // into the Built count.
     const room = w - 10 - Math.max(built.width, builtLabel.width) - 6 - 10;
@@ -993,6 +1031,8 @@ export class UIScene extends Phaser.Scene {
     cost.setX(w / 2 - pw / 2 + cost.width / 2);
     coin.setX(w / 2 + pw / 2 - 12);
     card.add([g, icon, name, trait, builtLabel, built, cost, coin]);
+    // The Brisket King's altar: his portrait beside it.
+    if (type === 'altar') { const hb = addHeroBadge(this, w - 30, tileY - 22, 38); if (locked) hb.setAlpha(0.55); card.add(hb); }
     if (locked) {
       const lock = this.add.text(cx, Math.round(h * 0.42), this.lockedText(st.reason), textStyle(14, COLORS.text, { align: 'center', wordWrap: { width: w - 16 } })).setOrigin(0.5);
       fitWidth(lock, w - 20);
@@ -1037,30 +1077,41 @@ export class UIScene extends Phaser.Scene {
     const th = this.gs.townHallLevel;
     const unlock = typeConfig(type).unlockTownHall ?? 1;
     const limitNow = limitFor(type, th);
-    const allowed = th < unlock ? `Unlocks at VH${unlock}` : `${type === 'wall' ? 'Walls' : 'Built'} ${countOwned(this.gs.buildings, type)} / ${limitNow} at VH${th}`;
-    const costText = type === 'wall' ? `Cost ${formatGold(buildCost(type, this.gs))} (Level ${wallLevel(this.gs)})` : `Cost ${formatGold(buildCost(type))}`;
+    const allowed = th < unlock ? `Unlocks at VH${unlock}`
+      : isPooled(type) && poolActive(th) ? `Built ${countOwned(this.gs.buildings, type)} · village ${poolUsed(this.gs.buildings)} / ${poolSize()} buildings`
+        : `${type === 'wall' ? 'Walls' : 'Built'} ${countOwned(this.gs.buildings, type)} / ${limitNow} at VH${th}`;
+    const costText = type === 'wall' ? `Cost ${formatGold(buildCost(type, this.gs))} (Level ${wallLevel(this.gs)})` : `Cost ${formatGold(buildCost(type, this.gs))}`;
     c.add(this.add.text(18, header + 16, `${costText} · ${allowed}`, bodyStyle(14, COLORS.inkAccent)));
-    const desc = this.add.text(18, header + 40, BUILDING_DESCRIPTIONS[type] || '', bodyStyle(14, COLORS.ink, { wordWrap: { width: W - 36 }, lineSpacing: 3 }));
+    // Village Hall 11's shared pool: how extra copies work for this type.
+    const cap = limitFor(type, poolTownHall());
+    const poolNote = isPooled(type) && poolActive(th)
+      ? `
+Village Hall ${poolTownHall()}: build any mix of buildings up to ${poolSize()} in all. Each ${buildingName(type)} past ${cap} costs ${Math.round((CONFIG.rules.buildingPool.extraCostGrowth - 1) * 100)}% more than the one before.` : '';
+    const desc = this.add.text(18, header + 40, (BUILDING_DESCRIPTIONS[type] || '') + poolNote, bodyStyle(14, COLORS.ink, { wordWrap: { width: W - 36 }, lineSpacing: 3 }));
     c.add(desc);
     const top = desc.y + desc.height + 14;
     // Level 1 picture on the left (labelled on the card, which saves a title row), Level 1 stats beside it.
     const picG = this.add.graphics();
     c.add(picG);
     c.add(this.drawBuildingPic(picG, PIC.x, top, buildingTextureKey(this, type, 1)));
+    if (type === 'altar') c.add(addHeroBadge(this, PIC.x + PIC.w - 24, top + 24, 36)); // the Brisket King's portrait
     c.add(this.add.text(PIC.x + 10, top + 6, 'Level 1', textStyle(15)));
     const col = PIC.x + PIC.w + 16;
     const preview = { type, level: 1, hp: levelStats(type, 1).hp, destroyed: false, stock: 0, ...footprintDims(type) };
     let y = Math.max(this.drawStats(c, preview, col, top, W - col - 18, true), top + PIC.h) + 14;
     const altar = type === 'altar' ? getAltar(this.gs) : null;
-    if (altar) {   // the Brisket King's altar: a shortcut to his hero page
-      c.add(new Button(this, W / 2 - 110, y, 220, 40, 'Open Brisket King', () => {
+    if (altar) {   // the Brisket King's altar: a shortcut to his hero page, a full-width button under the card
+      const bw = W - 36, bh = 46;
+      const open = new Button(this, W / 2, y + bh / 2, bw, bh, 'Open Brisket King', () => {
         this.hideShopInfo();
         this.closeShop();
         this.world.select(altar.id);
         this.infoTab = 'hero';
         this.openInfo();
-      }, { color: COLORS.buttonBlue, fontSize: 18, radius: 10 }));
-      y += 54;
+      }, { color: COLORS.buttonBlue, fontSize: 19 });
+      open.add(addHeroBadge(this, -bw / 2 + 28, -2, 32)); // his portrait at the button's left end
+      c.add(open);
+      y += bh + 16;
     }
     const close = new Button(this, W - 10, 10, 40, 40, '', () => this.hideShopInfo(), { color: COLORS.buttonDanger, icon: 'x', radius: 9 });
     c.add(close);
@@ -1103,6 +1154,8 @@ export class UIScene extends Phaser.Scene {
     this.infoContent = this.add.container(0, 0); // rebuilt on every refresh
     this.infoPicBg = this.add.graphics();
     this.infoPic = this.drawBuildingPic(this.infoPicBg, PIC.x, INFO_PIC_Y, TEX.coin);
+    // The Brisket King's portrait on his altar's picture (not on the Hero tab, which shows the king himself).
+    this.infoHeroBadge = addHeroBadge(this, PIC.x + PIC.w - 24, INFO_PIC_Y + 24, 36).setVisible(false);
     this.infoPicKey = null;
     this.infoTab = 'info';
     const tabW = (INFO_COL_W - 8) / 2;
@@ -1124,7 +1177,7 @@ export class UIScene extends Phaser.Scene {
       brew: new Button(this, INFO_W / 2, 0, bw, INFO_BTN_H, 'Brew Spells', () => this.openFuelStation(), { color: 0x8e5bd6, fontSize: 19 })
     };
     const close = new Button(this, INFO_W - 12, 12, 42, 40, '', () => this.world.select(null), { color: COLORS.buttonDanger, icon: 'x', radius: 9 });
-    c.add([this.infoBg, this.infoBlocker, this.infoName, this.infoLevel, this.infoPicBg, this.infoPic, this.infoContent,
+    c.add([this.infoBg, this.infoBlocker, this.infoName, this.infoLevel, this.infoPicBg, this.infoPic, this.infoHeroBadge, this.infoContent,
       ...Object.values(this.infoTabs), ...Object.values(this.infoButtons), close]);
     this.infoPanel = c;
     this.hideInfo();
@@ -1146,6 +1199,7 @@ export class UIScene extends Phaser.Scene {
       const k = hs === 'down' ? 'hero_brisket_defeated' : hs === 'asleep' ? 'hero_brisket_sleep' : 'hero_brisket';
       if (this.textures.exists(k)) picKey = k;
     }
+    this.infoHeroBadge.setVisible(b.type === 'altar' && this.infoTab !== 'hero');
     if (picKey === this.infoPicKey) return;
     this.infoPicKey = picKey;
     this.infoPicBg.clear();
@@ -1239,6 +1293,7 @@ export class UIScene extends Phaser.Scene {
       rows.push(row('Marked damage bonus', 'markBonus', 0xff6b3d, { unit: '%' }));
     } else if (isDefense(b.type)) rows.push(row(b.type === 'catapult' ? 'Impact damage' : 'Damage', 'damage', 0xff6b3d));
     if (b.type === 'catapult') rows.push(row('Pool damage', 'poolDps', 0xff4fa3, { unit: ' / s' }));
+    if (b.type === 'ksi') rows.push(row('Chill (slow)', 'slow', 0x8fd8ff, { unit: '%', fmt: (v) => String(Math.round(v * 100)) }));
     if (b.type === 'mine') {
       rows.push(row('Production', 'production', 0xffc93c, { unit: ' / s' }));
       rows.push(row('Stock capacity', 'stockCap', 0x3cb8ff));
@@ -1274,6 +1329,7 @@ export class UIScene extends Phaser.Scene {
       const notes = [`Range ${tiles(range)}${minRange ? ` (not within ${minRange})` : ''}`, `Fires every ${every} s`];
       notes.push(`Hits ${cfg.hitsGround && cfg.hitsAir ? 'ground & air' : cfg.hitsAir ? 'air only' : 'ground only'}${cfg.splashRadius ? ` · splash ${tiles(cfg.splashRadius)}` : ''}`);
       if (cfg.pool) notes.push(`Pink pool ${tiles(cfg.pool.radius * 2)} wide for ${cfg.pool.duration} s · slows ${Math.round(cfg.pool.slow * 100)}%`);
+      if (cfg.chill) notes.push(`Chills everything splashed for ${cfg.chill.seconds} s · bosses take half`);
       return notes;
     }
     const V = CONFIG.villagers;
@@ -1294,8 +1350,8 @@ export class UIScene extends Phaser.Scene {
     if (b.type === 'altar') {
       const st = heroStats(b), h = this.gs.hero;
       const status = !h ? '' : h.status === 'asleep' ? `asleep (${Math.floor(Math.ceil(h.sleepT) / 60)}:${String(Math.ceil(h.sleepT) % 60).padStart(2, '0')})` : h.status === 'waking' ? 'waking up' : 'ready';
-      return [`Brisket King Lv ${b.level}: ${st.maxHp} HP, ${Math.round(st.damage)} per hit · ${status}`,
-        `Guards ${st.guardRange} tiles · Brisket Feast: its hotbar slot in a wave (${st.feastCharges}x per wave)`];
+      return [`Brisket King Lv ${b.level}: ${formatGold(st.maxHp)} HP, ${formatGold(Math.round(st.damage))} per hit${preview ? '' : ` · ${status}`}`,
+        `Guards ${st.guardRange} tiles · Brisket Feast ${st.feastCharges}x per wave`];
     }
     if (b.type === 'dj') {
       const s = djStats(b);
@@ -1316,7 +1372,9 @@ export class UIScene extends Phaser.Scene {
     if (b.type === 'townHall') {
       const rate = hallIncomeRate(b.level);
       const next = nextWaveInfo(this.gs);
-      return [`Next attack: wave ${next.number}${next.specialInfo ? ` (${next.specialInfo.name})` : ''}`, ...(rate > 0 ? [`Makes ${rate} gold / s on its own`] : [])];
+      // The level before the pool's: say what the next upgrade brings.
+      const poolNext = b.level === poolTownHall() - 1 ? [`Level ${poolTownHall()}: one shared building limit (${poolSize()}, any mix)`] : [];
+      return [`Next attack: wave ${next.number}${next.specialInfo ? ` (${next.specialInfo.name})` : ''}`, ...(rate > 0 ? [`Makes ${rate} gold / s on its own`] : []), ...poolNext];
     }
     return [];
   }
@@ -1336,8 +1394,10 @@ export class UIScene extends Phaser.Scene {
   }
 
   /**
-   * The Hero tab: the Brisket King's level, health (now / max), damage, attack speed, guard range, what he's
-   * doing (ready, asleep with the time left, waking up), Brisket Feast, and what the next altar level adds.
+   * The Hero tab: the Brisket King's level, then (like the Stats tab and the Gnome Worker card) his stats as rows,
+   * value on the right with the next altar level's gain in green: what he's doing (ready, asleep with the time
+   * left, waking up), health (now / max), damage, attack speed, guard range. Under the picture, across the panel,
+   * his ability's card (drawFeastCard). Returns the y below.
    */
   drawHeroInfo(box, b, y) {
     const st = heroStats(b), h = this.gs.hero;
@@ -1345,38 +1405,64 @@ export class UIScene extends Phaser.Scene {
     const name = this.add.text(INFO_COL, y, `${CONFIG.altar.heroName}`, textStyle(19));
     box.add(name);
     box.add(this.add.text(name.x + name.width + 8, y + 4, `Lv ${b.level}`, textStyle(15, COLORS.textGold)));
-    y += 30;
+    y += 32;
     const fmt = (n) => formatGold(Math.round(n));
     const left = h ? Math.ceil(h.sleepT) : 0;
     const status = !h ? '-' : h.status === 'down' ? 'Knocked out' : h.status === 'asleep' ? `Asleep · ${Math.floor(left / 60)}:${String(left % 60).padStart(2, '0')}`
       : h.status === 'waking' ? 'Waking up' : 'Ready';
-    const feastLeft = h ? Math.max(0, st.feastCharges - (isWaveActive(this.gs) ? h.feastsUsed : 0)) : st.feastCharges;
     const rows = [
       ['Status', status, '', h && (h.status === 'asleep' || h.status === 'down') ? COLORS.inkBad : COLORS.inkGood],
       ['Health', `${fmt(h ? Math.max(0, h.hp) : st.maxHp)} / ${fmt(st.maxHp)}`, nxt ? `+${fmt(nxt.maxHp - st.maxHp)}` : ''],
       ['Damage', `${fmt(st.damage)} per hit`, nxt ? `+${fmt(nxt.damage - st.damage)}` : ''],
-      ['Attack speed', `${Math.round((1 / st.attackInterval) * 100) / 100} hits / s`, ''],
-      ['Guard range', `${st.guardRange} tiles`, ''],
-      ['Brisket Feast', isWaveActive(this.gs) ? `${feastLeft} of ${st.feastCharges} left` : `${st.feastCharges} per wave`, '']
+      ['Attack speed', `${Math.round((1 / st.attackInterval) * 100) / 100} ${Math.abs(1 / st.attackInterval - 1) < 0.005 ? 'hit' : 'hits'} / s`, ''],
+      ['Guard range', `${st.guardRange} tiles`, nxt && nxt.guardRange > st.guardRange ? `+${nxt.guardRange - st.guardRange}` : '']
     ];
-    for (const [label, value, gain, ink] of rows) {
+    const g = this.add.graphics();
+    box.add(g);
+    for (const [i, [label, value, gain, ink]] of rows.entries()) {
+      if (i > 0) g.fillStyle(COLORS.frame, 0.12).fillRect(INFO_COL, y - 3, INFO_COL_W, 1);
       box.add(this.add.text(INFO_COL, y, label, bodyStyle(14, COLORS.inkDim)));
-      const v = this.add.text(INFO_COL + 104, y, value, bodyStyle(14, ink || COLORS.ink, { fontStyle: 'bold' }));
+      const v = this.add.text(INFO_COL + INFO_COL_W, y, value, bodyStyle(14, ink || COLORS.ink, ink ? { fontStyle: 'bold' } : {})).setOrigin(1, 0);
       box.add(v);
-      if (gain) box.add(this.add.text(v.x + v.width + 6, y, gain, bodyStyle(13, COLORS.inkGood)));
-      y += 21;
+      if (gain) box.add(this.add.text(v.x - v.width - 4, y + 1, gain, bodyStyle(12, COLORS.inkGood)).setOrigin(1, 0));
+      y += 23;
     }
-    // His ability, described at every altar level.
-    const F = CONFIG.altar.hero.feast;
-    const ability = this.add.text(INFO_COL, y + 4, 'Ability: Brisket Feast', textStyle(15, COLORS.textGold));
-    box.add(ability);
-    y += ability.height + 6;
-    const descr = this.add.text(INFO_COL, y, `Heals him ${F.healPct}%, then he rages for ${F.boostSeconds} s (${F.damagePct}% more damage, ${F.speedPct}% faster) and slams and stuns enemies around him. Once per wave. Use its slot on the hotbar during a wave (or press its number key).`, bodyStyle(13, COLORS.ink, { wordWrap: { width: INFO_COL_W } }));
-    box.add(descr);
-    y += descr.height;
-    const tip = this.add.text(INFO_COL, y + 4, 'He naps after a wave to heal. If he is knocked out in a raid he stays down until it ends.', bodyStyle(13, COLORS.inkDim, { wordWrap: { width: INFO_COL_W } }));
+    // His ability, under the picture, across the panel.
+    y = this.drawFeastCard(box, st, Math.max(y + 4, INFO_PIC_Y + PIC.h + 12));
+    const tip = this.add.text(INFO_W / 2, y + 8, 'He naps after a wave to heal. Knocked out in a raid, he stays down until it ends.',
+      bodyStyle(13, COLORS.inkDim, { align: 'center', wordWrap: { width: INFO_W - PIC.x * 2 - 16 } })).setOrigin(0.5, 0);
     box.add(tip);
-    return y + 4 + tip.height + 10;
+    return tip.y + tip.height + 10;
+  }
+
+  /**
+   * Brisket Feast's card on the Hero tab, in the Gnome Worker card's recessed tray: its hotbar icon (the gold
+   * crown) in a gold slot like the hotbar's, its name, how many per wave (left in a wave), and what it does.
+   * Returns the y below.
+   */
+  drawFeastCard(box, st, y) {
+    const F = CONFIG.altar.hero.feast, h = this.gs.hero;
+    const x = PIC.x, w = INFO_W - PIC.x * 2, slot = 64;
+    const tx = x + 10 + slot + 12, tw = x + w - 12 - tx;
+    const title = this.add.text(tx, y + 10, 'Brisket Feast', textStyle(19));
+    const kind = this.add.text(title.x + title.width + 8, y + 14, 'Ability', textStyle(14, COLORS.textGold));
+    const used = h && isWaveActive(this.gs) ? h.feastsUsed : 0;
+    const charges = this.add.text(x + w - 12, y + 12, isWaveActive(this.gs) ? `${Math.max(0, st.feastCharges - used)} / ${st.feastCharges} left` : `${st.feastCharges}x per wave`,
+      textStyle(16, COLORS.textGold)).setOrigin(1, 0);
+    const text = this.add.text(tx, y + 40, `Heals him ${F.healPct}%, then he rages for ${F.boostSeconds} s (+${F.damagePct}% damage, +${F.speedPct}% speed) and slams and stuns enemies around him. In a wave, use its hotbar slot or its number key.`,
+      bodyStyle(13, COLORS.ink, { wordWrap: { width: tw }, lineSpacing: 2 }));
+    const hgt = Math.max(slot + 16, text.height + 50);
+    // Recessed tray, then the gold icon slot centered on its left.
+    const g = this.add.graphics();
+    g.fillStyle(COLORS.frame, 0.25).fillRoundedRect(x, y, w, hgt, 12);
+    g.fillStyle(COLORS.tray, 1).fillRoundedRect(x + 2, y + 3, w - 4, hgt - 5, 11);
+    const sy = y + (hgt - slot) / 2;
+    drawGlossy(g, x + 10, sy, slot, slot, 0xf2b632, { radius: 12, lip: 4 });
+    box.add(g);
+    if (this.textures.exists(TEX.feastReady)) box.add(fitIcon(this.add.image(x + 10 + slot / 2, sy + slot / 2 - 2, TEX.feastReady), slot - 16));
+    else box.add(this.add.text(x + 10 + slot / 2, sy + slot / 2 - 2, 'FEAST', textStyle(13)).setOrigin(0.5));
+    box.add([title, kind, charges, text]);
+    return y + hgt;
   }
 
   /** Draw the Info, Stats or Hero tab body starting at y; returns the y below it. */
@@ -1991,7 +2077,7 @@ export class UIScene extends Phaser.Scene {
       this.refreshShopButton();
     });
     on(['editModeChanged', 'waveTriggered'], () => { this.refreshEditButton(); this.refreshShopButton(); this.refreshWave(); });
-    on(['layoutDraftChanged', 'placementChanged'], () => { if (this.world.editMode) this.refreshHotbar(); });
+    on(['layoutDraftChanged', 'placementChanged', 'rowSelectChanged'], () => { if (this.world.editMode) this.refreshHotbar(); });
     on(['layoutRejected'], (d) => this.showBanner(d.reason));
     on(['layoutSaved'], () => this.showBanner('Layout saved!'));
     on(['tutorialChanged'], () => this.refreshAll());
@@ -2084,6 +2170,7 @@ export class UIScene extends Phaser.Scene {
       r.editHint = { x: HOTBAR.x, y: HOTBAR.y - 53, w: this.editHint.width + 44, h: 42 };
       r.layoutSave = btn(this.layoutSave); r.layoutCancel = btn(this.layoutCancel); r.layoutRemoveAll = btn(this.layoutRemoveAll);
       if (this.shiftPad.visible) r.shiftPad = { x: SHIFT_PAD.x - SHIFT_PAD.dx - 30, y: SHIFT_PAD.y - SHIFT_PAD.dy - 30, w: (SHIFT_PAD.dx + 30) * 2, h: (SHIFT_PAD.dy + 30) * 2 };
+      if (this.rowBtn.visible) r.rowSelect = btn(this.rowBtn);
     }
     return r;
   }

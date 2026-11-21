@@ -16,8 +16,8 @@ export default defineConfig({
     __APP_COMMIT__: JSON.stringify(commit)
   },
   build: {
-    // Phaser alone is ~1.2 MB minified; don't warn about it.
-    chunkSizeWarningLimit: 2000
+    // Phaser alone is ~1.2 MB minified; don't warn about it (the whole game passed 2 MB in v0.6).
+    chunkSizeWarningLimit: 2500
   },
   test: {
     include: ['tests/**/*.test.js'],

@@ -47,13 +47,13 @@ describe('buildings.js', () => {
 
   it('has 10 levels (the Catapult 5, walls 8, the Tower of Rah 8, the RV Lab and DJ Babyface 5, the Fuel Station 8) and blocks upgrades at the top level', () => {
     const max = CONFIG.rules.maxTownHallLevel;
-    expect(max).toBe(10);
-    for (const type of BUILDING_TYPES) expect(maxLevel(type)).toBe({ catapult: 5, wall: 8, ra: 8, rvlab: 5, dj: 5, fuelStation: 8 }[type] ?? 10);
+    expect(max).toBe(11); // v0.6: Village Hall 11 (the shared building limit)
+    for (const type of BUILDING_TYPES) expect(maxLevel(type)).toBe({ townHall: 11, catapult: 5, wall: 8, ra: 8, rvlab: 5, dj: 5, fuelStation: 8 }[type] ?? 10);
     const s6 = makeStateWithTownHall({ gold: 9999999 }, max);
     const cat = addBuilding(s6, 'catapult', 8, 8, 5);
     expect(checkUpgrade(s6, cat)).toMatchObject({ ok: false, reason: 'Max level' });
     const state = makeStateWithTownHall({ gold: 9999999 }, max);
-    const cannon = addBuilding(state, 'cannon', 13, 15, max);
+    const cannon = addBuilding(state, 'cannon', 13, 15, maxLevel('cannon'));
     expect(checkUpgrade(state, cannon)).toMatchObject({ ok: false, reason: 'Max level' });
     expect(checkUpgrade(state, state.buildings[0])).toMatchObject({ ok: false, reason: 'Max level' });
   });

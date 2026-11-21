@@ -14,22 +14,28 @@ import { isLowQuality } from '../quality.js';
 const ENEMY_BADGE = 0x8e1f2a; // level badge on enemy health bars (buildings' is blue)
 
 // On-screen height in pixels for real enemy art at zoom 1 (a 2x2 building is 128 px wide).
-const DISPLAY_HEIGHT = { grunt: 40, slinger: 44, bomber: 46, tank: 62, shark: 50, thief: 50, breaker: 46, balloon: 84, neegy: 48, babycar: 78, toilet: 50 };
+const DISPLAY_HEIGHT = {
+  grunt: 40, slinger: 44, bomber: 46, tank: 62, shark: 50, thief: 50, breaker: 46, balloon: 84, neegy: 48, babycar: 78, toilet: 50,
+  pork: 54, skeleton: 52, vaca: 64, yahu: 56, patapim: 82
+};
 // A dropped Neegy starts this far up (px) and floats down over its landing time.
 const DROP_HEIGHT = 95;
 // Real flyer art floats this far above its shadow (the placeholder has the shadow built in).
 const FLY_HEIGHT = 24;
 // Some flyers float higher (the Neegy Balloon drifts well above the building it drops onto).
-const FLY_HEIGHT_BY_KIND = { balloon: 80 };
+const FLY_HEIGHT_BY_KIND = { balloon: 80, vaca: 46 };
 // Pictures drawn facing left, by texture key (the rest face right or front). Each pose has its own
 // picture, so facing is per picture: enemies always face where they're going.
 const FACES_LEFT = new Set([
   'enemy_bomber', 'enemy_shark', 'enemy_balloon', 'enemy_babycar',
   'enemy_shark_attack', 'enemy_shark_death', 'enemy_tank_death', 'enemy_thief_death'
 ]);
-// Extra poses: enemy_<kind>_attack / enemy_<kind>_death in art-source/enemies/, used when present.
+// Extra poses: enemy_<kind>_attack / enemy_<kind>_death in art-source/enemies/, used when present. v0.6 abilities have
+// their own: enemy_pork_call (John Pork on the phone, while he calls) and enemy_skeleton_rage (Rahhh Skeleton's shield
+// bash: it flashes BASH_FLASHES times while the bash lasts).
 const ATTACK_POSE_MS = 320;          // the attack picture shows this long after each hit
-const POSE_HEIGHT = { walk: 1, attack: 1, death: 0.85 }; // share of DISPLAY_HEIGHT (lying down is lower)
+const BASH_FLASHES = 3;
+const POSE_HEIGHT = { walk: 1, attack: 1, call: 1, rage: 1, death: 0.85 }; // share of DISPLAY_HEIGHT (lying down is lower)
 // Per-kind overrides of POSE_HEIGHT: Mr. Least is tall and thin standing up but lies stretched out flat, so
 // his death picture is drawn lower to stay about as long as he is tall.
 const POSE_HEIGHT_BY_KIND = { thief: { death: 0.68 } };
@@ -42,6 +48,8 @@ const HIDDEN_SHIMMER = 0.07;
 // Enemies of a wave that has stalled too long (see src/logic/enrage.js) are tinted this red.
 const ENRAGED_TINT = 0xff7a6a;
 const RESTLESS_TINT = 0xffc2b8; // night attackers (restless nights)
+const RAGED_TINT = 0xff6a5a;    // raged by a Rahhh Skeleton's shield bash
+const CHILL_TINT = 0xa8dcff;    // chilled by a KSI Tower (frozen solid is the Ice Bag's deeper 0x8fd8ff)
 /** Multiply two 0xRRGGBB colors channel by channel. */
 function mulColor(a, b) {
   const ch = (s) => Math.round((((a >> s) & 255) * ((b >> s) & 255)) / 255) << s;
@@ -66,7 +74,8 @@ export class EnemyView {
     const placeholders = scene.registry.get('placeholderKeys');
     this.realArt = !(placeholders && placeholders.has(key));
     const real = (k) => scene.textures.exists(k) && !(placeholders && placeholders.has(k));
-    this.keys = { walk: key, attack: real(`${key}_attack`) ? `${key}_attack` : null, death: real(`${key}_death`) ? `${key}_death` : null };
+    const pose = (suffix) => (real(`${key}_${suffix}`) ? `${key}_${suffix}` : null);
+    this.keys = { walk: key, attack: pose('attack'), death: pose('death'), call: pose('call'), rage: pose('rage') };
     this.pose = 'walk';
     this.attackUntil = 0;
     this.movingLeft = false;
@@ -120,8 +129,15 @@ export class EnemyView {
     this.alpha += (wantAlpha - this.alpha) * 0.2;
     this.sprite.setAlpha(this.alpha);
     if (this.shadow) this.shadow.setPosition(s.x, s.y).setDepth(depth - 0.5);
-    // Pose: the attack picture right after a hit, otherwise walking.
-    const pose = this.keys.attack && time < this.attackUntil ? 'attack' : 'walk';
+    // Pose: John Pork on the phone while he calls; Rahhh Skeleton's bash flashing between his rage picture and his
+    // stance; the attack picture right after a hit (or while Brr Brr Patapim stomps); otherwise walking.
+    let pose = this.keys.attack && (time < this.attackUntil || e.stompT > 0) ? 'attack' : 'walk';
+    if (this.keys.call && e.callT > 0 && e.alive) pose = 'call';
+    if (this.keys.rage && e.bashT > 0 && e.alive) {
+      const total = CONFIG.enemies[e.kind].rage.bashSeconds;
+      const step = Math.floor(((total - e.bashT) / total) * BASH_FLASHES * 2); // rage, stance, rage, stance, rage, stance
+      pose = step % 2 === 0 ? 'rage' : 'walk';
+    }
     if (pose !== this.pose) this.setPose(pose);
     // Face the direction of travel.
     if (this.realArt && this.lastX !== null && Math.abs(s.x - this.lastX) > 0.05) {
@@ -139,7 +155,9 @@ export class EnemyView {
       // Moonlit at night; a stalled wave's enraged enemies also glow angry red.
       const base = this.scene.ambientTint ?? 0xffffff;
       // Hacked by a F.L.O.C.K Override: purple. Dazzled by Showstopper: a pale flicker.
-      if (e.frozenT > 0) this.sprite.setTint(mulColor(base, 0x8fd8ff)); // held by a Freeze spell: icy blue
+      if (e.frozenT > 0) this.sprite.setTint(mulColor(base, 0x8fd8ff)); // held by a Freeze spell (or frozen solid by a KSI Tower): icy blue
+      else if (e.chillT > 0) this.sprite.setTint(mulColor(base, CHILL_TINT)); // chilled by a KSI Tower: a paler icy blue
+      else if (e.rageT > 0) this.sprite.setTint(mulColor(base, RAGED_TINT));   // raged by a Rahhh Skeleton: angry red
       else if (e.hackedT > 0) this.sprite.setTint(mulColor(base, 0xc58cff));
       else if (e.disarmT > 0 && Math.sin(time * 0.03) > 0) this.sprite.setTint(mulColor(base, 0xfff3b0));
       else {

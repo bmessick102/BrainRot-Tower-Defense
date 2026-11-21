@@ -4,15 +4,17 @@
 //               ability paths, and how its stats grow from level 1 to max (all read from config).
 //   Upgrades  - leveling buildings and the Village Hall, rebuilding / selling, and the RV Lab abilities
 //               (build the lab -> pick a path per building type; every building of that type gets the perks).
-//   Enemies   - a browser for every enemy: picture, description, tags, which defenses can hit it, and stats.
+//   Enemies   - a roster of every enemy on the left (mini picture cards under their category: Ground, Air,
+//               Tanks & Bosses, Special) and the picked one on the right: picture, description, tags, which
+//               defenses can hit it, and stats.
 //   Leagues   - every league's badge and the wave it takes, with where you stand when logged in.
-// Arrow keys browse the Buildings / Enemies lists; 1-5 switch tabs; Esc goes back to the title.
+// Arrow keys browse the Buildings / Enemies lists (up / down: the enemy categories); 1-5 switch tabs; Esc goes back.
 import Phaser from 'phaser';
 import { CONFIG } from '../config.js';
 import { IS_TOUCH } from '../device.js';
 import {
   DEFENSE_TYPES, buildingName, typeConfig, maxLevel, levelStats, limitFor, unlockTownHall, footprintDims, buildCost,
-  totalSpent, isDefense, isSupport
+  totalSpent, isDefense, isSupport, isPooled, poolSize, poolTownHall
 } from '../logic/buildings.js';
 import { ENEMY_KINDS } from '../logic/enemies.js';
 import { formatGold } from '../logic/economy.js';
@@ -23,8 +25,8 @@ import { LEAGUES } from '../logic/leagues.js';
 import { session } from '../net/account.js';
 import { buildingTextureKey } from '../objects/BuildingView.js';
 import { TEX, enemyKey } from '../assetKeys.js';
-import { drawWindow, drawShowcaseCard, drawCardStrip, drawStatBar, drawTag, drawGlossy, fitWidth, fitIcon } from '../objects/uiDraw.js';
-import { ENEMY_DESCRIPTIONS } from '../enemyText.js';
+import { drawWindow, drawShowcaseCard, drawCardStrip, drawStatBar, drawTag, drawGlossy, fitWidth, fitIcon, addHeroBadge } from '../objects/uiDraw.js';
+import { ENEMY_DESCRIPTIONS, ENEMY_CATEGORIES, ENEMY_ORDER } from '../enemyText.js';
 import { BUILDING_DESCRIPTIONS } from '../buildingText.js';
 import { COLORS, bodyStyle, textStyle, RP_COLOR } from '../theme.js';
 import { rpText } from '../logic/researchPoints.js';
@@ -47,11 +49,27 @@ const CONTENT_TOP = 174, CONTENT_BOTTOM = 600; // the Back button's top is ~609
 const CHIP_Y = 200, CHIP_H = 50, CHIP_GAP = 8;
 const CARD = { x: 96, y: 246, w: 216, h: 248 };
 const RX = CARD.x + CARD.w + 40, RW = RIGHT - RX;
-const DESC_MAX_H = 66; // descriptions taller than ~3 lines drop to a smaller font
 const STAT_COLS = 3, STAT_ROW = 40;
+// Where a browser's parts go: the picture card, the text column right of it (name, tags, description: taller
+// descriptions than descMax drop to a smaller font) and the stat grid.
+const BUILDING_LAYOUT = { card: CARD, rx: RX, rw: RW, descMax: 66, statX: RX, statW: RW };
+// Enemies: the roster panel on the left; the picked enemy's card and text right of it, its "hit by" row and stats
+// across the whole detail area under them.
+const ROSTER = { x: LEFT, y: CONTENT_TOP, w: 330, h: CONTENT_BOTTOM - CONTENT_TOP, pad: 13, tileW: 56, tileH: 58, gap: 6, head: 28, block: 14 };
+const DX = ROSTER.x + ROSTER.w + 24, DW = RIGHT - DX;
+const ENEMY_CARD = { x: DX + 24, y: CONTENT_TOP + 4, w: 196, h: 226 };
+const ENEMY_LAYOUT = {
+  card: ENEMY_CARD, rx: ENEMY_CARD.x + ENEMY_CARD.w + 36, rw: RIGHT - (ENEMY_CARD.x + ENEMY_CARD.w + 36),
+  descMax: 104, statX: DX, statW: DW
+};
+// A color per enemy category (the roster's headers).
+const CATEGORY_COLORS = { ground: COLORS.button, air: COLORS.buttonBlue, tanks: 0xb03a2e, special: 0x9b59d0 };
 
 // Buildings in the order a player meets them: the base, economy, walls, then defenses and traps.
-const BUILDING_ORDER = ['townHall', 'mine', 'storage', 'house', 'rvlab', 'dj', 'fuelStation', 'wall', 'cannon', 'archer', 'mortar', 'wizard', 'firework', 'spear', 'flock', 'ra', 'catapult', 'mousetrap', 'altar'];
+const BUILDING_ORDER = ['townHall', 'mine', 'storage', 'house', 'rvlab', 'dj', 'fuelStation', 'wall', 'cannon', 'archer', 'mortar', 'wizard', 'firework', 'spear', 'ksi', 'flock', 'ra', 'catapult', 'mousetrap', 'altar'];
+
+const categoryOf = (kind) => ENEMY_CATEGORIES.find((c) => c.kinds.includes(kind));
+// The category tabs share the chip row: tabs on the left, the shown category's chips on the right.
 
 // Defenses that attack (support towers like the F.L.O.C.K Tower never hit anything).
 const ATTACKERS = DEFENSE_TYPES.filter((t) => !typeConfig(t).support);
@@ -198,6 +216,10 @@ function buildingStats(type) {
   } else if (isDefense(type)) {
     out.push(grow(type, type === 'catapult' ? 'Impact damage' : 'Damage', 'damage', 0xff6b3d));
     if (type === 'catapult') out.push(grow(type, 'Pool damage / s', 'poolDps', 0xff4fa3));
+    if (type === 'ksi') {
+      const lo = levelStats(type, 1).slow, hi = levelStats(type, top).slow;
+      out.push({ label: `Chill (${cfg.chill.seconds} s)`, value: `${Math.round(lo * 100)}% → ${Math.round(hi * 100)}% slower`, frac: lo / hi, growth: true, color: 0x8fd8ff });
+    }
     out.push(fixed('Range', `${tiles(cfg.range)}${cfg.minRange ? ` (not within ${cfg.minRange})` : ''}`, cfg.range / 16, 0x3cb8ff));
     out.push(fixed('Fires every', `${cfg.fireInterval} s`, 0.5 / cfg.fireInterval, 0xffc93c));
     if (type !== 'catapult') out.push(fixed('Splash', cfg.splashRadius ? tiles(cfg.splashRadius) : 'None', (cfg.splashRadius || 0) / 1.5, 0xb36bff));
@@ -229,7 +251,8 @@ function buildingTags(type) {
   }
   if (type !== 'townHall') {
     tags.push([`Unlocks at VH${unlockTownHall(type)}`, COLORS.buttonDark]);
-    tags.push([`Up to ${limitFor(type, CONFIG.rules.maxTownHallLevel)}${type === 'wall' ? ' walls' : ''}`, COLORS.buttonDark]);
+    // (Pooled types: that many at the usual price, more from Village Hall 11's shared limit.)
+    tags.push([`Up to ${limitFor(type, CONFIG.rules.maxTownHallLevel)}${type === 'wall' ? ' walls' : isPooled(type) ? `, more at VH${poolTownHall()}` : ''}`, COLORS.buttonDark]);
   }
   const { w, h } = footprintDims(type);
   tags.push([`${w}x${h} tile${w * h === 1 ? '' : 's'}`, COLORS.buttonDark]);
@@ -260,7 +283,7 @@ export class HowToPlayScene extends Phaser.Scene {
     this.page = this.add.container(0, 0); // the shown tab's content, rebuilt on every switch
     this.browsers = {
       buildings: { index: 0, count: BUILDING_ORDER.length, show: (i) => this.showBuilding(i), artMax: false },
-      enemies: { index: 0, count: ENEMY_KINDS.length, show: (i) => this.showEnemy(i) }
+      enemies: { index: 0, count: ENEMY_ORDER.length, show: (i) => this.showEnemy(i) }
     };
 
     new Button(this, width / 2, height - 82, 220, 58, 'Back', back, { color: COLORS.buttonGood, fontSize: 24 });
@@ -271,6 +294,8 @@ export class HowToPlayScene extends Phaser.Scene {
     };
     this.input.keyboard.on('keydown-LEFT', () => step(-1));
     this.input.keyboard.on('keydown-RIGHT', () => step(1));
+    this.input.keyboard.on('keydown-UP', () => { if (this.tab === 'enemies') this.stepCategory(-1); });
+    this.input.keyboard.on('keydown-DOWN', () => { if (this.tab === 'enemies') this.stepCategory(1); });
     ['ONE', 'TWO', 'THREE', 'FOUR', 'FIVE'].forEach((k, i) => this.input.keyboard.on(`keydown-${k}`, () => this.showTab(TABS[i].key)));
 
     this.showTab('basics');
@@ -322,9 +347,9 @@ export class HowToPlayScene extends Phaser.Scene {
 
   /** Stat tiles in the right column of a browser: STAT_COLS columns of labeled bars from y. */
   statGrid(g, box, stats, y) {
-    const gap = 22, colW = (RW - gap * (STAT_COLS - 1)) / STAT_COLS;
+    const L = this.lay, gap = 22, colW = (L.statW - gap * (STAT_COLS - 1)) / STAT_COLS;
     stats.forEach((s, i) => {
-      const x = RX + (i % STAT_COLS) * (colW + gap), sy = y + Math.floor(i / STAT_COLS) * STAT_ROW;
+      const x = L.statX + (i % STAT_COLS) * (colW + gap), sy = y + Math.floor(i / STAT_COLS) * STAT_ROW;
       const label = this.add.text(x, sy, s.label, bodyStyle(13, COLORS.inkDim));
       const v = this.add.text(x + colW, sy, s.value, bodyStyle(13, COLORS.ink, { fontStyle: 'bold' })).setOrigin(1, 0);
       if (v.width > colW * 0.62) v.setFontSize(12);
@@ -426,6 +451,7 @@ export class HowToPlayScene extends Phaser.Scene {
       'A building cannot be a higher level than your Village Hall.',
       'Each level adds health and power. Buildings get bigger and get new art every few levels.',
       'Upgrading the Village Hall unlocks new buildings and lets you build more of each. But the attacks get harder too.',
+      `At Village Hall ${poolTownHall()} the limits per building become one shared limit (${poolSize()} buildings): build any mix you like. Copies past a building's usual limit cost ${Math.round((CONFIG.rules.buildingPool.extraCostGrowth - 1) * 100)}% more each.`,
       'Walls share one level: "Upgrade Walls" raises every wall at once, and new walls are built at that level.',
       `After you beat a wave, destroyed buildings are rebuilt free. During a wave you can Rebuild one early for ${Math.round(CONFIG.rules.rebuildCostShare * 100)}% of its cost.`,
       `Selling gives back ${Math.round(CONFIG.rules.sellRefund * 100)}% of the gold you spent on a building.`
@@ -481,34 +507,107 @@ export class HowToPlayScene extends Phaser.Scene {
   // ---------- browsers (Buildings / Enemies) ----------
   buildBrowser(key) {
     const isB = key === 'buildings';
-    const list = isB ? BUILDING_ORDER : ENEMY_KINDS;
-    this.page.add(this.add.text(LEFT + 4, CONTENT_BOTTOM - 8, `Click ${isB ? 'a building' : 'an enemy'} above, or use the arrow keys`, bodyStyle(13, COLORS.inkDim)).setOrigin(0, 1));
-    // One chip per entry (green = shown).
-    const n = list.length;
-    const chipW = Math.floor((RIGHT - LEFT - CHIP_GAP * (n - 1)) / n);
-    this.chips = list.map((item, i) => {
-      const chip = new Button(this, LEFT + chipW / 2 + i * (chipW + CHIP_GAP), CHIP_Y, chipW, CHIP_H, '', () => this.browsers[key].show(i), { radius: 10 });
-      const img = this.add.image(0, -2, isB ? buildingTextureKey(this, item, 1) : enemyKey(item));
-      fitIcon(img, chipW - 14, CHIP_H - 14);
-      chip.add(img);
-      this.page.add(chip);
-      return chip;
-    });
+    const list = isB ? BUILDING_ORDER : ENEMY_ORDER;
+    this.lay = isB ? BUILDING_LAYOUT : ENEMY_LAYOUT;
+    this.chips = [];
+    this.rosterTiles = [];
+    if (isB) {
+      this.page.add(this.add.text(LEFT + 4, CONTENT_BOTTOM - 8, 'Click a building above, or use the arrow keys', bodyStyle(13, COLORS.inkDim)).setOrigin(0, 1));
+      // One chip per building (green = shown).
+      this.chipLayer = this.add.container(0, 0);
+      this.page.add(this.chipLayer);
+      this.layChips(list.map((item, i) => ({ item, i })), LEFT, RIGHT);
+    } else this.buildRoster();
     // The picture card's arrows; the card and details are rebuilt per entry in this.detail.
     this.detail = this.add.container(0, 0);
     this.page.add(this.detail);
-    const midY = CARD.y + CARD.h / 2;
+    const card = this.lay.card, midY = card.y + card.h / 2;
     const b = this.browsers[key];
+    const n = list.length;
     const step = (d) => b.show((b.index + d + n) % n);
-    const prev = new Button(this, CARD.x, midY, 44, 44, '', () => step(-1), { color: COLORS.buttonBlue, circle: true, icon: 'left' });
-    const next = new Button(this, CARD.x + CARD.w, midY, 44, 44, '', () => step(1), { color: COLORS.buttonBlue, circle: true, icon: 'right' });
+    const prev = new Button(this, card.x, midY, 44, 44, '', () => step(-1), { color: COLORS.buttonBlue, circle: true, icon: 'left' });
+    const next = new Button(this, card.x + card.w, midY, 44, 44, '', () => step(1), { color: COLORS.buttonBlue, circle: true, icon: 'right' });
     this.page.add([prev, next]);
     b.show(b.index, false);
   }
 
+  /** A row of building chips for `entries` ({ item, i }: i = the entry's index in its browser) from x0 to x1. */
+  layChips(entries, x0, x1) {
+    this.chipLayer.removeAll(true);
+    const n = entries.length;
+    const chipW = Math.floor((x1 - x0 - CHIP_GAP * (n - 1)) / n);
+    this.chips = entries.map(({ item, i }, k) => {
+      const chip = new Button(this, x0 + chipW / 2 + k * (chipW + CHIP_GAP), CHIP_Y, chipW, CHIP_H, '', () => this.browsers.buildings.show(i), { radius: 10 });
+      const img = this.add.image(0, -2, buildingTextureKey(this, item, 1));
+      fitIcon(img, chipW - 14, CHIP_H - 14);
+      chip.add(img);
+      chip.itemIndex = i;
+      this.chipLayer.add(chip);
+      return chip;
+    });
+  }
+
+  /**
+   * Enemies tab: the roster panel. Every enemy as a mini picture card (the same blue card as the big one), in rows
+   * under its category's header (a colored marker, the name and how many). The shown one gets a gold frame.
+   */
+  buildRoster() {
+    const R = ROSTER;
+    this.card(R.x, R.y, R.w, R.h);
+    const g = this.add.graphics();
+    this.page.add(g);
+    let y = R.y + R.pad;
+    for (const cat of ENEMY_CATEGORIES) {
+      const color = CATEGORY_COLORS[cat.key] ?? COLORS.buttonDark;
+      const x = R.x + R.pad, right = R.x + R.w - R.pad;
+      drawGlossy(g, x, y + 3, 14, 18, color, { radius: 4, lip: 2, shadow: false });
+      const head = this.add.text(x + 22, y + 12, cat.label, textStyle(17)).setOrigin(0, 0.5);
+      const count = this.add.text(right, y + 12, `${cat.kinds.length}`, bodyStyle(14, COLORS.inkDim, { fontStyle: 'bold' })).setOrigin(1, 0.5);
+      const lx = head.x + head.width + 10;
+      g.fillStyle(COLORS.frame, 0.18).fillRect(lx, y + 12, count.x - count.width - 10 - lx, 2);
+      this.page.add([head, count]);
+      y += R.head;
+      cat.kinds.forEach((kind, k) => this.rosterTile(kind, x + k * (R.tileW + R.gap), y));
+      y += R.tileH + R.block;
+    }
+  }
+
+  /** One roster entry at (x, y): mini card + picture; click shows it, hover lifts it. */
+  rosterTile(kind, x, y) {
+    const R = ROSTER, index = ENEMY_ORDER.indexOf(kind);
+    const tile = this.add.container(x + R.tileW / 2, y + R.tileH / 2);
+    const g = this.add.graphics();
+    drawShowcaseCard(g, -R.tileW / 2, -R.tileH / 2, R.tileW, R.tileH, { tileY: R.tileH / 2 - 12, tileW: 18 });
+    const img = this.add.image(0, R.tileH / 2 - 8, enemyKey(kind)).setOrigin(0.5, 1);
+    fitIcon(img, R.tileW - 10, R.tileH - 12);
+    // The shown enemy's frame: gold, a little outside the card.
+    const ring = this.add.graphics();
+    ring.lineStyle(4, 0xffd04a, 1).strokeRoundedRect(-R.tileW / 2 - 3, -R.tileH / 2 - 3, R.tileW + 6, R.tileH + 9, 14);
+    ring.lineStyle(1.5, COLORS.frame, 0.9).strokeRoundedRect(-R.tileW / 2 - 5.5, -R.tileH / 2 - 5.5, R.tileW + 11, R.tileH + 14, 16);
+    ring.setVisible(false);
+    tile.add([g, img, ring]);
+    tile.setSize(R.tileW, R.tileH + 4).setInteractive({ useHandCursor: true });
+    tile.on('pointerover', () => this.tweens.add({ targets: tile, scale: 1.08, duration: 90 }));
+    tile.on('pointerout', () => this.tweens.add({ targets: tile, scale: 1, duration: 90 }));
+    tile.on('pointerup', () => this.browsers.enemies.show(index));
+    tile.itemIndex = index;
+    tile.ring = ring;
+    this.page.add(tile);
+    this.rosterTiles.push(tile);
+  }
+
+  /** Up / down in the Enemies tab: the first enemy of the next / previous category. */
+  stepCategory(d) {
+    const b = this.browsers.enemies;
+    const at = ENEMY_CATEGORIES.indexOf(categoryOf(ENEMY_ORDER[b.index]));
+    const cat = ENEMY_CATEGORIES[(at + d + ENEMY_CATEGORIES.length) % ENEMY_CATEGORIES.length];
+    b.show(ENEMY_ORDER.indexOf(cat.kinds[0]));
+  }
+
   /** Highlight the shown chip and start a fresh detail view. Returns its graphics. */
   beginDetail(index) {
-    this.chips.forEach((chip, i) => { chip.color = i === index ? COLORS.buttonGood : COLORS.buttonDark; chip.redraw(); });
+    this.chips.forEach((chip) => { chip.color = chip.itemIndex === index ? COLORS.buttonGood : COLORS.buttonDark; chip.redraw(); });
+    this.rosterTiles.forEach((t) => t.ring.setVisible(t.itemIndex === index));
     const p = this.detail;
     p.removeAll(true);
     const g = this.add.graphics();
@@ -518,7 +617,7 @@ export class HowToPlayScene extends Phaser.Scene {
 
   /** Picture card: the picture on the spotlight tile, "n / total", and a strip at the bottom. */
   pictureCard(g, key, index, total, strip, coinStrip, animate) {
-    const p = this.detail;
+    const p = this.detail, CARD = this.lay.card;
     const tileY = CARD.y + CARD.h - 66;
     drawShowcaseCard(g, CARD.x, CARD.y, CARD.w, CARD.h, { tileY, tileW: 64 });
     const pic = this.add.image(CARD.x + CARD.w / 2, tileY + 18, key).setOrigin(0.5, 1);
@@ -546,13 +645,13 @@ export class HowToPlayScene extends Phaser.Scene {
 
   /** Name (shrunk to fit) with a subtitle under it. Returns the y below. */
   nameBlock(name, sub) {
-    const p = this.detail;
-    const t = this.add.text(RX, CARD.y - 6, name, textStyle(30));
-    if (t.width > RW) t.setStyle(textStyle(Math.floor(30 * RW / t.width)));
+    const p = this.detail, { rx, rw, card } = this.lay;
+    const t = this.add.text(rx, card.y - 6, name, textStyle(30));
+    if (t.width > rw) t.setStyle(textStyle(Math.floor(30 * rw / t.width)));
     p.add(t);
     let y = t.y + t.height;
     if (sub) {
-      const s = this.add.text(RX + 2, y - 2, sub.toUpperCase(), bodyStyle(14, COLORS.inkAccent, { letterSpacing: 2 }));
+      const s = this.add.text(rx + 2, y - 2, sub.toUpperCase(), bodyStyle(14, COLORS.inkAccent, { letterSpacing: 2 }));
       p.add(s);
       y = s.y + s.height;
     }
@@ -560,9 +659,10 @@ export class HowToPlayScene extends Phaser.Scene {
   }
 
   description(text, y) {
-    const d = this.add.text(RX, y, text || '', bodyStyle(15, COLORS.ink, { wordWrap: { width: RW }, lineSpacing: 3 }));
+    const { rx, rw, descMax } = this.lay;
+    const d = this.add.text(rx, y, text || '', bodyStyle(15, COLORS.ink, { wordWrap: { width: rw }, lineSpacing: 3 }));
     // Long descriptions step down in size until they fit their box.
-    for (let size = 14; d.height > DESC_MAX_H && size >= 11; size--) d.setFontSize(size).setLineSpacing(1);
+    for (let size = 14; d.height > descMax && size >= 11; size--) d.setFontSize(size).setLineSpacing(1);
     this.detail.add(d);
     return d.y + d.height;
   }
@@ -577,6 +677,7 @@ export class HowToPlayScene extends Phaser.Scene {
     const level = b.artMax ? top : 1;
     const strip = type === 'townHall' ? 'Your base' : formatGold(buildCost(type));
     this.pictureCard(g, buildingTextureKey(this, type, level), index, BUILDING_ORDER.length, strip, type !== 'townHall', animate);
+    if (type === 'altar') this.detail.add(addHeroBadge(this, CARD.x + CARD.w - 30, CARD.y + 32, 42)); // the Brisket King's portrait
     // Level 1 / Max level picture toggle under the card.
     const p = this.detail;
     const tw = (CARD.w - 8) / 2, ty = CARD.y + CARD.h + 26;
@@ -626,11 +727,11 @@ export class HowToPlayScene extends Phaser.Scene {
   showEnemy(index, animate = true) {
     const b = this.browsers.enemies;
     b.index = index;
-    const kind = ENEMY_KINDS[index];
+    const kind = ENEMY_ORDER[index];
     const cfg = CONFIG.enemies[kind];
     const g = this.beginDetail(index);
     const p = this.detail;
-    this.pictureCard(g, enemyKey(kind), index, ENEMY_KINDS.length, `Bounty ${cfg.bounty}`, true, animate);
+    this.pictureCard(g, enemyKey(kind), index, ENEMY_ORDER.length, `Bounty ${cfg.bounty}`, true, animate);
 
     let y = this.nameBlock(cfg.name, cfg.role);
     const tags = [cfg.type === 'air' ? ['Flying', COLORS.buttonBlue] : ['Ground', COLORS.button]];
@@ -640,23 +741,32 @@ export class HowToPlayScene extends Phaser.Scene {
     if (cfg.drops) tags.push(['Drops troops', 0xd0583c]);
     if (cfg.boss) tags.push(['Raid boss', 0xb03a2e], ['Rams through walls', 0xc98a12], ['Bursts into troops', 0xd0583c]);
     if (cfg.burrows) tags.push(['Tunnels underground', 0x8f673d], ['F.L.O.C.K sees it', 0x6c7a89]);
+    // v0.6 abilities.
+    if (cfg.call) tags.push([`Silences F.L.O.C.K Towers (${cfg.call.seconds} s)`, 0xd0583c]);
+    if (cfg.rage) tags.push([`Rages nearby enemies (+${cfg.rage.damagePct}% damage)`, 0xb03a2e]);
+    if (cfg.bounce) tags.push(['Ranged', 0x9b59d0], [`Boulders bounce ${cfg.bounce.count}x`, 0xc98a12]);
+    if (cfg.missileRadius) tags.push([`Missile strikes (${cfg.missileRadius} tile blast)`, 0xb03a2e]);
+    if (cfg.quake) tags.push(['Earthquakes', 0x8f673d], [`${cfg.quake.wallMult}x quake damage to walls`, 0xc98a12]);
     if (cfg.prefers && cfg.preferredDamageMultiplier) tags.push([`${cfg.preferredDamageMultiplier}x vs ${cfg.prefers.includes('wall') ? 'walls' : cfg.prefers.includes('airDefense') ? 'air defenses' : 'gold buildings'}`, 0xc98a12]);
     const fw = firstWave(kind);
     const dropper = cfg.droppedBy && CONFIG.enemies[cfg.droppedBy];
     const bossFrom = cfg.boss && CONFIG.rules.babyCar ? `From Village Hall ${CONFIG.rules.babyCar.fromTownHall}`
       : cfg.fromTownHall ? `From Village Hall ${cfg.fromTownHall}` : null;
     tags.push([dropper ? `From ${dropper.name}s` : bossFrom || (fw ? `From wave ${fw}` : 'Endless waves'), COLORS.buttonDark]);
-    y = this.tagRow(p, RX, y + 6, tags);
-    y = this.description(ENEMY_DESCRIPTIONS[kind], y + 4) + 10;
+    y = this.tagRow(p, ENEMY_LAYOUT.rx, y + 6, tags);
+    this.description(ENEMY_DESCRIPTIONS[kind], y + 4);
 
-    // Which defenses can hit it: building icons with a green check or red cross. Hover shows the name.
+    // Under the card, across the whole detail area: which defenses can hit it (building icons with a green check
+    // or red cross; hover shows the name), then the stats.
+    y = ENEMY_CARD.y + ENEMY_CARD.h + 16;
     const hits = ATTACKERS.filter((d) => defenseHitsEnemy(d, kind)).length;
     const baseLabel = `Hit by ${hits} of ${ATTACKERS.length} defenses${cfg.invisibleUntilJump ? ' once revealed' : ''}`;
-    const hitLabel = this.add.text(RX, y, baseLabel, bodyStyle(14, COLORS.inkDim));
+    const hitLabel = this.add.text(DX, y, baseLabel, bodyStyle(14, COLORS.inkDim));
     p.add(hitLabel);
-    const iconW = 58, iconH = 44;
+    const iconGap = 8, iconH = 44;
+    const iconW = Math.min(72, Math.floor((DW - iconGap * (ATTACKERS.length - 1)) / ATTACKERS.length));
     ATTACKERS.forEach((def, i) => {
-      const x = RX + i * (iconW + 8), iy = y + 22;
+      const x = DX + i * (iconW + iconGap), iy = y + 22;
       const ok = defenseHitsEnemy(def, kind);
       drawGlossy(g, x, iy, iconW, iconH, ok ? 0xbfe8a0 : 0xc9c3b8, { radius: 9, lip: 3, shadow: false });
       const icon = this.add.image(x + iconW / 2, iy + iconH / 2 - 1, buildingTextureKey(this, def, 1));
@@ -668,7 +778,7 @@ export class HowToPlayScene extends Phaser.Scene {
       zone.on('pointerout', () => hitLabel.setText(baseLabel).setColor(COLORS.inkDim));
       p.add([icon, mark, zone]);
     });
-    y += 22 + iconH + 14;
+    y += 22 + iconH + 16;
     this.statGrid(g, p, enemyStats(cfg), Math.min(y, CONTENT_BOTTOM - STAT_ROW * 2 + 6));
   }
 }

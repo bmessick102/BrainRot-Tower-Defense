@@ -11,6 +11,7 @@ import { getNav, distanceField, nextStep } from './pathfinding.js';
 import { emit, nextId, random } from './util.js';
 import { enrageFactor } from './enrage.js';
 import { walkToward, moveToward } from './motion.js';
+import { stepEnemyAbility } from './specialEnemies.js';
 
 /** A Village Hall's base wave (scripted for the first ones, the last scripted one grown after that). */
 function baseWaveFor(th) {
@@ -26,7 +27,7 @@ function baseWaveFor(th) {
 // Re-exported: they live in combat.js so a Wall Breaker can blow up from any death (being shot included).
 export { matchesTypes, enemyDamageVs, explode };
 
-export const ENEMY_KINDS = ['grunt', 'slinger', 'bomber', 'tank', 'shark', 'thief', 'breaker', 'balloon', 'neegy', 'babycar', 'toilet'];
+export const ENEMY_KINDS = ['grunt', 'slinger', 'bomber', 'tank', 'shark', 'thief', 'breaker', 'balloon', 'neegy', 'babycar', 'toilet', 'pork', 'skeleton', 'vaca', 'yahu', 'patapim'];
 // A Neegy dropped by a balloon floats down for this long (no moving or attacking) before it lands.
 export const LANDING_SECONDS = 0.7;
 
@@ -290,6 +291,8 @@ export function stepEnemy(state, e, dt, nav = null) {
   if (cfg.ramsToHall) { stepBabyCar(state, e, cfg, target, step, dt, rage); return; }
   // The Skibidi Toilet: tunnels to its target and pops up to attack.
   if (cfg.burrows) { stepBurrower(state, e, cfg, target, step, dt, rage); return; }
+  // v0.6 abilities (specialEnemies.js): John Pork's call, Rahhh Skeleton's shield bash, Brr Brr Patapim's quake.
+  if (stepEnemyAbility(state, e, cfg, dt, rage, damageBuilding)) return;
   // The Brisket King in reach (or taunting it): fight him instead of going on.
   if (fightHero(state, e, cfg, step, rage)) return;
   // Cheese Bait (a Mousetrap ability): lured straight onto the trap until it snaps. A building or wall in
@@ -324,8 +327,12 @@ export function stepEnemy(state, e, dt, nav = null) {
     // Fly straight over everything (walls included) to the footprint center and hover there.
     const c = footprintCenter(target);
     // Home on the center; neighbors push a group apart, so anywhere over the target counts as in range.
-    moveToward(e, c.x, c.y, step);
-    if (distance(e.x, e.y, c.x, c.y) <= Math.max(cfg.attackRange, ARRIVE_EPSILON) || distanceToFootprint(target, e.x, e.y) <= ARRIVE_EPSILON) attackTarget = target;
+    // A ranged flyer (La Vaca Saturno) stops attackRange tiles from the target's edge and throws from there.
+    if (cfg.attackRange > MELEE_REACH && distanceToFootprint(target, e.x, e.y) <= cfg.attackRange) attackTarget = target;
+    else {
+      moveToward(e, c.x, c.y, step);
+      if (distance(e.x, e.y, c.x, c.y) <= Math.max(cfg.attackRange, ARRIVE_EPSILON) || distanceToFootprint(target, e.x, e.y) <= ARRIVE_EPSILON) attackTarget = target;
+    }
   } else {
     attackTarget = stepGround(state, e, target, cfg, step, nav || getNav(state));
   }

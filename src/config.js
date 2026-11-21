@@ -64,8 +64,24 @@ export const CONFIG = {
     // Village Halls 6-10: their base wave is the previous hall's with x endlessCountGrowth enemies and x endlessHpGrowth
     // health (v0.5: 1.18 / 1.14 from the scripted VH5 wave; was 1.15 / 1.1 from VH4).
     endlessCountGrowth: 1.18,
+    // v0.6 enemies (fromTownHall kinds, waves.js withLateKinds): this share of their total health comes back out of the
+    // regular troops (lateKindPool, each cut by the same share, at most lateKindMaxCut), so a hall's wave keeps about
+    // the same strength while the new threats join it.
+    lateKindOffset: 0.7,
+    lateKindPool: ['grunt', 'slinger', 'bomber', 'tank', 'shark', 'thief'],
+    lateKindMaxCut: 0.35,
     endlessHpGrowth: 1.14,
-    maxTownHallLevel: 10,
+    maxTownHallLevel: 11,
+    // v0.6 (user, 2026-11-21): from Village Hall `fromTownHall` (11, the top one; Village Hall 10 keeps the usual caps)
+    // the per-type caps (limits[type]) become one shared pool for the `pooled` types: any mix of them, up to the sum
+    // of their caps at that hall (e.g. 5 Towers of Rah). Each copy of a type past its own cap costs extraCostGrowth x
+    // more than the one before (1.5: +50% compounding).
+    // Unique buildings (Village Hall, RV Lab, Fuel Station, DJ Babyface, altar) and walls keep their own caps.
+    buildingPool: {
+      fromTownHall: 11,
+      pooled: ['mine', 'storage', 'house', 'cannon', 'archer', 'mortar', 'wizard', 'firework', 'spear', 'ksi', 'mousetrap', 'flock', 'ra', 'catapult'],
+      extraCostGrowth: 1.5
+    },
     mineCoinIconThreshold: 0.1,
     buildingGap: 0
   },
@@ -80,8 +96,11 @@ export const CONFIG = {
     mortar: { flightTime: 1.2 },
     catapult: { flightTime: 1.8 }, // a long, high lob
     spear: { speed: 22 },          // the Spear Thrower's spear flies in a straight line (see fireSpear in combat.js)
+    ksi: { speed: 11 },            // the KSI Tower's bottle (spins in flight, bursts into a chilling splash)
     slinger: { speed: 10 },
-    bomber: { dropTime: 0.4 }
+    bomber: { dropTime: 0.4 },
+    vaca: { flightTime: 0.8, bounceTime: 0.35 }, // La Vaca Saturno's boulder: the throw, then each bounce
+    missile: { fallTime: 1.5 }                   // Big Yahu's missile: the red target shows this long before it lands
   },
   // Day/night clock in seconds: a cycle of its own (about 8 minutes), separate from the waves.
   dayNight: { daySeconds: 240, duskSeconds: 30, nightSeconds: 180, dawnSeconds: 30 },
@@ -101,7 +120,9 @@ export const CONFIG = {
       { upgradeCost: 20000, hp: 4579, capacity: 3000 },
       { upgradeCost: 40000, hp: 5724, capacity: 3500 },
       { upgradeCost: 80000, hp: 7155, capacity: 4000 },
-      { upgradeCost: 160000, hp: 8944, capacity: 4500 }
+      { upgradeCost: 160000, hp: 8944, capacity: 4500 },
+      // v0.6: Village Hall 11 (the shared building limit, +12 walls). 250,000 fits in 5 top storages (305,000).
+      { upgradeCost: 250000, hp: 11180, capacity: 5000 }
     ]
   },
   // v0.5: Levels 6-10 make 12-33% more (same fill time): late halls took 2-10 hours of full mines to max out.
@@ -514,6 +535,36 @@ export const CONFIG = {
         { cost: 280000, hp: 2235, damage: 671 }
       ]
     },
+    // KSI Tower (v0.6): an ice tower (ground and air). It lobs bottles that burst in a splash, dealing light damage and
+    // chilling every enemy hit: `slow` (0.3 = 30% slower) for chill.seconds (combat.js chillEnemy). Slows never stack:
+    // the strongest slow on an enemy wins (Catapult pools, glue, Hamstring...). Bosses (Da Baby Car) shrug off half the
+    // slow, like the Ice Bag spell's bossSlow. Chilled enemies show icy blue.
+    // Balance: about a Gandolf Tower's damage per second (a bit less, with a slower bottle and a wider splash), traded
+    // for the slow. Unlocks at Village Hall 5, just before the later raiders (Rahhh Skeleton's rage, La Vaca Saturno),
+    // so a slow is there for them. 10 levels, a picture per 2; cost between Gandolf's and the Tower of Rah's.
+    ksi: {
+      name: "KSI Tower",
+      hitsGround: true,
+      hitsAir: true,
+      fireInterval: 1.6,
+      range: 6.5,
+      minRange: 0,
+      splashRadius: 1.25,
+      chill: { seconds: 2.5, bossShare: 0.5 },
+      unlockTownHall: 5,
+      levels: [
+        { cost: 3000, hp: 500, damage: 26, slow: 0.3 },
+        { cost: 4500, hp: 625, damage: 32, slow: 0.32 },
+        { cost: 6500, hp: 781, damage: 40, slow: 0.34 },
+        { cost: 9500, hp: 977, damage: 50, slow: 0.36 },
+        { cost: 14000, hp: 1221, damage: 63, slow: 0.38 },
+        { cost: 21000, hp: 1526, damage: 78, slow: 0.4 },
+        { cost: 32000, hp: 1907, damage: 98, slow: 0.42 },
+        { cost: 50000, hp: 2384, damage: 122, slow: 0.44 },
+        { cost: 80000, hp: 2980, damage: 153, slow: 0.47 },
+        { cost: 120000, hp: 3725, damage: 191, slow: 0.5 }
+      ]
+    },
     // v0.5: damage -7% (splash on ground and air: the strongest per building in the balance runs).
     wizard: {
       name: "Gandolf Tower",
@@ -538,26 +589,29 @@ export const CONFIG = {
       ]
     }
   },
+  // Per Village Hall level (1-11). Village Hall 11 adds 12 walls; its other caps are Village Hall 10's (and the pooled
+  // types share them: rules.buildingPool).
   limits: {
-    mine: [1, 2, 3, 3, 4, 4, 5, 5, 6, 6],
-    storage: [1, 1, 2, 2, 3, 3, 4, 4, 5, 5],
-    house: [1, 1, 2, 2, 3, 3, 4, 4, 5, 5],
-    cannon: [1, 2, 2, 3, 3, 4, 4, 5, 5, 6],
-    archer: [0, 1, 2, 2, 3, 3, 4, 4, 5, 5],
-    mortar: [0, 1, 1, 2, 2, 3, 3, 4, 4, 5],
-    wizard: [0, 0, 1, 1, 2, 2, 3, 3, 4, 4],
-    townHall: [1, 1, 1, 1, 1, 1, 1, 1, 1, 1],
-    wall: [24, 36, 48, 60, 72, 84, 96, 108, 120, 132],
-    firework: [0, 0, 1, 1, 2, 2, 2, 3, 3, 3],
-    catapult: [0, 0, 0, 0, 0, 0, 0, 0, 0, 1], // the final unlock: Village Hall 10 only
-    spear: [0, 0, 1, 1, 2, 2, 2, 3, 3, 3],
-    flock: [0, 0, 1, 1, 1, 2, 2, 2, 3, 3],
-    mousetrap: [0, 1, 2, 2, 3, 3, 4, 4, 5, 5],
-    ra: [0, 0, 0, 0, 0, 1, 1, 1, 2, 2],
-    rvlab: [0, 0, 0, 1, 1, 1, 1, 1, 1, 1],
-    dj: [0, 0, 0, 0, 1, 1, 1, 1, 1, 1],
-    fuelStation: [0, 1, 1, 1, 1, 1, 1, 1, 1, 1],
-    altar: [0, 0, 0, 1, 1, 1, 1, 1, 1, 1]
+    mine: [1, 2, 3, 3, 4, 4, 5, 5, 6, 6, 6],
+    storage: [1, 1, 2, 2, 3, 3, 4, 4, 5, 5, 5],
+    house: [1, 1, 2, 2, 3, 3, 4, 4, 5, 5, 5],
+    cannon: [1, 2, 2, 3, 3, 4, 4, 5, 5, 6, 6],
+    archer: [0, 1, 2, 2, 3, 3, 4, 4, 5, 5, 5],
+    mortar: [0, 1, 1, 2, 2, 3, 3, 4, 4, 5, 5],
+    wizard: [0, 0, 1, 1, 2, 2, 3, 3, 4, 4, 4],
+    townHall: [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1],
+    wall: [24, 36, 48, 60, 72, 84, 96, 108, 120, 132, 144],
+    firework: [0, 0, 1, 1, 2, 2, 2, 3, 3, 3, 3],
+    catapult: [0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1], // the final unlock: from Village Hall 10
+    spear: [0, 0, 1, 1, 2, 2, 2, 3, 3, 3, 3],
+    ksi: [0, 0, 0, 0, 1, 1, 2, 2, 3, 3, 3],
+    flock: [0, 0, 1, 1, 1, 2, 2, 2, 3, 3, 3],
+    mousetrap: [0, 1, 2, 2, 3, 3, 4, 4, 5, 5, 5],
+    ra: [0, 0, 0, 0, 0, 1, 1, 1, 2, 2, 2],
+    rvlab: [0, 0, 0, 1, 1, 1, 1, 1, 1, 1, 1],
+    dj: [0, 0, 0, 0, 1, 1, 1, 1, 1, 1, 1],
+    fuelStation: [0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1],
+    altar: [0, 0, 0, 1, 1, 1, 1, 1, 1, 1, 1]
   },
   // radius (tiles): body size; enemies push apart so they never stack on top of each other.
   // name: shown to players; role: the enemy's job, shown as subtext under the name.
@@ -763,6 +817,105 @@ export const CONFIG = {
       attackRange: 0.5,
       bounty: 7,
       researchPoints: 1
+    },
+    // ---------- v0.6 enemies (src/logic/specialEnemies.js). Each joins the waves from its fromTownHall (baseCount
+    // there, growing like the Skibidi Toilet's); waves.js takes rules.lateKindOffset of its health back out of the
+    // regular troops so a wave's strength only creeps up. ----------
+    // A melee bruiser (sturdier than Tung Tung Sahur). Whenever a standing F.L.O.C.K Tower's range covers him, he stops
+    // and makes a call (call.poseSeconds): the towers that see him and every other F.L.O.C.K Tower within call.radius
+    // tiles of him go silent for call.seconds (no marks, no reveals, no auras); he can call again call.cooldown s later.
+    pork: {
+      name: "John Pork",
+      role: "Phone Jammer",
+      radius: 0.28,
+      type: "ground",
+      call: { radius: 5, seconds: 6, cooldown: 14, poseSeconds: 1.2 },
+      fromTownHall: 4,
+      baseCount: 2,
+      hp: 420,
+      speed: 1,
+      damage: 22,
+      attackInterval: 1,
+      attackRange: 0.5,
+      bounty: 18,
+      researchPoints: 5
+    },
+    // Melee rager. The first time he reaches a building he bashes his shield (rage.bashSeconds, standing still), then
+    // again every rage.cooldown s: he and every enemy within rage.radius tiles are enraged for rage.seconds (+damagePct
+    // damage, +speedPct speed). Another bash refreshes it; it never stacks.
+    skeleton: {
+      name: "Rahhh Skeleton",
+      role: "Battle Rager",
+      radius: 0.26,
+      type: "ground",
+      rage: { radius: 3, seconds: 6, damagePct: 40, speedPct: 25, cooldown: 12, bashSeconds: 0.6 },
+      fromTownHall: 6,
+      baseCount: 2,
+      hp: 520,
+      speed: 0.85,
+      damage: 28,
+      attackInterval: 1.2,
+      attackRange: 0.5,
+      bounty: 20,
+      researchPoints: 5
+    },
+    // Tanky ranged flyer: hovers attackRange tiles from its target and throws a boulder (projectiles.vaca). It lands on
+    // the target for full damage, then bounces on bounce.count times, each bounce.step tiles further along the throw,
+    // hitting every building and wall within bounce.radius of where it lands for bounce.falloff less each time
+    // (100 / 70 / 49 / 34%), like a Bowler. Only air-capable defenses can hit it.
+    vaca: {
+      name: "La Vaca Saturno",
+      role: "Boulder Flyer",
+      radius: 0.45,
+      type: "air",
+      bounce: { count: 3, step: 1.5, radius: 1, falloff: 0.3 },
+      fromTownHall: 7,
+      baseCount: 1,
+      hp: 1500,
+      speed: 0.6,
+      damage: 70,
+      attackInterval: 3,
+      attackRange: 3.5,
+      bounty: 45,
+      researchPoints: 10
+    },
+    // Ranged artillery: from attackRange tiles away it calls a missile down on its target. A red target ring shows
+    // where it will land for projectiles.missile.fallTime s, then it hits every building and wall within
+    // missileRadius (the Bomber's bomb and blast). Never outranges a defense that can shoot it (attackRangeVs).
+    yahu: {
+      name: "Big Yahu",
+      role: "Missile Caller",
+      radius: 0.26,
+      type: "ranged",
+      missileRadius: 1.25,
+      fromTownHall: 8,
+      baseCount: 2,
+      hp: 650,
+      speed: 0.8,
+      damage: 110,
+      attackInterval: 4.5,
+      attackRange: 6,
+      bounty: 32,
+      researchPoints: 8
+    },
+    // Tank with an earthquake: every quake.every s, while a building or wall is within quake.radius tiles, he stomps
+    // (quake.stompSeconds, standing still) and every building within quake.radius takes quake.damage (walls
+    // quake.wallMult x). Strong, not an instant win: Level 1 walls break in one quake, Level 8 walls take 7.
+    patapim: {
+      name: "Brr Brr Patapim",
+      role: "Earthquake Tank",
+      radius: 0.5,
+      type: "ground",
+      quake: { radius: 2.5, every: 5, damage: 150, wallMult: 4, stompSeconds: 0.5 },
+      fromTownHall: 9,
+      baseCount: 1,
+      hp: 2800,
+      speed: 0.45,
+      damage: 70,
+      attackInterval: 2.2,
+      attackRange: 0.6,
+      bounty: 60,
+      researchPoints: 14
     }
   },
   // Special waves (src/logic/waves.js): every `every`th wave is one of these, rotating through `order`
@@ -779,10 +932,10 @@ export const CONFIG = {
     order: ['swarm', 'air', 'ground', 'heist', 'siege'],
     types: {
       swarm: { name: 'Swarm', hint: 'Hordes of weak enemies', mix: { grunt: 0.6, thief: 0.4 }, needs: ['thief'], strength: 0.8 },
-      air: { name: 'Air Raid', hint: 'Flyers only: build anti-air', mix: { bomber: 0.8, balloon: 0.2 }, needs: ['bomber'], strength: 0.7 },
+      air: { name: 'Air Raid', hint: 'Flyers only: build anti-air', mix: { bomber: 0.7, balloon: 0.15, vaca: 0.15 }, needs: ['bomber'], strength: 0.7 },
       ground: { name: 'Ground Assault', hint: 'No flyers: more troops instead', mix: null, needs: ['bomber'], strength: 1 },
       heist: { name: 'Heist', hint: 'A gang of Mr. Leasts after your gold', mix: { thief: 0.85, grunt: 0.15 }, needs: ['thief'], strength: 0.6 },
-      siege: { name: 'Siege', hint: 'Tanks and Wall Breakers', mix: { tank: 0.92, breaker: 0.08 }, needs: ['tank'], strength: 1 }
+      siege: { name: 'Siege', hint: 'Tanks and Wall Breakers', mix: { tank: 0.8, patapim: 0.12, breaker: 0.08 }, needs: ['tank'], strength: 1 }
     }
   },
   // Rebalanced in v0.5 (R group, from headless runs of a maxed base per hall: scratch sim): VH2-4 were far harder

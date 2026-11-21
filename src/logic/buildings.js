@@ -7,9 +7,9 @@ import { researchPoints, needRpReason } from './researchPoints.js';
 
 // Every building type (saves only accept these). New types must be added here too; a test checks that the
 // defense / economy / wall lists are all covered.
-export const BUILDING_TYPES = ['townHall', 'mine', 'storage', 'house', 'cannon', 'archer', 'mortar', 'wizard', 'firework', 'spear', 'mousetrap', 'flock', 'catapult', 'ra', 'rvlab', 'dj', 'altar', 'fuelStation', 'wall'];
+export const BUILDING_TYPES = ['townHall', 'mine', 'storage', 'house', 'cannon', 'archer', 'mortar', 'wizard', 'firework', 'spear', 'ksi', 'mousetrap', 'flock', 'catapult', 'ra', 'rvlab', 'dj', 'altar', 'fuelStation', 'wall'];
 // Shop order = unlock order; the Diddypult (Village Hall 10) is always last.
-export const DEFENSE_TYPES = ['cannon', 'archer', 'mortar', 'wizard', 'firework', 'spear', 'mousetrap', 'flock', 'ra', 'catapult'];
+export const DEFENSE_TYPES = ['cannon', 'archer', 'mortar', 'wizard', 'firework', 'spear', 'ksi', 'mousetrap', 'flock', 'ra', 'catapult'];
 export const ECONOMY_TYPES = ['mine', 'storage', 'house'];
 export const WALL_TYPES = ['wall'];
 // Research buildings (the RV Lab: researches the defenses' ability paths, see abilities.js).
@@ -138,7 +138,11 @@ export function unlockTownHall(type) {
  */
 export function buildCost(type, state = null) {
   if (type === 'wall' && state) return wallBuildCost(state);
-  return type === 'townHall' ? 0 : typeConfig(type).levels[0].cost;
+  if (type === 'townHall') return 0;
+  const base = typeConfig(type).levels[0].cost;
+  // Village Hall 11's shared pool: copies past the type's old cap cost more each (extraCostGrowth).
+  const extra = state ? poolExtraCopies(state, type) : 0;
+  return extra > 0 ? Math.round(base * CONFIG.rules.buildingPool.extraCostGrowth ** extra) : base;
 }
 
 /** Price to go from `level` to `level + 1`, or null at max level. */
@@ -160,7 +164,7 @@ export function upgradeCurrency(type, level) {
   return (next && next.costCurrency) || 'gold';
 }
 
-/** How many of a type are allowed at a town hall level. */
+/** How many of a type are allowed at a town hall level (from Village Hall 11, a pooled type's own cap: see poolSize). */
 export function limitFor(type, townHallLevel) {
   return CONFIG.limits[type][townHallLevel - 1] ?? 0;
 }
@@ -169,11 +173,59 @@ export function countOwned(buildings, type) {
   return buildings.filter((b) => b.type === type).length;
 }
 
-/** How many more buildings and wall segments the Town Hall level allows (shop badge). */
+// ---------- Village Hall 11's shared building pool (CONFIG.rules.buildingPool) ----------
+/** Does this type share the pool (instead of its own cap) from Village Hall 11? */
+export function isPooled(type) {
+  return CONFIG.rules.buildingPool.pooled.includes(type);
+}
+
+/** The Village Hall level the shared pool starts at (11). */
+export function poolTownHall() {
+  return CONFIG.rules.buildingPool.fromTownHall;
+}
+
+/** Is the shared pool in force at this Village Hall level (Village Hall 11)? */
+export function poolActive(townHallLevelNow) {
+  return townHallLevelNow >= poolTownHall();
+}
+
+/** The pool's size: every pooled type's cap at the pool's Village Hall, added up. */
+export function poolSize() {
+  const top = poolTownHall();
+  return CONFIG.rules.buildingPool.pooled.reduce((n, t) => n + limitFor(t, top), 0);
+}
+
+/** How many pooled buildings the village has (all of them count, whatever their type). */
+export function poolUsed(buildings) {
+  return buildings.filter((b) => isPooled(b.type)).length;
+}
+
+/**
+ * How many copies of `type` the village already has past its cap at Village Hall 11 (what makes the next one pricier),
+ * plus one for the copy being bought when it is past the cap too. 0 when the pool isn't in force.
+ */
+export function poolExtraCopies(state, type) {
+  if (!isPooled(type) || !poolActive(townHallLevel(state))) return 0;
+  const cap = limitFor(type, poolTownHall());
+  return Math.max(0, countOwned(state.buildings, type) + 1 - cap);
+}
+
+/** How many more of `type` this village may build now (the pool's room for pooled types from Village Hall 11). */
+export function roomFor(state, type) {
+  const th = townHallLevel(state);
+  if (isPooled(type) && poolActive(th)) return Math.max(0, poolSize() - poolUsed(state.buildings));
+  return Math.max(0, limitFor(type, th) - countOwned(state.buildings, type));
+}
+
+/**
+ * How many more buildings and wall segments the Town Hall level allows (shop badge). At the top hall the pooled
+ * types count once as the pool's room, not once per type.
+ */
 export function buildableCount(state) {
   const th = townHallLevel(state);
-  return BUILDING_TYPES.filter((t) => t !== 'townHall')
-    .reduce((n, t) => n + Math.max(0, limitFor(t, th) - countOwned(state.buildings, t)), 0);
+  const single = BUILDING_TYPES.filter((t) => t !== 'townHall' && !(poolActive(th) && isPooled(t)))
+    .reduce((n, t) => n + roomFor(state, t), 0);
+  return single + (poolActive(th) ? Math.max(0, poolSize() - poolUsed(state.buildings)) : 0);
 }
 
 export function getTownHall(state) {
@@ -194,10 +246,10 @@ export function checkBuy(state, type) {
   const th = townHallLevel(state);
   const unlock = unlockTownHall(type);
   if (th < unlock) return { ok: false, reason: `Requires VH${unlock}` };
-  if (countOwned(state.buildings, type) >= limitFor(type, th)) {
+  if (roomFor(state, type) <= 0) {
     // Limit is 0 at this TH level even though the type is "unlocked": point at the next TH that allows one.
     if (limitFor(type, th) === 0) return { ok: false, reason: `Requires VH${th + 1}` };
-    return { ok: false, reason: 'Limit reached' };
+    return { ok: false, reason: isPooled(type) && poolActive(th) ? 'Village full' : 'Limit reached' };
   }
   if (isWaveActive(state)) return { ok: false, reason: 'Not during a wave' };
   const cost = buildCost(type, state);

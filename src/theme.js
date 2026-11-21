@@ -30,6 +30,7 @@ export const COLORS = {
   buttonGood: 0x6cbf2c,  // green
   buttonDanger: 0xe2442f,// red
   buttonBlue: 0x3d8fe0,
+  buttonBlueDisabled: 0x7d9ab8, // a paging arrow at the first / last page: the blue, greyed down
   buttonDark: 0x4a5159,  // unselected tabs
   buttonDisabled: 0x9a958c,
   badge: 0xe8322a,

@@ -3,21 +3,56 @@ import { CONFIG } from '../src/config.js';
 import {
   waveComposition, choosePaths, buildSpawnQueues, triggerWave, stepWaveSpawning, checkWaveCleared,
   enemiesLeft, nightWaveNumber, waveRamp, scaledWaveComposition, nextWaveComposition, nextWaveInfo,
-  getWavePlan, wavePlanCounts, specialTypesAt, specialWaveType, specialComposition, waveStrength, PATHS, skipCountdown, cancelCountdown
+  getWavePlan, wavePlanCounts, specialTypesAt, specialWaveType, specialComposition, waveStrength, PATHS, skipCountdown, cancelCountdown, OFFSET_KINDS
 } from '../src/logic/waves.js';
 import { startTutorialWave } from '../src/logic/dayNight.js';
 import { TUTORIAL_NIGHT_STEP } from '../src/logic/tutorial.js';
 import { ENEMY_KINDS } from '../src/logic/enemies.js';
 import { makeStateWithTownHall, seededRng } from './helpers.js';
 
+// The kinds that join the waves later (fromTownHall), all 0 in the first base waves.
+const LATE_ZERO = { toilet: 0, pork: 0, skeleton: 0, vaca: 0, yahu: 0, patapim: 0 };
 const w4 = CONFIG.waves[3];
 const w5 = CONFIG.waves[4];
 
 describe('waves.js', () => {
   it('waves 1 to 5 match config (Village Hall 5 has a scripted base wave too)', () => {
     expect(CONFIG.waves).toHaveLength(5);
-    for (let n = 1; n <= 4; n++) expect(waveComposition(n)).toEqual({ ...CONFIG.waves[n - 1], toilet: 0 }); // (Skibidi Toilets join from Village Hall 5)
-    expect(waveComposition(5)).toEqual({ ...CONFIG.waves[4], toilet: CONFIG.enemies.toilet.baseCount });
+    for (let n = 1; n <= 3; n++) expect(waveComposition(n)).toEqual({ ...CONFIG.waves[n - 1], ...LATE_ZERO }); // (the late kinds join from VH4)
+    // From Village Hall 4 the v0.6 kinds join (John Pork first) and the regular troops make room for them.
+    expect(waveComposition(4).pork).toBe(CONFIG.enemies.pork.baseCount);
+    expect(waveComposition(5).toilet).toBe(CONFIG.enemies.toilet.baseCount);
+    for (const n of [4, 5]) {
+      const c = waveComposition(n), w = CONFIG.waves[n - 1];
+      for (const k of ['breaker', 'balloon', 'neegy']) expect(c[k]).toBe(w[k]); // not in the offset pool
+      for (const k of CONFIG.rules.lateKindPool) {
+        expect(c[k]).toBeLessThanOrEqual(w[k]);
+        expect(c[k]).toBeGreaterThanOrEqual(Math.min(w[k], Math.floor(w[k] * (1 - CONFIG.rules.lateKindMaxCut))));
+      }
+    }
+  });
+
+  it('the v0.6 enemies join at VH4 (John Pork), 6 (Rahhh Skeleton), 7 (La Vaca Saturno), 8 (Big Yahu), 9 (Brr Brr Patapim)', () => {
+    const from = { pork: 4, skeleton: 6, vaca: 7, yahu: 8, patapim: 9 };
+    for (const [k, th] of Object.entries(from)) {
+      expect(waveComposition(th - 1)[k]).toBe(0);
+      expect(waveComposition(th)[k]).toBe(CONFIG.enemies[k].baseCount);
+    }
+  });
+
+  it('the offset keeps each hall wave strength close to what it was before the v0.6 enemies (within 15%)', () => {
+    const before = (n) => {
+      const saved = OFFSET_KINDS.map((k) => CONFIG.enemies[k].baseCount);
+      OFFSET_KINDS.forEach((k) => { CONFIG.enemies[k].baseCount = 0; });
+      const c = waveComposition(n);
+      OFFSET_KINDS.forEach((k, i) => { CONFIG.enemies[k].baseCount = saved[i]; });
+      return waveStrength(c);
+    };
+    for (let n = 1; n <= 10; n++) {
+      const now = waveStrength(waveComposition(n));
+      expect(now).toBeGreaterThanOrEqual(before(n));
+      expect(now / before(n)).toBeLessThan(1.15);
+    }
   });
 
   it('wave 1 always uses the top path', () => {
@@ -38,7 +73,8 @@ describe('waves.js', () => {
   it('wave 6 follows the endless formulas from the Village Hall 5 base', () => {
     const { endlessCountGrowth: cg, endlessHpGrowth: hg } = CONFIG.rules;
     const c = waveComposition(6);
-    for (const k of ENEMY_KINDS) if (!CONFIG.enemies[k].fromTownHall) expect(c[k]).toBe(Math.round((w5[k] || 0) * cg));
+    for (const k of ENEMY_KINDS) if (!CONFIG.enemies[k].fromTownHall && !CONFIG.rules.lateKindPool.includes(k)) expect(c[k]).toBe(Math.round((w5[k] || 0) * cg));
+    for (const k of CONFIG.rules.lateKindPool) expect(c[k]).toBeLessThanOrEqual(Math.round((w5[k] || 0) * cg)); // (made room for the v0.6 kinds)
     expect(c.toilet).toBe(Math.round(CONFIG.enemies.toilet.baseCount * cg)); // joined at Village Hall 5
     expect(c.hpMultiplier).toBe(Math.round(w5.hpMultiplier * hg * 100) / 100);
     expect(c.spawnPaths).toBe(2);
@@ -47,7 +83,7 @@ describe('waves.js', () => {
   it('wave 8 follows the endless formulas', () => {
     const { endlessCountGrowth: cg, endlessHpGrowth: hg } = CONFIG.rules;
     const c = waveComposition(8);
-    for (const k of ENEMY_KINDS) if (!CONFIG.enemies[k].fromTownHall) expect(c[k]).toBe(Math.round((w5[k] || 0) * cg ** 3));
+    for (const k of ENEMY_KINDS) if (!CONFIG.enemies[k].fromTownHall && !CONFIG.rules.lateKindPool.includes(k)) expect(c[k]).toBe(Math.round((w5[k] || 0) * cg ** 3));
     expect(c.toilet).toBe(Math.round(CONFIG.enemies.toilet.baseCount * cg ** 3));
     expect(c.hpMultiplier).toBe(Math.round(w5.hpMultiplier * hg ** 3 * 100) / 100);
     expect(c.spawnPaths).toBe(3);
@@ -168,7 +204,8 @@ describe('waves.js', () => {
   });
 
   it('the Village Hall picks the base wave; the first wave is exactly that base', () => {
-    for (let th = 1; th <= 4; th++) expect(scaledWaveComposition(th, 1)).toEqual({ ...CONFIG.waves[th - 1], babycar: 0, toilet: 0 }); // (no Da Baby Cars or Skibidi Toilets in these base waves)
+    for (let th = 1; th <= 3; th++) expect(scaledWaveComposition(th, 1)).toEqual({ ...CONFIG.waves[th - 1], babycar: 0, ...LATE_ZERO }); // (no Da Baby Cars or late kinds in these base waves)
+    expect(scaledWaveComposition(4, 1)).toEqual({ ...waveComposition(4), babycar: 0 });
     expect(scaledWaveComposition(7, 1)).toEqual(waveComposition(7));
     expect(scaledWaveComposition(12, 1)).toEqual(waveComposition(CONFIG.rules.maxTownHallLevel)); // capped
   });
@@ -258,7 +295,7 @@ describe('waves.js', () => {
 
     it('never have more than maxEnemiesFactor x the normal count (the rest goes into HP)', () => {
       // A few big enemies: the same strength in Mr. Leasts would be far more than 2x the count.
-      const normal = { ...scaledWaveComposition(4, 1), grunt: 1, slinger: 0, bomber: 0, tank: 3, shark: 0, thief: 1, breaker: 0, balloon: 0 };
+      const normal = { ...scaledWaveComposition(4, 1), grunt: 1, slinger: 0, bomber: 0, tank: 3, shark: 0, thief: 1, breaker: 0, balloon: 0, pork: 0 };
       const c = specialComposition(normal, 'heist');
       expect(kinds(c).reduce((n, k) => n + c[k], 0)).toBeLessThanOrEqual(Math.round(5 * SW.maxEnemiesFactor));
       expect(c.hpMultiplier).toBeGreaterThan(normal.hpMultiplier);

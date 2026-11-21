@@ -141,7 +141,7 @@ describe('combat.js', () => {
     expect(fw.levels[0].hp).toBeLessThan(archer.levels[0].hp);
     expect(fw.unlockTownHall).toBe(3);
     expect(Math.max(...CONFIG.limits.firework)).toBe(3);
-    expect(CONFIG.limits.wall).toEqual([24, 36, 48, 60, 72, 84, 96, 108, 120, 132]); // single-tile walls: 3x the old 3-tile segments
+    expect(CONFIG.limits.wall).toEqual([24, 36, 48, 60, 72, 84, 96, 108, 120, 132, 144]); // single-tile walls: 3x the old 3-tile segments; VH11 +12
   });
 
   it('destroyed defenses never fire', () => {

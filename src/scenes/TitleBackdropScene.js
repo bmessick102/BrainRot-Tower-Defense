@@ -3,9 +3,10 @@
 // draws under every screen that shows it and keeps running (no restart, no second logo drop) as they change.
 // PreloadScene loads TITLE_ART_KEYS before anything else, so the whole picture is up while the game loads.
 // It stops itself as soon as the game (GameScene) starts.
-// While the game loads, the mortar fires its man at the enemies every few seconds. When loading finishes
-// (BootScene emits LOADED_EVENT and sets the registry flag LOADED_FLAG), he's fired one last time and stays
-// hovering, arms out, at the top of his arc; the title menu keeps that picture.
+// While the game loads, the mortar sits loaded and idle (it used to fire every few seconds, which on a slow phone
+// meant several shots before anything was ready). When loading finishes (BootScene emits LOADED_EVENT and sets the
+// registry flag LOADED_FLAG), it fires its one shot and he stays hovering, arms out, at the top of his arc; the
+// title menu keeps that picture.
 //
 // Layout follows unused-assets/public/assets/images/ui/ui_title_background.png (a layout reference only; never shown):
 // logo top center; the wizard, archer and a worker gnome at the left with the mortar in front of them; the enemies grouped at
@@ -31,7 +32,8 @@ const ART = {
 /** Every texture the backdrop shows; PreloadScene loads these before the loading screen appears. */
 export const TITLE_ART_KEYS = [
   ...Object.values(ART),
-  'enemy_grunt', 'enemy_tank', 'enemy_shark', 'enemy_toilet', 'enemy_thief', 'enemy_breaker', 'enemy_neegy'
+  'enemy_grunt', 'enemy_tank', 'enemy_shark', 'enemy_toilet', 'enemy_thief', 'enemy_breaker', 'enemy_neegy',
+  'enemy_patapim', 'enemy_pork', 'enemy_skeleton' // v0.6: Brr Brr Patapim, John Pork, Rahhh Skeleton
 ];
 // Effect textures drawn at runtime (no files).
 const FX_DOT = 'title_fx_dot';           // soft white dot: embers, sparks, smoke, dust, glows
@@ -70,16 +72,20 @@ const ORB_PULSE_MS = 900;
 
 // ---------- enemies (right, facing left; x, y = feet, h = height on screen) ----------
 // One big overlapping group in the foreground, all standing on the ground line near the bottom, kept right of
-// the title menu's Start Game button (x < 820 above y 540). Taller characters are drawn behind shorter ones
-// (depth by height) so everyone stays visible. flip: the picture faces right, so it's mirrored to face the heroes.
+// the title menu's Start Game button (x < 820 above y 540). Each has its own layer (`depth`, 0..1, lower = further
+// back; without one, taller = further back) so everyone stays visible. flip: the picture faces right, so it's mirrored
+// to face the heroes. v0.6 added Brr Brr Patapim, Rahhh Skeleton and John Pork and moved the rest to make room.
 const ENEMIES = [
-  { key: 'enemy_tank', x: 1088, y: 636, h: 400, flip: true },    // Tripi Tropi, the fish giant: the biggest, at the back
-  { key: 'enemy_grunt', x: 1224, y: 652, h: 330, flip: true },   // Tung Tung Sahur, right of the fish giant, in front of him
-  { key: 'enemy_neegy', x: 892, y: 650, h: 300, flip: true, depth: 0.65 }, // the gold Neegy, left (layer kept as before)
-  { key: 'enemy_thief', x: 1040, y: 678, h: 300, flip: true },   // Mr. Least, in front of the fish
-  { key: 'enemy_toilet', x: 945, y: 714, h: 215, flip: false },  // Skibidi Toilet (faces front), front
-  { key: 'enemy_breaker', x: 852, y: 716, h: 205, flip: true },  // Frog Tire (the Wall Breaker), front left
-  { key: 'enemy_shark', x: 1160, y: 702, h: 225, flip: false, depth: 0.71 } // Tralalero Tralala (art faces left), just in front of Mr. Least (0.70)
+  { key: 'enemy_patapim', x: 985, y: 606, h: 330, flip: true, depth: 0.1 },  // Brr Brr Patapim (v0.6): the tree giant, at the very back
+  { key: 'enemy_tank', x: 1150, y: 630, h: 380, flip: true, depth: 0.2 },    // Tripi Tropi, the fish giant, back right
+  { key: 'enemy_grunt', x: 1238, y: 664, h: 300, flip: true, depth: 0.45 },  // Tung Tung Sahur, at the right edge
+  { key: 'enemy_skeleton', x: 902, y: 650, h: 255, flip: true, depth: 0.5 }, // Rahhh Skeleton (v0.6), left, shield up
+  { key: 'enemy_neegy', x: 985, y: 668, h: 250, flip: true, depth: 0.55 },   // the gold Neegy
+  { key: 'enemy_pork', x: 1072, y: 690, h: 262, flip: false, depth: 0.62 },  // John Pork (v0.6, faces front), middle
+  { key: 'enemy_thief', x: 1178, y: 700, h: 268, flip: true, depth: 0.66 },  // Mr. Least
+  { key: 'enemy_shark', x: 1130, y: 716, h: 200, flip: false, depth: 0.8 },  // Tralalero Tralala (art faces left), front
+  { key: 'enemy_toilet', x: 990, y: 718, h: 190, flip: false, depth: 0.85 }, // Skibidi Toilet (faces front), front
+  { key: 'enemy_breaker', x: 862, y: 718, h: 180, flip: true, depth: 0.9 }   // Frog Tire (the Wall Breaker), front left
 ];
 
 // ---------- idle breathing (every hero and enemy) ----------
@@ -107,15 +113,11 @@ const MORTAR_FIRE_ORIGIN = { x: 0.456, y: 1 };
 const MORTAR_FIRE_SCALE_RATIO = 1.2308;          // firing picture scale / idle picture scale (same-size base)
 const MUZZLE_OFFSET = { x: 100, y: -329 };      // barrel opening, idle-picture px from the base tip
 const BARREL_ANGLE_DEG = -40;                    // up-right (Phaser angles: 0 = right, negative = up)
-const FIRE_EVERY_MS = [5000, 7000];
-const FIRST_FIRE_MS = 2600;
 const RECOIL = { squashX: 1.06, squashY: 0.9, dropPx: 6, hitMs: 70, springMs: 420 };
 const SHAKE = { ms: 110, intensity: 0.0022 };
-// The man in the barrel leaves along the barrel (LAUNCH_ANGLE_DEG up from level, toward the enemies) on a
-// ballistic arc and lands among the enemies with a dust puff (it passes under the logo). He never spins (his
-// picture has its smoke trail painted on): he only tilts a little to follow the arc.
-const LAUNCH_ANGLE_DEG = 45;
-const FLIGHT = { toX: 880, toY: 520, ms: 1350, h: 130 };
+// The man shot out of the barrel never spins (his picture has its smoke trail painted on): he only tilts a little
+// to follow his arc. FLIGHT.h: his on-screen height in flight.
+const FLIGHT = { h: 130 };
 const FLYER_ART_ANGLE_DEG = -40;   // the direction he's drawn flying in
 const FLYER_TILT_FOLLOW = 0.2;     // share of the arc's turn he follows...
 const FLYER_TILT_MAX_DEG = 14;     // ...up to this much tilt
@@ -129,9 +131,6 @@ const HEAD_PX = { flyer: 62, pose: 53.5 }; // head width in title_flyer.png / ti
 const HOVER_POP_SCALE = 1.08;
 const LAST_SHOT_DELAY_MS = 350;    // after the mortar reloads (or right away if it's idle)
 const WISPS = { everyMs: 260, lifeMs: 1700 }; // smoke curling from the barrel afterwards
-const LANDED_HOLD_MS = 260;        // he stays a moment after landing, then fades
-const LANDED_FADE_MS = 320;
-const RESET_PAUSE_MS = 650;        // then the mortar reloads (back to the idle picture)
 
 // ---------- ambient particles ----------
 const EMBERS = { everyMs: 320, lifeMs: [7000, 11000], riseSpeed: [14, 34], colors: [0xffb347, 0xffd27a, 0xfff1b0, 0xd9a0ff] };
@@ -342,11 +341,6 @@ export class TitleBackdropScene extends Phaser.Scene {
       scale: { start: 0.22, end: 0 }, alpha: { start: 1, end: 0.2 }, tint: [0xffd27a, 0xff9a3c, 0xfff1b0],
       gravityY: 380, blendMode: 'ADD'
     }).setDepth(P + 0.1);
-    this.dust = this.add.particles(0, 0, FX_DOT, {
-      emitting: false, lifespan: { min: 500, max: 900 }, speed: { min: 40, max: 130 }, angle: { min: 190, max: 350 },
-      scale: { start: 0.5, end: 1.3 }, alpha: { start: 0.6, end: 0 }, tint: [0xc8a878, 0xa88a5c, 0xe0c9a0],
-      gravityY: 120
-    }).setDepth(P);
 
     if (this.has(ART.flyer)) {
       this.flyer = this.add.image(0, 0, ART.flyer).setDepth(DEPTH.flyer).setVisible(false);
@@ -361,22 +355,21 @@ export class TitleBackdropScene extends Phaser.Scene {
       angle: { min: BARREL_ANGLE_DEG - 30, max: BARREL_ANGLE_DEG + 5 }, scale: { start: 0.3, end: 1.3 },
       alpha: { start: 0.35, end: 0 }, tint: [0xd8d4cc, 0xeeeae2], gravityY: -18
     }).setDepth(DEPTH.particles - 0.5);
-    this.fireTimer = this.time.delayedCall(FIRST_FIRE_MS, () => this.fire());
+    // v0.6: no shots while the game loads (on a slow phone that meant several shots before anything was ready):
+    // the mortar sits loaded and idle until loading is done, then fires its one shot (onLoaded).
   }
 
   /** Loading finished: stop the firing loop and fire the last shot (instant: already done when we started). */
   onLoaded(instant = false) {
     if (this.done) return;
     this.done = true;
-    if (this.fireTimer) this.fireTimer.remove();
     if (!this.mortar) return;
     if (instant === true) { this.showHover(true); return; }
-    // Mid-flight, the reload after his landing fires the last shot; otherwise fire it now.
-    if (!this.flying) this.time.delayedCall(LAST_SHOT_DELAY_MS, () => this.fire(true));
+    this.time.delayedCall(LAST_SHOT_DELAY_MS, () => this.fire());
   }
 
-  fire(last = false) {
-    if (!last) this.fireTimer = this.time.delayedCall(between(FIRE_EVERY_MS), () => this.fire()); // never waits on the flight
+  /** Its one shot (loading is done): flash, smoke, recoil, and the man flies up to hover over the scene. */
+  fire() {
     const { x, y } = this.muzzle;
     if (this.mortarFire) { this.mortarIdle.setVisible(false); this.mortarFire.setVisible(true); }
     // Muzzle flash, smoke and sparks along the barrel.
@@ -395,60 +388,13 @@ export class TitleBackdropScene extends Phaser.Scene {
       ]
     });
     this.cameras.main.shake(SHAKE.ms, SHAKE.intensity);
-    if (last) this.flyToHover(x, y);
-    else this.launchFlyer(x, y);
+    this.flyToHover(x, y);
   }
 
   /** Tilt that follows the arc a little (heading in radians); no spin. */
   flyerTilt(heading) {
     const max = Phaser.Math.DegToRad(FLYER_TILT_MAX_DEG);
     return Phaser.Math.Clamp((heading - Phaser.Math.DegToRad(FLYER_ART_ANGLE_DEG)) * FLYER_TILT_FOLLOW, -max, max);
-  }
-
-  /** The man arcs from the barrel to the enemies with a smoke trail; dust where he lands. */
-  launchFlyer(x0, y0) {
-    this.flying = true;
-    if (!this.flyer) { this.time.delayedCall(FLIGHT.ms + RESET_PAUSE_MS, () => this.reload()); return; }
-    const f = this.flyer, { toX: x1, toY: y1 } = FLIGHT;
-    const pos = ballistic(x0, y0, x1, y1, Math.tan(Phaser.Math.DegToRad(LAUNCH_ANGLE_DEG)));
-    f.setVisible(true).setAlpha(1).setScale(this.flyerScale * 0.6).setPosition(x0, y0).setRotation(0);
-    this.trail.startFollow(f);
-    this.trail.start();
-    const k = { t: 0 };
-    this.tweens.add({
-      targets: k, t: 1, duration: FLIGHT.ms, ease: 'Linear',
-      onUpdate: () => {
-        const t = k.t, p = pos(t), q = pos(Math.min(1, t + 0.01));
-        const heading = t < 0.99 ? Math.atan2(q.y - p.y, q.x - p.x) : f.heading;
-        f.heading = heading;
-        f.setPosition(p.x, p.y).setRotation(this.flyerTilt(heading)).setScale(this.flyerScale * Math.min(1, 0.6 + t * 1.6));
-      },
-      onComplete: () => {
-        this.trail.stop();
-        this.trail.stopFollow();
-        this.dust.explode(16, x1, y1 + FLIGHT.h * 0.3);
-        this.tweens.chain({
-          targets: f,
-          tweens: [
-            { y: y1 - 14, rotation: 0, duration: 140, ease: 'Quad.easeOut' },
-            { y: y1, duration: 140, ease: 'Quad.easeIn' },
-            { alpha: 0, delay: LANDED_HOLD_MS, duration: LANDED_FADE_MS }
-          ],
-          onComplete: () => { f.setVisible(false); this.time.delayedCall(RESET_PAUSE_MS, () => this.reload()); }
-        });
-      }
-    });
-  }
-
-  /** Back to the idle picture (loaded again) with a little settle; once loading is done, the last shot. */
-  reload() {
-    this.flying = false;
-    if (this.mortarFire) {
-      this.mortarFire.setVisible(false);
-      this.mortarIdle.setVisible(true);
-      this.tweens.add({ targets: this.mortar, scaleY: 1.03, duration: 110, ease: 'Quad.easeOut', yoyo: true });
-    }
-    if (this.done) this.time.delayedCall(LAST_SHOT_DELAY_MS, () => this.fire(true));
   }
 
   /** The last shot: he flies forward along the barrel to the top of his arc, turns to the arms-out pose and hovers there. */
