@@ -1,16 +1,21 @@
 // Leaderboard: the top players by furthest wave survived (one row per player: their best village), each
 // with their league badge (src/logic/leagues.js), your own row highlighted, and added at the bottom if
 // you're not in the top list. The footer shows your league and what the next one takes. v0.7: click a row for that
-// player's card (PlayerCardWindow); the eye button goes straight to their best village.
+// player's card (PlayerCardWindow); its green Visit button goes straight to their best village. Medals are graded
+// (gold biggest, bronze smallest) and ranks 4+ sit on a dark rank badge so the numbers stand out.
 import { Modal } from './Modal.js';
 import { Button } from './Button.js';
 import { COLORS, bodyStyle, textStyle } from '../theme.js';
-import { leagueFor, nextLeague } from '../logic/leagues.js';
+import { leagueFor, nextLeague, leagueBadgeSize } from '../logic/leagues.js';
 import { fitIcon, fitWidth } from './uiDraw.js';
-import { eyeButton } from './PlayerCardWindow.js';
+import { visitButton, VISIT_W } from './PlayerCardWindow.js';
 
 const W = 640, H = 640, TOP = 40, TOP_N = 10, ROW_H = 38, ROW_GAP = 4;
 const MEDALS = [0xffc83a, 0xc9d1da, 0xd08a4a];
+// Medal sizes by rank: gold is a touch bigger than silver, and bronze a touch smaller, so the podium reads in order.
+const MEDAL_SIZE = [36, 34, 32];
+// Rank badge for ranks 4+: a small dark pill with the number on it (your own row uses the orange button colour).
+const BADGE_W = 34, BADGE_H = 26;
 
 export class LeaderboardWindow {
   constructor(scene, { session, onClose = null, onOpenPlayer = null, onVisitBest = null }) {
@@ -90,13 +95,20 @@ export class LeaderboardWindow {
     if (r.isMe) g.lineStyle(3, COLORS.button, 1).strokeRoundedRect(x, y, w, ROW_H, 9);
     const cy = y + ROW_H / 2;
     if (r.rank <= 3 && s.textures.exists(`ui_medal_${r.rank}`)) {
-      fitIcon(m.add(s.add.image(cols.rank, cy, `ui_medal_${r.rank}`)), ROW_H + 2); // v0.7: the gold / silver / bronze medal
+      fitIcon(m.add(s.add.image(cols.rank, cy, `ui_medal_${r.rank}`)), MEDAL_SIZE[r.rank - 1]); // v0.7: the gold / silver / bronze medal
     } else if (r.rank <= 3) {
       g.fillStyle(COLORS.frame, 1).fillCircle(cols.rank, cy + 1, 15);
       g.fillStyle(MEDALS[r.rank - 1], 1).fillCircle(cols.rank, cy, 13);
       m.add(s.add.text(cols.rank, cy, String(r.rank), textStyle(16)).setOrigin(0.5));
     } else {
-      m.add(s.add.text(cols.rank, cy, String(r.rank), bodyStyle(17, COLORS.inkDim)).setOrigin(0.5));
+      // A dark pill with a lighter face on top, so the white number reads clearly against the stone row.
+      // Your own row gets the orange button colour instead, so it pops out of the list.
+      const base = r.isMe ? COLORS.button : 0x4a4f5a, face = r.isMe ? 0xffc45c : 0x5d6370;
+      const bx = cols.rank - BADGE_W / 2, by = cy - BADGE_H / 2;
+      g.fillStyle(COLORS.frame, 1).fillRoundedRect(bx, by, BADGE_W, BADGE_H, 8);
+      g.fillStyle(base, 1).fillRoundedRect(bx + 2, by + 2, BADGE_W - 4, BADGE_H - 4, 6);
+      g.fillStyle(face, 1).fillRoundedRect(bx + 4, by + 3, BADGE_W - 8, 8, 4);
+      m.add(s.add.text(cols.rank, cy, String(r.rank), textStyle(17, '#ffffff')).setOrigin(0.5));
     }
     // Your own row shows the wave your profile does (the server only counts waves it has verified, so it can be a
     // little behind for a while after a long offline stretch).
@@ -104,19 +116,19 @@ export class LeaderboardWindow {
     const league = leagueFor(wave);
     if (league && s.textures.exists(league.texture)) {
       const img = m.add(s.add.image(cols.badge, cy, league.texture));
-      fitIcon(img, 32);
+      fitIcon(img, leagueBadgeSize(league, 36)); // v0.7.1: bigger for higher leagues, like the medals
     }
     const name = m.add(s.add.text(cols.name, cy, r.username, bodyStyle(18)).setOrigin(0, 0.5));
     fitWidth(name, cols.hall - cols.name - 110);
     if (r.isMe) m.add(s.add.text(cols.name + name.displayWidth + 8, cy, '(you)', bodyStyle(15, COLORS.inkAccent)).setOrigin(0, 0.5));
     m.add(s.add.text(cols.hall, cy, String(r.bestTownHall || '-'), bodyStyle(18, COLORS.ink)).setOrigin(0.5));
     m.add(s.add.text(cols.wave, cy, String(wave), textStyle(22, COLORS.textGold)).setOrigin(0.5));
-    // v0.7: the row opens the player's card; the eye looks at their best village.
+    // v0.7: the row opens the player's card; Visit looks at their best village.
     if (this.onOpenPlayer) {
-      const zone = m.add(s.add.zone(x, y, w - 56, ROW_H).setOrigin(0).setInteractive({ useHandCursor: true }));
+      const zone = m.add(s.add.zone(x, y, w - VISIT_W - 12, ROW_H).setOrigin(0).setInteractive({ useHandCursor: true }));
       zone.on('pointerup', () => this.onOpenPlayer(r.username));
     }
-    if (this.onVisitBest) m.add(eyeButton(s, x + w - 24, cy + 1, 32, () => this.onVisitBest(r.username)));
+    if (this.onVisitBest) m.add(visitButton(s, x + w - 6, cy, 30, () => this.onVisitBest(r.username)));
   }
 
   close() { this.modal.close(); }

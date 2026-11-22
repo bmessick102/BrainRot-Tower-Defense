@@ -8,8 +8,8 @@
 //   - music_*         96 kbps (stereo kept)
 //   - ambient_*       96 kbps mono (background beds)
 //   - LOOPS           long looping effects: 96 kbps mono
-//   - CLIPS           effects the game only ever plays the start of (playSfxClip's maxSeconds): trimmed to that,
-//                     with a short fade so the cut never clicks
+//   - CLIPS           effects the game only ever plays the start of (playSfxClip's maxSeconds), or voice lines cropped
+//                     by request: trimmed to that, with a short fade so the cut never clicks
 //   - other effects   re-encoded at 128 kbps only if the original is higher; otherwise copied as is
 // Uses the `ffmpeg-static` dev dependency.
 import fs from 'node:fs';
@@ -24,7 +24,7 @@ const OUT = path.join(ROOT, 'public', 'assets', 'audio');
 
 const LOOPS = new Set(['sfx_bomber_flying', 'sfx_ra_beam', 'sfx_hero_snore', 'sfx_catapult_pool']);
 // Seconds kept: a little past the longest maxSeconds the game plays them for (GameScene).
-const CLIPS = { sfx_patapim_quake: 2.5, sfx_pork_call: 3.8, sfx_skeleton_rage: 2.8 };
+const CLIPS = { sfx_patapim_quake: 2.5, sfx_pork_call: 3.8, sfx_skeleton_rage: 2.8, sfx_lirili_voice: 3 };
 const FADE = 0.15;
 
 const probe = (file) => {

@@ -1,14 +1,14 @@
 // Find Players (v0.7, from Settings): search by name, filter by league and Village Hall, sort by furthest wave,
 // Village Hall or achievements. Each result shows its league badge, name, Village Hall, wave and achievements, with an
-// eye button to look at their best village; clicking the row opens their card (PlayerCardWindow).
+// green Visit button to look at their best village; clicking the row opens their card (PlayerCardWindow).
 import { Modal } from './Modal.js';
 import { Button } from './Button.js';
 import { addTextField } from './TextField.js';
 import { COLORS, bodyStyle, textStyle } from '../theme.js';
-import { LEAGUES, leagueFor } from '../logic/leagues.js';
+import { LEAGUES, leagueFor, leagueBadgeSize } from '../logic/leagues.js';
 import { CONFIG } from '../config.js';
 import { fitIcon, fitWidth } from './uiDraw.js';
-import { eyeButton } from './PlayerCardWindow.js';
+import { visitButton, VISIT_W } from './PlayerCardWindow.js';
 
 const W = 780, H = 650, ROW_H = 40, ROW_GAP = 4, PER_PAGE = 8;
 const SORTS = [['wave', 'Furthest wave'], ['hall', 'Village Hall'], ['achievements', 'Achievements']];
@@ -121,7 +121,7 @@ export class PlayerSearchWindow {
     this.clearBody(this.body);
     const rows = this.results || [];
     const left = m.x + 28, w = W - 56;
-    const cols = { badge: left + 26, name: left + 54, hall: left + w - 300, wave: left + w - 205, ach: left + w - 115 };
+    const cols = { badge: left + 26, name: left + 54, hall: left + w - 330, wave: left + w - 235, ach: left + w - 145 };
     let y = m.y + 236;
     for (const [x, label, o] of [[cols.name, 'Player', 0], [cols.hall, 'Village Hall', 0.5], [cols.wave, 'Wave', 0.5], [cols.ach, 'Achievements', 0.5]]) {
       this.addBody(s.add.text(x, y, label, bodyStyle(14, COLORS.inkDim)).setOrigin(o, 0.5));
@@ -139,19 +139,19 @@ export class PlayerSearchWindow {
       };
       paint(false);
       const league = leagueFor(r.bestWave);
-      if (league && s.textures.exists(league.texture)) fitIcon(this.addBody(s.add.image(cols.badge, cy, league.texture)), 30);
+      if (league && s.textures.exists(league.texture)) fitIcon(this.addBody(s.add.image(cols.badge, cy, league.texture)), leagueBadgeSize(league, 36));
       const name = this.addBody(s.add.text(cols.name, cy, r.username, bodyStyle(18)).setOrigin(0, 0.5));
       fitWidth(name, cols.hall - cols.name - 70);
       if (r.isMe) this.addBody(s.add.text(cols.name + name.displayWidth + 8, cy, '(you)', bodyStyle(14, COLORS.inkAccent)).setOrigin(0, 0.5));
       this.addBody(s.add.text(cols.hall, cy, r.bestTownHall ? String(r.bestTownHall) : '-', bodyStyle(18)).setOrigin(0.5));
       this.addBody(s.add.text(cols.wave, cy, String(r.bestWave || 0), textStyle(20, COLORS.textGold)).setOrigin(0.5));
       this.addBody(s.add.text(cols.ach, cy, String(r.achievements || 0), bodyStyle(18)).setOrigin(0.5));
-      // The row opens the card; the eye goes straight to their best village.
-      const zone = this.addBody(s.add.zone(left, ry, w - 56, ROW_H).setOrigin(0).setInteractive({ useHandCursor: true }));
+      // The row opens the card; Visit goes straight to their best village.
+      const zone = this.addBody(s.add.zone(left, ry, w - VISIT_W - 12, ROW_H).setOrigin(0).setInteractive({ useHandCursor: true }));
       zone.on('pointerover', () => paint(true));
       zone.on('pointerout', () => paint(false));
       zone.on('pointerup', () => this.onOpenPlayer(r.username));
-      this.addBody(eyeButton(s, left + w - 24, cy + 1, 34, () => this.onVisitBest(r.username)));
+      this.addBody(visitButton(s, left + w - 6, cy, 30, () => this.onVisitBest(r.username)));
     });
     if (pages > 1) {
       const py = m.y + H - 40;

@@ -324,21 +324,22 @@ describe('the v0.6 enemies', () => {
     expect(CONFIG.storage.levels[9].hp - target.hp).toBeGreaterThan(0);
   });
 
-  it('Big Yahu: a red target first, then the missile hits every building and wall in its blast (even if the target fell)', () => {
+  it('Big Yahu: a red target around one building first, then the missile hits only that building (v0.7.1)', () => {
     const s = attack(8);
-    const Y = CONFIG.enemies.yahu;
     const target = addBuilding(s, 'storage', 12, 10, 10);
+    target.hp = target.maxHp = 1e6;
     const nextTo = addBuilding(s, 'wall', 14, 11, 8);
     const y = tough(s, 'yahu', 12, 4);
     y.targetId = target.id;
     run(s, 2);
     const warn = s.events.find((e) => e.name === 'missileIncoming');
     expect(warn).toBeTruthy();
-    expect(warn.data.radius).toBe(Y.missileRadius);
+    expect(warn.data.radius).toBeLessThan(2); // just around the storage it's aimed at
     expect(warn.data.delay).toBe(CONFIG.projectiles.missile.fallTime);
     run(s, CONFIG.projectiles.missile.fallTime + 0.2);
     expect(s.events.some((e) => e.name === 'bombExploded' && e.data.missile)).toBe(true);
-    expect(CONFIG.walls.levels[7].hp - nextTo.hp).toBeGreaterThan(0);
+    expect(target.hp).toBeLessThan(1e6);                        // the target is hit...
+    expect(nextTo.hp).toBe(CONFIG.walls.levels[7].hp);           // ...and nothing next to it
   });
 
   it('new enemies can be damaged and killed like the rest (bounty, RP)', () => {

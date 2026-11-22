@@ -902,14 +902,14 @@ export const CONFIG = {
       researchPoints: 10
     },
     // Ranged artillery: from attackRange tiles away it calls a missile down on its target. A red target ring shows
-    // where it will land for projectiles.missile.fallTime s, then it hits every building and wall within
-    // missileRadius (the Bomber's bomb and blast). Never outranges a defense that can shoot it (attackRangeVs).
+    // where it will land for projectiles.missile.fallTime s, then it hits only that building (missileStrike; since
+    // v0.7.1, before that a 1.25-tile blast). Never outranges a defense that can shoot it (attackRangeVs).
     yahu: {
       name: "Big Yahu",
       role: "Missile Caller",
       radius: 0.26,
       type: "ranged",
-      missileRadius: 1.25,
+      missileStrike: true,
       fromTownHall: 8,
       baseCount: 2,
       hp: 650,
@@ -979,13 +979,15 @@ export const CONFIG = {
     },
     // v0.7: a melee legionary in armor. `armor` (scaled like its health) takes every hit first; only once it's broken
     // does its health go down, and the hit that breaks it is spent on the armor (its leftover damage is lost). Its
-    // health bar shows a steel armor bar and a shield while the armor holds.
+    // health bar shows a steel armor bar and a shield while the armor holds. While the armor holds, incoming damage
+    // is also cut by `armorReduction` (0.3 = 30% less); the reduced amount is what the armor loses. No reduction once broken.
     bicus: {
       name: "Bri Bri Bicus Dicus",
       role: "Armored Legionary",
       radius: 0.27,
       type: "ground",
       armor: 450,
+      armorReduction: 0.3,
       fromTownHall: 5,
       baseCount: 2,
       hp: 300,

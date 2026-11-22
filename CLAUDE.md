@@ -38,8 +38,16 @@ does now. If an entry could fit two sections, use the first one in the table.
 2. **Then newest first** among changes of about the same size (0.7.0 before 0.6.3).
 
 A release lists its own changes **and** the entries of the recent patches before it (since the last minor release),
-merged into the same sections and sorted by the rules above, so players who skipped a patch still see it. Drop the
-older minor release's entries when a new minor release ships.
+merged into the same sections and sorted by the rules above, so players who skipped a patch still see it.
+
+### Tabs: one per minor update (since 0.7.1)
+
+The window has a tab for each minor update: `PATCH_NOTES` is the latest (tab "v0.7 · Latest"), `PATCH_HISTORY` holds
+the older ones, newest first. Each release has `release` (the tab name, `'0.7'`), `version` (its newest patch) and
+`sections`; every entry's `version` must belong to its tab's `release` (a test checks this). When a new minor release
+ships (0.8.0), move the current `PATCH_NOTES` sections into a new object at the **front** of `PATCH_HISTORY`
+(`release: '0.7'`, `version: '0.7.x'`, with the `entries` getter), then start `PATCH_NOTES` fresh with `release: '0.8'`.
+Don't edit an older tab's entries afterwards except to fix a mistake.
 
 ### Each entry
 

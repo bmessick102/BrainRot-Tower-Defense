@@ -85,3 +85,6 @@ revoke execute on function public.get_player_profile(text) from public, anon;
 grant execute on function public.get_player_profile(text) to authenticated;
 revoke execute on function public.get_player_base(uuid) from public, anon;
 grant execute on function public.get_player_base(uuid) to authenticated;
+
+-- Make the API see the new functions right away (otherwise: "Could not find the function ... in the schema cache").
+notify pgrst, 'reload schema';

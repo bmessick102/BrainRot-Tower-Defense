@@ -431,8 +431,12 @@ export function damageEnemy(state, e, amount, source = null) {
   if (e.exposedChance && random(state) < e.exposedChance) { amount *= e.exposedMult || 2; if (!source) source = 'crit'; }
   // Bri Bri Bicus Dicus: while its armor holds, every hit goes into the armor. The hit that breaks it does no
   // health damage at all: whatever was left over is lost (user, v0.7). Only later hits reach its health.
+  // While it holds, the armor also cuts the damage (CONFIG armorReduction); that reduced amount is what the armor
+  // loses and what the damage number shows. Once broken there is no reduction.
   let toHp = amount;
   if (e.armor > 0) {
+    amount *= 1 - (CONFIG.enemies[e.kind]?.armorReduction || 0);
+    if (!source) source = 'armor'; // the damage number reads as armored (steel blue)
     e.armor -= amount;
     toHp = 0;
     if (e.armor <= 0) { e.armor = 0; emit(state, 'armorBroken', { id: e.id, kind: e.kind, x: e.x, y: e.y }); }
@@ -578,7 +582,7 @@ export function fireEnemyProjectile(state, e, building) {
   const dmg = cfg.damage * enrageFactor(state, e).damage * (e.pack || 1) * (1 - enemyWeaken(e));
   // La Vaca Saturno's bouncing boulder and Big Yahu's missile (specialEnemies.js).
   if (cfg.bounce) return fireBoulderAt(state, e, building, dmg);
-  if (cfg.missileRadius) return fireMissileAt(state, e, building, dmg);
+  if (cfg.missileStrike) return fireMissileAt(state, e, building, dmg);
   const p = {
     id: nextId(state, 'p'),
     owner: 'enemy',

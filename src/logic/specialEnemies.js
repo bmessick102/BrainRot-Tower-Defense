@@ -14,10 +14,11 @@
 //                              (b.frigoSlow / hero.frigoSlow, set each step by stepSpecialEnemies).
 //   Bombombini Gusini (bombo) - breathes fire: its target, plus a share on what's right next to it (breatheFire).
 //   La Vaca Saturno (vaca)   - throws boulders that bounce on behind the target (fireBoulderAt / landEnemyShot).
-//   Big Yahu (yahu)          - calls missiles down on a spot, with a warning ring first (fireMissileAt / landEnemyShot).
+//   Big Yahu (yahu)          - calls a missile down on one building, with a warning ring first; it hits only that
+//                              building (v0.7.1; it used to blast everything around it) (fireMissileAt / stepEnemyShot).
 // stepEnemyAbility runs inside stepEnemy (enemies.js); stepSpecialEnemies once per step (simulate.js).
 import { CONFIG } from '../config.js';
-import { footprintCenter, distanceToFootprint } from './grid.js';
+import { footprintCenter, distanceToFootprint, fpW, fpH } from './grid.js';
 import { distance } from './iso.js';
 import { towerRange } from './abilities.js';
 import { emit, nextId } from './util.js';
@@ -223,14 +224,17 @@ export function fireBoulderAt(state, e, building, damage) {
   return p;
 }
 
-/** Big Yahu's missile: aimed at a building's center now, it lands projectiles.missile.fallTime s later. */
+/**
+ * Big Yahu's missile: aimed at one building now, it lands projectiles.missile.fallTime s later and hits only that
+ * building (an airstrike on a single target). The warning ring is drawn around that building's footprint.
+ */
 export function fireMissileAt(state, e, building, damage) {
   const c = footprintCenter(building);
-  const cfg = cfgOf(e);
+  const ring = Math.max(fpW(building), fpH(building)) / 2 + 0.2; // (just around the building it's aimed at)
   const p = {
     id: nextId(state, 'p'), kind: 'missile', owner: 'enemy', sourceId: e.id, x: c.x, y: c.y, startX: c.x, startY: c.y,
     targetId: building.id, targetX: c.x, targetY: c.y, homing: false, elapsed: 0,
-    flightTime: CONFIG.projectiles.missile.fallTime, damage, radius: cfg.missileRadius, done: false
+    flightTime: CONFIG.projectiles.missile.fallTime, damage, radius: ring, done: false
   };
   state.projectiles.push(p);
   emit(state, 'projectileFired', { id: p.id, kind: p.kind, sourceId: e.id });
@@ -251,10 +255,11 @@ export function stepEnemyShot(state, p, dt, damageBuilding) {
   if (t < 1) return;
   const source = state.enemies.find((o) => o.id === p.sourceId) || null;
   if (p.kind === 'missile') {
+    // Only the building it was aimed at (if it's still standing and can be hit: not under an Invisibility spell).
     p.done = true;
-    const hit = buildingsNear(state, p.targetX, p.targetY, p.radius);
+    const b = state.buildings.find((o) => o.id === p.targetId);
     emit(state, 'bombExploded', { x: p.targetX, y: p.targetY, targetId: p.targetId, radius: p.radius, missile: true });
-    for (const b of hit) { damageBuilding(state, b, p.damage, source); if (state.gameOver) return; }
+    if (b && hittable(b)) damageBuilding(state, b, p.damage, source);
     return;
   }
   // La Vaca Saturno's boulder: the first landing hits its target; each bounce hits everything around it.

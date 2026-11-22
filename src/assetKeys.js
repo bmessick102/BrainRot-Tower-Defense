@@ -104,6 +104,11 @@ export const SFX = {
   neegyHit: 'sfx_neegy_hit',               // a Neegy's punch
   sharkVoice: 'sfx_shark_voice',           // "Tralalero tralala" (now and then while one is in the wave)
   gruntVoice: 'sfx_grunt_voice',           // "Tung tung tung sahur" (now and then while one is in the wave)
+  bicusVoice: 'sfx_bicus_voice',           // "Bri bri bicus dicus" (now and then while one is in the wave)
+  frigoVoice: 'sfx_frigo_voice',           // "Frigo camelo" (now and then while one is in the wave)
+  patapimVoice: 'sfx_patapim_voice',       // "Brr brr patapim" (now and then while one is in the wave)
+  liriliVoice: 'sfx_lirili_voice',         // "Lirili larila" (cropped to 3 s; now and then while one is in the wave)
+  babycarVoice: 'sfx_babycar_voice',       // Da Baby Car's line (now and then while one is in the wave)
   raBeam: 'sfx_ra_beam',                   // looping while a Tower of Rah beam burns
   raHeatUp: 'sfx_ra_heat_up',              // a Tower of Rah beam heats up to its next stage
   buildingSelect: 'sfx_building_select', // clicking a building
@@ -168,7 +173,12 @@ export const ENEMY_ATTACK_SFX = {
 /** Enemies that say their line now and then while they're on the map (see GameScene.enemyChatter). */
 export const ENEMY_VOICE = {
   shark: SFX.sharkVoice,
-  grunt: SFX.gruntVoice
+  grunt: SFX.gruntVoice,
+  bicus: SFX.bicusVoice,
+  frigo: SFX.frigoVoice,
+  patapim: SFX.patapimVoice,
+  lirili: SFX.liriliVoice,
+  babycar: SFX.babycarVoice
 };
 
 /** Which sound a tower plays when it fires. */

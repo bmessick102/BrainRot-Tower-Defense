@@ -140,6 +140,8 @@ export class VisitScene extends Phaser.Scene {
         return;
       }
       if (this.pinch) return;
+      // A press on the HUD (Back, the switcher, the building card) is the HUD's, not the map's.
+      if (this.hud && this.hud.covers && this.hud.covers(p.x, p.y)) { this.press = null; return; }
       this.press = { x: p.x, y: p.y, sx: this.cameras.main.scrollX, sy: this.cameras.main.scrollY, moved: false };
     });
     this.input.on('pointermove', (p) => {

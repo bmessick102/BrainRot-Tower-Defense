@@ -27,7 +27,7 @@ import { PlayerCardWindow } from '../objects/PlayerCardWindow.js';
 import { PlayerSearchWindow } from '../objects/PlayerSearchWindow.js';
 import { confirmDialog, promptDialog } from '../objects/Modal.js';
 import { drawBadge } from '../objects/uiDraw.js';
-import { leagueFor } from '../logic/leagues.js';
+import { leagueFor, leagueBadgeSize } from '../logic/leagues.js';
 import { showTitleBackdrop } from './TitleBackdropScene.js';
 import { takeTakeover } from '../objects/LockOverlay.js';
 import { requestImages } from '../assetLoader.js';
@@ -159,7 +159,7 @@ export class TitleScene extends Phaser.Scene {
     const tx = hasBadge ? 70 : 30;
     if (hasBadge) {
       const img = this.add.image(40, 32, league.texture).setDepth(2);
-      fitIcon(img, 54);
+      fitIcon(img, leagueBadgeSize(league, 58));
     }
     const name = this.add.text(tx, 40, session.user.username, textStyle(22)).setOrigin(0, 0.5).setDepth(1);
     const small = this.add.text(tx, 18, hasBadge ? `${league.name} League` : 'Signed in as', textStyle(13, hasBadge ? COLORS.textGold : COLORS.textDim)).setOrigin(0, 0.5).setDepth(1);
@@ -234,7 +234,7 @@ export class TitleScene extends Phaser.Scene {
     });
   }
 
-  /** The eye button: straight to a player's best village (their card if none can be shown). */
+  /** The Visit button: straight to a player's best village (their card if none can be shown). */
   async visitBest(username) {
     if (this.opening) return;
     try {

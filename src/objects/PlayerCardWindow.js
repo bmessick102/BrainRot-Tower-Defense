@@ -1,12 +1,12 @@
 // A player's card (v0.7), from the leaderboard or player search: their league badge and name, four stat tiles
 // (furthest wave, Village Hall, rank, achievements), the achievements they've earned, and their villages (best first)
-// with an eye button each to go and look at it. A player who hides their villages shows a note instead.
+// with a green Visit button each to go and look at it. A player who hides their villages shows a note instead.
 import { Modal } from './Modal.js';
 import { Button } from './Button.js';
 import { COLORS, bodyStyle, textStyle } from '../theme.js';
-import { leagueFor } from '../logic/leagues.js';
+import { leagueFor, leagueBadgeSize } from '../logic/leagues.js';
 import { ACHIEVEMENTS } from '../logic/achievements.js';
-import { drawGlossy, drawEye, fitIcon, fitWidth } from './uiDraw.js';
+import { fitIcon, fitWidth } from './uiDraw.js';
 
 import { TEX } from '../assetKeys.js';
 
@@ -14,9 +14,10 @@ const TROPHY = TEX.achievementIcon;
 
 const W = 660, H = 620, ACH_SHOWN = 8;
 
-/** The circular eye button: "look at this village". */
-export function eyeButton(scene, x, y, size, onClick) {
-  return new Button(scene, x, y, size, size, '', onClick, { circle: true, color: COLORS.buttonBlue, icon: 'eye' });
+/** The green Visit button at the right end of a row ("look at this village"; v0.7.1, was a round eye). */
+export const VISIT_W = 72;
+export function visitButton(scene, rightX, y, h, onClick) {
+  return new Button(scene, rightX - VISIT_W / 2, y, VISIT_W, h, 'Visit', onClick, { color: COLORS.buttonGood, fontSize: 16, radius: 9 });
 }
 
 export class PlayerCardWindow {
@@ -64,7 +65,7 @@ export class PlayerCardWindow {
     // Name row: league badge, league name, joined date.
     const league = leagueFor(p.bestWave);
     let y = m.y + 80;
-    if (league && s.textures.exists(league.texture)) fitIcon(m.add(s.add.image(left + 30, y + 22, league.texture)), 58);
+    if (league && s.textures.exists(league.texture)) fitIcon(m.add(s.add.image(left + 30, y + 22, league.texture)), leagueBadgeSize(league, 62));
     const nx = left + 70;
     m.add(s.add.text(nx, y, league ? `${league.name} League` : 'No league yet', textStyle(22, league ? COLORS.textGold : COLORS.text)));
     const joined = p.joinedAt ? new Date(p.joinedAt) : null;
@@ -108,7 +109,7 @@ export class PlayerCardWindow {
     y += Math.ceil(rows / 2) * (ch + 6);
     if (earned.length > ACH_SHOWN) { m.add(s.add.text(left + w, y - 2, `+${earned.length - ACH_SHOWN} more`, bodyStyle(14, COLORS.inkDim)).setOrigin(1, 0)); }
 
-    // Villages (best first), each with an eye.
+    // Villages (best first), each with a Visit button.
     y += 14;
     m.add(s.add.text(left, y, 'Villages', textStyle(19)));
     y += 30;
@@ -126,20 +127,14 @@ export class PlayerCardWindow {
       const name = m.add(s.add.text(left + 14, ry + rowH / 2, b.name, bodyStyle(17, COLORS.ink, { fontStyle: 'bold' })).setOrigin(0, 0.5));
       fitWidth(name, w - 300);
       if (i === 0) m.add(s.add.text(name.x + name.displayWidth + 8, ry + rowH / 2, 'Best', bodyStyle(13, COLORS.inkAccent, { fontStyle: 'bold' })).setOrigin(0, 0.5));
-      m.add(s.add.text(left + w - 56, ry + rowH / 2, `Village Hall ${b.townHall || '-'}  ·  Wave ${Math.max(b.bestWave || 0, 0)}`, bodyStyle(15, COLORS.inkDim)).setOrigin(1, 0.5));
-      m.add(eyeButton(s, left + w - 24, ry + rowH / 2 + 1, 34, () => this.visit(p, b.id)));
+      m.add(s.add.text(left + w - VISIT_W - 20, ry + rowH / 2, `Village Hall ${b.townHall || '-'}  ·  Wave ${Math.max(b.bestWave || 0, 0)}`, bodyStyle(15, COLORS.inkDim)).setOrigin(1, 0.5));
+      m.add(visitButton(s, left + w - 6, ry + rowH / 2, 30, () => this.visit(p, b.id)));
     });
 
     // The big button: their best village.
     const best = p.bases[0];
-    const btn = m.add(new Button(s, m.cx, m.y + H - 46, 330, 56, best ? 'View Best Village' : 'No Village to View', () => best && this.visit(p, best.id), { color: COLORS.buttonBlue, fontSize: 21 }));
-    if (best) {
-      // An eye at the button's left end.
-      const eg = s.add.graphics();
-      drawGlossy(eg, -165 + 12, -22, 40, 40, 0x2a6fb8, { circle: true, lip: 2, shadow: false });
-      drawEye(eg, -165 + 32, -4, 24);
-      btn.add(eg);
-    } else btn.setEnabled(false);
+    const btn = m.add(new Button(s, m.cx, m.y + H - 46, 330, 56, best ? 'Visit Best Village' : 'No Village to Visit', () => best && this.visit(p, best.id), { color: COLORS.buttonGood, fontSize: 21 }));
+    if (!best) btn.setEnabled(false);
   }
 
   visit(profile, baseId) {

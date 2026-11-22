@@ -92,6 +92,22 @@ export function markerLayout(path, kinds) {
   return { disc, chips, rect: { x: -w / 2, y: -M.disc / 2, w, h } };
 }
 
+/**
+ * The chips a marker shows (v0.7.1): condensed (the default) is one summary chip with the wave's total from that
+ * corner; open is a chip per enemy kind plus a Hide chip at the end. entries: [[kind, n]].
+ */
+export function markerChips(entries, open) {
+  const total = entries.reduce((a, [, n]) => a + n, 0);
+  if (!open) return [{ summary: true, total }];
+  return [...entries.map(([kind, n]) => ({ kind, n })), { hide: true }];
+}
+
+/** Is the world point (wx, wy) on a marker anchored at (ax, ay) and drawn at `scale`? (`pad` world px of slack) */
+export function markerHit(layout, ax, ay, scale, wx, wy, pad = 4) {
+  const r = markerRect(layout, ax, ay, scale);
+  return wx >= r.x - pad && wx <= r.x + r.w + pad && wy >= r.y - pad && wy <= r.y + r.h + pad;
+}
+
 /** The marker's world rect with its anchor at (ax, ay), drawn at `scale`. */
 export function markerRect(layout, ax, ay, scale) {
   const r = layout.rect;

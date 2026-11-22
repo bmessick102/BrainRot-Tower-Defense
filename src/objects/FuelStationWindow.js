@@ -100,15 +100,17 @@ function drawNode(scene, m, gs, kind, x, y, isSel, onSelect) {
   g.fillStyle(SPELL_COLORS[kind], open ? 1 : 0.35).fillRoundedRect(x + 2, y + 2, 6, CARD_H - 5, 3);
   const icon = m.add(addSpellIcon(scene, x + 46, y + CARD_H / 2 - 1, kind, 70));
   if (!open) { icon.setTint(0x9a9a9a); icon.setAlpha(0.6); }
-  m.add(scene.add.text(x + 86, y + 14, cfg.name, bodyStyle(16, open ? COLORS.ink : '#a89c88', { fontStyle: 'bold' })));
+  m.add(scene.add.text(x + 86, y + 10, cfg.name, bodyStyle(16, open ? COLORS.ink : '#a89c88', { fontStyle: 'bold' })));
   const cost = brewCost(gs, kind);
   const line = !open ? `Locked · Fuel Station lv ${cfg.level}` : cost === 0 ? 'Brew · Free (first one)' : `Brew · ${rpText(cost)}`;
   const short = open && /more Burgers?$/.test(c.reason || '');
   const ink = !open ? '#b3a892' : c.ok ? COLORS.inkGood : short ? COLORS.inkBad : COLORS.inkDim;
-  m.add(scene.add.text(x + 86, y + 40, line, bodyStyle(12.5, ink, { fontStyle: 'bold' })));
+  fitWidth(m.add(scene.add.text(x + 86, y + 33, line, bodyStyle(12.5, ink, { fontStyle: 'bold' }))), CARD_W - 96);
   const s = spellStats(gs, kind);
-  const facts = m.add(scene.add.text(x + 86, y + 62, `${cfg.effect} · ${s.radius} tiles${s.duration ? ` · ${s.duration} s` : ' · instant'}`, bodyStyle(12.5, open ? COLORS.inkDim : '#b3a892')));
-  fitWidth(facts, CARD_W - 96); // "Lightning Strike · 3.5 tiles · instant"
+  const ink2 = open ? COLORS.inkDim : '#b3a892';
+  // Two short lines (what it does, then its size and length) so nothing has to shrink to fit the card.
+  m.add(scene.add.text(x + 86, y + 52, cfg.effect, bodyStyle(13, ink2, { fontStyle: 'bold' })));
+  m.add(scene.add.text(x + 86, y + 70, `${s.radius} tiles${s.duration ? ` · ${s.duration} s` : ' · instant'}`, bodyStyle(13, ink2)));
   const n = spellCount(gs, kind);
   if (n) {
     drawBadge(g, x + CARD_W - 16, y + 16, 11);

@@ -353,3 +353,6 @@ revoke execute on function public.limit_bases() from public, anon, authenticated
 revoke execute on function public.check_base() from public, anon, authenticated;
 revoke execute on function public.stamp_base() from public, anon, authenticated;
 revoke execute on function public.keep_bests() from public, anon, authenticated;
+
+-- Make the API see new or changed functions right away.
+notify pgrst, 'reload schema';

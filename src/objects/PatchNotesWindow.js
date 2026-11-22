@@ -1,4 +1,5 @@
-// The Patch Notes window ("What's New"): this release's changes (src/patchNotes.js) in a Modal, grouped in sections
+// The Patch Notes window ("What's New"): one tab per update (src/patchNotes.js: the latest, then PATCH_HISTORY, newest
+// first; v0.7.1), each tab its update's changes in pages, grouped in sections
 // (New Features, Changes, Balance, Bug Fixes: a colored heading each, repeated when a section carries onto the next
 // page), each entry with a picture (the building, enemy or spell it's about), a bold title, the version it came in and
 // a short note. The same blue page arrows as the shop and How to Play; "Got it!" closes it. TitleScene opens it once
@@ -9,12 +10,16 @@ import { drawShowcaseCard, drawGlossy, fitIcon, fitWidth, addHeroBadge } from '.
 import { buildingTextureKey } from './BuildingView.js';
 import { enemyKey, spellArtKey } from '../assetKeys.js';
 import { COLORS, bodyStyle, textStyle } from '../theme.js';
-import { PATCH_NOTES, PATCH_SECTIONS, PATCH_SECTION_ORDER } from '../patchNotes.js';
+import { PATCH_NOTES, PATCH_RELEASES, PATCH_SECTIONS, PATCH_SECTION_ORDER } from '../patchNotes.js';
 import { readKey, writeKey, SAVE_KEYS } from '../logic/save.js';
 
-const W = 900, H = 600, HEADER = 60;
+const W = 900, H = 640, HEADER = 60;
+const TABS_H = 58, TAB_H = 40, TAB_W = 170, TAB_GAP = 10; // the update tabs under the title
 const ROW_H = 84, ICON = 72, HEAD_H = 36;
-const ROOM = H - HEADER - 18 - 74; // the page's height for rows (above the footer)
+const ROOM = H - HEADER - TABS_H - 18 - 74; // the page's height for rows (between the tabs and the footer)
+
+/** A tab's name: "v0.7 · Latest" for the newest update, "v0.6" for older ones. */
+export const releaseLabel = (release, i) => `v${release.release}${i === 0 ? ' · Latest' : ''}`;
 
 /**
  * The notes laid out in pages: [[{ section, continued } | { entry }]]. Sections in their fixed order; a section that
@@ -51,12 +56,33 @@ export function markPatchNotesSeen(storage) {
 export class PatchNotesWindow {
   constructor(scene, { storage = null, onClose = null } = {}) {
     this.scene = scene;
-    this.page = 0;
-    this.layout = patchPages();
-    this.pages = this.layout.length;
+    this.releases = PATCH_RELEASES;
     if (storage) markPatchNotesSeen(storage);
     this.modal = new Modal(scene, { width: W, height: H, title: PATCH_NOTES.title, header: HEADER, depth: 1200, onClose });
+    this.showRelease(0);
+  }
+
+  /** Open update `i`'s tab (0 = the latest) at its first page. */
+  showRelease(i) {
+    this.tab = Math.max(0, Math.min(this.releases.length - 1, i));
+    const rel = this.releases[this.tab];
+    this.layout = patchPages(rel);
+    this.pages = this.layout.length;
+    this.modal.setTitle(this.tab === 0 ? PATCH_NOTES.title : `What's New in v${rel.release}`);
     this.show(0);
+  }
+
+  /** The update tabs under the title: green for the open one; tabs shrink to fit if there are many. */
+  drawTabs(m) {
+    const s = this.scene, n = this.releases.length;
+    const w = Math.min(TAB_W, (W - 68 - TAB_GAP * (n - 1)) / n);
+    const y = m.y + HEADER + 18 + TAB_H / 2;
+    this.releases.forEach((rel, i) => {
+      const btn = new Button(s, m.x + 34 + w / 2 + i * (w + TAB_GAP), y, w, TAB_H, releaseLabel(rel, i),
+        () => { if (i !== this.tab) this.showRelease(i); },
+        { color: i === this.tab ? COLORS.buttonGood : COLORS.buttonDark, fontSize: 18, radius: 10 });
+      m.add(btn);
+    });
   }
 
   /** The picture for an entry, fitted in an ICON-sized card at (x, y). */
@@ -78,8 +104,9 @@ export class PatchNotesWindow {
     const m = this.modal, s = this.scene;
     this.page = Math.max(0, Math.min(this.pages - 1, page));
     m.clear();
+    this.drawTabs(m);
     const left = m.x + 34, textX = left + ICON + 20, textW = W - (textX - m.x) - 34;
-    let y = m.y + HEADER + 18;
+    let y = m.y + HEADER + TABS_H + 18;
     for (const row of this.layout[this.page] || []) {
       if (row.section) {
         // Section heading: a colored tab with its name, and a rule across.

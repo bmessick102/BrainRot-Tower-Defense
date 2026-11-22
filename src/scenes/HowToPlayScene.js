@@ -742,6 +742,20 @@ export class HowToPlayScene extends Phaser.Scene {
   }
 
   // ---------- Enemies ----------
+  /** A clickable card in the enemy detail's right column: `kind`'s picture, a label and a › arrow; opens that enemy's page. */
+  linkCard(kind, label, y) {
+    const { rx, rw } = ENEMY_LAYOUT, h = 46, w = Math.min(rw, 330);
+    const btn = new Button(this, rx + w / 2, y + h / 2, w, h, '', () => this.browsers.enemies.show(ENEMY_ORDER.indexOf(kind)),
+      { radius: 11, color: CATEGORY_COLORS.summoned, onRelease: true });
+    const pic = this.add.image(-w / 2 + 32, h / 2 - 8, enemyKey(kind)).setOrigin(0.5, 1);
+    fitIcon(pic, 44, h - 10);
+    const text = this.add.text(-w / 2 + 62, -2, label, textStyle(16)).setOrigin(0, 0.5);
+    fitWidth(text, w - 62 - 34);
+    const arrow = this.add.text(w / 2 - 18, -2, '›', textStyle(30)).setOrigin(0.5);
+    btn.add([pic, text, arrow]);
+    this.detail.add(btn);
+  }
+
   showEnemy(index, animate = true) {
     const b = this.browsers.enemies;
     b.index = index;
@@ -763,12 +777,12 @@ export class HowToPlayScene extends Phaser.Scene {
     if (cfg.call) tags.push([`Silences F.L.O.C.K Towers (${cfg.call.seconds} s)`, 0xd0583c]);
     if (cfg.summon) tags.push([`Summons ${cfg.summon.count} Skeletons every ${cfg.summon.cooldown} s`, 0xb03a2e]);
     if (cfg.bounce) tags.push(['Ranged', 0x9b59d0], [`Boulders bounce ${cfg.bounce.count}x`, 0xc98a12]);
-    if (cfg.missileRadius) tags.push([`Missile strikes (${cfg.missileRadius} tile blast)`, 0xb03a2e]);
+    if (cfg.missileStrike) tags.push(['Missile strikes (one building)', 0xb03a2e]);
     if (cfg.quake) tags.push(['Earthquakes', 0x8f673d], [`${cfg.quake.wallMult}x quake damage to walls`, 0xc98a12]);
     // v0.7.
     if (cfg.spawn) tags.push([`Drops a ${CONFIG.enemies[cfg.spawn.kind].name} every ${cfg.spawn.every} s`, 0xd0583c]);
     if (cfg.kamikaze) tags.push(['One big hit, then gone', 0xb03a2e]);
-    if (cfg.armor) tags.push([`Armor: ${cfg.armor} before health`, 0x5b7a99]);
+    if (cfg.armor) tags.push([`Armor ${cfg.armor}${cfg.armorReduction ? ` (-${Math.round(cfg.armorReduction * 100)}% damage)` : ''}`, 0x5b7a99]);
     if (cfg.chillAura) tags.push([`Slows defenses ${cfg.chillAura.slowPct}% (${cfg.chillAura.radius} tiles)`, 0x3d9bff]);
     if (cfg.breath) tags.push(['Fire breath', 0xd0583c], [`${cfg.breath.splashPct}% to buildings next to it`, 0xc98a12]);
     if (cfg.prefers && cfg.preferredDamageMultiplier) tags.push([`${cfg.preferredDamageMultiplier}x vs ${cfg.prefers.includes('wall') ? 'walls' : cfg.prefers.includes('airDefense') ? 'air defenses' : 'gold buildings'}`, 0xc98a12]);
@@ -778,7 +792,14 @@ export class HowToPlayScene extends Phaser.Scene {
       : cfg.fromTownHall ? `From Village Hall ${cfg.fromTownHall}` : null;
     tags.push([dropper ? `From ${dropper.name}s` : bossFrom || (fw ? `From wave ${fw}` : 'Endless waves'), COLORS.buttonDark]);
     y = this.tagRow(p, ENEMY_LAYOUT.rx, y + 6, tags);
-    this.description(ENEMY_DESCRIPTIONS[kind], y + 4);
+    y = this.description(ENEMY_DESCRIPTIONS[kind], y + 4);
+    // A carrier links to the troop it brings, and that troop links back: a small picture card that opens its page.
+    const subKind = cfg.summon?.kind || cfg.spawn?.kind || cfg.drops;
+    if (subKind && CONFIG.enemies[subKind]) {
+      this.linkCard(subKind, `${cfg.drops ? 'Drops' : 'Summons'}: ${CONFIG.enemies[subKind].name}`, y + 8);
+    } else if (cfg.droppedBy && CONFIG.enemies[cfg.droppedBy]) {
+      this.linkCard(cfg.droppedBy, `Brought by: ${CONFIG.enemies[cfg.droppedBy].name}`, y + 8);
+    }
 
     // Under the card, across the whole detail area: which defenses can hit it (building icons with a green check
     // or red cross; hover shows the name), then the stats.

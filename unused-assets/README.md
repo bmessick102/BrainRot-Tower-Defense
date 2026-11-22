@@ -122,3 +122,13 @@ v0.7 drops (Bri Bri Bicus Dicus, Frigo Camillo, Bombombini Gusini, Lirili Larila
 | `Leaderboard 1st Gold Medal Icon.png` | `art-source/ui/ui_medal_1.png` |
 | `Leaderboard 2nd Silver Medal Icon.png` | `art-source/ui/ui_medal_2.png` |
 | `Leaderboard 3rd bronze medal icon.png` | `art-source/ui/ui_medal_3.png` |
+
+v0.7.1 voice lines (lirili cropped to 3 s):
+
+| Dropped file | Installed as |
+| --- | --- |
+| `brri-brri-dicus-bicus-bombicus.mp3` | `art-source/audio/sfx_bicus_voice.mp3` |
+| `47-frigo-camelo.mp3` | `art-source/audio/sfx_frigo_voice.mp3` |
+| `brr-brr-patapim.mp3` | `art-source/audio/sfx_patapim_voice.mp3` |
+| `lirili-larila.mp3` | `art-source/audio/sfx_lirili_voice.mp3` |
+| `Da Baby Car Sound Effect.mp3` | `art-source/audio/sfx_babycar_voice.mp3` (v0.7.1, Da Baby Car's voice line) |

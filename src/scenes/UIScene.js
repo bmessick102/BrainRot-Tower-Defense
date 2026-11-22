@@ -48,7 +48,7 @@ import { Modal } from '../objects/Modal.js';
 import { ProfileWindow } from '../objects/ProfileWindow.js';
 import { profileNews, markProfileSeen } from '../net/profileNews.js';
 import { session } from '../net/account.js';
-import { leagueFor } from '../logic/leagues.js';
+import { leagueFor, leagueBadgeSize } from '../logic/leagues.js';
 
 // Shop window: slate header (title + category tabs), recessed card tray, green gold strip.
 const SHOP_W = 1100;
@@ -343,7 +343,7 @@ export class UIScene extends Phaser.Scene {
     c.add([bg, hover, small, name]);
     if (hasBadge) {
       const img = this.add.image(28, 25, league.texture);
-      fitIcon(img, 48);
+      fitIcon(img, leagueBadgeSize(league, 52));
       c.add(img);
     }
     // What's new (like the shop's badge): rewards to claim + achievements / league not seen yet. It pops when
@@ -1374,8 +1374,10 @@ New walls are built at your wall level (${wallLevel(this.gs)}), so one costs wha
       const names = (lvl) => SPELL_KINDS.filter((k) => spellConfig(k).level === lvl).map((k) => spellFullName(k));
       const open = SPELL_KINDS.filter((k) => spellConfig(k).level <= b.level).map((k) => spellConfig(k).name);
       const next = b.level < maxLevel('fuelStation') ? names(b.level + 1) : [];
-      return [`Brews ${open.join(', ')}`, `Spell slots: ${spellSlots(this.gs)} (more with the Village Hall) · ${brewedSpells(this.gs).length} brewed`,
-        next.length ? `Level ${b.level + 1} adds ${next.join(' and ')}` : 'Every spell unlocked'];
+      const all = open.length >= SPELL_KINDS.length;
+      return [all ? 'Every spell unlocked' : open.length > 3 ? `Brews ${open.length} of ${SPELL_KINDS.length} spells` : `Brews ${open.join(', ')}`,
+        `Spell slots: ${spellSlots(this.gs)} · ${brewedSpells(this.gs).length} brewed`,
+        ...(next.length ? [`Level ${b.level + 1} adds ${next.join(' and ')}`] : [])];
     }
     if (b.type === 'rvlab') {
       const next = b.level < maxLevel('rvlab') ? levelStats('rvlab', b.level + 1) : null;
@@ -1484,6 +1486,9 @@ New walls are built at your wall level (${wallLevel(this.gs)}), so one costs wha
     if (this.infoTab === 'hero' && b.type === 'altar') return this.drawHeroInfo(box, b, y);
     if (this.infoTab === 'info') {
       const t = this.add.text(INFO_COL, y, BUILDING_DESCRIPTIONS[b.type] || '', bodyStyle(15, COLORS.ink, { wordWrap: { width: INFO_COL_W }, lineSpacing: 3 }));
+      // Keep the panel on screen above the three-button stack: a long description steps its font down (never below 11).
+      const maxH = SCREEN.h - 8 - INFO_TOP_MIN - y - (INFO_BTN_H + 6) * 3 - 20;
+      for (let size = 14; t.height > maxH && size >= 11; size--) t.setFontSize(size);
       box.add(t);
       return y + t.height + 12;
     }

@@ -142,3 +142,24 @@ describe('wave markers (world-space wave preview)', () => {
     expect(pathEnds('nowhere')).toBeNull();
   });
 });
+
+describe('condensed wave markers (v0.7.1)', () => {
+  it('start as one summary chip with the total; open shows every kind plus a Hide chip', async () => {
+    const { markerChips } = await import('../src/logic/waveMarkers.js');
+    const entries = [['grunt', 12], ['tank', 3], ['bicus', 2]];
+    expect(markerChips(entries, false)).toEqual([{ summary: true, total: 17 }]);
+    const open = markerChips(entries, true);
+    expect(open).toHaveLength(4);
+    expect(open[0]).toEqual({ kind: 'grunt', n: 12 });
+    expect(open[3]).toEqual({ hide: true });
+  });
+
+  it('a tap hits a marker inside its rect (scaled with zoom) and misses outside', async () => {
+    const { markerHit, markerLayout, MARKER } = await import('../src/logic/waveMarkers.js');
+    const L = markerLayout('bottom', 1);
+    expect(markerHit(L, 100, 100, 1, 100, 100)).toBe(true);
+    expect(markerHit(L, 100, 100, 1, 100, 100 + MARKER.disc / 2 + MARKER.gap + MARKER.chipH - 2)).toBe(true);
+    expect(markerHit(L, 100, 100, 1, 100 + 200, 100)).toBe(false);
+    expect(markerHit(L, 100, 100, 2, 100 + MARKER.chipW * 0.9, 120)).toBe(true);
+  });
+});

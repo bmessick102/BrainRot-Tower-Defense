@@ -15,11 +15,11 @@ export const ENEMY_DESCRIPTIONS = {
   skeleton: 'Near your base he bashes his shield and three Skeletons climb out of the ground around him, then more every few seconds (up to six of his at once). Take him out early.',
   bones: 'A little sword-swinging Skeleton raised by a Rahhh Skeleton. Weak on its own, but they keep coming while he stands.',
   vaca: 'A tough flyer that throws boulders from range. Each boulder bounces on behind its target three times, hitting everything it lands on for a bit less each bounce.',
-  yahu: 'Calls missiles down from long range. A red target shows where each one will land; when it hits, every building and wall in the blast is damaged.',
+  yahu: 'Calls missiles down from long range. A red target shows where each one will land; each one hits only the building it’s aimed at.',
   patapim: 'A huge, slow jungle caller. As he walks in he drops a Chimpanzini Bananini every few seconds; they leap your walls and dive into your buildings.',
   lirili: 'A huge, slow tank. Every few seconds it stomps an earthquake that hits every building and wall around it, and walls take extra damage.',
   chimp: 'Dropped by Brr Brr Patapim. It runs at the nearest building (never walls), leaps any wall in the way, and dives into it for one big hit.',
-  bicus: 'An armored legionary. Its armor (the steel bar over its health) soaks every hit until it breaks; only then does it take real damage.',
+  bicus: 'An armored legionary. Its armor (the steel bar over its health) cuts all damage by 30% and soaks every hit until it breaks; only then does it take full, real damage.',
   frigo: 'A fridge on legs with a freezing aura: every defense and the Brisket King near it attacks a lot slower. Pick it off from range.',
   bombo: 'A jet-powered goose that breathes fire. It burns one building at a time, and the flames also scorch the buildings right next to it.',
   thief: 'A smug man in a sharp suit who strolls in unseen until he hops a wall or hits a building. He goes straight for your money: Mines and Storages take 3x damage.'

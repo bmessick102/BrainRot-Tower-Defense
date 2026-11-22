@@ -11,6 +11,28 @@ export const LEAGUES = [
   { key: 'warlord', name: 'WarLord', minWave: 160, texture: 'ui_league_warlord' }
 ];
 
+/** Bronze's badge is this share of the full size; each league up adds an even step, to WarLord at 100% (v0.7.1). */
+export const LEAGUE_BADGE_MIN = 0.85;
+
+/**
+ * How much of its box each badge's picture fills: sqrt(width x height) / its longer side, measured from the art.
+ * A badge is fitted by its longer side, so a squarish one (Silver) looks bigger than a tall narrow one (Champion)
+ * at the same size; dividing by this evens them out, so the league grading is what the eye sees.
+ */
+export const LEAGUE_ART_FILL = { bronze: 0.892, silver: 0.991, gold: 0.913, crystal: 0.976, champion: 0.890, warlord: 0.967 };
+const ART_FILL_REF = 0.93; // about the average: badges stay about as big as before overall
+
+/**
+ * A league badge's size (its longer side): a little bigger for each league up, like the leaderboard's gold / silver /
+ * bronze medals, corrected for each picture's shape. `size` is about the top league's size.
+ */
+export function leagueBadgeSize(league, size) {
+  const i = Math.max(0, LEAGUES.indexOf(league));
+  const grade = LEAGUE_BADGE_MIN + (1 - LEAGUE_BADGE_MIN) * i / (LEAGUES.length - 1);
+  const fill = (league && LEAGUE_ART_FILL[league.key]) || ART_FILL_REF;
+  return Math.round(size * grade * ART_FILL_REF / fill);
+}
+
 /** The league for a furthest wave survived, or null below the first one. */
 export function leagueFor(bestWave) {
   let out = null;

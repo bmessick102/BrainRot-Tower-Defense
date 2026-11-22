@@ -8,7 +8,7 @@ import { LeaderboardWindow } from './LeaderboardWindow.js';
 import { drawBadge, drawTag, fitIcon } from './uiDraw.js';
 import { addLeagueRow } from './LeagueRow.js';
 import { COLORS, bodyStyle, textStyle } from '../theme.js';
-import { leagueFor, nextLeague, LEAGUES } from '../logic/leagues.js';
+import { leagueFor, nextLeague, LEAGUES, leagueBadgeSize } from '../logic/leagues.js';
 import { ACHIEVEMENTS } from '../logic/achievements.js';
 import { formatGold } from '../logic/economy.js';
 
@@ -85,7 +85,7 @@ export class ProfileWindow {
     const bx = left + 70, by = y + 75;
     if (league && s.textures.exists(league.texture)) {
       const img = m.add(s.add.image(bx, by, league.texture));
-      fitIcon(img, 110);
+      fitIcon(img, leagueBadgeSize(league, 118));
     } else {
       const g = m.add(s.add.graphics());
       g.fillStyle(COLORS.frame, 1).fillCircle(bx, by, 46);

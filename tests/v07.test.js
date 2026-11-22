@@ -23,18 +23,23 @@ describe('Bri Bri Bicus Dicus: armor', () => {
     expect(e.hp).toBe(C.hp * 2);
   });
 
-  it('takes no health damage until its armor breaks, and the breaking hit\'s leftover is lost', () => {
+  it('cuts damage while the armor holds; the breaking hit does no health damage; then full damage', () => {
     const s = attack();
     const e = createEnemy(s, 'bicus', 5, 5, 1);
     s.enemies.push(e);
-    damageEnemy(s, e, C.armor - 50);
+    expect(C.armorReduction).toBe(0.3);
+    damageEnemy(s, e, 100); // 30% less: the armor loses 70
+    expect(e.armor).toBe(C.armor - 70);
     expect(e.hp).toBe(C.hp);
-    expect(e.armor).toBe(50);
-    damageEnemy(s, e, 200); // breaks the armor: the other 150 does nothing
+    const hit = s.events.filter((ev) => ev.name === 'enemyHit').pop();
+    expect(hit.data.amount).toBeCloseTo(70);
+    expect(hit.data.source).toBe('armor');
+    e.armor = 50;
+    damageEnemy(s, e, 1000); // breaks the armor: the rest is lost
     expect(e.armor).toBe(0);
     expect(e.hp).toBe(C.hp);
     expect(s.events.some((ev) => ev.name === 'armorBroken')).toBe(true);
-    damageEnemy(s, e, 100); // now its health
+    damageEnemy(s, e, 100); // now its health, no reduction
     expect(e.hp).toBe(C.hp - 100);
   });
 
@@ -145,28 +150,54 @@ describe('Brr Brr Patapim and Chimpanzini Bananini', () => {
 
 describe("What's New format (CLAUDE.md, 'Patch notes')", () => {
   it('sections in the fixed order (each type once, none empty); every entry has a version, title, text and picture', async () => {
-    const { PATCH_NOTES, PATCH_SECTION_ORDER, PATCH_SECTIONS } = await import('../src/patchNotes.js');
-    const types = PATCH_NOTES.sections.map((x) => x.type);
-    expect(new Set(types).size).toBe(types.length);
-    expect(types).toEqual(PATCH_SECTION_ORDER.filter((t) => types.includes(t)));
+    const { PATCH_RELEASES, PATCH_SECTION_ORDER, PATCH_SECTIONS } = await import('../src/patchNotes.js');
     const v = (x) => x.split('.').map(Number).reduce((a, n) => a * 1000 + n, 0);
-    for (const sec of PATCH_NOTES.sections) {
-      expect(PATCH_SECTIONS[sec.type]).toBeTruthy();
-      expect(sec.entries.length).toBeGreaterThan(0);
-      for (const e of sec.entries) {
-        expect(e.version).toMatch(/^\d+\.\d+\.\d+$/);
-        expect(v(e.version)).toBeLessThanOrEqual(v(PATCH_NOTES.version));
-        expect(e.title && e.text && e.icon).toBeTruthy();
+    for (const rel of PATCH_RELEASES) {
+      const types = rel.sections.map((x) => x.type);
+      expect(new Set(types).size).toBe(types.length);
+      expect(types).toEqual(PATCH_SECTION_ORDER.filter((t) => types.includes(t)));
+      for (const sec of rel.sections) {
+        expect(PATCH_SECTIONS[sec.type]).toBeTruthy();
+        expect(sec.entries.length).toBeGreaterThan(0);
+        for (const e of sec.entries) {
+          expect(e.version).toMatch(/^\d+\.\d+\.\d+$/);
+          expect(v(e.version)).toBeLessThanOrEqual(v(rel.version));
+          // An entry sits in its own minor update's tab (0.6.x entries in the v0.6 tab).
+          expect(e.version.split('.').slice(0, 2).join('.')).toBe(rel.release);
+          expect(e.title && e.text && e.icon).toBeTruthy();
+        }
       }
     }
   });
 
+  it('one tab per minor update, newest first; the latest is this release', async () => {
+    const { PATCH_NOTES, PATCH_RELEASES } = await import('../src/patchNotes.js');
+    expect(PATCH_RELEASES[0]).toBe(PATCH_NOTES);
+    expect(PATCH_NOTES.version.startsWith(`${PATCH_NOTES.release}.`)).toBe(true);
+    const r = PATCH_RELEASES.map((x) => x.release.split('.').map(Number).reduce((a, n) => a * 1000 + n, 0));
+    for (let i = 1; i < r.length; i++) expect(r[i]).toBeLessThan(r[i - 1]);
+    expect(PATCH_RELEASES.map((x) => x.release)).toContain('0.6');
+  });
+
   it('pages: every entry once, each page starts with a section heading', async () => {
-    const { PATCH_NOTES } = await import('../src/patchNotes.js');
+    const { PATCH_RELEASES } = await import('../src/patchNotes.js');
     const { patchPages } = await import('../src/objects/PatchNotesWindow.js').catch(() => ({ patchPages: null }));
     if (!patchPages) return; // (the window module needs Phaser in a browser)
-    const pages = patchPages(PATCH_NOTES);
-    expect(pages.flat().filter((r) => r.entry)).toHaveLength(PATCH_NOTES.entries.length);
-    for (const p of pages) expect(p[0].section).toBeTruthy();
+    for (const rel of PATCH_RELEASES) {
+      const pages = patchPages(rel);
+      expect(pages.flat().filter((r) => r.entry)).toHaveLength(rel.entries.length);
+      for (const p of pages) expect(p[0].section).toBeTruthy();
+    }
+  });
+});
+
+describe('league badge sizes (v0.7.1)', () => {
+  it('each league looks a little bigger than the one before (corrected for the picture shape)', async () => {
+    const { LEAGUES, leagueBadgeSize, LEAGUE_ART_FILL } = await import('../src/logic/leagues.js');
+    // What the eye sees: the drawn longer side x how much of its box the picture fills.
+    const seen = LEAGUES.map((l) => leagueBadgeSize(l, 200) * LEAGUE_ART_FILL[l.key]);
+    for (let i = 1; i < seen.length; i++) expect(seen[i]).toBeGreaterThan(seen[i - 1]);
+    // Never much past the space laid out for it.
+    for (const l of LEAGUES) expect(leagueBadgeSize(l, 200)).toBeLessThanOrEqual(206);
   });
 });

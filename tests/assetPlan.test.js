@@ -9,7 +9,7 @@ import {
 } from '../src/assetPlan.js';
 import { artTier, LEVELS_PER_ART } from '../src/objects/BuildingView.js';
 import { BUILDING_TYPES, maxLevel } from '../src/logic/buildings.js';
-import { PATCH_NOTES } from '../src/patchNotes.js';
+import { PATCH_RELEASES } from '../src/patchNotes.js';
 
 const keys = new Set(IMAGE_FILES.map((f) => f.key));
 
@@ -30,7 +30,7 @@ describe('asset plan', () => {
     for (const t of BUILDING_TYPES) if (keys.has(`bld_${t}_lv1`)) expect(core.has(`bld_${t}_lv1`)).toBe(true);
     // The title backdrop's art and the patch notes' building icons never wait.
     for (const k of keys) if (/^(title|enemy|hero|ui|proj|villager|game_map)_/.test(k)) expect(core.has(k)).toBe(true);
-    for (const e of PATCH_NOTES.entries) if (e.icon.building) expect(isDeferredImage(levelArtKey(e.icon.building, e.icon.level || 1))).toBe(false);
+    for (const e of PATCH_RELEASES.flatMap((r) => r.entries)) if (e.icon.building) expect(isDeferredImage(levelArtKey(e.icon.building, e.icon.level || 1))).toBe(false);
   });
 
   it('music and ambience load when they play (not the title music); sound effects are core', () => {

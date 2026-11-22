@@ -487,7 +487,10 @@ export class GameScene extends Phaser.Scene {
       const w = this.screenToWorld(p.x, p.y);
       const b = this.pickBuilding(w.x, w.y);
       id = b ? b.id : null;
-    }
+      // Over an incoming-wave marker: it lights up and the hand shows (a click opens / folds its troops; v0.7.1).
+      const hand = !b && !this.editMode ? this.waveMarkers.hoverAt(w.x, w.y) : this.waveMarkers.hoverAt(null, null);
+      if (hand !== !!this.markerHand) { this.markerHand = hand; this.input.setDefaultCursor(hand ? 'pointer' : 'default'); }
+    } else if (this.markerHand) { this.markerHand = false; this.waveMarkers.hoverAt(null, null); this.input.setDefaultCursor('default'); }
     this.lastHoverPtr = { x: p.x, y: p.y };
     this.hoverDirty = false;
     if (id === this.hoverId && !camMoved) return;
@@ -783,6 +786,8 @@ export class GameScene extends Phaser.Scene {
     }
     // Aiming a spell from the hotbar: the click casts it there.
     if (this.spellAim) { this.castAimedSpell(px, py); return; }
+    // An incoming-wave marker (off the grass, by the red arrow): open or fold its list of troops (v0.7.1).
+    if (!this.editMode && this.waveMarkers.toggleAt(w.x, w.y)) { playSfx(this, SFX.uiClick); return; }
     const b = this.pickBuilding(w.x, w.y);
     if (this.editMode) {
       // Edit mode: clicking a building picks it up to move; nothing else happens. With Select Row on, a wall
@@ -1288,7 +1293,7 @@ export class GameScene extends Phaser.Scene {
       }
       // Over the enemy's body (flyers float high), not on the ground beneath it.
       const lift = v && v.sprite ? v.sprite.y - v.sprite.originY * v.sprite.displayHeight + 0.35 * v.sprite.displayHeight - s.y : -20;
-      floatText(this, s.x, s.y + lift, `${Math.round(d.amount)}`, '#ffffff', 14);
+      floatText(this, s.x, s.y + lift, `${Math.round(d.amount)}`, d.source === 'armor' ? '#9fb8d6' : '#ffffff', 14); // armored: steel blue
       playSfx(this, d.source === 'spear' ? SFX.spearHit : SFX.hit); // a Spear Thrower's spear has its own hit sound
     });
     // Wall Breaker: a big cartoon boom the size of its radius, a jolt, and its blast sound.

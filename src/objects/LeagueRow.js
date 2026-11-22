@@ -2,7 +2,7 @@
 // Profile window (compact) and the How to Play Leagues tab (large). Your own league is outlined and tagged
 // "YOU"; leagues below it show a tick, leagues above it are dimmed. `best` < 0 means "no player" (How to Play
 // when logged out): every league is shown plainly.
-import { LEAGUES } from '../logic/leagues.js';
+import { LEAGUES, leagueBadgeSize } from '../logic/leagues.js';
 import { drawTag, fitWidth, fitIcon } from './uiDraw.js';
 import { COLORS, bodyStyle, textStyle } from '../theme.js';
 
@@ -39,7 +39,7 @@ export function addLeagueRow(scene, add, { x, y, w, h, best, large = false }) {
     const by = y + 10 + badge / 2;
     if (scene.textures.exists(league.texture)) {
       const img = scene.add.image(cx, by, league.texture);
-      fitIcon(img, badge);
+      fitIcon(img, leagueBadgeSize(league, badge)); // v0.7.1: each league's badge a little bigger than the one before
       if (hasPlayer && !reached) { img.setTint(0x6f6a62); img.setAlpha(0.55); } // not reached yet
       add(img);
     }

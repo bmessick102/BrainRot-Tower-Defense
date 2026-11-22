@@ -40,6 +40,8 @@ export function friendlyError(error) {
     [/email not confirmed/i, 'Confirm your email first (check your inbox), then log in.'],
     [/unable to validate email|invalid format|email address .* is invalid/i, 'That email address doesn’t look right.'],
     [/base limit/i, 'You already have the most villages allowed.'],
+    // A server function the game calls isn't installed yet (a migration hasn't been run on the database).
+    [/schema cache|could not find the function|PGRST202/i, 'This isn’t available on the server yet. Try again later.'],
     [/rate limit|too many requests/i, 'Too many tries. Wait a minute and try again.'],
     [/jwt|not authenticated|session/i, 'Your login expired. Log in again.']
   ];

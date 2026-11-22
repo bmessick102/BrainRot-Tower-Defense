@@ -12,7 +12,7 @@
 //             the closest lower level meanwhile). Music and ambience load when they first play (audio.js).
 import { IMAGE_FILES, AUDIO_FILES } from './assetManifest.js';
 import { BUILDING_TYPES, maxLevel } from './logic/buildings.js';
-import { PATCH_NOTES } from './patchNotes.js';
+import { PATCH_RELEASES } from './patchNotes.js';
 
 const LEVEL_ART = /^bld_([A-Za-z]+)_lv(\d+)(?:_[a-z0-9]+)?$/;
 // Levels per picture: a building gets new art every 2 levels (some every level). Kept equal to BuildingView's
@@ -23,9 +23,10 @@ export const artTierOf = (level, type) => Math.ceil(level / (ART_LEVELS[type] ??
 const IMAGE_PATH = new Map(IMAGE_FILES.map((f) => [f.key, f.path]));
 const AUDIO_PATH = new Map(AUDIO_FILES.map((f) => [f.key, f.path]));
 
-// The What's New window's building icons (drawn once, on the title screen): always core, so they show right away.
+// The What's New window's building icons, every tab's (drawn once, on the title screen): always core, so they show
+// right away.
 let patchIcons = null;
-const patchIconKeys = () => patchIcons || (patchIcons = new Set(PATCH_NOTES.entries
+const patchIconKeys = () => patchIcons || (patchIcons = new Set(PATCH_RELEASES.flatMap((r) => r.entries)
   .filter((e) => e.icon && e.icon.building)
   .flatMap((e) => { const k = levelArtKey(e.icon.building, e.icon.level || 1); return k ? artGroup(k) : []; })));
 
