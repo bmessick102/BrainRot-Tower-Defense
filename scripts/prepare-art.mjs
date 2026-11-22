@@ -47,6 +47,12 @@ const TARGETS = [
   { match: /^bld_dj_lv[0-9]+$/, width: 384, trim: true, needsAlpha: true },
   // Fuel Station: 4 levels drawn on one canvas, one shared box (so each level keeps its scale and ground point).
   { match: /^bld_fuelStation_lv[0-9]+$/, width: 384, trim: 'group', needsAlpha: true },
+  // Merged defenses (v0.8, CONFIG.merges[type].art.key): one picture each (bld_archer_merged, bld_mortar_merged), drawn
+  // like the max-level picture. A merged Cannon may come in the 4 facings (_dl/_dr/_ul/_ur, one shared box) or as one.
+  { match: /^bld_cannon_merged(_(dl|dr|ul|ur))?$/, width: 384, trim: 'group', needsAlpha: true },
+  { match: /^bld_[A-Za-z]+_merged$/, width: 384, trim: true, needsAlpha: true },
+  // The merged Firework Launcher aims left or right: both pictures share one box (same scale, the base doesn't jump).
+  { match: /^bld_firework_merged_(left|right)$/, width: 384, trim: 'group', needsAlpha: true },
   { match: /^bld_/, width: 384, trim: true, needsAlpha: true },
   { match: /^hero_/, width: 192, trim: true, needsAlpha: true },          // the Brisket King's poses
   { match: /^enemy_babycar$/, width: 256, trim: true, needsAlpha: true }, // the Baby Car raid boss is drawn bigger
@@ -54,7 +60,7 @@ const TARGETS = [
   // exported at twice the usual width to stay sharp there; in game it's scaled to the same height as before.
   { match: /^enemy_tank$/, width: 320, trim: true, needsAlpha: true },
   // v0.6 heavies, drawn bigger in game (and Brr Brr Patapim / La Vaca Saturno also stand on the title screen).
-  { match: /^enemy_(patapim|vaca|lirili|bombo)(_[a-z]+)?$/, width: 256, trim: true, needsAlpha: true },
+  { match: /^enemy_(patapim|vaca|lirili|bombo|grimace)(_[a-z]+)?$/, width: 256, trim: true, needsAlpha: true },
   { match: /^enemy_/, width: 160, trim: true, needsAlpha: true },
   // The gnome's working pose (busy at a building: mining, repairing, building). Wider than the standing gnome (an arm
   // out), so it's exported wider to keep the same detail; the game sizes both to the same height.
@@ -71,6 +77,7 @@ const TARGETS = [
   { match: /^ui_research_point$/, width: 128, trim: true, needsAlpha: true }, // the Burger (research points, shown as Burgers)
   { match: /^ui_research_ready$/, width: 128, trim: true, needsAlpha: true }, // book over the RV Lab: research ready
   { match: /^ui_beat_ready$/, width: 128, trim: true, needsAlpha: true },     // over DJ Babyface: Drop the Beat ready
+  { match: /^ui_merge_gear$/, width: 128, trim: true, needsAlpha: true },     // v0.8: the badge over merged defenses
   { match: /^ui_feast_ready$/, width: 192, trim: true, needsAlpha: true },    // the Brisket Feast HUD button / ready icon
   { match: /^ui_hero_crown$/, width: 128, trim: true, needsAlpha: true },     // the hero level crown beside his health bar
   { match: /^guide_portrait$/, width: 256, trim: true, needsAlpha: true },

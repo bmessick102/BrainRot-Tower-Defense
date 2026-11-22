@@ -22,15 +22,17 @@ export const ENEMY_DESCRIPTIONS = {
   bicus: 'An armored legionary. Its armor (the steel bar over its health) cuts all damage by 30% and soaks every hit until it breaks; only then does it take full, real damage.',
   frigo: 'A fridge on legs with a freezing aura: every defense and the Brisket King near it attacks a lot slower. Pick it off from range.',
   bombo: 'A jet-powered goose that breathes fire. It burns one building at a time, and the flames also scorch the buildings right next to it.',
+  quandale: 'A fast striker who dashes at your buildings and lands a heavy, stunning hit: the building stops attacking for a moment. Walls stop his dash, so keep them up.',
+  grimace: 'A huge, slow tank that leaves purple goo wherever he walks. Troops that walk through the goo get angrier: faster and stronger. When he falls he leaves a big puddle.',
   thief: 'A smug man in a sharp suit who strolls in unseen until he hops a wall or hits a building. He goes straight for your money: Mines and Storages take 3x damage.'
 };
 
 // The Enemies tab's categories (v0.6: too many enemies for one row of chips; v0.7 added Summoned). Every enemy is in exactly one; the
 // How to Play browser walks them in this order (arrow keys and the card's arrows go on into the next category).
 export const ENEMY_CATEGORIES = [
-  { key: 'ground', label: 'Ground', kinds: ['grunt', 'slinger', 'shark', 'thief', 'bicus', 'frigo'] },
+  { key: 'ground', label: 'Ground', kinds: ['grunt', 'slinger', 'shark', 'thief', 'bicus', 'frigo', 'quandale'] },
   { key: 'air', label: 'Air', kinds: ['bomber', 'balloon', 'vaca', 'bombo'] },
-  { key: 'tanks', label: 'Tanks & Bosses', kinds: ['tank', 'lirili', 'patapim', 'babycar'] },
+  { key: 'tanks', label: 'Tanks & Bosses', kinds: ['tank', 'lirili', 'patapim', 'grimace', 'babycar'] },
   { key: 'special', label: 'Special', kinds: ['breaker', 'toilet', 'pork', 'skeleton', 'yahu'] },
   // v0.7: the troops other enemies bring with them (never in a wave's queue).
   { key: 'summoned', label: 'Summoned', kinds: ['neegy', 'bones', 'chimp'] }

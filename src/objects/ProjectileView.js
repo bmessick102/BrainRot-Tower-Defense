@@ -12,6 +12,9 @@ const DISPLAY_WIDTH = {
   cannon: 14, archer: 34, mortar: 34, wizard: 34, firework: 28, catapult: 16, spear: 52, slinger: 18, bomb: 18, pellet: 8, boulder: 26, bomblet: 18,
   ksi: 11, ksiBounce: 9, vaca: 24, missile: 30
 };
+const MEGA_BALL_WIDTH = 26; // a Mega Cannon's cannonball (Rolling Thunder), about twice a cannonball
+const BOLT_WIDTH = 56;      // a Locklair Citadel's Ballista Bolt: a big arrow
+const ROLL_LIFT = 12;       // a rolling Mega Cannon ball settles to this height over the ground (px)
 const SHURIKEN_SPIN = 0.35; // radians per frame the Slinger's shuriken turns in flight
 // The bomb picture's nose points left (180°): turn it so the nose leads the way down.
 const BOMB_NOSE_ANGLE = Math.PI;
@@ -44,8 +47,10 @@ export class ProjectileView {
     this.id = p.id;
     this.kind = p.kind;
     this.image = scene.add.image(0, 0, PROJECTILE_KEYS[p.kind]).setDepth(2000);
-    const w = DISPLAY_WIDTH[p.kind] || 12;
+    // Merged defenses' shots: the Mega Cannon's huge cannonball, the Locklair Citadel's ballista bolt.
+    const w = p.mega ? MEGA_BALL_WIDTH : p.bolt ? BOLT_WIDTH : DISPLAY_WIDTH[p.kind] || 12;
     this.image.setScale(w / this.image.frame.width);
+    if (p.bolt) this.image.setTint(0xffe2b0);
     this.last = null;
     this.launchOff = this.launchOffset(p); // screen offset of the muzzle from the shot's ground start
     this.hitOff = { x: 0, y: 0 };          // screen offset of the hit point from the target's ground spot
@@ -128,7 +133,7 @@ export class ProjectileView {
     const arc = Math.sin(Math.PI * t) * lob;
     const x = s.x + this.launchOff.x * (1 - t) + this.hitOff.x * t;
     const y = s.y + this.launchOff.y * (1 - t) + this.hitOff.y * t - arc;
-    if (this.last && (p.kind === 'archer' || p.kind === 'wizard' || p.kind === 'firework')) {
+    if (this.last && (p.kind === 'archer' || p.kind === 'wizard' || p.kind === 'firework' || p.bolt)) {
       const dx = x - this.last.x, dy = y - this.last.y;
       if (dx * dx + dy * dy > 0.01) this.image.setRotation(Math.atan2(dy, dx));
     }
@@ -168,9 +173,14 @@ export class ProjectileView {
       this.lineLift = this.last ? this.last.y - s.y : -(LINE_LIFT[p.kind] ?? 16);
       if (p.kind === 'boulder') this.lineLift = -(LINE_LIFT.boulder);
     }
+    // Rolling Thunder: the ball drops to the ground and rolls (spinning) along it.
+    if (p.rolling) {
+      this.lineLift += (-ROLL_LIFT - this.lineLift) * 0.25;
+      this.image.rotation += 0.3 * Math.sign(p.dirX - p.dirY || 1);
+    }
     const x = s.x, y = s.y + this.lineLift;
     if (p.kind === 'boulder') this.image.rotation += 0.25 * Math.sign(p.dirX - p.dirY || 1);
-    if (p.kind === 'spear') { // point along the flight (its picture points right)
+    if (p.kind === 'spear' || (p.bolt && p.kind === 'archer')) { // point along the flight (its picture points right; a Skewer bolt too)
       const n = gridToScreen(p.x + p.dirX, p.y + p.dirY);
       this.image.setRotation(Math.atan2(n.y - s.y, n.x - s.x));
     }

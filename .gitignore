@@ -16,3 +16,6 @@ dist/
 
 # Screenshots taken while testing (kept on disk, not in git).
 /Screenshots/
+
+# Windows Explorer folder settings (system files, recreated by Windows).
+desktop.ini

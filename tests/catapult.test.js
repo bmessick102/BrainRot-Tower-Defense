@@ -82,15 +82,15 @@ describe('Catapult', () => {
 
   it('is the last unlock: from Village Hall 10, one at the normal price, and has 5 levels', () => {
     expect(cfg.unlockTownHall).toBe(10);
-    expect(Math.max(...CONFIG.limits.catapult)).toBe(1);
     expect(limitFor('catapult', 9)).toBe(0);
     expect(limitFor('catapult', 10)).toBe(1);
+    expect([11, 12, 13, 14, 15].map((th) => limitFor('catapult', th))).toEqual([2, 2, 3, 3, 3]); // v0.8: +1 at VH11 and VH13
     expect(maxLevel('catapult')).toBe(5);
     const s = makeStateWithTownHall({ gold: 9999999 }, 10);
     expect(checkBuy(s, 'catapult').ok).toBe(true);
     addBuilding(s, 'catapult', 2, 2);
     expect(checkBuy(s, 'catapult')).toEqual({ ok: false, reason: 'Limit reached' }); // Village Hall 10: one
-    // Village Hall 11's Bonus Slots allow more, at the normal price.
+    // Village Hall 11 allows a second, at the normal price.
     const s11 = makeStateWithTownHall({ gold: 9999999 }, 11);
     addBuilding(s11, 'catapult', 2, 2);
     expect(checkBuy(s11, 'catapult').ok).toBe(true);

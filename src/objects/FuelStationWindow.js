@@ -27,7 +27,7 @@ const PANEL_W = W - 22 - (CARD_W * 2 + CARD_GAP) - 16 - 22;
 const TRAY_Y = TOP + GRID_H + 12, TRAY_H = 78;
 const SLOT_R = 24;
 const BREW_COLOR = 0x8e5bd6;                           // the RV Lab's purple RP buttons
-const REFRESH_ON = ['researchPointsChanged', 'spellBrewed', 'spellDiscarded', 'buildingUpgraded', 'buildingPlaced', 'buildingSold',
+const REFRESH_ON = ['researchPointsChanged', 'spellBrewed', 'spellDiscarded', 'buildingUpgraded', 'buildingPlaced',
   'buildingDestroyed', 'buildingRepaired', 'waveStarted', 'waveCleared', 'abilityResearched', 'abilitiesApplied', 'abilityRespecced', 'townHallUpgraded'];
 
 /** Open the Fuel Station window. `onPerks` opens its perk tree (this window closes first). */

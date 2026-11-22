@@ -16,11 +16,13 @@ import { tutorialAllows } from '../logic/tutorial.js';
 import { isWaveActive, isWaveInProgress, clamp } from '../logic/util.js';
 import { mineShowsCoin } from '../logic/economy.js';
 import { MAX_STEP } from '../logic/simulate.js';
-import { BuildingView, buildingTextureKey, placeBuildingSprite } from '../objects/BuildingView.js';
+import { stepsPerFrame } from '../logic/fastForward.js';
+import { BuildingView, buildingTextureKey, buildingPictureKey, mergedSizeFactor, placeBuildingSprite } from '../objects/BuildingView.js';
 import { EnemyView } from '../objects/EnemyView.js';
 import { djStats, buildingsInDjRange } from '../logic/dj.js';
-import { HeroView } from '../objects/HeroView.js';
+import { HeroView, QUEEN_VIEW } from '../objects/HeroView.js';
 import { getAltar, heroStats } from '../logic/hero.js';
+import { getQueenAltar, queenStats } from '../logic/queen.js';
 import { WallView, placeWallTile } from '../objects/WallView.js';
 import { ProjectileView } from '../objects/ProjectileView.js';
 import { PoolView, POOL_COLOR } from '../objects/PoolView.js';
@@ -43,6 +45,8 @@ import { SpellFx } from '../objects/SpellFx.js';
 import { WaveMarkers } from '../objects/WaveMarkers.js';
 import { SpawnFog } from '../objects/SpawnFog.js';
 import { checkCast, checkCastSpot, spellStats } from '../logic/spells.js';
+import { checkMerge } from '../logic/merge.js';
+import { NetFx } from '../objects/NetFx.js';
 
 const PLANNING_FADE_MS = 600; // the ambience / village music hands over to the planning track this fast
 const ZOOM_STEP = 1.1;
@@ -108,9 +112,11 @@ export class GameScene extends Phaser.Scene {
     this.beamHum = new BeamHum(this); // Tower of Rah beam loop while any beam burns
     this.views = { buildings: new Map(), enemies: new Map(), projectiles: new Map(), pools: new Map() };
     this.heroView = new HeroView(this); // the Brisket King
+    this.queenView = new HeroView(this, QUEEN_VIEW); // the Hatsune Queen (v0.8)
     this.rangeCircle = new RangeCircle(this);
     // Fuel Station spells: the aiming ring (while a hotbar spell waits for a spot on the map) and zones in play.
     this.spellFx = new SpellFx(this, gs);
+    this.netFx = new NetFx(this); // Missile Silo's nets (skyNet.js)
     // The next wave's arrow + enemy counts at each entrance it attacks from (UIScene feeds the counts).
     this.waveMarkers = new WaveMarkers(this);
     // Fog over the back end of all four paths, where enemies come onto the map: always on, under those markers.
@@ -345,7 +351,11 @@ export class GameScene extends Phaser.Scene {
   }
 
   update(time, delta) {
-    if (!this.endingGame) this.gs.update(Math.min(delta / 1000, MAX_STEP));
+    if (!this.endingGame) {
+      // 2x wave speed: the same capped step run twice (src/logic/fastForward.js), never one doubled step.
+      const step = Math.min(delta / 1000, MAX_STEP);
+      for (let i = stepsPerFrame(this.gs); i > 0; i--) this.gs.update(step);
+    }
     this.dayNight.update(this.gs.clock);
     // Day / night ambience: follows how dark it is, and steps aside for the attack music during a wave.
     updateAmbience(this.night || 0, !isWaveInProgress(this.gs) && !this.endingGame, Math.min(delta / 1000, MAX_STEP));
@@ -371,8 +381,68 @@ export class GameScene extends Phaser.Scene {
     this.updateLayoutExtras();
     this.spellFx.update(time);
     this.updateSpellAim();
+    this.updateMergePick(time);
+    this.netFx.update(time);
     this.waveMarkers.update();
     this.spawnFog.update();
+  }
+
+  // ---------- merging (src/logic/merge.js): Merge in the panel, then tap the second copy on the map ----------
+  /**
+   * Start picking the copy to merge `id` with: every other max-level, unmerged copy of its type glows gold (BuildingView
+   * reads scene.mergeTargets) over a pulsing gold tile, and UIScene shows "Tap another Level 10 Cannon to merge" with
+   * Cancel. Tapping one opens the confirm window; Cancel, Esc or a right click stop. Returns false if it can't merge now.
+   */
+  beginMergePick(id) {
+    const b = this.gs.getBuilding(id);
+    const c = checkMerge(this.gs, b);
+    if (!c.ok) return false;
+    if (this.placement) this.cancelPlacement();
+    this.cancelSpellAim();
+    this.mergePick = { id, type: b.type };
+    this.mergeTargets = new Set(c.candidates.map((o) => o.id));
+    this.mergeGroundKey = '';
+    this.gs.emit('mergePickChanged', { active: true, id, type: b.type });
+    return true;
+  }
+
+  /** Stop picking (Cancel, Esc, a right click, a wave starting, or a partner picked). */
+  cancelMergePick() {
+    if (!this.mergePick) return;
+    this.mergePick = null;
+    this.mergeTargets = null;
+    if (this.mergeGfx) this.mergeGfx.clear();
+    this.gs.emit('mergePickChanged', { active: false });
+  }
+
+  /** Every frame while picking: the partners' gold tiles pulse; it ends by itself if the merge can't happen any more. */
+  updateMergePick(time) {
+    const pick = this.mergePick;
+    if (!pick) return;
+    const c = checkMerge(this.gs, this.gs.getBuilding(pick.id));
+    if (!c.candidates.length || isWaveActive(this.gs) || this.editMode) { this.cancelMergePick(); return; }
+    this.mergeTargets = new Set(c.candidates.map((o) => o.id));
+    if (!this.mergeGfx) this.mergeGfx = this.add.graphics().setDepth(-8980); // on the ground, over the dirt plots
+    const g = this.mergeGfx;
+    g.clear();
+    const k = 0.5 + 0.5 * Math.sin(time * 0.006);
+    for (const b of c.candidates) {
+      const w = fpW(b), h = fpH(b), grow = 0.12 * k;
+      const pts = [gridToScreen(b.col - grow, b.row - grow), gridToScreen(b.col + w + grow, b.row - grow), gridToScreen(b.col + w + grow, b.row + h + grow), gridToScreen(b.col - grow, b.row + h + grow)];
+      g.fillStyle(0xffc83a, 0.25 + 0.2 * k).fillPoints(pts, true);
+      g.lineStyle(3, 0xffe9a0, 0.7 + 0.3 * k).strokePoints(pts, true);
+    }
+  }
+
+  /** A tap while picking: a glowing partner opens the confirm window; anything else does nothing (Cancel is on screen). */
+  mergePickClick(wx, wy) {
+    const b = this.pickBuilding(wx, wy);
+    if (!b || !this.mergeTargets || !this.mergeTargets.has(b.id)) { playSfx(this, SFX.invalid); return; }
+    const keepId = this.mergePick.id;
+    this.views.buildings.get(b.id)?.pop();
+    playSfx(this, SFX.buildingSelect);
+    this.cancelMergePick();
+    this.scene.get('UIScene').openMergeConfirm(keepId, b.id);
   }
 
   // ---------- spells (cast from the hotbar: click the spell, then the map) ----------
@@ -691,6 +761,7 @@ export class GameScene extends Phaser.Scene {
       if (this.isOverUI(p)) return;
       if (p.rightButtonDown()) {
         if (this.spellAim) { this.cancelSpellAim(); return; } // right click cancels a spell being aimed
+        if (this.mergePick) { this.cancelMergePick(); return; } // ...or picking a building to merge with
         if (this.placement) this.cancelPlacement();
         else if (this.editMode) this.leaveEdit();
         return;
@@ -744,6 +815,7 @@ export class GameScene extends Phaser.Scene {
       if (this.time.now - this.resumedAt < 250) return; // the Esc that closed the pause menu
       if (Modal.isOpen(this.scene.get('UIScene'))) return; // Esc closes the ability window instead
       if (this.spellAim) { this.cancelSpellAim(); return; } // Esc cancels a spell being aimed
+      if (this.mergePick) { this.cancelMergePick(); return; } // ...or picking a building to merge with
       if (this.placement) this.cancelPlacement();
       else if (this.editMode) this.leaveEdit();
       else this.openPause();
@@ -786,6 +858,8 @@ export class GameScene extends Phaser.Scene {
     }
     // Aiming a spell from the hotbar: the click casts it there.
     if (this.spellAim) { this.castAimedSpell(px, py); return; }
+    // Picking the building to merge with: only the glowing partners answer.
+    if (this.mergePick) { this.mergePickClick(w.x, w.y); return; }
     // An incoming-wave marker (off the grass, by the red arrow): open or fold its list of troops (v0.7.1).
     if (!this.editMode && this.waveMarkers.toggleAt(w.x, w.y)) { playSfx(this, SFX.uiClick); return; }
     const b = this.pickBuilding(w.x, w.y);
@@ -801,6 +875,13 @@ export class GameScene extends Phaser.Scene {
     if (heroHit && (!b || b.type === 'altar')) {
       const altar = getAltar(this.gs);
       if (altar) { playVoiceLine(this, [SFX.heroSelect], 'heroSelect'); this.heroView.selectPose(this.time.now); this.select(altar.id); }
+      return;
+    }
+    // The Hatsune Queen the same way: clicking her selects her altar with her "clicked on" line (Encore Cloak is
+    // only on the hotbar).
+    if (this.queenView.hitTest(w.x, w.y) && (!b || b.type === 'queenAltar')) {
+      const altar = getQueenAltar(this.gs);
+      if (altar) { playVoiceLine(this, [SFX.queenSelect], 'queenSelect'); this.queenView.selectPose(this.time.now); this.select(altar.id); }
       return;
     }
     if (!b) { this.select(null); return; }
@@ -822,7 +903,9 @@ export class GameScene extends Phaser.Scene {
     const canSelect = tutorialAllows(this.gs, 'select', b.type) && !collected;
     if (collected || canSelect) this.views.buildings.get(b.id)?.pop(); // click feedback
     if (canSelect) {
-      playSfx(this, b.type === 'altar' && this.cache.audio.exists(SFX.altarSelect) ? SFX.altarSelect : SFX.buildingSelect);
+      // Either hero's altar makes the same altar sound (her own line plays only when you click her, above).
+      const isAltar = b.type === 'altar' || b.type === 'queenAltar';
+      playSfx(this, isAltar && this.cache.audio.exists(SFX.altarSelect) ? SFX.altarSelect : SFX.buildingSelect);
       if (this.selectedId !== b.id) this.select(b.id); // already selected: stays as it is (Info opens the panel)
     }
   }
@@ -878,6 +961,10 @@ export class GameScene extends Phaser.Scene {
       // The Brisket King's guard range: he fights ground enemies inside it.
       const c = footprintCenter(b);
       this.rangeCircle.show(c.x, c.y, heroStats(b).guardRange, 0);
+    } else if (b.type === 'queenAltar') {
+      // The Hatsune Queen's guard range: she shoots enemies (ground and air) inside it.
+      const c = footprintCenter(b);
+      this.rangeCircle.show(c.x, c.y, queenStats(b).guardRange, 0);
     } else if (isDefense(b.type)) {
       const cfg = typeConfig(b.type);
       const c = footprintCenter(b);
@@ -972,9 +1059,9 @@ export class GameScene extends Phaser.Scene {
   }
 
   /** Take the next building of a hotbar card (type + level) to place it. */
-  pickFromHotbar(type, level) {
+  pickFromHotbar(type, level, merged = false) {
     if (!this.layout) return;
-    const group = hotbarGroups(this.gs, this.layout).find((g) => g.type === type && g.level === level);
+    const group = hotbarGroups(this.gs, this.layout).find((g) => g.type === type && g.level === level && g.merged === !!merged);
     if (!group) return;
     playSfx(this, SFX.buildingSelect);
     this.beginMove(group.ids[0]);
@@ -1027,7 +1114,7 @@ export class GameScene extends Phaser.Scene {
     // Picked up from its draft spot, or out of the hotbar.
     const d = this.layout.pos[id];
     const fromHotbar = isStored(this.layout, id);
-    this.placement = { mode: 'move', id, fromHotbar, type: b.type, level: b.level, orient: d.orient, w: d.w, h: d.h, col: d.col, row: d.row, valid: !fromHotbar };
+    this.placement = { mode: 'move', id, fromHotbar, type: b.type, level: b.level, merged: !!b.merged, orient: d.orient, w: d.w, h: d.h, col: d.col, row: d.row, valid: !fromHotbar };
     const view = this.views.buildings.get(id);
     if (view) view.setAlpha(0.3);
     this.createGhost();
@@ -1081,7 +1168,8 @@ export class GameScene extends Phaser.Scene {
 
   createGhost() {
     const pl = this.placement;
-    const key = buildingTextureKey(this, pl.type, pl.level);
+    // (A merged defense being moved shows its own picture.)
+    const key = pl.merged ? buildingPictureKey(this, { type: pl.type, level: pl.level, merged: true }) : buildingTextureKey(this, pl.type, pl.level);
     // A wall ghost is one fence picture when there's segment art, else one placeholder per tile.
     const count = pl.type === 'wall' ? pl.w * pl.h : 1;
     this.ghost = {
@@ -1146,7 +1234,9 @@ export class GameScene extends Phaser.Scene {
     }
     if (pl.type === 'wall') this.placeWallGhost(this.ghost.sprites, pl.col, pl.row, pl.w, pl.h, pl.orient, pl.level);
     else {
-      placeBuildingSprite(this.ghost.sprites[0], pl.col, pl.row, pl.w, pl.type, pl.level);
+      const gsp = this.ghost.sprites[0];
+      placeBuildingSprite(gsp, pl.col, pl.row, pl.w, pl.type, pl.level);
+      if (pl.merged) { const k = mergedSizeFactor(this, { type: pl.type, level: pl.level, merged: true }); gsp.setScale(gsp.scaleX * k, gsp.scaleY * k); }
     }
     for (const sp of this.ghost.sprites) sp.setDepth(2460).setTint(pl.valid ? 0xb8ffb8 : 0xff9a9a);
     if (isDefense(pl.type)) {
@@ -1170,14 +1260,19 @@ export class GameScene extends Phaser.Scene {
     if (!plan) return;
     const o = this.gs.getBuilding(id);
     if (!this.swapPreview) {
-      const key = buildingTextureKey(this, o.type, o.level);
+      const key = o.merged ? buildingPictureKey(this, o) : buildingTextureKey(this, o.type, o.level);
       const count = o.type === 'wall' ? fpW(o) * fpH(o) : 1;
       this.swapPreview = { id, sprites: Array.from({ length: count }, () => this.add.image(0, 0, key).setOrigin(0.5, 1).setAlpha(0.6)) };
       this.views.buildings.get(id)?.setAlpha(0.3);
     }
     const { col, row } = plan.otherTo;
     if (o.type === 'wall') this.placeWallGhost(this.swapPreview.sprites, col, row, fpW(o), fpH(o), o.orient, o.level);
-    else placeBuildingSprite(this.swapPreview.sprites[0], col, row, fpW(o), o.type, o.level);
+    else {
+      const sp = this.swapPreview.sprites[0];
+      placeBuildingSprite(sp, col, row, fpW(o), o.type, o.level);
+      const k = mergedSizeFactor(this, o);
+      if (k !== 1) sp.setScale(sp.scaleX * k, sp.scaleY * k);
+    }
     for (const sp of this.swapPreview.sprites) sp.setDepth(2460).setTint(0xb8ffb8);
   }
 
@@ -1344,6 +1439,24 @@ export class GameScene extends Phaser.Scene {
     on('heroKnockedOut', () => { const s = heroAt(); if (s) floatText(this, s.x, s.y - 80, 'Knocked out! Zzz', '#d9e4ff', 18); playSfx(this, SFX.buildingDestroyed); });
     on('heroSecondWind', (d) => { const s = gridToScreen(d.x, d.y); floatText(this, s.x, s.y - 80, 'Second Wind!', '#9bf07a', 18); });
     on('heroReady', () => { const s = heroAt(); if (s) floatText(this, s.x, s.y - 80, 'Ready!', '#ffd34a', 16); });
+    // The Hatsune Queen: her bolts (the Locklair's arrow sound), Encore Cloak, knockouts and getting back up.
+    const queenAt = () => { const h = this.gs.queen; return h ? gridToScreen(h.x, h.y) : null; };
+    on('queenShot', () => playSfxCapped(this, SFX.arrowFire, ENEMY_HIT_MAX));
+    on('queenBoltHit', (d) => {
+      if (!d.crit && !d.head) return;
+      const s = gridToScreen(d.x, d.y);
+      floatText(this, s.x, s.y - (d.air ? 90 : 46), d.head ? 'HEADLINER!' : 'CRIT!', d.head ? '#ffb3e6' : '#7ff0e8', d.head ? 16 : 14);
+    });
+    on('queenEncore', (d) => {
+      const s = gridToScreen(d.x, d.y);
+      splashRing(this, s.x, s.y, 1.2, 0x2fc7c0, { duration: 520, depth: 2710 });
+      floatText(this, s.x, s.y - 90, 'ENCORE!', '#7ff0e8', 22);
+      playSfx(this, this.cache.audio.exists(SPELL_SFX.invisibility) ? SPELL_SFX.invisibility : SFX.upgrade); // she vanishes
+    });
+    on('queenDodge', (d) => { const s = gridToScreen(d.x, d.y); floatText(this, s.x, s.y - 70, 'Dodge!', '#d9e4ff', 14); });
+    on('queenKnockedOut', () => { const s = queenAt(); if (s) floatText(this, s.x, s.y - 70, 'Knocked out! Zzz', '#d9e4ff', 18); playSfx(this, SFX.buildingDestroyed); });
+    on('queenCurtainCall', (d) => { const s = gridToScreen(d.x, d.y); floatText(this, s.x, s.y - 80, 'Curtain Call!', '#9bf07a', 18); });
+    on('queenReady', () => { const s = queenAt(); if (s) floatText(this, s.x, s.y - 80, 'Ready!', '#7ff0e8', 16); });
     // ...and when it's wrecked it bursts open and its troops pour out.
     on('babyCarBurst', (d) => {
       const s = gridToScreen(d.x, d.y);
@@ -1423,6 +1536,17 @@ export class GameScene extends Phaser.Scene {
         frostImpact(this, s.x, s.y, d.radius, TEX.light);
         splashRing(this, s.x, s.y, d.radius, ICE_BLUE, { duration: 600, depth: 2710 });
         playSfxCapped(this, SFX.ksiImpact, 4);
+      } else if (d.kind === 'megaBurst') {
+        // Rolling Thunder: the Mega Cannon's ball bursts where its roll ends.
+        fireballImpact(this, s.x, s.y, d.radius * 0.8, TEX.light);
+        splashRing(this, s.x, s.y, d.radius, 0xffa040, { duration: 450, depth: 2710 });
+        playSfxCapped(this, SFX.mortarImpact, 3);
+      } else if (d.kind === 'syncBlast') {
+        // Synchronized Impact: the Triple Mortar's shells meet in one combined blast.
+        fireballImpact(this, s.x, s.y, d.radius, TEX.light);
+        splashRing(this, s.x, s.y, d.radius, 0xffe08a, { duration: 600, depth: 2710 });
+        splashRing(this, s.x, s.y, d.radius * 0.6, 0xffffff, { duration: 420, depth: 2710 });
+        this.cameras.main.shake(120, 0.003);
       } else if (d.kind === 'catapult') {
         // The bottle bursts: a pink splash ring and droplets; the pool itself is a PoolView.
         splashRing(this, s.x, s.y, d.radius, POOL_COLOR, { duration: 450, depth: 2710 });
@@ -1525,6 +1649,28 @@ export class GameScene extends Phaser.Scene {
       splashRing(this, s.x, s.y, d.radius, 0xb8a080, { duration: 380, depth: 2710 });
       if (!d.bounce) this.cameras.main.shake(100, 0.003);
       playSfxCapped(this, SFX.vacaImpact, 3);
+    });
+    // v0.8: Quandale Dingle's dash: a dust kick as he sets off; the impact: a heavy hit, a burst, a jolt, the stunned building.
+    on('enemyDash', (d) => {
+      const s = enemyPos(d);
+      splashRing(this, s.x, s.y - 2, 0.5, 0xc9b28a, { duration: 320, depth: 2710 });
+      playSfxCapped(this, SFX.quandaleDash, 2);
+    });
+    on('dashImpact', (d) => {
+      const s = enemyPos(d), v = this.views.buildings.get(d.targetId);
+      const t = v ? v.topCenter() : { x: s.x, y: s.y - 30 };
+      splashRing(this, s.x, s.y - 4, 0.9, 0xffcf5a, { duration: 360, depth: 2710 });
+      splashRing(this, t.x, t.y + 20, 0.6, 0xc9b28a, { duration: 420, depth: 2709 });
+      floatText(this, t.x, t.y - 14, 'WHAM!', '#ffcf5a', 18);
+      this.cameras.main.shake(140, 0.004);
+      playSfxCapped(this, SFX.enemyHitBig, ENEMY_HIT_MAX);
+    });
+    on('buildingStunned', (d) => {
+      const v = this.views.buildings.get(d.id);
+      if (!v) return;
+      const t = v.topCenter();
+      floatText(this, t.x, t.y - 30, 'Stunned!', '#ffe14a', 15);
+      v.pop();
     });
     // KSI Tower Fully Frozen: an enemy freezes solid.
     on('enemyFrozen', (d) => { const s = enemyPos(d); splashRing(this, s.x, s.y - 4, 0.45, 0xffffff, { duration: 360, depth: 2710 }); });
@@ -1629,6 +1775,39 @@ export class GameScene extends Phaser.Scene {
     const at = (d) => gridToScreen(d.x, d.y);
     const overBuilding = (id, text, color) => { const v = this.views.buildings.get(id); if (v) { const t = v.topCenter(); tag(t.x, t.y - 8, text, color, 16); } };
     on('slam', (d) => { const s = at(d); tag(s.x, s.y - 34, 'SLAM!', '#ffcf5a', 17); this.cameras.main.shake(90, 0.003); });
+    // Merged defenses: a Ballista Bolt pins (a boss is only slowed); two copies merge into one.
+    on('enemyPinned', (d) => {
+      const s = at(d), v = this.views.enemies.get(d.id);
+      const top = v && v.sprite ? v.sprite.y - v.sprite.displayHeight : s.y - 40;
+      tag(s.x, top - 10, d.boss ? 'SLOWED' : 'PINNED!', d.boss ? '#9fd8ff' : '#ffe2a0', 16);
+      splashRing(this, s.x, s.y, 0.45, 0xf5e6c0, { duration: 320, depth: 2710 });
+    });
+    // Missile Silo: the net rocket goes up with a launch sound; the net bursts open with a crackle over the group.
+    on('netFired', () => playSfx(this, SFX.fireworkFire));
+    on('netOpened', (d) => {
+      const s = at(d);
+      splashRing(this, s.x, s.y - 34, d.radius, 0xffd84a, { duration: 420, depth: 2710 });
+      tag(s.x, s.y - 70, 'NET!', '#ffe066', 17);
+      playSfxCapped(this, SFX.fireworkImpact, 2);
+    });
+    on('buildingsMerged', (d) => {
+      const v = this.views.buildings.get(d.id);
+      if (d.removedX !== undefined) { const g = gridToScreen(d.removedX, d.removedY); splashRing(this, g.x, g.y, 1.2, 0xffe9a0, { duration: 500, depth: 2710 }); sparklerFx(this, g.x, g.y - 20, 1, TEX.light); }
+      if (v) {
+        const b = this.gs.getBuilding(d.id), c = footprintCenter(b), g = gridToScreen(c.x, c.y), top = v.topCenter();
+        v.flash(this.time.now);
+        v.growPop(9, 10);
+        splashRing(this, g.x, g.y, 1.6, 0xffc83a, { duration: 700, depth: 2710 });
+        splashRing(this, g.x, g.y, 1.0, 0xffffff, { duration: 500, depth: 2710 });
+        sparklerFx(this, g.x, top.y + 20, 1.2, TEX.light);
+        sparklerFx(this, g.x, (top.y + g.y) / 2, 1.4, TEX.light);
+        tag(top.x, top.y - 12, 'MERGED!', '#ffe066', 22);
+        this.cameras.main.shake(140, 0.003);
+      }
+      // The merge sound alone (no upgrade / ability-unlocked sounds on top).
+      playSfx(this, this.cache.audio.exists(SFX.merge) ? SFX.merge : SFX.upgrade);
+      this.updateSelectionVisuals();
+    });
     on('flak', (d) => { const s = at(d); splashRing(this, s.x, s.y - 24, 0.6, 0xffe08a, { duration: 300, depth: 2710 }); playSfx(this, SFX.cannonFire); });
     on('broadside', (d) => { overBuilding(d.id, 'Broadside!', '#ffffff'); playSfx(this, SFX.cannonFire); });
     on('volleyLock', (d) => overBuilding(d.id, 'Volley!', '#ffffff'));
@@ -1679,6 +1858,7 @@ export class GameScene extends Phaser.Scene {
     });
     const unlockSfx = this.cache.audio.exists(SFX.abilityUnlocked) ? SFX.abilityUnlocked : SFX.upgrade;
     on('abilityResearched', () => playSfx(this, unlockSfx));
+    on('masteryResearched', () => playSfx(this, unlockSfx)); // a Mastery tier researched in the RV Lab: the same sound as a perk
     // A level-up that reaches a new ability tier: wait until the upgrade sound has played (its length, minus a
     // small overlap UNLOCK_OVERLAP_MS), then the unlock sound. 0 when there was no upgrade just now (research).
     this.unlockDelay = () => {
@@ -1709,10 +1889,6 @@ export class GameScene extends Phaser.Scene {
       }
       this.updateSelectionVisuals();
     });
-    on('buildingSold', (d) => {
-      playSfx(this, SFX.sell);
-      if (this.selectedId === d.id) this.select(null);
-    });
     on('buildingMoved', () => this.updateSelectionVisuals());
     on('baseReset', () => this.select(null));
     on('waveTriggered', (d) => {
@@ -1728,6 +1904,7 @@ export class GameScene extends Phaser.Scene {
     });
     on('waveStarted', () => {
       if (this.placement) this.cancelPlacement();
+      this.cancelMergePick();
       this.setEditMode(false);
       playSfx(this, SFX.waveStart);
       this.playAttackMusic(); // hard cut to the attack soundtrack at full volume, no fade-in
@@ -1787,6 +1964,7 @@ export class GameScene extends Phaser.Scene {
     this.syncList(gs.projectiles, this.views.projectiles, (p) => new ProjectileView(this, p));
     this.syncList(gs.pools || [], this.views.pools, (p) => new PoolView(this, p));
     this.heroView.sync(gs, this.time.now);
+    this.queenView.sync(gs, this.time.now);
     if (this.placement && this.placement.mode === 'move') {
       const v = this.views.buildings.get(this.placement.id);
       if (v) v.setAlpha(0.3);

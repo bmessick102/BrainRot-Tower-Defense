@@ -220,22 +220,30 @@ export function fitIcon(img, w, h = w) {
   return img.setScale(Math.min(w / img.frame.width, h / img.frame.height));
 }
 
-// The Brisket King's portrait: his head (crown included) out of his standing picture, in hero_brisket.png pixels.
-const HERO_FACE = { key: 'hero_brisket', x: 44, y: 0, w: 100, h: 96 };
+// Hero portraits: the head (crown included) out of the standing picture, in its pixels. The Brisket King's
+// (hero_brisket) on a gold chip, the Hatsune Queen's (hero_queen, v0.8) on a teal one.
+const HERO_FACES = {
+  brisket: { key: 'hero_brisket', x: 44, y: 0, w: 100, h: 96, chip: 0xe0a82e, back: 0x3a2412 },
+  queen: { key: 'hero_queen', x: 61, y: 0, w: 70, h: 64, chip: 0x2fc7c0, back: 0x123a3a }
+};
+
+/** Which hero an altar type holds ('brisket' for 'altar', 'queen' for 'queenAltar'). */
+export const heroKindOf = (type) => (type === 'queenAltar' ? 'queen' : 'brisket');
 
 /**
- * The Brisket King's badge, shown wherever his altar is (shop card and info, How to Play, building info, RV Lab
- * list): a gold glossy chip with his portrait, centered on (x, y), `size` px square. Returns a container (empty if
- * his art isn't loaded) for the caller to add to its layer.
+ * A hero's badge, shown wherever its altar is (shop card and info, How to Play, building info, RV Lab list): a
+ * glossy chip with the hero's portrait, centered on (x, y), `size` px square. `kind`: 'brisket' (default) or
+ * 'queen'. Returns a container (empty if the art isn't loaded) for the caller to add to its layer.
  */
-export function addHeroBadge(scene, x, y, size = 40) {
+export function addHeroBadge(scene, x, y, size = 40, kind = 'brisket') {
   const c = scene.add.container(x, y);
-  if (!scene.textures.exists(HERO_FACE.key)) return c;
+  const f = HERO_FACES[kind] || HERO_FACES.brisket;
+  if (!scene.textures.exists(f.key)) return c;
   const g = scene.add.graphics();
-  drawGlossy(g, -size / 2, -size / 2, size, size, 0xe0a82e, { radius: Math.round(size * 0.28), lip: 3 });
-  g.fillStyle(0x3a2412, 1).fillRoundedRect(-size / 2 + 4, -size / 2 + 4, size - 8, size - 11, Math.round(size * 0.2));
-  const img = scene.add.image(0, 0, HERO_FACE.key).setOrigin(0, 0);
-  const f = HERO_FACE, inner = size - 10;
+  drawGlossy(g, -size / 2, -size / 2, size, size, f.chip, { radius: Math.round(size * 0.28), lip: 3 });
+  g.fillStyle(f.back, 1).fillRoundedRect(-size / 2 + 4, -size / 2 + 4, size - 8, size - 11, Math.round(size * 0.2));
+  const img = scene.add.image(0, 0, f.key).setOrigin(0, 0);
+  const inner = size - 10;
   const scale = Math.min(inner / f.w, inner / f.h);
   img.setCrop(f.x, f.y, f.w, f.h).setScale(scale);
   img.setPosition(-(f.x + f.w / 2) * scale, -(f.y + f.h / 2) * scale - 2);

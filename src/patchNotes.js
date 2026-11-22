@@ -2,7 +2,7 @@
 // once per `version` (the first time the title screen opens after an update; saved in ibtd.patchNotes), and its
 // "What's New" button opens it any time. Keep `version` equal to package.json's for the release it describes.
 //
-// One tab per minor update (v0.7.1): PATCH_NOTES is the newest (its tab is "v0.7 · Latest"), PATCH_HISTORY the older
+// One tab per minor update (v0.7.1): PATCH_NOTES is the newest (its tab is "v0.8 · Latest"), PATCH_HISTORY the older
 // ones, newest first. Each has `release` (the tab's name: '0.7'), `version` (its newest patch) and `sections`.
 // When a new minor update ships, the current PATCH_NOTES content moves to the front of PATCH_HISTORY.
 //
@@ -18,36 +18,40 @@
 const allEntries = (release) => release.sections.flatMap((s) => s.entries);
 
 export const PATCH_NOTES = {
-  release: '0.7',
-  version: '0.7.1',
-  title: "What's New in v0.7.1",
+  release: '0.8',
+  version: '0.8.0',
+  title: "What's New in v0.8",
   sections: [
     {
       type: 'feature',
       entries: [
         {
-          version: '0.7.0', icon: { texture: 'ui_league_champion' }, title: "Visit other players' villages",
-          text: 'Press the eye on the leaderboard, or use Settings > Find Players to search by name, league or Village Hall. A player\'s card shows their stats, achievements and league, and lets you look around their villages. Don\'t want visitors? Turn off "Let others view my villages" in Settings.'
+          version: '0.8.0', icon: { texture: 'hero_queen' }, title: 'New hero: the Hatsune Queen (from Village Hall 8)',
+          text: 'A crossbow hero with her own altar who shoots ground and air enemies from range while staying back. Her Encore Cloak (hotbar) hides her for 4 s while her bolts hit much harder and pierce. She has her own RV Lab tree with three paths.'
         },
         {
-          version: '0.7.0', icon: { enemy: 'babycar' }, title: 'Themed waves',
-          text: 'Every wave now has a theme (Iron Legion, Frozen Front, Sky Fire, Jungle Stampede and more) that rotates so no two waves in a row feel the same. Every 10th wave is a Boss Wave with the raid boss, and each new enemy gets a debut wave of its own.'
+          version: '0.8.0', icon: { texture: 'ui_merge_gear' }, title: 'Merge your defenses',
+          text: 'Two Level 10 Cannons, Locklair Towers, Litman Mortars or Firework Launchers can merge into one bigger building as strong as both, with its own special ability (the Firework Launcher becomes a Missile Silo) and a gold Mastery track. Select a Level 10 one and press Merge.'
         },
         {
-          version: '0.7.0', icon: { enemy: 'bicus' }, title: 'New enemy: Bri Bri Bicus Dicus (from Village Hall 5)',
-          text: 'An armored legionary. Its armor bar has to be broken before it takes any health damage, and the hit that breaks the armor is spent on it. Heavy hitters crack it fastest.'
+          version: '0.8.0', icon: { enemy: 'quandale' }, title: 'New enemy: Quandale Dingle (from Village Hall 7)',
+          text: 'A fast street fighter. When he gets close he dashes into a building with a big impact hit that stuns it for a moment, then keeps punching. A wall in his way stops the dash.'
         },
         {
-          version: '0.7.0', icon: { enemy: 'frigo' }, title: 'New enemy: Frigo Camillo (from Village Hall 6)',
-          text: 'A fridge on legs with a freezing aura: your defenses and the Brisket King attack 35% slower near it. Pick it off from range.'
+          version: '0.8.0', icon: { enemy: 'grimace' }, title: 'New enemy: Grimace Golem (from Village Hall 11)',
+          text: 'A huge purple tank that leaves goo as he walks. Troops that step in it get enraged (faster and harder hitting), and he leaves a big puddle when he falls. Take him down before the troops behind him reach the goo.'
         },
         {
-          version: '0.7.0', icon: { enemy: 'bombo' }, title: 'New enemy: Bombombini Gusini (from Village Hall 8)',
-          text: 'A fire-breathing goose. It burns one building at a time, and the flames scorch the buildings right next to it too. Only defenses that hit air can stop it.'
+          version: '0.8.0', icon: { building: 'townHall', level: 11 }, title: 'Village Halls 12 to 15',
+          text: 'Four more Village Hall levels, each with its own new buildings (more Towers of Rah, Gandolfs, Diddypults and more), extra walls and tougher waves. Open your Village Hall to see what the next level adds.'
         },
         {
-          version: '0.7.0', icon: { enemy: 'lirili' }, title: 'New enemy: Lirili Larila (from Village Hall 9)',
-          text: 'The new earthquake tank: its stomps hit every building and wall around it, and walls take the most.'
+          version: '0.8.0', icon: { texture: 'ui_start_button' }, title: '2x wave speed',
+          text: 'Press the 2x button next to Start Wave (or T) to play a wave at double speed. It stays on for the next waves until you turn it off.'
+        },
+        {
+          version: '0.8.0', icon: { texture: 'ui_medal_1' }, title: 'Leaderboard: every village',
+          text: 'Every village now has its own spot on the leaderboard, with its name under the player’s, so all your villages can climb it.'
         }
       ]
     },
@@ -55,61 +59,28 @@ export const PATCH_NOTES = {
       type: 'change',
       entries: [
         {
-          version: '0.7.0', icon: { enemy: 'chimp' }, title: 'Brr Brr Patapim drops Chimpanzinis (now from Village Hall 10)',
-          text: 'Patapim\'s earthquake went to Lirili Larila. Instead, as he walks in he drops a Chimpanzini Bananini every few seconds: they leap your walls and dive into the nearest building for one big hit.'
+          version: '0.8.0', icon: { building: 'townHall', level: 11 }, title: 'Village Hall 11: new defenses instead of Bonus Slots',
+          text: 'Bonus Slots are gone. Village Hall 11 now gives one more Tower of Rah, Gandolf, Diddypult, KSI Tower and Cannon. Villages keep every building they built with Bonus Slots: they all keep working, you just can’t build another of that kind until you’re under the limit.'
         },
         {
-          version: '0.7.1', icon: { enemy: 'yahu' }, title: 'Big Yahu: airstrikes hit one building',
-          text: 'Big Yahu’s missiles now hit only the building they’re aimed at (the red target is drawn around it), instead of everything nearby.'
+          version: '0.8.0', icon: { building: 'cannon', level: 10 }, title: 'No more selling',
+          text: 'Every Village Hall allows a set number of each building, so selling is gone: rearrange your village by moving buildings in edit mode instead. Nothing was taken from your village.'
         },
         {
-          version: '0.7.1', icon: { building: 'cannon' }, title: 'Visiting: new building cards',
-          text: 'Tapping a building in someone else’s village opens a card like the game’s own: its picture, health, size, damage, range and targets, and its perks in their path colors.'
+          version: '0.8.0', icon: { enemy: 'grimace' }, title: 'Two new wave themes',
+          text: 'Dash Gang (Quandale Dingles with Sharks) and Goo Parade (Grimace Golems leading the horde) join the rotation once those enemies are in your waves.'
         },
         {
-          version: '0.7.1', icon: { enemy: 'grunt' }, title: 'Incoming troops fold up',
-          text: 'The list of troops by each red arrow now starts as one small button with the total. Click or tap it to see every troop in the wave, and press Hide to fold it again.'
+          version: '0.8.0', icon: { texture: 'ui_league_champion' }, title: 'Visit from the player’s profile',
+          text: 'The button on each leaderboard and Find Players row is now Profile. Visit their villages from inside the profile; Back returns you to their profile, then the list you came from.'
         },
         {
-          version: '0.7.1', icon: { texture: 'ui_league_champion' }, title: 'Green Visit buttons',
-          text: 'The round eye buttons on the leaderboard, in Find Players and on player cards are now green Visit buttons, so it’s clear how to look around someone’s village.'
+          version: '0.8.0', icon: { enemy: 'tank' }, title: 'Title screen',
+          text: 'Tripi Tropi, the fish giant, is smaller on the title screen so he no longer towers over everyone.'
         },
         {
-          version: '0.7.1', icon: { texture: 'ui_start_button' }, title: 'What’s New: past updates',
-          text: 'This window has a tab for each update. Press one to read what came in it, like v0.6’s KSI Tower and Village Hall 11.'
-        },
-        {
-          version: '0.7.1', icon: { enemy: 'frigo' }, title: 'More enemies speak up',
-          text: 'Bri Bri Bicus Dicus, Frigo Camillo, Brr Brr Patapim, Lirili Larila and Da Baby Car now shout their lines now and then during a raid.'
-        },
-        {
-          version: '0.7.1', icon: { enemy: 'bones' }, title: 'How to Play: see the troops enemies bring',
-          text: 'Rahhh Skeleton, Brr Brr Patapim and the Neegy Balloon have a button on their page that opens the troop they bring (Skeleton, Chimpanzini, Neegy), and that page has one to go back.'
-        },
-        {
-          version: '0.7.1', icon: { texture: 'ui_medal_2' }, title: 'Leaderboard ranks and league badges stand out',
-          text: 'The gold, silver and bronze medals are sized by place, and every other rank sits on its own badge so it’s easy to read. League badges grow a little with each league too, from Bronze up to WarLord.'
-        },
-        {
-          version: '0.7.0', icon: { texture: 'ui_medal_1' }, title: 'Leaderboard medals',
-          text: 'The top three players on the leaderboard now wear gold, silver and bronze medals.'
-        },
-        {
-          version: '0.7.0', icon: { building: 'rvlab' }, title: 'How to Play and the RV Lab, tidied',
-          text: 'How to Play lists all 22 enemies, with a new Summoned group for the troops other enemies bring. The RV Lab\'s building list has cleaner rows that no longer overlap.'
-        }
-      ]
-    },
-    {
-      type: 'balance',
-      entries: [
-        {
-          version: '0.7.1', icon: { enemy: 'bicus' }, title: 'Bri Bri Bicus Dicus: tougher armor',
-          text: 'While its armor holds, it takes 30% less damage from every hit. Once the armor breaks, it takes full damage.'
-        },
-        {
-          version: '0.7.0', icon: { enemy: 'tank' }, title: 'Late waves make room for the new enemies',
-          text: 'From Village Hall 9 up, the regular troops thin out a bit more as the new enemies join, so a wave stays about as strong as before (within 5%).'
+          version: '0.8.0', icon: { texture: 'ui_settings_button' }, title: 'New perk sound',
+          text: 'Researching a perk in the RV Lab has a new sound, and Mastery tiers play it too.'
         }
       ]
     },
@@ -117,8 +88,28 @@ export const PATCH_NOTES = {
       type: 'fix',
       entries: [
         {
-          version: '0.7.1', icon: { building: 'fuelStation' }, title: 'Fuel Station text fits',
-          text: 'The Fuel Station’s info, shop card and Brew window no longer have text running over buttons or out of their boxes.'
+          version: '0.8.0', icon: { building: 'townHall', level: 1 }, title: 'Village drawn as plain blocks',
+          text: 'On a slow or patchy connection, pictures that failed to load stayed as plain blocks all game. The game now keeps trying, swaps buildings in when they arrive, and offers Retry and Reload if pictures still won’t load.'
+        },
+        {
+          version: '0.8.0', icon: { hero: true }, title: 'Hero health bar not full',
+          text: 'After upgrading a hero’s altar, the hero’s health bar looked hurt even at full health. It now stays full.'
+        },
+        {
+          version: '0.8.0', icon: { texture: 'ui_settings_button' }, title: 'Sound with the sliders at 0',
+          text: 'Music, ambience and some sounds kept playing after you turned the sliders down (in the pause menu or mid-sound). Every slider now silences its sounds right away.'
+        },
+        {
+          version: '0.8.0', icon: { texture: 'ui_league_champion' }, title: 'Black screen when visiting a village',
+          text: 'Visiting a big village showed a black screen while its pictures loaded. The village now appears right away and fills in, and if something goes wrong you get a message and a Back button.'
+        },
+        {
+          version: '0.8.0', icon: { texture: 'ui_league_champion' }, title: 'Buttons stuck after visiting a village',
+          text: 'Coming back from someone’s village and closing their card left every title screen button unclickable until a refresh. They work again.'
+        },
+        {
+          version: '0.8.0', icon: { enemy: 'quandale' }, title: 'Enemies drawn as a plain box',
+          text: 'An enemy whose picture hadn’t loaded showed up as a plain box. It now shows a simple stand-in figure instead (reload the page to get its picture back).'
         }
       ]
     }
@@ -129,6 +120,113 @@ export const PATCH_NOTES = {
 
 /** Older updates, newest first: one What's New tab each (players can read them any time). */
 export const PATCH_HISTORY = [
+  {
+    release: '0.7',
+    version: '0.7.1',
+    sections: [
+      {
+        type: 'feature',
+        entries: [
+          {
+            version: '0.7.0', icon: { texture: 'ui_league_champion' }, title: "Visit other players' villages",
+            text: 'Press the eye on the leaderboard, or use Settings > Find Players to search by name, league or Village Hall. A player\'s card shows their stats, achievements and league, and lets you look around their villages. Don\'t want visitors? Turn off "Let others view my villages" in Settings.'
+          },
+          {
+            version: '0.7.0', icon: { enemy: 'babycar' }, title: 'Themed waves',
+            text: 'Every wave now has a theme (Iron Legion, Frozen Front, Sky Fire, Jungle Stampede and more) that rotates so no two waves in a row feel the same. Every 10th wave is a Boss Wave with the raid boss, and each new enemy gets a debut wave of its own.'
+          },
+          {
+            version: '0.7.0', icon: { enemy: 'bicus' }, title: 'New enemy: Bri Bri Bicus Dicus (from Village Hall 5)',
+            text: 'An armored legionary. Its armor bar has to be broken before it takes any health damage, and the hit that breaks the armor is spent on it. Heavy hitters crack it fastest.'
+          },
+          {
+            version: '0.7.0', icon: { enemy: 'frigo' }, title: 'New enemy: Frigo Camillo (from Village Hall 6)',
+            text: 'A fridge on legs with a freezing aura: your defenses and the Brisket King attack 35% slower near it. Pick it off from range.'
+          },
+          {
+            version: '0.7.0', icon: { enemy: 'bombo' }, title: 'New enemy: Bombombini Gusini (from Village Hall 8)',
+            text: 'A fire-breathing goose. It burns one building at a time, and the flames scorch the buildings right next to it too. Only defenses that hit air can stop it.'
+          },
+          {
+            version: '0.7.0', icon: { enemy: 'lirili' }, title: 'New enemy: Lirili Larila (from Village Hall 9)',
+            text: 'The new earthquake tank: its stomps hit every building and wall around it, and walls take the most.'
+          }
+        ]
+      },
+      {
+        type: 'change',
+        entries: [
+          {
+            version: '0.7.0', icon: { enemy: 'chimp' }, title: 'Brr Brr Patapim drops Chimpanzinis (now from Village Hall 10)',
+            text: 'Patapim\'s earthquake went to Lirili Larila. Instead, as he walks in he drops a Chimpanzini Bananini every few seconds: they leap your walls and dive into the nearest building for one big hit.'
+          },
+          {
+            version: '0.7.1', icon: { enemy: 'yahu' }, title: 'Big Yahu: airstrikes hit one building',
+            text: 'Big Yahu’s missiles now hit only the building they’re aimed at (the red target is drawn around it), instead of everything nearby.'
+          },
+          {
+            version: '0.7.1', icon: { building: 'cannon' }, title: 'Visiting: new building cards',
+            text: 'Tapping a building in someone else’s village opens a card like the game’s own: its picture, health, size, damage, range and targets, and its perks in their path colors.'
+          },
+          {
+            version: '0.7.1', icon: { enemy: 'grunt' }, title: 'Incoming troops fold up',
+            text: 'The list of troops by each red arrow now starts as one small button with the total. Click or tap it to see every troop in the wave, and press Hide to fold it again.'
+          },
+          {
+            version: '0.7.1', icon: { texture: 'ui_league_champion' }, title: 'Green Visit buttons',
+            text: 'The round eye buttons on the leaderboard, in Find Players and on player cards are now green Visit buttons, so it’s clear how to look around someone’s village.'
+          },
+          {
+            version: '0.7.1', icon: { texture: 'ui_start_button' }, title: 'What’s New: past updates',
+            text: 'This window has a tab for each update. Press one to read what came in it, like v0.6’s KSI Tower and Village Hall 11.'
+          },
+          {
+            version: '0.7.1', icon: { enemy: 'frigo' }, title: 'More enemies speak up',
+            text: 'Bri Bri Bicus Dicus, Frigo Camillo, Brr Brr Patapim, Lirili Larila and Da Baby Car now shout their lines now and then during a raid.'
+          },
+          {
+            version: '0.7.1', icon: { enemy: 'bones' }, title: 'How to Play: see the troops enemies bring',
+            text: 'Rahhh Skeleton, Brr Brr Patapim and the Neegy Balloon have a button on their page that opens the troop they bring (Skeleton, Chimpanzini, Neegy), and that page has one to go back.'
+          },
+          {
+            version: '0.7.1', icon: { texture: 'ui_medal_2' }, title: 'Leaderboard ranks and league badges stand out',
+            text: 'The gold, silver and bronze medals are sized by place, and every other rank sits on its own badge so it’s easy to read. League badges grow a little with each league too, from Bronze up to WarLord.'
+          },
+          {
+            version: '0.7.0', icon: { texture: 'ui_medal_1' }, title: 'Leaderboard medals',
+            text: 'The top three players on the leaderboard now wear gold, silver and bronze medals.'
+          },
+          {
+            version: '0.7.0', icon: { building: 'rvlab' }, title: 'How to Play and the RV Lab, tidied',
+            text: 'How to Play lists all 22 enemies, with a new Summoned group for the troops other enemies bring. The RV Lab\'s building list has cleaner rows that no longer overlap.'
+          }
+        ]
+      },
+      {
+        type: 'balance',
+        entries: [
+          {
+            version: '0.7.1', icon: { enemy: 'bicus' }, title: 'Bri Bri Bicus Dicus: tougher armor',
+            text: 'While its armor holds, it takes 30% less damage from every hit. Once the armor breaks, it takes full damage.'
+          },
+          {
+            version: '0.7.0', icon: { enemy: 'tank' }, title: 'Late waves make room for the new enemies',
+            text: 'From Village Hall 9 up, the regular troops thin out a bit more as the new enemies join, so a wave stays about as strong as before (within 5%).'
+          }
+        ]
+      },
+      {
+        type: 'fix',
+        entries: [
+          {
+            version: '0.7.1', icon: { building: 'fuelStation' }, title: 'Fuel Station text fits',
+            text: 'The Fuel Station’s info, shop card and Brew window no longer have text running over buttons or out of their boxes.'
+          }
+        ]
+      }
+    ],
+    get entries() { return allEntries(this); }
+  },
   {
     release: '0.6',
     version: '0.6.3',

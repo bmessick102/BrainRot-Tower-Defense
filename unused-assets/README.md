@@ -132,3 +132,36 @@ v0.7.1 voice lines (lirili cropped to 3 s):
 | `brr-brr-patapim.mp3` | `art-source/audio/sfx_patapim_voice.mp3` |
 | `lirili-larila.mp3` | `art-source/audio/sfx_lirili_voice.mp3` |
 | `Da Baby Car Sound Effect.mp3` | `art-source/audio/sfx_babycar_voice.mp3` (v0.7.1, Da Baby Car's voice line) |
+
+v0.8.0 new enemies (Quandale Dingle, Grimace Golem):
+
+| Dropped file | Installed as |
+| --- | --- |
+| `Quandale Dingle Idle Image.png` | `art-source/enemies/enemy_quandale.png` |
+| `Quandale Dingle Attack Pose.png` | `art-source/enemies/enemy_quandale_attack.png` |
+| `Quanddale dingle death pose.png` | `art-source/enemies/enemy_quandale_death.png` |
+| `Grimace Enemy Idle.png` | `art-source/enemies/enemy_grimace.png` |
+| `Grimace Enemy Attack.png` | `art-source/enemies/enemy_grimace_attack.png` |
+| `Grimace Enemy death image.png` | `art-source/enemies/enemy_grimace_death.png` |
+| `Quandale Dingle Dash Start Sound Effect.mp3` | `art-source/audio/sfx_quandale_dash.mp3` |
+| `Quandale dingle troop random sound effect.mp3` | `art-source/audio/sfx_quandale_voice.mp3` |
+| `Gear Icon Image.png` | `art-source/ui/ui_merge_gear.png` (v0.8.0, the badge over merged defenses) |
+| `Merged Locklair Tower.png` | `art-source/buildings/bld_archer_merged.png` (v0.8.0, the Locklair Citadel) |
+| `Merged Mortar Image.png` | `art-source/buildings/bld_mortar_merged.png` (v0.8.0, the merged Mortar, three barrels) |
+| `Merged Litman Mortar V2.png` | `art-source/buildings/bld_mortar_merged.png` (v0.8.0, replaces the first merged Mortar picture) |
+| `Merged Firework Launcher aimed left image 2.png` | `art-source/buildings/bld_firework_merged_left.png` (v0.8.0, merged Firework Launcher, aiming left) |
+| `Merged Firework Launcher aimed right Image.png` | `art-source/buildings/bld_firework_merged_right.png` (v0.8.0, aiming right) |
+| `merged cannon_sprites.zip` (and an identical `cannon_sprites.zip`) | `art-source/buildings/bld_cannon_merged_dl/_dr/_ul/_ur.png` (v0.8.0, the Mega Cannon, 4 facings) |
+
+v0.8 drops (the Hatsune Queen):
+
+| Dropped file | Installed as |
+| --- | --- |
+| `Hatsune Queen Alter Level 1.png` ... `Level 5.png` | `art-source/buildings/bld_queenAltar_lv1.png` ... `lv5.png` |
+| `Hatsune Queen Idle Image.png` | `art-source/heroes/hero_queen.png` |
+| `hatsune Queen shooting pose image.png` | `art-source/heroes/hero_queen_attack.png` |
+| `Hatsune Queen Sleeping or Knocked out pose.png` | `art-source/heroes/hero_queen_sleep.png` (also her knocked-out picture) |
+| `hatsune queen clicked on sound.mp3` | `art-source/audio/sfx_queen_select.mp3` |
+| `Merge Building Sound.mov` | `art-source/audio/sfx_merge.mp3` (v0.8.0, audio extracted with ffmpeg; plays when two buildings merge) |
+| `New Perk Unlocked sound.mp3` | `art-source/audio/sfx_ability_unlocked.mp3` (v0.8.0, replaces the old perk-researched sound) |
+| `sfx_ability_unlocked_v1.mp3` | the old perk-researched sound it replaced (kept for reference) |

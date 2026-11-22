@@ -124,7 +124,9 @@ export class LocalBackend {
     const same = (k) => fields[k] === undefined || JSON.stringify(fields[k] ?? null) === JSON.stringify(b[k] ?? null);
     const content = !same('save') || !same('checkpoint');
     const { updatedAt, userId, id: _id, ...rest } = fields; // eslint-disable-line no-unused-vars
+    const before = b.bestWave || 0;
     Object.assign(b, rest);
+    if ((b.bestWave || 0) > before) b.bestWaveAt = now(); // when the best wave last went up (earlier wins leaderboard ties)
     if (content) b.updatedAt = new Date(Math.max(Date.now(), (Date.parse(b.updatedAt) || 0) + 1)).toISOString();
     this.write(d);
     return { updatedAt: b.updatedAt };
@@ -189,13 +191,21 @@ export class LocalBackend {
   async leaderboard(limit = 10) {
     await wait();
     const d = this.db();
-    const rows = d.stats.filter((s) => s.bestWave > 0)
-      .sort((a, b) => b.bestWave - a.bestWave || String(a.reachedAt).localeCompare(String(b.reachedAt)))
-      .map((s, i) => {
-        const u = d.users.find((x) => x.id === s.userId);
-        return { rank: i + 1, username: u ? u.username : '?', bestWave: s.bestWave, bestTownHall: s.bestTownHall, isMe: s.userId === this.userId };
-      });
-    return rows.filter((r) => r.rank <= limit || r.isMe);
+    // One row per village (like get_village_leaderboard): best wave first, then who got there first.
+    const bases = d.bases.filter((b) => b.bestWave > 0).sort((a, b) => b.bestWave - a.bestWave
+      || String(a.bestWaveAt || a.updatedAt).localeCompare(String(b.bestWaveAt || b.updatedAt)) || String(a.id).localeCompare(String(b.id)));
+    const seen = new Set();
+    const rows = bases.map((b, i) => {
+      const u = d.users.find((x) => x.id === b.userId);
+      const isMe = b.userId === this.userId, first = !seen.has(b.userId);
+      seen.add(b.userId);
+      const hidden = u && u.publicBases === false && !isMe;
+      return {
+        rank: i + 1, username: u ? u.username : '?', villageName: hidden ? null : b.name, bestWave: b.bestWave, bestTownHall: b.townHall || 0,
+        isMe, first
+      };
+    });
+    return rows.filter((r) => r.rank <= limit || (r.isMe && r.first)).map(({ first, ...r }) => r); // eslint-disable-line no-unused-vars
   }
 
   // ---------- other players (v0.7): search, player cards, visiting villages ----------

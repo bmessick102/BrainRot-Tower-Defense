@@ -2,7 +2,7 @@
 import { CONFIG } from '../config.js';
 import { gridToScreen } from '../logic/iso.js';
 import { fpW, fpH } from '../logic/grid.js';
-import { maxHp, maxLevel, BUILDING_TYPES } from '../logic/buildings.js';
+import { maxHp, maxLevel, BUILDING_TYPES, mergedConfigOf } from '../logic/buildings.js';
 import { mineShowsCoin, mineFill } from '../logic/economy.js';
 import { isWaveActive } from '../logic/util.js';
 import { buildingKey, buildingLevelKey, buildingDestroyedKey, TEX } from '../assetKeys.js';
@@ -14,6 +14,7 @@ import { darkness, lerpColor } from './DayNight.js';
 import { hypeFill } from '../logic/dj.js';
 import { hasAbilities, picksOf, MAX_TIER, canResearchSomething } from '../logic/abilities.js';
 import { PATH_COLORS } from '../abilityConfig.js';
+import { facingToward, masteryLevel, masteryTierCount } from '../logic/merge.js';
 import { requestImages, imageRequested } from '../assetLoader.js';
 import { artGroup, isDeferredImage } from '../assetPlan.js';
 
@@ -24,6 +25,8 @@ const HYPE_W = 40, HYPE_STACK = 20;
 const IDLE_TURN_MS = [2500, 7000];
 // The label chip: level badge radius, ability pip radius and spacing.
 const CHIP_R = 10, PIP_R = 5, PIP_GAP = 12;
+// A merged defense's Mastery pips: gold stars after the five perk pips, past a small divider.
+const MASTERY_SEP = 8, STAR_GAP = 13;
 const FLASH_MIN_GAP_MS = 400;
 
 // Night lighting: a pool of light on the ground around each standing building.
@@ -39,7 +42,7 @@ const BUILDING_LIT_TOP = 0xe2e6f8;
 const BUILDING_LIT_WARMTH = 0.2;
 const LIGHT_COLORS = {
   townHall: 0xffa23c, mine: 0xffa23c, storage: 0xffb43c, house: 0xffc86b, cannon: 0xff8a3c,
-  archer: 0xff9a3c, mortar: 0xff7a3c, wizard: 0xb066ff, firework: 0xff4d6d, catapult: 0xff5fa8, spear: 0xc98a4a, ksi: 0x6cc8ff, flock: 0x4cd6ff, mousetrap: 0xffc24a, ra: 0xff7a2a, rvlab: 0xffd27a, dj: 0xc070ff, altar: 0xffb04a, fuelStation: 0xffc24a
+  archer: 0xff9a3c, mortar: 0xff7a3c, wizard: 0xb066ff, firework: 0xff4d6d, catapult: 0xff5fa8, spear: 0xc98a4a, ksi: 0x6cc8ff, flock: 0x4cd6ff, mousetrap: 0xffc24a, ra: 0xff7a2a, rvlab: 0xffd27a, dj: 0xc070ff, altar: 0xffb04a, queenAltar: 0x7ff0e8, fuelStation: 0xffc24a
 };
 
 // Shared rubble art for any building without its own bld_<type>_destroyed picture. Every variant that
@@ -115,6 +118,38 @@ export function buildingTextureKey(scene, type, level, destroyed = false, rubble
   return buildingKey(type);
 }
 
+// ---------- merged defenses (CONFIG.merges) ----------
+/** A merged building's own picture (CONFIG.merges[type].art.key) when it's loaded and real art, else null. */
+export function mergedArtKey(scene, b) {
+  const m = mergedConfigOf(b);
+  if (!m || b.destroyed || !m.art) return null;
+  const k = m.art.key, placeholders = scene.registry.get('placeholderKeys');
+  return scene.textures.exists(k) && !(placeholders && placeholders.has(k)) ? k : null;
+}
+
+/** A merged building still waiting for its picture: drawn as its max-level picture, bigger, with a gold glow. */
+export function isMergedStandIn(scene, b) {
+  return !!mergedConfigOf(b) && !b.destroyed && !mergedArtKey(scene, b);
+}
+
+/** The picture a building shows: a merged one's own art, else its level's (buildingTextureKey). Never a missing texture. */
+export function buildingPictureKey(scene, b, rubbleRoll = 0) {
+  return mergedArtKey(scene, b) || buildingTextureKey(scene, b.type, b.level, b.destroyed, rubbleRoll);
+}
+
+/** How much bigger a merged building is drawn than its max-level picture (1 when not merged). */
+export function mergedSizeFactor(scene, b) {
+  const m = mergedConfigOf(b);
+  if (!m || b.destroyed) return 1;
+  const art = m.art || {};
+  return isMergedStandIn(scene, b) ? art.standInScale || 1.15 : art.scale || 1;
+}
+
+/** The gear that marks merged buildings (ui_merge_gear; nothing is drawn when its art is missing). */
+export const MERGE_GEAR = 'ui_merge_gear';
+const GEAR_SIZE = 28;
+const GEAR_GAP = 4; // between the gear and the level badge
+
 // Sprite width as a share of the footprint width, so every building sits inside its tiles with a margin.
 // Cannon and Mortar art paints bulkier than the rest, so they get a little less.
 const DEFAULT_SPRITE_SCALE = 0.75;
@@ -127,7 +162,8 @@ const DEFAULT_SPRITE_SCALE = 0.75;
 // Tower of Rah: a tall, slim tower, drawn narrower than its footprint (it starts small and grows a lot).
 // RV Lab: a long RV on its own paved pad; 0.77 of its 2x2 footprint (10% bigger than the earlier 0.7).
 // KSI Tower: a tall, slim tower like the Locklair's, a little narrower than the default.
-const SPRITE_SCALE = { mortar: 0.65, cannon: 0.63, firework: 0.52, catapult: 0.66, spear: 0.66, ksi: 0.62, flock: 1.28, mousetrap: 1.1, ra: 0.54, rvlab: 0.77, dj: 0.77, altar: 0.66, fuelStation: 0.8 };
+// Mortar: 0.585 (was 0.65, v0.8: 10% smaller at every level so the 25% bigger merged Triple Mortar stands out).
+const SPRITE_SCALE = { mortar: 0.585, cannon: 0.63, firework: 0.52, catapult: 0.66, spear: 0.66, ksi: 0.62, flock: 1.28, mousetrap: 1.1, ra: 0.54, rvlab: 0.77, dj: 0.77, altar: 0.66, queenAltar: 0.66, fuelStation: 0.8 };
 
 // Buildings grow as they level up: this share of their normal size at Level 1, up to LEVEL_SIZE.max at
 // their top level (Level 10, or the type's own top level). They only grow on upgrades that keep the same
@@ -175,7 +211,7 @@ function topLevelOf(type) {
 // Flat pads whose picture shows thick sides: the share of the picture's height (from its bottom) where its
 // side corners meet the ground. That point goes on the footprint's center, so the pad sits flush with its
 // tiles instead of floating above them. (The Brisket King's altar: about 0.44 in all 5 pictures.)
-const GROUND_SHARE = { altar: 0.44 };
+const GROUND_SHARE = { altar: 0.44, queenAltar: 0.45 }; // (the Hatsune Queen's: about 0.45)
 
 export function spriteScale(type) {
   return SPRITE_SCALE[type] ?? DEFAULT_SPRITE_SCALE;
@@ -295,13 +331,18 @@ export class BuildingView {
     // Roll a rubble variant once each time the building is destroyed; clear it when it's repaired.
     if (b.destroyed && this.rubbleRoll === undefined) this.rubbleRoll = Math.random();
     if (!b.destroyed) this.rubbleRoll = undefined;
-    const key = this.variantKey(b, buildingTextureKey(this.scene, b.type, b.level, b.destroyed, this.rubbleRoll), time);
+    const key = this.variantKey(b, buildingPictureKey(this.scene, b, this.rubbleRoll), time); // (a merged one's own art)
     if (key !== this.key) {
       this.sprite.setTexture(key);
       this.key = key;
     }
     this.b = b;
     let front = placeBuildingSprite(this.sprite, b.col, b.row, b.size, b.type, b.level);
+    // A merged defense: its own picture at its size, or the max-level picture drawn bigger (standing on the same spot).
+    const mergeK = mergedSizeFactor(this.scene, b);
+    if (mergeK !== 1) this.sprite.setScale(this.sprite.scaleX * mergeK, this.sprite.scaleY * mergeK);
+    const merged = !!mergedConfigOf(b) && !b.destroyed;
+    const standIn = merged && isMergedStandIn(this.scene, b);
     if (b.destroyed && FLAT_RUBBLE[b.type] && key === buildingDestroyedKey(b.type)) {
       // A flat pile: centered on the footprint, nearly as wide as it (depth stays the building's).
       const c = gridToScreen(b.col + b.size / 2, b.row + b.size / 2);
@@ -325,24 +366,33 @@ export class BuildingView {
     const picks = b.destroyed ? [] : picksOf(b);
     // Every building with a perk tree shows its 5-slot perk bar (empty until perks are researched).
     const hasPips = !b.destroyed && hasAbilities(b.type);
-    const pipsW = hasPips ? PIP_GAP * MAX_TIER + 4 : 0;
+    // A merged defense adds its Mastery stars (one per tier, gold once researched) to the perk bar.
+    const mTiers = merged && hasPips ? masteryTierCount(b.type) : 0;
+    const mHave = mTiers && this.scene.gs ? masteryLevel(this.scene.gs, b.type) : 0;
+    const mastery = mTiers ? { have: mHave, tiers: mTiers } : null;
+    const pipsW = hasPips ? PIP_GAP * MAX_TIER + 4 + (mastery ? MASTERY_SEP + STAR_GAP * mTiers : 0) : 0;
     const rowY = top - 12;
+    // Merged: the gear sits left of the level badge, on the health bar or on the label chip, whichever shows.
+    if (merged !== this.gearOn) { this.gearOn = merged; this.hpBar.setGear(merged ? MERGE_GEAR : null, GEAR_SIZE); this.chipKey = ''; }
+    const gearW = merged && this.scene.textures.exists(MERGE_GEAR) ? GEAR_SIZE + GEAR_GAP : 0;
     if (damaged) {
       // [health bar][pips], centered together.
       const barW = this.hpBar.width, gap = labels && pipsW ? 6 : 0, shown = labels ? pipsW : 0;
-      const left = front.x - (barW + gap + shown) / 2;
+      const left = front.x - (barW + gap + shown) / 2 + gearW / 2;
       this.hpBar.draw(left + barW / 2, rowY - this.hpBar.height / 2, b.hp / max, true, b.level);
       this.badge.setVisible(labels && pipsW > 0).setPosition(left + barW + gap, rowY);
-      if (labels && pipsW) this.drawChip(picks, null, true);
+      if (labels && pipsW) this.drawChip(picks, null, true, false, mastery);
     } else {
       this.hpBar.draw(front.x, rowY, 1, false, b.level);
       this.badge.setVisible(labels);
       if (labels) {
         const w = CHIP_R * 2 + (pipsW ? 4 + pipsW : 0);
-        this.badge.setPosition(front.x - w / 2, rowY);
-        this.drawChip(picks, b.level, hasPips);
+        this.badge.setPosition(front.x - w / 2 + gearW / 2, rowY);
+        this.drawChip(picks, b.level, hasPips, merged, mastery);
       }
     }
+
+    this.drawMergeGlow(standIn, time);
 
     if (this.researchIcon) {
       // Re-checked a few times a second (it looks through every defense's paths).
@@ -361,6 +411,7 @@ export class BuildingView {
 
     if (this.hypeGfx) this.drawHype(b, front.x, top - 12, time, labels || damaged, labels);
     if (this.silencedGfx) this.drawSilenced(b, front.x, top - 36, time);
+    if (b.stunT > 0 || this.stunGfx) this.drawStun(b, front.x, top + 24, time);
 
     if (this.coin) {
       const show = mineShowsCoin(b) && !isWaveActive(this.scene.gs); // no collecting while a wave attacks
@@ -380,7 +431,10 @@ export class BuildingView {
     if (!this.flashUntil) {
       const moon = this.scene.ambientTint ?? 0xffffff;
       if (b.sprung) this.sprite.setTint(0x7a7a7a); // a sprung trap looks spent until it resets
+      // A copy you can merge with (picking the second building, GameScene.beginMergePick): a pulsing gold glow.
+      else if (this.scene.mergeTargets && this.scene.mergeTargets.has(b.id)) this.sprite.setTint(lerpColor(0xffc040, 0xfff6d0, 0.5 + 0.5 * Math.sin(time * 0.008)));
       else if (b.silencedT > 0 && !b.destroyed) this.sprite.setTint(0x8a8a8a); // silenced by John Pork: switched off, grey
+      else if (b.stunT > 0 && !b.destroyed) this.sprite.setTint(0xa8a8b8);       // stunned by Quandale's dash impact: dazed, grey
       // Slowed by a Frigo Camillo's cold aura (v0.7): a frosty blue, gently shimmering.
       else if (b.frigoSlow > 0 && !b.destroyed && CONFIG.defenses[b.type]) this.sprite.setTint(lerpColor(0x9fd8ff, 0xd6f0ff, 0.5 + 0.5 * Math.sin(time * 0.008)));
       // Boosted by DJ Babyface's Drop the Beat: the defense pulses between pink and cyan party lights.
@@ -399,7 +453,7 @@ export class BuildingView {
         const top = lerpColor(moon, BUILDING_LIT_TOP, night);
         const bottom = lerpColor(moon, lerpColor(0xffffff, LIGHT_COLORS[b.type] || 0xffa23c, BUILDING_LIT_WARMTH), night);
         this.sprite.setTint(top, top, bottom, bottom);
-      } else this.sprite.setTint(moon); // moonlit at night (rubble has no light)
+      } else this.sprite.setTint(standIn ? lerpColor(moon, 0xffd27a, 0.28) : moon); // moonlit at night (rubble has no light); a merged stand-in: golden
     }
     // Invisibility spell: see-through while it lasts (enemies can't see it either).
     this.sprite.setAlpha(this.baseAlpha * this.fade * (b.spellInvisT > 0 && !b.destroyed ? 0.4 + 0.08 * Math.sin(time * 0.01) : 1));
@@ -419,14 +473,28 @@ export class BuildingView {
    * empty for tiers it doesn't have yet; all empty before any research), on one dark pill. `pips` false: just
    * the level badge (buildings without a perk tree). Redrawn only on change.
    */
-  drawChip(picks, level, pips) {
-    const key = `${picks.join('')}|${level}|${pips}`;
+  drawChip(picks, level, pips, gear = false, mastery = null) {
+    const key = `${picks.join('')}|${level}|${pips}|${gear}|${mastery ? `${mastery.have}/${mastery.tiers}` : ''}`;
     if (key === this.chipKey) return;
     this.chipKey = key;
     const g = this.chipGfx;
     g.clear();
+    // A merged defense's gear, just left of the level badge with a small gap, on a dark gold-rimmed disc (drawn below).
+    const showGear = gear && level !== null && this.scene.textures.exists(MERGE_GEAR);
+    if (showGear && !this.chipGear) { this.chipGear = this.scene.add.image(0, 0, MERGE_GEAR); this.badge.add(this.chipGear); }
+    if (this.chipGear) {
+      this.chipGear.setVisible(showGear);
+      if (showGear) this.chipGear.setScale((GEAR_SIZE - 4) / Math.max(this.chipGear.frame.width, this.chipGear.frame.height)).setPosition(-GEAR_SIZE / 2 - GEAR_GAP, 0);
+    }
+    if (showGear) {
+      const gx = -GEAR_SIZE / 2 - GEAR_GAP;
+      g.fillStyle(0xffc83a, 0.3).fillCircle(gx, 0, GEAR_SIZE / 2 + 3);
+      g.fillStyle(0x1d1812, 0.9).fillCircle(gx, 0, GEAR_SIZE / 2);
+      g.lineStyle(2, 0xffc83a, 1).strokeCircle(gx, 0, GEAR_SIZE / 2);
+    }
     const hasLevel = level !== null;
-    const pipsW = pips ? PIP_GAP * MAX_TIER + 4 : 0;
+    const starsW = pips && mastery ? MASTERY_SEP + STAR_GAP * mastery.tiers : 0;
+    const pipsW = pips ? PIP_GAP * MAX_TIER + 4 + starsW : 0;
     const w = (hasLevel ? CHIP_R * 2 : 0) + (hasLevel && pipsW ? 4 : 0) + pipsW;
     if (!w) return;
     g.fillStyle(0x000000, 0.45).fillRoundedRect(0, -PIP_R - 3, w, PIP_R * 2 + 6, PIP_R + 3);
@@ -443,6 +511,21 @@ export class BuildingView {
       const pts = [{ x: cx, y: -PIP_R }, { x: cx + PIP_R, y: 0 }, { x: cx, y: PIP_R }, { x: cx - PIP_R, y: 0 }];
       if (picks[k]) g.fillStyle(PATH_COLORS[picks[k]], 1).fillPoints(pts, true);
       g.lineStyle(1.5, picks[k] ? 0xffffff : 0x8a8a8a, picks[k] ? 0.9 : 0.7).strokePoints(pts, true);
+    }
+    if (starsW) {
+      // The Mastery stars: a thin gold divider, then one star per tier (filled gold once researched).
+      const sx = x + 2 + PIP_GAP * MAX_TIER + MASTERY_SEP / 2;
+      g.lineStyle(1.5, 0xffc83a, 0.8).lineBetween(sx, -PIP_R, sx, PIP_R);
+      for (let k = 0; k < mastery.tiers; k++) {
+        const cx = sx + MASTERY_SEP / 2 + STAR_GAP / 2 + k * STAR_GAP, own = k < mastery.have;
+        const pts = [];
+        for (let i = 0; i < 10; i++) {
+          const r = i % 2 ? PIP_R * 0.45 : PIP_R + 1, a = -Math.PI / 2 + (i * Math.PI) / 5;
+          pts.push({ x: cx + Math.cos(a) * r, y: Math.sin(a) * r });
+        }
+        if (own) g.fillStyle(0xffc83a, 1).fillPoints(pts, true);
+        g.lineStyle(1.2, own ? 0xfff3c0 : 0xb08a3a, own ? 1 : 0.8).strokePoints(pts, true);
+      }
     }
   }
 
@@ -481,6 +564,21 @@ export class BuildingView {
    * level picture when a variant isn't loaded.
    */
   variantKey(b, key, time = 0) {
+    // A merged building with facing pictures (CONFIG.merges[type].art.facings): the Mega Cannon's four, turned toward
+    // its target and looking around when idle like the Cannon; the Missile Silo's left / right, both turning at random when idle.
+    const facings = !b.destroyed && key === mergedArtKey(this.scene, b) ? mergedConfigOf(b).art.facings : null;
+    if (facings) {
+      const options = Object.keys(facings);
+      const gs = this.scene.gs;
+      const t = b.targetId && gs ? gs.enemies.find((e) => e.id === b.targetId && e.alive) : null;
+      if (t) {
+        const a = gridToScreen(b.col + fpW(b) / 2, b.row + fpH(b) / 2), p = gridToScreen(t.x, t.y);
+        this.facing = facingToward(options, p.x - a.x, p.y - a.y, this.facing);
+        this.lookAt = time + IDLE_TURN_MS[0] + Math.random() * (IDLE_TURN_MS[1] - IDLE_TURN_MS[0]);
+      } else this.lookAround(options, time); // idle: looks around now and then, 4 or 2 facings, like the plain Cannon
+      const k = facings[this.facing];
+      return k && this.scene.textures.exists(k) ? k : key;
+    }
     if (b.destroyed || !/_lv\d+$/.test(key)) return key;
     let variant = null;
     if (b.type === 'cannon' || b.type === 'mortar' || b.type === 'spear') {
@@ -583,6 +681,42 @@ export class BuildingView {
     g.lineStyle(3, 0xffffff, 1).lineBetween(x - 8, cy - 8, x + 8, cy + 8);
   }
 
+  /** Quandale's stunning impact: three yellow stars circling over the building (fading out as the stun runs out). */
+  drawStun(b, x, y, time) {
+    const on = b.stunT > 0 && !b.destroyed;
+    if (!this.stunGfx) {
+      if (!on) return;
+      this.stunGfx = this.scene.add.graphics().setDepth(OVERLAY_DEPTH + 1);
+    }
+    const g = this.stunGfx;
+    g.setVisible(on);
+    if (!on) return;
+    g.clear().setAlpha(Math.min(1, b.stunT / 0.4));
+    const rx = Math.max(22, this.sprite.displayWidth * 0.22), ry = rx * 0.4;
+    for (let i = 0; i < 3; i++) {
+      const a = time * 0.007 + (i * Math.PI * 2) / 3;
+      const sx = x + Math.cos(a) * rx, sy = y + Math.sin(a) * ry - 14;
+      g.fillStyle(0x000000, 0.25).fillCircle(sx, sy + 3, 3);
+      g.fillStyle(0xffe14a, 1).lineStyle(1.5, 0xb8860b, 1);
+      const pts = [];
+      for (let k = 0; k < 10; k++) { const rr = k % 2 ? 3 : 7, aa = -Math.PI / 2 + (k * Math.PI) / 5; pts.push({ x: sx + Math.cos(aa) * rr, y: sy + Math.sin(aa) * rr }); }
+      g.fillPoints(pts, true).strokePoints(pts, true);
+    }
+  }
+
+  /**
+   * A merged building still waiting for its picture: a soft gold glow behind the (bigger, golden) max-level picture, a
+   * gold-filled copy of the sprite a little larger, gently pulsing.
+   */
+  drawMergeGlow(on, time) {
+    if (!on) { if (this.mergeGlow) this.mergeGlow.setVisible(false); return; }
+    if (!this.mergeGlow) this.mergeGlow = this.scene.add.image(0, 0, this.sprite.texture.key).setOrigin(0.5, 1).setBlendMode('ADD');
+    const s = this.sprite, k = 1.07;
+    this.mergeGlow.setVisible(true).setTexture(s.texture.key, s.frame.name).setTintFill(0xffc83a)
+      .setScale(s.scaleX * k, s.scaleY * k).setPosition(s.x, s.y + s.displayHeight * (k - 1) * 0.35)
+      .setDepth(s.depth - 0.005).setAlpha((0.32 + 0.14 * Math.sin(time * 0.004)) * this.baseAlpha * this.fade);
+  }
+
   /** Top-center of the sprite in world pixels (for tutorial arrows and labels). */
   topCenter() {
     return { x: this.sprite.x, y: this.sprite.y - this.sprite.displayHeight };
@@ -603,5 +737,7 @@ export class BuildingView {
     if (this.hypeGfx) { this.hypeGfx.destroy(); this.hypeReady.destroy(); }
     if (this.researchIcon) this.researchIcon.destroy();
     if (this.silencedGfx) this.silencedGfx.destroy();
+    if (this.stunGfx) this.stunGfx.destroy();
+    if (this.mergeGlow) this.mergeGlow.destroy();
   }
 }

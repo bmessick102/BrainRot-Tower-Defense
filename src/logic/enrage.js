@@ -26,7 +26,10 @@ export function nightLootMult(state) {
 export function enrageFactor(state, e = null) {
   const w = state.wave;
   const E = CONFIG.rules.enrage;
-  const N = isRestless(state) && !(e && e.calmed) ? CONFIG.rules.night : { damage: 1, speed: 1 };
+  const N0 = isRestless(state) && !(e && e.calmed) ? CONFIG.rules.night : { damage: 1, speed: 1 };
+  // Grimace Golem's goo (v0.8): an enemy that stood in it is enraged for a while (e.gooT, set by stepPools).
+  const goo = e && e.gooT > 0;
+  const N = { damage: N0.damage * (goo ? e.gooDamage || 1 : 1), speed: N0.speed * (goo ? e.gooSpeed || 1 : 1) };
   if (!w || w.phase !== 'active' || !w.stallTime || w.stallTime <= E.after) return { damage: N.damage, speed: N.speed };
   const r = (w.stallTime - E.after) / E.ramp;
   return { damage: Math.min(E.maxDamage, 1 + r) * N.damage, speed: Math.min(E.maxSpeed, 1 + 0.5 * r) * N.speed };

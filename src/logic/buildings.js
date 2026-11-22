@@ -7,7 +7,7 @@ import { researchPoints, needRpReason } from './researchPoints.js';
 
 // Every building type (saves only accept these). New types must be added here too; a test checks that the
 // defense / economy / wall lists are all covered.
-export const BUILDING_TYPES = ['townHall', 'mine', 'storage', 'house', 'cannon', 'archer', 'mortar', 'wizard', 'firework', 'spear', 'ksi', 'mousetrap', 'flock', 'catapult', 'ra', 'rvlab', 'dj', 'altar', 'fuelStation', 'wall'];
+export const BUILDING_TYPES = ['townHall', 'mine', 'storage', 'house', 'cannon', 'archer', 'mortar', 'wizard', 'firework', 'spear', 'ksi', 'mousetrap', 'flock', 'catapult', 'ra', 'rvlab', 'dj', 'altar', 'queenAltar', 'fuelStation', 'wall'];
 // Shop order = unlock order; the Diddypult (Village Hall 10) is always last.
 export const DEFENSE_TYPES = ['cannon', 'archer', 'mortar', 'wizard', 'firework', 'spear', 'ksi', 'mousetrap', 'flock', 'ra', 'catapult'];
 export const ECONOMY_TYPES = ['mine', 'storage', 'house'];
@@ -18,8 +18,9 @@ export const RESEARCH_TYPES = ['rvlab'];
 export const UTILITY_TYPES = ['dj'];
 // Spell buildings (the Fuel Station: brews spells for the hotbar with RP, see spells.js). In the shop's Economy tab.
 export const SPELL_TYPES = ['fuelStation'];
-// Hero altars (the Brisket King's: the hero guards it and levels up with it, see hero.js).
-export const HERO_TYPES = ['altar'];
+// Hero altars: the Brisket King's (hero.js) and, from Village Hall 8, the Hatsune Queen's (queen.js). Each hero guards
+// her or his altar and levels up with it.
+export const HERO_TYPES = ['altar', 'queenAltar'];
 /** Wall orientations: 'x' runs along columns (N wide, 1 tall), 'y' along rows (1 wide, N tall). */
 export const WALL_ORIENTS = ['x', 'y'];
 
@@ -48,6 +49,7 @@ export function typeConfig(type) {
   if (type === 'rvlab') return CONFIG.rvlab;
   if (type === 'dj') return CONFIG.dj;
   if (type === 'altar') return CONFIG.altar;
+  if (type === 'queenAltar') return CONFIG.queenAltar;
   if (type === 'fuelStation') return CONFIG.fuelStation;
   return CONFIG.defenses[type];
 }
@@ -119,9 +121,61 @@ function hpBonus(b) {
 
 export function maxHp(b) {
   const hp = levelStats(b.type, b.level).hp;
-  const k = hpBonus(b);
+  const k = hpBonus(b) * (b.merged ? mergedConfigOf(b)?.hpMult || 1 : 1); // a merged defense: CONFIG.merges[type].hpMult
   return k === 1 ? hp : Math.round(hp * k);
 }
+
+// ---------- merged defenses (CONFIG.merges; the merge itself is in merge.js) ----------
+/** The merge block for a type (CONFIG.merges[type]), or null when the type can't merge. */
+export function mergeConfig(type) {
+  return (CONFIG.merges && CONFIG.merges[type]) || null;
+}
+
+/** A merged building's merge block, or null (not merged, or its type can no longer merge). */
+export function mergedConfigOf(b) {
+  return b && b.merged ? mergeConfig(b.type) : null;
+}
+
+/** What a building is called: a merged one has its own name ("Mega Cannon"). */
+export function displayName(b) {
+  const m = mergedConfigOf(b);
+  return m ? m.name : buildingName(b.type);
+}
+
+/**
+ * Timed perk specials (Flak Burst, Broadside, Volley Lock, Earthquake...) on a merged defense hit as much harder as its
+ * shots' damage per second went up: damageMult / fireIntervalMult (Mega Cannon 1.5, Locklair Citadel 1.4). 1 if not merged.
+ */
+export function mergeDpsMult(b) {
+  const m = mergedConfigOf(b);
+  return m ? (m.damageMult || 1) / (m.fireIntervalMult || 1) : 1;
+}
+
+/** Extra on each regular shot on top of mergeDpsMult, so a shot hits for damageMult in all (Mega Cannon: 1.6). */
+export function mergeShotMult(b) {
+  const m = mergedConfigOf(b);
+  return m ? m.fireIntervalMult || 1 : 1;
+}
+
+/**
+ * A merged building's Mastery effects (its type's researched Mastery tiers, kept on the building as b.mastery by
+ * syncMastery in merge.js): the tiers' fx merged like perks (a later tier's keys join the earlier ones). {} if none.
+ */
+export function masteryFxOf(b) {
+  const m = mergedConfigOf(b);
+  const n = m ? Math.min(b.mastery || 0, m.mastery.tiers.length) : 0;
+  if (!n) return NO_FX;
+  const key = `${b.type}|${n}`;
+  let fx = masteryCache.get(key);
+  if (!fx) {
+    fx = {};
+    for (const t of m.mastery.tiers.slice(0, n)) for (const [k, v] of Object.entries(t.fx)) fx[k] = fx[k] === undefined ? v : Math.max(fx[k], v);
+    masteryCache.set(key, Object.freeze(fx));
+  }
+  return fx;
+}
+const NO_FX = Object.freeze({});
+const masteryCache = new Map();
 
 export function maxLevel(type) {
   const n = typeConfig(type).levels.length;
@@ -139,7 +193,7 @@ export function unlockTownHall(type) {
 export function buildCost(type, state = null) {
   if (type === 'wall' && state) return wallBuildCost(state);
   if (type === 'townHall') return 0;
-  return typeConfig(type).levels[0].cost; // (a copy in a Bonus Slot costs the same)
+  return typeConfig(type).levels[0].cost;
 }
 
 /** Price to go from `level` to `level + 1`, or null at max level. */
@@ -161,71 +215,45 @@ export function upgradeCurrency(type, level) {
   return (next && next.costCurrency) || 'gold';
 }
 
-/** How many of a type are allowed at a town hall level (its cap; Village Hall 11's Bonus Slots come on top: roomFor). */
+/** How many of a type are allowed at a town hall level (its cap). */
 export function limitFor(type, townHallLevel) {
   return CONFIG.limits[type][townHallLevel - 1] ?? 0;
 }
 
+/** How many of a type count toward its limit: a merged building counts as 2 (it took two slots and keeps them). */
 export function countOwned(buildings, type) {
-  return buildings.filter((b) => b.type === type).length;
-}
-
-// ---------- Village Hall 11's Bonus Slots (CONFIG.rules.bonusSlots) ----------
-/** Can a copy of this type go in a Bonus Slot (past its own cap) from Village Hall 11? */
-export function takesBonusSlot(type) {
-  return CONFIG.rules.bonusSlots.types.includes(type);
-}
-
-/** The Village Hall level the Bonus Slots come with (11). */
-export function bonusTownHall() {
-  return CONFIG.rules.bonusSlots.fromTownHall;
-}
-
-/** Does this Village Hall level have Bonus Slots (Village Hall 11)? */
-export function bonusActive(townHallLevelNow) {
-  return townHallLevelNow >= bonusTownHall();
-}
-
-/** How many Bonus Slots a village has at this Village Hall level (0 before Village Hall 11). */
-export function bonusSlotCount(townHallLevelNow) {
-  return bonusActive(townHallLevelNow) ? CONFIG.rules.bonusSlots.count : 0;
-}
-
-/** Bonus Slots in use: every copy of a slot type past its own cap, all types added up. */
-export function bonusSlotsUsed(state) {
-  const th = townHallLevel(state);
-  return CONFIG.rules.bonusSlots.types.reduce((n, t) => n + Math.max(0, countOwned(state.buildings, t) - limitFor(t, th)), 0);
-}
-
-/** Bonus Slots still free (0 when a village has more extras than slots, e.g. one from v0.6.0's shared pool). */
-export function bonusSlotsFree(state) {
-  return Math.max(0, bonusSlotCount(townHallLevel(state)) - bonusSlotsUsed(state));
-}
-
-/** Would the next copy of `type` take a Bonus Slot (it's at its cap, at Village Hall 11)? */
-export function nextTakesBonusSlot(state, type) {
-  const th = townHallLevel(state);
-  return takesBonusSlot(type) && bonusActive(th) && limitFor(type, th) > 0 && countOwned(state.buildings, type) >= limitFor(type, th);
-}
-
-/** How many more of `type` its own cap allows (no Bonus Slots). */
-function roomUnderCap(state, type) {
-  return Math.max(0, limitFor(type, townHallLevel(state)) - countOwned(state.buildings, type));
-}
-
-/** How many more of `type` this village may build now: its cap's room, plus the free Bonus Slots from Village Hall 11. */
-export function roomFor(state, type) {
-  const room = roomUnderCap(state, type);
-  if (!takesBonusSlot(type) || !bonusActive(townHallLevel(state)) || limitFor(type, townHallLevel(state)) <= 0) return room;
-  return room + bonusSlotsFree(state);
+  let n = 0;
+  for (const b of buildings) if (b.type === type) n += b.merged ? 2 : 1;
+  return n;
 }
 
 /**
- * How many more buildings and wall segments the Town Hall level allows (shop badge): every type's room under its
- * cap, plus the free Bonus Slots once (they're shared by every type).
+ * How many of `type` this village has past its cap (0 normally). v0.6.1-v0.7's Bonus Slots let Village Hall 11 build
+ * up to 5 defenses past their caps; those villages keep them (they work, upgrade and move as usual), but no more of
+ * that type can be built until the village is back under the cap.
  */
+export function overCap(state, type) {
+  return Math.max(0, countOwned(state.buildings, type) - limitFor(type, townHallLevel(state)));
+}
+
+/** How many more of `type` this village may build now (its cap's room; 0 at or over the cap). */
+export function roomFor(state, type) {
+  return Math.max(0, limitFor(type, townHallLevel(state)) - countOwned(state.buildings, type));
+}
+
+/** How many more buildings and wall segments the Town Hall level allows (shop badge): every type's room under its cap. */
 export function buildableCount(state) {
-  return BUILDING_TYPES.filter((t) => t !== 'townHall').reduce((n, t) => n + roomUnderCap(state, t), 0) + bonusSlotsFree(state);
+  return BUILDING_TYPES.filter((t) => t !== 'townHall').reduce((n, t) => n + roomFor(state, t), 0);
+}
+
+/**
+ * What each Village Hall level adds over the one before it: [{ type, add }] for every type whose cap goes up, in
+ * shop order (defenses first, then the economy and the rest; walls last). Empty for levels past the top.
+ */
+export function hallUnlocks(level) {
+  if (level < 2 || level > CONFIG.rules.maxTownHallLevel) return [];
+  const order = [...DEFENSE_TYPES, ...ECONOMY_TYPES, ...SPELL_TYPES, ...RESEARCH_TYPES, ...UTILITY_TYPES, ...HERO_TYPES, ...WALL_TYPES];
+  return order.map((type) => ({ type, add: limitFor(type, level) - limitFor(type, level - 1) })).filter((u) => u.add > 0);
 }
 
 export function getTownHall(state) {
@@ -249,7 +277,7 @@ export function checkBuy(state, type) {
   if (roomFor(state, type) <= 0) {
     // Limit is 0 at this TH level even though the type is "unlocked": point at the next TH that allows one.
     if (limitFor(type, th) === 0) return { ok: false, reason: `Requires VH${th + 1}` };
-    return { ok: false, reason: takesBonusSlot(type) && bonusActive(th) ? 'No Bonus Slots left' : 'Limit reached' };
+    return { ok: false, reason: 'Limit reached' }; // (over the cap too: see overCap)
   }
   if (isWaveActive(state)) return { ok: false, reason: 'Not during a wave' };
   const cost = buildCost(type, state);
@@ -337,7 +365,7 @@ export function wallLevel(state) {
 
 /**
  * A new wall's price: what one wall at the village's wall level has cost (level 1 + every upgrade), so a wall
- * bought late costs the same as one bought early and upgraded (and selling it can't make gold).
+ * bought late costs the same as one bought early and upgraded.
  */
 export function wallBuildCost(state) {
   return totalSpent('wall', wallLevel(state));

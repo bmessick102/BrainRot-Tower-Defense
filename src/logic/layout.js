@@ -114,12 +114,14 @@ export function hotbarGroups(state, draft) {
   for (const id of draft.stored) {
     const b = state.buildings.find((x) => x.id === id);
     if (!b) continue;
-    const key = `${b.type}:${b.level}`;
-    if (!groups.has(key)) groups.set(key, { type: b.type, level: b.level, ids: [] });
+    // A merged defense gets its own card (its own picture), apart from plain copies of the same level.
+    const merged = !!b.merged;
+    const key = `${b.type}:${b.level}:${merged ? 'm' : ''}`;
+    if (!groups.has(key)) groups.set(key, { type: b.type, level: b.level, merged, ids: [] });
     groups.get(key).ids.push(id);
   }
   const order = (t) => { const i = BUILDING_TYPES.indexOf(t); return i < 0 ? 99 : i; };
-  return [...groups.values()].sort((a, b) => order(a.type) - order(b.type) || a.level - b.level);
+  return [...groups.values()].sort((a, b) => order(a.type) - order(b.type) || a.level - b.level || a.merged - b.merged);
 }
 
 /** Can the draft be saved? Every building placed, none overlapping or off the grass. */

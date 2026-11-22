@@ -1,5 +1,5 @@
 // One simulation step. GameScene calls this every frame with dt in seconds (capped).
-import { stepHero } from './hero.js';
+import { stepHeroes } from './heroes.js';
 import { stepDj } from './dj.js';
 import { stepSpells } from './spells.js';
 import { stepEconomyPerks } from './econPerks.js';
@@ -9,6 +9,7 @@ import { stepClock } from './dayNight.js';
 import { stepWaveSpawning, checkWaveCleared } from './waves.js';
 import { stepEnemies, removeDeadEnemies } from './enemies.js';
 import { stepDefenses, stepProjectiles, stepPools } from './combat.js';
+import { stepSkyNets } from './skyNet.js';
 import { stepFlockTowers } from './flock.js';
 import { stepSpecialEnemies } from './specialEnemies.js';
 import { stepTraps } from './traps.js';
@@ -35,7 +36,7 @@ export function simulate(state, dt) {
   stepGnomeMining(state, dt, gnomes);
   stepWaveSpawning(state, dt);
   stepEnemies(state, dt);
-  if (!state.gameOver) stepHero(state, dt); // the Brisket King guards his altar (hero.js)
+  if (!state.gameOver) stepHeroes(state, dt); // the Brisket King and the Hatsune Queen guard their altars (heroes.js)
   if (!state.gameOver) stepTraps(state, dt); // ground enemies stepping onto set Mousetraps spring them (+ re-arm, lures)
   stepSpecialEnemies(state, dt); // F.L.O.C.K Towers silenced by John Pork's call count down
   stepFlockTowers(state); // mark + reveal enemies in F.L.O.C.K Tower range before the defenses fire
@@ -44,6 +45,7 @@ export function simulate(state, dt) {
   stepEconomyPerks(state, dt); // economy perks on a timer: mine Auto-Collect, house Garden and Militia
   if (!state.gameOver) stepDefenses(state, dt);
   if (!state.gameOver) stepSpecials(state, dt); // RV Lab specials on a timer (Arrow Storm, Meteor, Finale)
+  if (!state.gameOver) stepSkyNets(state, dt); // Missile Silo (merged Firework Launcher): its nets (skyNet.js)
   if (!state.gameOver) stepBeams(state, dt); // Tower of Rah beams
   if (!state.gameOver) stepProjectiles(state, dt);
   if (!state.gameOver) stepPools(state, dt);

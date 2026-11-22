@@ -34,7 +34,7 @@ const PATH_EVERY = 0.35; // s between path re-plans while walking somewhere
 
 // ---------- getting around: around buildings, over walls ----------
 /** Can he stand on tile (c, r)? Not on a standing building (his own altar, walls and traps are fine). */
-function openTile(nav, c, r, altarId) {
+export function openTile(nav, c, r, altarId) {
   if (c < 0 || r < 0 || c >= MAP.cols || r >= MAP.rows) return false;
   const o = nav.occ[r * MAP.cols + c];
   return !o || o.type === 'wall' || o.id === altarId;
@@ -80,14 +80,14 @@ function nextWaypoint(nav, h, gx, gy, altarId) {
 }
 
 /** Walk toward (tx, ty): straight when the way is open, else around buildings (walls are hopped). */
-function heroStep(state, h, tx, ty, step, altarId) {
+export function heroStep(state, h, tx, ty, step, altarId, speed = H().speed) {
   const nav = getNav(state);
   if (clearLine(nav, h.x, h.y, tx, ty, altarId)) { h.waypoint = null; moveToward(h, tx, ty, step); }
   else {
     h.planT = (h.planT || 0) - step; // (re-plan now and then, as the target moves)
     if (!h.waypoint || h.planT <= 0 || Math.hypot(h.x - h.waypoint.x, h.y - h.waypoint.y) < 0.05) {
       h.waypoint = nextWaypoint(nav, h, tx, ty, altarId);
-      h.planT = PATH_EVERY * H().speed;
+      h.planT = PATH_EVERY * speed;
     }
     if (h.waypoint) moveToward(h, h.waypoint.x, h.waypoint.y, step);
     else moveToward(h, tx, ty, step);
@@ -116,12 +116,12 @@ function pickRoamSpot(state, h, home, guard, altarId) {
 }
 
 /** Roaming: walk to a spot, pause there a while, pick the next one. */
-function roam(state, h, home, st, dt, altarId) {
+export function roam(state, h, home, st, dt, altarId) {
   h.attacking = false;
   if (h.roamPause > 0) { h.roamPause = Math.max(0, h.roamPause - dt); h.moving = false; return; }
   if (!h.roamTo) h.roamTo = pickRoamSpot(state, h, home, st.guardRange, altarId);
   const step = st.speed * ROAM_SPEED * dt;
-  heroStep(state, h, h.roamTo.x, h.roamTo.y, step, altarId);
+  heroStep(state, h, h.roamTo.x, h.roamTo.y, step, altarId, st.speed);
   h.moving = true;
   if (Math.hypot(h.x - h.roamTo.x, h.y - h.roamTo.y) < 0.05) {
     h.roamTo = null;
@@ -152,7 +152,7 @@ export function heroStats(altar) {
   };
 }
 
-/** Make sure state.hero matches the altar: created when one is built, gone when it's sold. */
+/** Make sure state.hero matches the altar: created when one is built, gone when it's removed. */
 export function ensureHero(state) {
   const altar = getAltar(state);
   if (!altar) { state.hero = null; return null; }
@@ -162,12 +162,22 @@ export function ensureHero(state) {
     const c = footprintCenter(altar);
     const sleep = altar.heroSleep || 0; // saved nap (seconds left)
     h = state.hero = {
-      altarId: altar.id, x: c.x, y: c.y, hp: sleep > 0 ? Math.round(st.maxHp * 0.5) : st.maxHp,
+      altarId: altar.id, x: c.x, y: c.y, hp: sleep > 0 ? Math.round(st.maxHp * 0.5) : st.maxHp, hpMax: st.maxHp,
       status: sleep > 0 ? 'asleep' : 'ready', sleepT: sleep, sleepTotal: Math.max(sleep, 1), wakeT: 0,
       targetId: null, cooldown: 0, attacking: false, hits: 0, boostT: 0, feastsUsed: 0, downT: 0
     };
   }
   return h;
+}
+
+/**
+ * A hero's health follows its maximum: when the altar levels up (or a health perk is picked), the health bar keeps its
+ * share, so a hero at full health stays at full health (and a hurt one keeps the same fraction), like buildings do.
+ * Shared by the Brisket King and the Hatsune Queen. `h.hpMax` is the maximum the current `h.hp` was counted against.
+ */
+export function syncHeroMaxHp(h, maxHp) {
+  if (h.hpMax && h.hpMax !== maxHp) h.hp = Math.min(maxHp, h.hp * (maxHp / h.hpMax));
+  h.hpMax = maxHp;
 }
 
 /** Is the hero up and able to fight (and be fought)? */
@@ -199,6 +209,7 @@ export function stepHero(state, dt) {
   if (!h) return;
   const altar = getAltar(state);
   const st = heroStats(altar);
+  syncHeroMaxHp(h, st.maxHp);
   if (h.hp > st.maxHp) h.hp = st.maxHp;
   // Near a Frigo Camillo his swings come slower (its cold aura, specialEnemies.js).
   h.cooldown = Math.max(0, h.cooldown - dt * (1 - Math.max(0, Math.min(90, h.frigoSlow || 0)) / 100));

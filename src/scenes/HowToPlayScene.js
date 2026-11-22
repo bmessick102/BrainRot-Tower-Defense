@@ -2,7 +2,7 @@
 //   Basics    - controls, waves and the day/night cycle, gold.
 //   Buildings - a browser for every building: picture (level 1 or max), what it is, where it unlocks, its
 //               ability paths, and how its stats grow from level 1 to max (all read from config).
-//   Upgrades  - leveling buildings and the Village Hall, rebuilding / selling, and the RV Lab abilities
+//   Upgrades  - leveling buildings and the Village Hall, rebuilding, merging, and the RV Lab abilities
 //               (build the lab -> pick a path per building type; every building of that type gets the perks).
 //   Enemies   - a roster of every enemy on the left (mini picture cards under their category: Ground, Air,
 //               Tanks & Bosses, Special) and the picked one on the right: picture, description, tags, which
@@ -14,7 +14,7 @@ import { CONFIG } from '../config.js';
 import { IS_TOUCH } from '../device.js';
 import {
   DEFENSE_TYPES, buildingName, typeConfig, maxLevel, levelStats, limitFor, unlockTownHall, footprintDims, buildCost,
-  totalSpent, isDefense, isSupport, takesBonusSlot, bonusTownHall
+  totalSpent, isDefense, isSupport
 } from '../logic/buildings.js';
 import { ENEMY_KINDS } from '../logic/enemies.js';
 import { formatGold } from '../logic/economy.js';
@@ -26,7 +26,7 @@ import { session } from '../net/account.js';
 import { buildingTextureKey, artTier } from '../objects/BuildingView.js';
 import { TEX, enemyKey, buildingLevelKey } from '../assetKeys.js';
 import { ASSETS_ADDED } from '../assetLoader.js';
-import { drawWindow, drawShowcaseCard, drawCardStrip, drawStatBar, drawTag, drawGlossy, fitWidth, fitIcon, addHeroBadge } from '../objects/uiDraw.js';
+import { drawWindow, drawShowcaseCard, drawCardStrip, drawStatBar, drawTag, drawGlossy, fitWidth, fitIcon, addHeroBadge, heroKindOf } from '../objects/uiDraw.js';
 import { ENEMY_DESCRIPTIONS, ENEMY_CATEGORIES, ENEMY_ORDER } from '../enemyText.js';
 import { BUILDING_DESCRIPTIONS } from '../buildingText.js';
 import { COLORS, bodyStyle, textStyle, RP_COLOR } from '../theme.js';
@@ -34,6 +34,14 @@ import { rpText } from '../logic/researchPoints.js';
 import { SPELL_KINDS, spellConfig, spellName, spellEffect } from '../logic/spells.js';
 import { addSpellIcon } from '../objects/SpellIcons.js';
 import { showTitleBackdrop } from './TitleBackdropScene.js';
+import { MERGE_TYPES } from '../logic/merge.js';
+import { MERGE_GEAR } from '../objects/BuildingView.js';
+import { abilityIcon } from '../objects/MergeIcons.js';
+
+// "Cannons, Locklair Towers, Litman Mortars or Firework Launchers": the types that can merge (CONFIG.merges).
+const plural = (t) => `${CONFIG.defenses[t].name}s`;
+const MERGE_NAMES = MERGE_TYPES.length > 1
+  ? `${MERGE_TYPES.slice(0, -1).map(plural).join(', ')} or ${plural(MERGE_TYPES[MERGE_TYPES.length - 1])}` : plural(MERGE_TYPES[0]);
 
 // ---------- layout ----------
 const TABS = [
@@ -72,7 +80,7 @@ const ENEMY_LAYOUT = {
 const CATEGORY_COLORS = { ground: COLORS.button, air: COLORS.buttonBlue, tanks: 0xb03a2e, special: 0x9b59d0, summoned: 0x23a99a };
 
 // Buildings in the order a player meets them: the base, economy, walls, then defenses and traps.
-const BUILDING_ORDER = ['townHall', 'mine', 'storage', 'house', 'rvlab', 'dj', 'fuelStation', 'wall', 'cannon', 'archer', 'mortar', 'wizard', 'firework', 'spear', 'ksi', 'flock', 'ra', 'catapult', 'mousetrap', 'altar'];
+const BUILDING_ORDER = ['townHall', 'mine', 'storage', 'house', 'rvlab', 'dj', 'fuelStation', 'wall', 'cannon', 'archer', 'mortar', 'wizard', 'firework', 'spear', 'ksi', 'flock', 'ra', 'catapult', 'mousetrap', 'altar', 'queenAltar'];
 
 const categoryOf = (kind) => ENEMY_CATEGORIES.find((c) => c.kinds.includes(kind));
 // The category tabs share the chip row: tabs on the left, the shown category's chips on the right.
@@ -110,7 +118,7 @@ function carrierStats(cfg) {
   const troop = CONFIG.enemies[cfg.drops];
   return [
     { label: 'Health', value: formatGold(cfg.hp), frac: cfg.hp / maxOf((c) => c.hp), color: 0x4cd137 },
-    { label: 'Drops', value: `${cfg.perDrop} ${troop.name}s`, frac: 1, color: 0xff6b3d },
+    { label: 'Drops', value: `${cfg.perDrop} ${troop.name.replace(/y$/, "ie")}s`, frac: 1, color: 0xff6b3d },
     { label: 'Drops every', value: `${cfg.dropInterval} s`, frac: 1 / cfg.dropInterval, color: 0xffc93c },
     { label: 'Attacks', value: 'Never (drops troops)', frac: 0.08, color: 0xe0452f },
     { label: 'Speed', value: `${cfg.speed} tiles/s`, frac: cfg.speed / maxOf((c) => c.speed), color: 0x3cb8ff },
@@ -186,6 +194,13 @@ function buildingStats(type) {
     out.push(fixed('Guard range', `${CONFIG.altar.hero.guardRange} tiles`, CONFIG.altar.hero.guardRange / 10, 0x3cb8ff));
     out.push(fixed('Longest nap', `${CONFIG.altar.hero.maxSleepSeconds} s`, 0.6, 0x9b59d0));
     out.push(fixed('Upgrades cost', `${levelStats(type, 2).cost} → ${rpText(levelStats(type, top).cost)}`, 0.5, RP_COLOR));
+  } else if (type === 'queenAltar') {
+    const Q = CONFIG.queenAltar.hero;
+    out.push(grow(type, 'Hero health', 'heroHp', 0x4cd137));
+    out.push(grow(type, 'Hero damage per bolt', 'heroDamage', 0xff6b3d));
+    out.push(fixed('Range / guard range', `${Q.attackRange} / ${Q.guardRange} tiles`, Q.guardRange / 10, 0x3cb8ff));
+    out.push(fixed('Longest nap', `${Q.maxSleepSeconds} s`, 0.6, 0x9b59d0));
+    out.push(fixed('Upgrades cost', `${formatGold(levelStats(type, 2).cost)} → ${rpText(levelStats(type, top).cost)}`, 0.5, RP_COLOR));
   } else if (type === 'dj') {
     out.push(grow(type, 'Range', 'range', 0x4cd6ff, ' tiles'));
     out.push(grow(type, 'Gnome work speed', 'gnomeBoostPct', 0xffc93c, '%'));
@@ -248,6 +263,7 @@ function buildingTags(type) {
   else if (type === 'dj') tags.push(['Utility', 0x9b59d0], ['Drop the Beat on the hotbar', 0xc070ff]);
   else if (type === 'fuelStation') tags.push(['Spells', 0x9b59d0], ['Brewed with Burgers', RP_COLOR], ['Cast from the hotbar', 0xc070ff]);
   else if (type === 'altar') tags.push(['Hero', 0xc98a12], ['Melee', 0xd0583c], ['Sleeps to heal', 0x6c7a89]);
+  else if (type === 'queenAltar') tags.push(['Hero', 0xc98a12], ['Ranged', 0x23a99a], ['Ground & air', 0x3c8ad0], ['Sleeps to heal', 0x6c7a89]);
   else if (!isDefense(type)) tags.push(['Economy', COLORS.buttonGood]);
   else if (cfg.trap) tags.push(['Hidden trap', 0x6c7a89]);
   else if (isSupport(type)) tags.push(['Support', 0x23a99a]);
@@ -257,8 +273,7 @@ function buildingTags(type) {
   }
   if (type !== 'townHall') {
     tags.push([`Unlocks at VH${unlockTownHall(type)}`, COLORS.buttonDark]);
-    // (Bonus Slot types: up to their cap, more with Village Hall 11's Bonus Slots.)
-    tags.push([`Up to ${limitFor(type, CONFIG.rules.maxTownHallLevel)}${type === 'wall' ? ' walls' : takesBonusSlot(type) ? `, more with VH${bonusTownHall()} Bonus Slots` : ''}`, COLORS.buttonDark]);
+    tags.push([`Up to ${limitFor(type, CONFIG.rules.maxTownHallLevel)}${type === 'wall' ? ' walls' : ''}`, COLORS.buttonDark]);
   }
   const { w, h } = footprintDims(type);
   tags.push([`${w}x${h} tile${w * h === 1 ? '' : 's'}`, COLORS.buttonDark]);
@@ -430,7 +445,7 @@ export class HowToPlayScene extends Phaser.Scene {
         'Left-click to select, collect, build, and press buttons.',
         'Drag the map to move it. Scroll to zoom.',
         'Esc: cancel building, close a window, or pause.',
-        'In a wave, the hotbar (bottom middle) holds Brisket Feast, Drop the Beat and your spells: click a slot or press 1-9. A spell then needs a click on the map.',
+        'In a wave, the hotbar (bottom middle) holds your heroes\' abilities (Brisket Feast: F, Encore Cloak: G), Drop the Beat and your spells: click a slot or press 1-9. A spell then needs a click on the map.',
         'Walls: keep clicking to make a line. Walls that touch join up.',
         'Edit button (bottom right): move your buildings around, then press Save.',
         'Profile (top left): your league, achievements and stats.'
@@ -439,6 +454,7 @@ export class HowToPlayScene extends Phaser.Scene {
         'Build as long as you like. Press Start Wave to get 30 seconds to get ready. A "!" shows where enemies will come from.',
         `Day turns to night about every 8 minutes. At night, enemies hit ${Math.round((CONFIG.rules.night.damage - 1) * 100)}% harder and move faster, but you earn +${Math.round(CONFIG.rules.night.lootBonus * 100)}% gold and Burgers.`,
         'Each wave is harder than the last. Every 3rd wave is special and pays bonus gold.',
+        `The round "2x" button beside Start Wave${IS_TOUCH ? '' : ' (or press T)'} speeds a wave up to double speed. It stays on until you turn it off.`,
         `You get 1 to 3 stars for how much of your village survives. 3 stars pays +${Math.round(CONFIG.rules.waveStars.bonus[2] * 100)}% gold and Burgers. After a wave, everything destroyed is rebuilt free.`,
         'If your Village Hall falls, you can Retry the wave.'
       ]],
@@ -467,10 +483,11 @@ export class HowToPlayScene extends Phaser.Scene {
       'A building cannot be a higher level than your Village Hall.',
       'Each level adds health and power. Buildings get bigger and get new art every few levels.',
       'Upgrading the Village Hall unlocks new buildings and lets you build more of each. But the attacks get harder too.',
-      `Village Hall ${bonusTownHall()} adds ${CONFIG.rules.bonusSlots.count} Bonus Slots: each is one more defense of any kind past its usual limit, at the normal price (sell one to free its slot). It also allows one more Mine, Storage and House.`,
+      `Village Halls 11 to ${CONFIG.rules.maxTownHallLevel} bring no new building levels: each allows a few more defenses and 12 more walls. Your Village Hall's Stats tab shows what its next level adds.`,
       'Walls share one level: "Upgrade Walls" raises every wall at once, and new walls are built at that level.',
       `After you beat a wave, destroyed buildings are rebuilt free. During a wave you can Rebuild one early for ${Math.round(CONFIG.rules.rebuildCostShare * 100)}% of its cost.`,
-      `Selling gives back ${Math.round(CONFIG.rules.sellRefund * 100)}% of the gold you spent on a building.`
+      "Buildings can't be sold: each Village Hall allows a set number of every building, so rearrange your village by moving them in edit mode.",
+      `Merging: two Level 10 ${MERGE_NAMES} can merge into one stronger building with its own ability (Merge button, between waves, gold + Burgers). It still counts as two toward the limit, so merging doesn't free a slot.`
     ]);
 
     // Right: the RV Lab and abilities, in three numbered steps plus an example.
@@ -695,7 +712,7 @@ export class HowToPlayScene extends Phaser.Scene {
     this.wantedArt = buildingLevelKey(type, artTier(level, type));
     const strip = type === 'townHall' ? 'Your base' : formatGold(buildCost(type));
     this.pictureCard(g, buildingTextureKey(this, type, level), index, BUILDING_ORDER.length, strip, type !== 'townHall', animate);
-    if (type === 'altar') this.detail.add(addHeroBadge(this, CARD.x + CARD.w - 30, CARD.y + 32, 42)); // the Brisket King's portrait
+    if (type === 'altar' || type === 'queenAltar') this.detail.add(addHeroBadge(this, CARD.x + CARD.w - 30, CARD.y + 32, 42, heroKindOf(type))); // the hero's portrait
     // Level 1 / Max level picture toggle under the card.
     const p = this.detail;
     const tw = (CARD.w - 8) / 2, ty = CARD.y + CARD.h + 26;
@@ -706,7 +723,7 @@ export class HowToPlayScene extends Phaser.Scene {
     });
 
     const cfg = typeConfig(type);
-    const sub = type === 'townHall' ? 'The heart of your village' : isDefense(type) ? (cfg.trap ? 'Trap' : isSupport(type) ? 'Support tower' : 'Defense') : type === 'wall' ? 'Wall' : type === 'rvlab' ? 'Research' : type === 'altar' ? 'Hero' : type === 'dj' ? 'Utility' : type === 'fuelStation' ? 'Spells' : 'Economy';
+    const sub = type === 'townHall' ? 'The heart of your village' : isDefense(type) ? (cfg.trap ? 'Trap' : isSupport(type) ? 'Support tower' : 'Defense') : type === 'wall' ? 'Wall' : type === 'rvlab' ? 'Research' : type === 'altar' || type === 'queenAltar' ? 'Hero' : type === 'dj' ? 'Utility' : type === 'fuelStation' ? 'Spells' : 'Economy';
     let y = this.nameBlock(buildingName(type), sub);
     y = this.tagRow(p, RX, y + 6, buildingTags(type));
     y = this.description(BUILDING_DESCRIPTIONS[type], y + 4) + 10;
@@ -719,6 +736,19 @@ export class HowToPlayScene extends Phaser.Scene {
       for (const path of PATH_KEYS) {
         tx += drawTag(this, p, tx, y, `${path.toUpperCase()} · ${ABILITIES[type][path].name}`, PATH_COLORS[path], textStyle(14)) + 8;
       }
+      y += 36;
+    }
+    // Mergeable defenses: what two Level 10s become (the gear, its name, its ability in one line).
+    const merge = CONFIG.merges && CONFIG.merges[type];
+    if (merge) {
+      let mx = RX;
+      if (this.textures.exists(MERGE_GEAR)) { p.add(fitIcon(this.add.image(RX + 13, y + 14, MERGE_GEAR), 26)); mx += 32; }
+      mx += drawTag(this, p, mx, y, `Merge 2 x Level ${top}: ${merge.name}`, 0xd9a21b, textStyle(14)) + 10;
+      p.add(abilityIcon(this, merge.abilityIcon, mx + 15, y + 14, 30));
+      mx += 36;
+      const line = this.add.text(mx, y + 14, `${merge.ability}: ${merge.abilityShort}`, bodyStyle(14, COLORS.ink, { fontStyle: 'bold' })).setOrigin(0, 0.5);
+      fitWidth(line, RX + RW - mx);
+      p.add(line);
       y += 36;
     }
     if (type === 'fuelStation') {
@@ -786,6 +816,9 @@ export class HowToPlayScene extends Phaser.Scene {
     if (cfg.chillAura) tags.push([`Slows defenses ${cfg.chillAura.slowPct}% (${cfg.chillAura.radius} tiles)`, 0x3d9bff]);
     if (cfg.breath) tags.push(['Fire breath', 0xd0583c], [`${cfg.breath.splashPct}% to buildings next to it`, 0xc98a12]);
     if (cfg.prefers && cfg.preferredDamageMultiplier) tags.push([`${cfg.preferredDamageMultiplier}x vs ${cfg.prefers.includes('wall') ? 'walls' : cfg.prefers.includes('airDefense') ? 'air defenses' : 'gold buildings'}`, 0xc98a12]);
+    // v0.8.
+    if (cfg.dash) tags.push(['Dashes to buildings', 0xd0583c], [`Impact hit ${cfg.dash.impactMult}x + stun ${cfg.dash.stunSeconds} s`, 0xb03a2e], ['Walls stop the dash', 0x5b7a99]);
+    if (cfg.goo) tags.push([`Goo trail: enrages troops +${Math.round((cfg.goo.damageMult - 1) * 100)}%`, 0x8a3fd1], ['Big puddle when he falls', 0xc98a12]);
     const fw = firstWave(kind);
     const dropper = cfg.droppedBy && CONFIG.enemies[cfg.droppedBy];
     const bossFrom = cfg.boss && CONFIG.rules.babyCar ? `From Village Hall ${CONFIG.rules.babyCar.fromTownHall}`

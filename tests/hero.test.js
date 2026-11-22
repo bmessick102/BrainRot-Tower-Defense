@@ -4,7 +4,7 @@ import { ensureHero, stepHero, heroStats, damageHero, useFeast, checkFeast, hero
 import { stepEnemy } from '../src/logic/enemies.js';
 import { towerFireInterval } from '../src/logic/abilities.js';
 import { limitFor, checkBuy, checkUpgrade, levelStats, buildCost } from '../src/logic/buildings.js';
-import { sellRefund, repairCost } from '../src/logic/economy.js';
+import { repairCost } from '../src/logic/economy.js';
 import { rpCap } from '../src/logic/researchPoints.js';
 import { footprintCenter } from '../src/logic/grid.js';
 import { serializeGame, parseSave } from '../src/logic/save.js';
@@ -220,9 +220,8 @@ describe('his upgrades cost Burgers (research points), building the altar costs 
     }
   });
 
-  it('selling refunds only the gold (Level 1); a rebuild is priced in gold and grows with the level', () => {
+  it('a rebuild is priced in gold and grows with the level', () => {
     const altar = { type: 'altar', level: 7 };
-    expect(sellRefund(altar)).toBe(Math.round(3000 * CONFIG.rules.sellRefund));
     const burgers = levelStats('altar', 7).cost;
     expect(repairCost(altar)).toBe(Math.round(Math.max(3000, burgers * CONFIG.rules.burgerGoldValue) * CONFIG.rules.rebuildCostShare));
     expect(repairCost({ type: 'altar', level: 1 })).toBe(Math.round(3000 * CONFIG.rules.rebuildCostShare));

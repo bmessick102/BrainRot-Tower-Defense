@@ -14,11 +14,14 @@ const TROPHY = TEX.achievementIcon;
 
 const W = 660, H = 620, ACH_SHOWN = 8;
 
-/** The green Visit button at the right end of a row ("look at this village"; v0.7.1, was a round eye). */
-export const VISIT_W = 72;
-export function visitButton(scene, rightX, y, h, onClick) {
-  return new Button(scene, rightX - VISIT_W / 2, y, VISIT_W, h, 'Visit', onClick, { color: COLORS.buttonGood, fontSize: 16, radius: 9 });
+/** A green button at the right end of a list row: "Visit" (a village, on the card) or "Profile" (a player's card,
+ *  on the leaderboard and Find Players; v0.8.0). */
+export const VISIT_W = 78;
+export function rowButton(scene, rightX, y, h, label, onClick) {
+  return new Button(scene, rightX - VISIT_W / 2, y, VISIT_W, h, label, onClick, { color: COLORS.buttonGood, fontSize: 16, radius: 9 });
 }
+export const visitButton = (scene, rightX, y, h, onClick) => rowButton(scene, rightX, y, h, 'Visit', onClick);
+export const profileButton = (scene, rightX, y, h, onClick) => rowButton(scene, rightX, y, h, 'Profile', onClick);
 
 export class PlayerCardWindow {
   /**

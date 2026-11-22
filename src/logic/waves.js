@@ -2,7 +2,7 @@
 // Difficulty: the Village Hall level picks a base wave (scripted for TH1-4, the endless formula above
 // that), and every wave survived ramps it up (waveRamp), so waves keep getting harder at any hall level.
 import { CONFIG } from '../config.js';
-import { ENEMY_KINDS, spawnEnemy } from './enemies.js';
+import { ENEMY_KINDS, spawnEnemy, hallWaveGrowth } from './enemies.js';
 import { repairAll, salvageMine, addGold, getCapacity, storageCapacity } from './economy.js';
 import { abilityFx } from './abilities.js';
 import { isDark } from './clockLight.js';
@@ -25,18 +25,18 @@ export function waveComposition(n) {
 
 /**
  * Enemy kinds that join the waves from a Village Hall level (fromTownHall on the enemy, e.g. the Skibidi
- * Toilet): baseCount at that hall, growing by rules.endlessCountGrowth per hall after it.
+ * Toilet): baseCount at that hall, growing like the base wave per hall after it (hallWaveGrowth in enemies.js).
  * The v0.6 kinds (OFFSET_KINDS) make room for themselves: rules.lateKindOffset of their total health comes back out of
  * the regular troops (rules.lateKindPool, each cut by the same share, never more than rules.lateKindMaxCut).
  */
-export const OFFSET_KINDS = ['pork', 'skeleton', 'vaca', 'yahu', 'patapim', 'lirili', 'bicus', 'frigo', 'bombo'];
+export const OFFSET_KINDS = ['pork', 'skeleton', 'vaca', 'yahu', 'patapim', 'lirili', 'bicus', 'frigo', 'bombo', 'quandale', 'grimace'];
 
 function withLateKinds(comp, n) {
   let added = 0;
   for (const k of ENEMY_KINDS) {
     const cfg = CONFIG.enemies[k];
     if (!cfg.fromTownHall || !cfg.baseCount) continue;
-    comp[k] = n >= cfg.fromTownHall ? Math.round(cfg.baseCount * CONFIG.rules.endlessCountGrowth ** (n - cfg.fromTownHall)) : 0;
+    comp[k] = n >= cfg.fromTownHall ? Math.round(cfg.baseCount * hallWaveGrowth(cfg.fromTownHall, n)) : 0;
     if (OFFSET_KINDS.includes(k)) added += comp[k] * cfg.hp;
   }
   if (added > 0) {
@@ -52,11 +52,12 @@ function baseComposition(n) {
   const scripted = CONFIG.waves;
   if (n <= scripted.length) return { ...scripted[n - 1] };
   const last = scripted[scripted.length - 1];
-  const k = n - scripted.length; // waves past the last scripted one
+  const k = n - scripted.length; // halls past the last scripted one
+  const grow = hallWaveGrowth(scripted.length, n), growHp = hallWaveGrowth(scripted.length, n, 'hp');
   const comp = {};
-  for (const kind of ENEMY_KINDS) comp[kind] = Math.round((last[kind] || 0) * CONFIG.rules.endlessCountGrowth ** k);
-  comp.hpMultiplier = round2(last.hpMultiplier * CONFIG.rules.endlessHpGrowth ** k);
-  // (Village Halls 6-10 come from 2, 3, 3, 4, 4 corners, as they did before Village Hall 5 got a scripted wave.)
+  for (const kind of ENEMY_KINDS) comp[kind] = Math.round((last[kind] || 0) * grow);
+  comp.hpMultiplier = round2(last.hpMultiplier * growHp);
+  // (Village Halls 6-10 come from 2, 3, 3, 4, 4 corners, as they did before Village Hall 5 got a scripted wave; 4 after.)
   comp.spawnPaths = Math.min(PATHS.length, last.spawnPaths + Math.floor(k / ENDLESS_WAVES_PER_EXTRA_PATH));
   return comp;
 }
@@ -123,7 +124,7 @@ function countQueues(queues) {
  * instead of one type arriving back-to-back.
  */
 // Every kind a wave queues (Neegies only come from balloons), in the order their shares are dealt to the paths.
-const QUEUE_ORDER = ['babycar', 'patapim', 'lirili', 'tank', 'frigo', 'bicus', 'breaker', 'skeleton', 'pork', 'grunt', 'slinger', 'yahu', 'thief', 'toilet', 'shark', 'bomber', 'bombo', 'vaca', 'balloon'];
+const QUEUE_ORDER = ['babycar', 'grimace', 'patapim', 'lirili', 'tank', 'frigo', 'bicus', 'quandale', 'breaker', 'skeleton', 'pork', 'grunt', 'slinger', 'yahu', 'thief', 'toilet', 'shark', 'bomber', 'bombo', 'vaca', 'balloon'];
 
 export function buildSpawnQueues(comp, paths) {
   const share = Object.fromEntries(paths.map((p) => [p, Object.fromEntries(ENEMY_KINDS.map((k) => [k, 0]))]));
@@ -196,9 +197,9 @@ export function scaledWaveComposition(th, n) {
 // ---------- themed waves (CONFIG.waveThemes, v0.7) ----------
 const WT = () => CONFIG.waveThemes;
 const clampHall = (th) => Math.max(1, Math.min(th, CONFIG.rules.maxTownHallLevel));
-// Enemies that debut in v0.7 (new, or Brr Brr Patapim's new ability): an older save that already met every enemy at
-// its hall still gets their debut waves (legacyDebuted).
-const V07_DEBUTS = ['bicus', 'frigo', 'bombo', 'lirili', 'patapim'];
+// Enemies that debut in v0.7 (new, or Brr Brr Patapim's new ability) and v0.8: an older save that already met every
+// enemy at its hall still gets their debut waves (legacyDebuted). (Saves with a `debuted` list get v0.8's on their own.)
+const V07_DEBUTS = ['bicus', 'frigo', 'bombo', 'lirili', 'patapim', 'quandale', 'grimace'];
 
 /** Total enemy HP of a composition (before its hpMultiplier): the strength a themed wave keeps. */
 export function waveStrength(comp) {
@@ -508,6 +509,7 @@ export function checkWaveCleared(state) {
   state.projectiles = [];
   state.pools = [];
   state.strikes = [];
+  state.nets = []; // Missile Silo nets (skyNet.js)
   let ruins = repairAll(state);
   resetTraps(state); // every Mousetrap is set again for the next wave
   // Once per night: Last Stand; Spellsteal and Ready Rack start over.

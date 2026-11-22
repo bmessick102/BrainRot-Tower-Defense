@@ -11,6 +11,7 @@ const TRAIL_COLOR = 0xfff1cf;
 const TRAIL_HOLD_MS = 260;   // the lost chunk lingers this long before it starts draining
 const TRAIL_DRAIN_MS = 110;  // then shrinks toward the real value (exponential time constant)
 const FLASH_MS = 220;        // how long a hit brightens and bumps the bar
+const GEAR_GAP = 4;          // between a merged building's gear and the level badge
 const BUMP = 0.16;           // extra scale at the start of a hit
 
 export class HealthBar {
@@ -49,6 +50,31 @@ export class HealthBar {
     this.flashAt = -Infinity;
     this.lastTime = 0;
     this.drawnKey = '';
+  }
+
+  /**
+   * A small picture to the left of the level badge (a merged defense's gear, `ui_merge_gear`), riding with the bar; null
+   * removes it. `size` in px.
+   */
+  setGear(key, size = 28) {
+    const want = key && this.scene.textures.exists(key) ? key : null;
+    if (!want) {
+      if (this.gearImg) { this.gearImg.destroy(); this.gearImg = null; }
+      if (this.gearBg) { this.gearBg.destroy(); this.gearBg = null; }
+      return;
+    }
+    if (!this.gearBg) { this.gearBg = this.scene.add.graphics(); this.container.addAt(this.gearBg, 0); }
+    if (!this.gearImg) { this.gearImg = this.scene.add.image(0, 0, want); this.container.addAt(this.gearImg, 1); }
+    const br = this.badgeR || 0;
+    this.gearImg.setScale((size - 4) / Math.max(this.gearImg.frame.width, this.gearImg.frame.height));
+    // Left of the badge (or of the bar's left end when there's no badge) with a small gap (the badge's left edge is at
+    // x - 0.6 br), on a dark disc with a gold rim and glow so it reads on any background.
+    const gx = -this.width / 2 - br * 0.6 - GEAR_GAP - size / 2;
+    this.gearImg.setPosition(gx, 0);
+    this.gearBg.clear();
+    this.gearBg.fillStyle(0xffc83a, 0.3).fillCircle(gx, 0, size / 2 + 3);
+    this.gearBg.fillStyle(0x1d1812, 0.9).fillCircle(gx, 0, size / 2);
+    this.gearBg.lineStyle(2, 0xffc83a, 1).strokeCircle(gx, 0, size / 2);
   }
 
   /** Change the fill color (redrawn on the next draw). */

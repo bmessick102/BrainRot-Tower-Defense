@@ -59,6 +59,7 @@ export function stepBeams(state, dt) {
   for (const b of state.buildings) {
     if (!isBeam(b.type)) continue;
     if (b.destroyed) { b.beams = []; b.beamChains = []; b.beamTargetId = null; b.beamTime = 0; continue; }
+    if (b.stunT > 0) { b.beams = []; b.beamChains = []; b.beamTargetId = null; b.beamTime = 0; continue; } // stunned (Quandale)
     const fx = abilityFx(b);
     const cfg = CONFIG.defenses[b.type];
     // (Frigo Camillo's cold aura burns it slower too.)

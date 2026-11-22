@@ -11,7 +11,6 @@ export const CONFIG = {
   grid: { tileWidth: 64, tileHeight: 32, townHallSize: 3, buildingSize: 2 },
   startingGold: 250, // 100 rebuilds the ruined Village Hall (level 0 -> 1), 150 buys the first Mine
   rules: {
-    sellRefund: 0.5,
     // Everything destroyed in a night is rebuilt for free when the wave is beaten. During a wave a destroyed
     // building (not a wall) can be rebuilt early for this share of its current level's cost.
     rebuildCostShare: 0.3,
@@ -61,8 +60,8 @@ export const CONFIG = {
     // areaExponent: area damage (splash, pools, traps...) hits a packed enemy pack ** areaExponent times over
     // (combat.js areaPack), tuned so a capped wave takes about as much damage as the uncapped crowd would.
     crowdCap: { maxEnemies: 400, maxSizeBoost: 0.35, areaExponent: 0.66 },
-    // Village Halls 6-10: their base wave is the previous hall's with x endlessCountGrowth enemies and x endlessHpGrowth
-    // health (v0.5: 1.18 / 1.14 from the scripted VH5 wave; was 1.15 / 1.1 from VH4).
+    // Village Halls 6-11: their base wave is the previous hall's with x endlessCountGrowth enemies and x endlessHpGrowth
+    // health (Village Halls 12-15: topHallGrowth below) (v0.5: 1.18 / 1.14 from the scripted VH5 wave; was 1.15 / 1.1 from VH4).
     endlessCountGrowth: 1.18,
     // v0.6 enemies (fromTownHall kinds, waves.js withLateKinds): this share of their total health comes back out of the
     // regular troops (lateKindPool, each cut by the same share, at most lateKindMaxCut), so a hall's wave keeps about
@@ -71,19 +70,14 @@ export const CONFIG = {
     lateKindPool: ['grunt', 'slinger', 'bomber', 'tank', 'shark', 'thief'],
     lateKindMaxCut: 0.55, // v0.7: 0.35 -> 0.55 so Village Halls 9-11 make room for Lirili Larila, the new Patapim and Bombombini too
     endlessHpGrowth: 1.14,
-    maxTownHallLevel: 11,
-    // Bonus Slots (v0.6.1, user, 2026-11-21; replaced v0.6.0's shared building pool): from Village Hall `fromTownHall`
-    // (11, the top one) every building keeps its own cap (limits[type]), and on top of that the village gets `count`
-    // Bonus Slots: each is one more copy of any of the `types`, past that type's cap, at the normal price. Any mix
-    // (all 5 can be Towers of Rah). Nothing marks which copy is the bonus one: slots in use = copies past the caps,
-    // so selling one frees a slot. v0.6.3 (user): defenses only (every Defenses and Traps tab building); mines,
-    // storages and houses get one more each at Village Hall 11 instead (limits). Unique buildings (Village Hall,
-    // RV Lab, Fuel Station, DJ Babyface, altar) and walls can't use them.
-    bonusSlots: {
-      fromTownHall: 11,
-      count: 5,
-      types: ['cannon', 'archer', 'mortar', 'wizard', 'firework', 'spear', 'ksi', 'mousetrap', 'flock', 'ra', 'catapult']
-    },
+    // Village Halls 12-15 (v0.8): past Village Hall `from` - 1 (11) buildings get no new levels, only a few more
+    // defenses per hall (limits), so their base waves grow gentler than the endless formula above: x `count` enemies
+    // and x `hp` health per hall (x1.07 strength). Kinds that join by Village Hall grow the same way past it.
+    topHallGrowth: { from: 12, count: 1.04, hp: 1.03 },
+    maxTownHallLevel: 15,
+    // (v0.6.1-v0.7 had Bonus Slots at Village Hall 11: 5 extra defenses of any kind past their caps. v0.8 replaced
+    // them with fixed caps per hall (limits). A village that built past a cap keeps those buildings, but can't build
+    // another of that type until it's back under the cap: checkBuy in src/logic/buildings.js.)
     mineCoinIconThreshold: 0.1,
     buildingGap: 0
   },
@@ -123,8 +117,15 @@ export const CONFIG = {
       { upgradeCost: 40000, hp: 5724, capacity: 3500 },
       { upgradeCost: 80000, hp: 7155, capacity: 4000 },
       { upgradeCost: 160000, hp: 8944, capacity: 4500 },
-      // v0.6: Village Hall 11 (5 Bonus Slots since v0.6.1, +12 walls). 250,000 fits in 5 top storages (305,000).
-      { upgradeCost: 250000, hp: 11180, capacity: 5000 }
+      // v0.6: Village Hall 11. 250,000 fits in 5 top storages + the hall (309,500).
+      { upgradeCost: 250000, hp: 11180, capacity: 5000 },
+      // v0.8: Village Halls 12-15 (HP x1.25, capacity +500 per level). Each upgrade fits in the gold the hall before it
+      // can hold (top storages + the hall): 300,000 <= 371,000 (VH11: 6 storages), 340,000 <= 371,500 (VH12: 6),
+      // 380,000 <= 433,000 (VH13: 7), 410,000 <= 433,500 (VH14: 7).
+      { upgradeCost: 300000, hp: 13975, capacity: 5500 },
+      { upgradeCost: 340000, hp: 17469, capacity: 6000 },
+      { upgradeCost: 380000, hp: 21836, capacity: 6500 },
+      { upgradeCost: 410000, hp: 27295, capacity: 7000 }
     ]
   },
   // v0.5: Levels 6-10 make 12-33% more (same fill time): late halls took 2-10 hours of full mines to max out.
@@ -209,7 +210,7 @@ export const CONFIG = {
     name: "Fuel Station",
     size: 2,
     unlockTownHall: 2,
-    spellSlots: [0, 1, 1, 2, 2, 3, 3, 4, 4, 5],
+    spellSlots: [0, 1, 1, 2, 2, 3, 3, 4, 4, 5, 5, 5, 5, 5, 5],
     powerPerLevel: 0.08,
     // 8 levels, a picture per 2; HP x1.25 per level; each level needs a Village Hall level (VH2 -> VH10).
     levels: [
@@ -277,6 +278,38 @@ export const CONFIG = {
       { cost: 2500, costCurrency: 'rp', hp: 4292, heroHp: 3941, heroDamage: 255 },
       { cost: 4000, costCurrency: 'rp', hp: 5364, heroHp: 4730, heroDamage: 301 },
       { cost: 6000, costCurrency: 'rp', hp: 6706, heroHp: 5676, heroDamage: 355 }
+    ]
+  },
+  // The Hatsune Queen's altar (src/logic/queen.js, v0.8): the second hero, a crossbow sniper. Her level is the
+  // altar's (heroHp / heroDamage per level). She guards guardRange tiles around the altar and shoots ground AND air
+  // enemies from attackRange, a bolt every attackInterval s (boltSpeed tiles/s). She stays back: a ground enemy
+  // closer than keepAway tiles makes her step away from it (inside her guard area). Sleep, knockouts and waking work
+  // like the Brisket King's. Encore Cloak (encore): from the hotbar during a wave, once per wave: for `seconds` she
+  // can't be targeted, her bolts deal +damagePct% and pierce `pierce` more enemies, and she heals healPct%.
+  // She comes at Village Hall 8 (limits.queenAltar). Level 1 costs gold; Levels 2-10 cost Burgers and each needs the
+  // `townHall` on its level (VH8-15). From VH8 a village can have a Level 5 RV Lab, so every price fits the top
+  // Burger cap (rules.rpCaps: 10,000).
+  queenAltar: {
+    name: "Hatsune Queen Altar",
+    heroName: "Hatsune Queen",
+    size: 2,
+    unlockTownHall: 8,
+    hero: {
+      speed: 1.4, attackInterval: 0.8, attackRange: 5, guardRange: 8, keepAway: 2.5, boltSpeed: 18,
+      maxSleepSeconds: 120, wakeSeconds: 1.5,
+      encore: { seconds: 4, damagePct: 150, pierce: 2, healPct: 30 }
+    },
+    levels: [
+      { cost: 25000, townHall: 8, hp: 2400, heroHp: 2400, heroDamage: 160 },
+      { cost: 1500, costCurrency: 'rp', townHall: 8, hp: 2760, heroHp: 2580, heroDamage: 171 },
+      { cost: 2200, costCurrency: 'rp', townHall: 9, hp: 3174, heroHp: 2774, heroDamage: 182 },
+      { cost: 3000, costCurrency: 'rp', townHall: 9, hp: 3650, heroHp: 2982, heroDamage: 195 },
+      { cost: 4000, costCurrency: 'rp', townHall: 10, hp: 4198, heroHp: 3205, heroDamage: 208 },
+      { cost: 5000, costCurrency: 'rp', townHall: 11, hp: 4827, heroHp: 3446, heroDamage: 222 },
+      { cost: 6000, costCurrency: 'rp', townHall: 12, hp: 5551, heroHp: 3704, heroDamage: 237 },
+      { cost: 7000, costCurrency: 'rp', townHall: 13, hp: 6384, heroHp: 3982, heroDamage: 253 },
+      { cost: 8000, costCurrency: 'rp', townHall: 14, hp: 7342, heroHp: 4281, heroDamage: 270 },
+      { cost: 9500, costCurrency: 'rp', townHall: 15, hp: 8443, heroHp: 4602, heroDamage: 288 }
     ]
   },
   // Gnome villagers all live in Villager Houses (house.levels[].gnomes; their stats come from the same
@@ -594,29 +627,151 @@ export const CONFIG = {
       ]
     }
   },
-  // Per Village Hall level (1-11). Village Hall 11 adds 12 walls and one Mine, Storage and House; its defense caps are
-  // Village Hall 10's (plus its Bonus Slots for defenses: rules.bonusSlots).
+  // Defense merging (v0.8, user 2026-11-22; src/logic/merge.js). Two max-level copies of a type listed here combine
+  // into ONE merged building (b.merged) at the selected one's spot; the other copy is removed (no rubble). It counts as
+  // 2 toward the type's limit (countOwned: merging frees no slot), so its stats are about two max-level copies'
+  // worth (damage per second ~2x, health ~2x) plus its ability, and it can't merge again (one merge level).
+  //   cost        Burgers (rp, about a top RV Lab perk: 3,000) AND gold (about the type's own last upgrade); between
+  //               waves only. Both fit a Village Hall 10 village (Burger cap 10,000 with RV Lab 5; ~309,500 gold).
+  //   hpMult / rangeAdd   health and range of the merged building.
+  //   damageMult  damage of each regular shot; fireIntervalMult  time between shots. Timed perk specials (Flak,
+  //               Broadside, Volley Lock, Earthquake...) get damageMult / fireIntervalMult, the shots' DPS gain, so
+  //               nothing goes past two buildings' worth (see mergeDpsMult in buildings.js).
+  //   ability     the merged ability's own numbers (roll / bolt / triple below; read by combat.js).
+  //   mastery     a 3-tier track in the RV Lab that only upgrades the merged ability: Burgers per tier (`costs`), tier N
+  //               needs RV Lab level `labLevel[N - 1]`; it is not part of the one-path lock. Tiers add up (each tier's
+  //               fx merges with the ones before, like perks). Researched per type, like perks (state.mastery).
+  //   art         the merged picture (key); until it exists the max-level picture stands in, drawn standInScale bigger
+  //               with a gold glow. scale: the real picture's size against the max-level one,
+  //               chosen from each picture's visible pixels so the merged building looks 25% bigger than the Level 10 one.
+  merges: {
+    // Mega Cannon: 3.2x damage per shot at 1.6x the interval (2x DPS, two Cannons' worth). Rolling Thunder: every shot rolls on past its
+    // target `length` tiles at `speed`, hitting every ground enemy within hitRadius of its path for full damage, then
+    // bursts (burstRadius, burstDamage x the shot's damage, ground only). Heavy Shot's pierce perks extend the roll
+    // instead (pierceLengthShare x their pierceLength); their knockback and stun hit everything it rolls through.
+    cannon: {
+      name: 'Mega Cannon',
+      ability: 'Rolling Thunder',
+      abilityIcon: 'ui_ability_rolling_thunder',
+      abilityShort: 'Shots roll on through every ground enemy in their path.',
+      abilityText: 'Every shot is a huge cannonball that keeps rolling 4 tiles past its target, hitting every ground enemy in its path for full damage, then bursts at the end.',
+      cost: { gold: 76800, rp: 3000 },
+      hpMult: 2, rangeAdd: 0.5, damageMult: 3.2, fireIntervalMult: 1.6,
+      roll: { length: 4, speed: 7, hitRadius: 0.55, burstRadius: 1.25, burstDamage: 0.5, pierceLengthShare: 0.4, bossSlow: 0.5 },
+      mastery: {
+        costs: [1200, 2000, 3000], labLevel: [3, 4, 5],
+        tiers: [
+          { name: 'Heavier Ball', desc: 'The cannonball rolls 2 tiles further.', fx: { rollAdd: 2 } },
+          { name: 'Shockwave', desc: 'The burst at the end of the roll stuns every ground enemy in it for 0.5 s (bosses are slowed instead).', fx: { burstStun: 0.5 } },
+          { name: 'Scorched Path', desc: 'The ball leaves a burning trail: ground enemies on it burn for 15% of its damage every second for 3 s.', fx: { trailDps: 0.15, trailSeconds: 3, trailRadius: 0.5 } }
+        ]
+      },
+      // Four facings like the Cannon's own (turned toward its target; down-left is the plain picture for windows).
+      art: {
+        key: 'bld_cannon_merged_dl', scale: 1.15, standInScale: 1.15,
+        facings: { dl: 'bld_cannon_merged_dl', dr: 'bld_cannon_merged_dr', ul: 'bld_cannon_merged_ul', ur: 'bld_cannon_merged_ur' }
+      }
+    },
+    // Locklair Citadel: fast arrows at 2x damage (2x DPS). Ballista Bolt: every `every`th shot is a bolt for `mult` x damage
+    // that pins its target for pinSeconds (held: no moving or attacking, flyers too; a pinned dasher's dash ends with
+    // no impact). Bosses (Da Baby Car) are slowed by bossSlow instead, never pinned.
+    archer: {
+      name: 'Locklair Citadel',
+      ability: 'Ballista Bolt',
+      abilityIcon: 'ui_ability_ballista_bolt',
+      abilityShort: 'Every 5th shot is a 4x bolt that pins its target.',
+      abilityText: 'Every 5th shot is a big ballista bolt: 4x damage, and it pins its target for 1 s (flyers too; bosses are only slowed). A pinned Quandale Dingle\'s dash ends.',
+      cost: { gold: 128000, rp: 3000 },
+      hpMult: 2, rangeAdd: 0.5, damageMult: 2, fireIntervalMult: 1,
+      bolt: { every: 5, mult: 4, pinSeconds: 1, bossSlow: 0.5, skewerLength: 3 },
+      mastery: {
+        costs: [1200, 2000, 3000], labLevel: [3, 4, 5],
+        tiers: [
+          { name: 'Quick Crank', desc: 'A Ballista Bolt every 4th shot.', fx: { boltEvery: 4 } },
+          { name: 'Barbed Bolt', desc: 'Bolts pin for 1.5 s, and pinned enemies take 20% more damage from everything.', fx: { pinSeconds: 1.5, pinVuln: 0.2 } },
+          { name: 'Skewer', desc: 'The bolt passes through its target and pins one more enemy behind it.', fx: { skewer: 1 } }
+        ]
+      },
+      art: { key: 'bld_archer_merged', scale: 1.15, standInScale: 1.15 }
+    },
+    // Litman Triple Mortar (the user's picture: three barrels). Triple Strike: every volley is `shells` shells, each
+    // shellMult x a max-level shell's damage (about 2x when all three hit), same interval and splash. One lands on the
+    // target; the others on the next enemies in range (not already under a shell, spread out), else `spread` tiles around
+    // the target. Heavy once-per-shot perks (Cluster Shell, Seismic Charge, Fault Line, Aftershock, Craters, fire patches:
+    // sideShellDrops) only come with the main shell; Barrage / Ready Rack add single full shells, as on any Mortar.
+    mortar: {
+      name: 'Litman Triple Mortar',
+      ability: 'Triple Strike',
+      abilityIcon: 'ui_ability_triple_strike',
+      abilityShort: 'Fires three shells at once, at three enemies.',
+      abilityText: 'Every volley fires three shells at once: one on its target, the others on the next enemies in range (or around the target), each at 67% damage with the full splash.',
+      cost: { gold: 204800, rp: 3000 },
+      hpMult: 2, rangeAdd: 1, damageMult: 1, fireIntervalMult: 1,
+      triple: { shells: 3, shellMult: 0.67, spread: 1.2, spreadApart: 1.1, sideShellDrops: ['cluster', 'bounce', 'crack', 'aftershock', 'craterSlow', 'fireRadius'] },
+      mastery: {
+        costs: [1200, 2000, 3000], labLevel: [3, 4, 5],
+        tiers: [
+          { name: 'Quick Reload', desc: 'Fires 15% more often.', fx: { fireIntervalMult: 0.85 } },
+          { name: 'Concussion', desc: 'Each shell slows the enemies it hits by 30% for 2 s.', fx: { slowOnHit: 0.3, slowSeconds: 2 } },
+          { name: 'Synchronized Impact', desc: 'When 2 or more shells of a volley land within 1.5 tiles of each other, a combined blast hits for 50% of a shell\'s damage and stuns for 0.5 s.', fx: { syncRadius: 1.5, syncDamage: 0.5, syncStun: 0.5 } }
+        ]
+      },
+      art: { key: 'bld_mortar_merged', scale: 1.24, standInScale: 1.15 }
+    },
+    // Missile Silo: 2x damage (normal splash bursts). Sky Net: every `every` s, on top of its rockets, a net rocket
+    // (flightTime s) flies to the spot in range covering the most flyers (and ground troops with Ground Show); it opens
+    // there for `seconds`: everything inside `radius` is slowed `slow` (the strongest slow wins, like pools) and pulled
+    // toward the middle (at most `pull` tiles over the whole net). Bosses are slowed, never pulled.
+    // art: two pictures, aiming left / right (facings), turned toward its target like the Cannon's facings, drawn
+    // `scale` x the max-level picture's size.
+    firework: {
+      name: 'Missile Silo',
+      ability: 'Sky Net',
+      abilityIcon: 'ui_ability_sky_net',
+      abilityShort: 'Every 6 s a net rocket pulls a group of flyers together and slows them.',
+      abilityText: 'Every 6 s it also fires a net rocket at the biggest group of flyers in range: for 3 s the net pulls them together and slows them 50% (bosses are only slowed). With Ground Show it catches ground troops too.',
+      cost: { gold: 256000, rp: 3000 },
+      hpMult: 2, rangeAdd: 0.5, damageMult: 2, fireIntervalMult: 1,
+      net: { every: 6, flightTime: 0.5, radius: 1.5, seconds: 3, pull: 1.5, slow: 0.5, linger: 0.25, coreRadius: 0.2 },
+      mastery: {
+        costs: [1200, 2000, 3000], labLevel: [3, 4, 5],
+        tiers: [
+          { name: 'Wider Net', desc: 'The net is 1 tile wider.', fx: { netRadiusAdd: 1 } },
+          { name: 'Tangled', desc: 'Enemies in the net take 20% more damage from everything.', fx: { netVuln: 0.2 } },
+          { name: 'Double Net', desc: 'Fires two nets, at the two biggest groups.', fx: { nets: 2 } }
+        ]
+      },
+      art: { key: 'bld_firework_merged_left', facings: { left: 'bld_firework_merged_left', right: 'bld_firework_merged_right' }, scale: 1.22, standInScale: 1.15 }
+    }
+  },
+  // Per Village Hall level (1-15). Every hall from 11 adds 12 walls. v0.8 (user, 2026-11-22; replaced v0.6.1's Bonus
+  // Slots): on top of the hall before it, Village Hall 11 adds a Tower of Rah, Gandolf, Diddypult, KSI Tower and Cannon
+  // (and, since v0.6.3, a Mine, Storage and House); VH12 a Tower of Rah and Gandolf; VH13 a Diddypult, KSI Tower,
+  // Locklair Tower and Storage (so the VH14 upgrade fits); VH14 a Cannon, Mortar, Spear Thrower and F.L.O.C.K Tower;
+  // VH15 a Tower of Rah, Firework Launcher, Mine, Storage and House. A village over a cap (built with Bonus Slots)
+  // keeps those buildings (checkBuy just won't add more).
   limits: {
-    mine: [1, 2, 3, 3, 4, 4, 5, 5, 6, 6, 7],     // v0.6.3: Village Hall 11 adds one Mine, Storage and House
-    storage: [1, 1, 2, 2, 3, 3, 4, 4, 5, 5, 6],
-    house: [1, 1, 2, 2, 3, 3, 4, 4, 5, 5, 6],
-    cannon: [1, 2, 2, 3, 3, 4, 4, 5, 5, 6, 6],
-    archer: [0, 1, 2, 2, 3, 3, 4, 4, 5, 5, 5],
-    mortar: [0, 1, 1, 2, 2, 3, 3, 4, 4, 5, 5],
-    wizard: [0, 0, 1, 1, 2, 2, 3, 3, 4, 4, 4],
-    townHall: [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1],
-    wall: [24, 36, 48, 60, 72, 84, 96, 108, 120, 132, 144],
-    firework: [0, 0, 1, 1, 2, 2, 2, 3, 3, 3, 3],
-    catapult: [0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1], // the final unlock: from Village Hall 10
-    spear: [0, 0, 1, 1, 2, 2, 2, 3, 3, 3, 3],
-    ksi: [0, 0, 0, 0, 1, 1, 2, 2, 3, 3, 3],
-    flock: [0, 0, 1, 1, 1, 2, 2, 2, 3, 3, 3],
-    mousetrap: [0, 1, 2, 2, 3, 3, 4, 4, 5, 5, 5],
-    ra: [0, 0, 0, 0, 0, 1, 1, 1, 2, 2, 2],
-    rvlab: [0, 0, 0, 1, 1, 1, 1, 1, 1, 1, 1],
-    dj: [0, 0, 0, 0, 1, 1, 1, 1, 1, 1, 1],
-    fuelStation: [0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1],
-    altar: [0, 0, 0, 1, 1, 1, 1, 1, 1, 1, 1]
+    mine: [1, 2, 3, 3, 4, 4, 5, 5, 6, 6, 7, 7, 7, 7, 8],
+    storage: [1, 1, 2, 2, 3, 3, 4, 4, 5, 5, 6, 6, 7, 7, 8],
+    house: [1, 1, 2, 2, 3, 3, 4, 4, 5, 5, 6, 6, 6, 6, 7],
+    cannon: [1, 2, 2, 3, 3, 4, 4, 5, 5, 6, 7, 7, 7, 8, 8],
+    archer: [0, 1, 2, 2, 3, 3, 4, 4, 5, 5, 5, 5, 6, 6, 6],
+    mortar: [0, 1, 1, 2, 2, 3, 3, 4, 4, 5, 5, 5, 5, 6, 6],
+    wizard: [0, 0, 1, 1, 2, 2, 3, 3, 4, 4, 5, 6, 6, 6, 6],
+    townHall: [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1],
+    wall: [24, 36, 48, 60, 72, 84, 96, 108, 120, 132, 144, 156, 168, 180, 192],
+    firework: [0, 0, 1, 1, 2, 2, 2, 3, 3, 3, 3, 3, 3, 3, 4],
+    catapult: [0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 2, 2, 3, 3, 3], // the final unlock: from Village Hall 10
+    spear: [0, 0, 1, 1, 2, 2, 2, 3, 3, 3, 3, 3, 3, 4, 4],
+    ksi: [0, 0, 0, 0, 1, 1, 2, 2, 3, 3, 4, 4, 5, 5, 5],
+    flock: [0, 0, 1, 1, 1, 2, 2, 2, 3, 3, 3, 3, 3, 4, 4],
+    mousetrap: [0, 1, 2, 2, 3, 3, 4, 4, 5, 5, 5, 5, 5, 5, 5],
+    ra: [0, 0, 0, 0, 0, 1, 1, 1, 2, 2, 3, 4, 4, 4, 5],
+    rvlab: [0, 0, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1],
+    dj: [0, 0, 0, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1],
+    fuelStation: [0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1],
+    altar: [0, 0, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1],
+    queenAltar: [0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 1, 1, 1, 1] // the Hatsune Queen: from Village Hall 8
   },
   // radius (tiles): body size; enemies push apart so they never stack on top of each other.
   // name: shown to players; role: the enemy's job, shown as subtext under the name.
@@ -807,7 +962,7 @@ export const CONFIG = {
     // Dropped by Neegy Balloons (never in a wave's queue). Hits air defenses twice as hard.
     neegy: {
       name: "Neegy",
-      role: "Paratrooper",
+      role: "Summoned Paratrooper",
       radius: 0.22,
       type: "ground",
       droppedBy: "balloon",
@@ -1035,6 +1190,47 @@ export const CONFIG = {
       attackRange: 2.5,
       bounty: 40,
       researchPoints: 9
+    },
+    // v0.8: a fast street fighter. When the building he's going for is dash.minRange..dash.range tiles away (and no wall
+    // is in his way: his route doesn't need breaking one) he dashes at dash.speed tiles/s, at most every dash.cooldown
+    // s and for at most dash.maxSeconds. Reaching it, he lands an impact hit of dash.impactMult x his damage, then
+    // punches normally. A wall in the way ends the dash with no impact (walls still protect). After a kill he walks to
+    // a building that's close (under dash.minRange) and dashes to one further off.
+    quandale: {
+      name: "Quandale Dingle",
+      role: "Dash Striker",
+      radius: 0.26,
+      type: "ground",
+      dash: { minRange: 1.5, range: 4, speed: 4.5, maxSeconds: 1.4, cooldown: 2, impactMult: 3, stunSeconds: 1.5 },
+      fromTownHall: 7,
+      baseCount: 2,
+      hp: 380,
+      speed: 1.35,
+      damage: 24,
+      attackInterval: 1,
+      attackRange: 0.5,
+      bounty: 22,
+      researchPoints: 6
+    },
+    // v0.8: a big slow tank that leaves purple goo behind. Every goo.every tiles he walks he drops a puddle (goo.radius,
+    // lasting goo.seconds); any other enemy standing in goo is enraged for goo.rageSeconds: goo.speedMult x speed and
+    // goo.damageMult x damage (it doesn't stack, and doesn't affect Grimaces). Where he dies, one big puddle
+    // (goo.deathRadius, goo.deathSeconds).
+    grimace: {
+      name: "Grimace Golem",
+      role: "Goo Tank",
+      radius: 0.4,
+      type: "ground",
+      goo: { every: 1, radius: 0.55, seconds: 6, rageSeconds: 4, speedMult: 1.3, damageMult: 1.3, deathRadius: 2, deathSeconds: 8 },
+      fromTownHall: 11,
+      baseCount: 1,
+      hp: 3200,
+      speed: 0.5,
+      damage: 50,
+      attackInterval: 2,
+      attackRange: 0.5,
+      bounty: 60,
+      researchPoints: 12
     }
   },
   // Themed waves (v0.7, src/logic/waves.js; replaced v0.6's special wave every 3rd wave). From wave `fromWave` every
@@ -1059,10 +1255,10 @@ export const CONFIG = {
     // Enemies with abilities that pile up badly (auras, summoners, artillery...): a theme never brings more than
     // `mult` x the normal wave's count of one (or `extra` more, whichever is higher); the health budget it would have
     // had goes to the wave's other troops instead, so the strength stays the same.
-    headlinerCap: { mult: 3, extra: 2, kinds: ['toilet', 'pork', 'skeleton', 'vaca', 'yahu', 'patapim', 'lirili', 'bicus', 'frigo', 'bombo'] },
+    headlinerCap: { mult: 3, extra: 2, kinds: ['toilet', 'pork', 'skeleton', 'vaca', 'yahu', 'patapim', 'lirili', 'bicus', 'frigo', 'bombo', 'quandale', 'grimace'] },
     boss: { every: 10, name: 'Boss Wave', hint: 'The toughest enemies you have met, led by the raid boss', headliners: 4, share: 0.6, strength: 1.15, bonusBounty: 1 },
     order: ['swarm', 'sneak', 'ironLegion', 'air', 'boneMarch', 'heist', 'frozenFront', 'bombSquad', 'skyFire', 'ground',
-      'signalLost', 'earthshaker', 'underground', 'artillery', 'jungle', 'siege'],
+      'signalLost', 'earthshaker', 'underground', 'artillery', 'jungle', 'siege', 'dashGang', 'gooParade'],
     types: {
       swarm: { name: 'Swarm', hint: 'Hordes of weak enemies', pure: true, mix: { grunt: 0.6, thief: 0.4 }, needs: ['thief'], strength: 0.8 },
       sneak: { name: 'Sneak Attack', hint: 'Sharks and thieves leap your walls', mix: { shark: 0.6, thief: 0.4 }, needs: ['shark'], share: 0.55 },
@@ -1079,6 +1275,8 @@ export const CONFIG = {
       underground: { name: 'Underground', hint: 'Skibidi Toilets tunnel under everything', mix: { toilet: 0.7, grunt: 0.3 }, needs: ['toilet'], share: 0.55 },
       artillery: { name: 'Artillery', hint: 'Missiles and stones from long range', mix: { yahu: 0.5, slinger: 0.5 }, needs: ['yahu'], share: 0.55 },
       jungle: { name: 'Jungle Stampede', hint: 'Brr Brr Patapim drops diving Chimpanzinis while Sharks run ahead', mix: { patapim: 0.6, shark: 0.4 }, needs: ['patapim'], share: 0.55 },
+      dashGang: { name: 'Dash Gang', hint: 'Quandale Dingles dash from building to building as Sharks leap your walls', mix: { quandale: 0.6, shark: 0.4 }, needs: ['quandale'], share: 0.55 },
+      gooParade: { name: 'Goo Parade', hint: 'Grimace Golems leave goo that enrages the troops behind them', mix: { grimace: 0.5, grunt: 0.3, tank: 0.2 }, needs: ['grimace'], share: 0.55 },
       siege: { name: 'Siege', hint: 'Tanks and Wall Breakers', pure: true, mix: { tank: 0.8, lirili: 0.12, breaker: 0.08 }, needs: ['tank'], strength: 1 }
     }
   },

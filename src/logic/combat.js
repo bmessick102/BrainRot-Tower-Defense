@@ -3,7 +3,7 @@
 // play out when it lands (pierce, knockback, slows, stuns, fire patches, chains, sparklers, bomblets...).
 import { CONFIG } from '../config.js';
 import { ABILITY_RULES } from '../abilityConfig.js';
-import { typeConfig, isDefense, isSupport, maxHp } from './buildings.js';
+import { typeConfig, isDefense, isSupport, maxHp, mergedConfigOf, mergeShotMult, masteryFxOf } from './buildings.js';
 import { abilityFx, towerRange, towerMinRange, towerDamageMult, towerFireInterval, auraOf } from './abilities.js';
 import { footprintCenter, distanceToFootprint } from './grid.js';
 import { distance } from './iso.js';
@@ -13,7 +13,7 @@ import { enrageFactor, nightLootMult } from './enrage.js';
 import { addHype } from './dj.js';
 import { knockback, applySlow, applyStun } from './motion.js';
 import { addResearchPoints, killResearchPoints } from './researchPoints.js';
-import { fireBoulderAt, fireMissileAt, stepEnemyShot } from './specialEnemies.js';
+import { fireBoulderAt, fireMissileAt, stepEnemyShot, dropGoo } from './specialEnemies.js';
 
 export { applySlow, applyStun };
 
@@ -154,6 +154,17 @@ export function fireDefense(state, b, target, opts = {}) {
     source: opts.source || null,
     done: false
   };
+  // Merged defenses (CONFIG.merges, merge.js): a side shell's trimmed perks (Triple Strike), a Mega Cannon's roll, a
+  // Ballista Bolt's pin, the Mortar's Concussion Mastery, and the volley a shell belongs to (Synchronized Impact).
+  const merge = mergedConfigOf(b);
+  if (opts.fx) p.fx = opts.fx;
+  if (merge) {
+    const mfx = masteryFxOf(b);
+    if (merge.roll && !opts.kind && !enemyIsAir(target)) { p.roll = rollFor(merge.roll, fx, mfx); p.mega = true; }
+    if (mfx.slowOnHit) p.fx = { ...p.fx, slowOnHit: Math.max(p.fx.slowOnHit || 0, mfx.slowOnHit), slowSeconds: Math.max(p.fx.slowSeconds || 0, mfx.slowSeconds || 1) };
+  }
+  if (opts.bolt) p.bolt = opts.bolt;
+  if (opts.volley) p.volley = opts.volley;
   if (pcfg.flightTime !== undefined) {
     // Mortar: arcs to where the target is right now, lands after flightTime.
     p.homing = false;
@@ -166,13 +177,50 @@ export function fireDefense(state, b, target, opts = {}) {
       if (len > 3) { lx *= 3 / len; ly *= 3 / len; }
       p.targetX += lx; p.targetY += ly;
     }
+    if (opts.aim) { p.targetX = opts.aim.x; p.targetY = opts.aim.y; } // a Triple Strike shell spread around its target
   } else {
     p.homing = true;
     p.speed = pcfg.speed * (1 + (fx.projSpeedPct || 0) / 100); // Firework Skyrocket
   }
   state.projectiles.push(p);
-  emit(state, 'projectileFired', { id: p.id, kind: p.kind, sourceId: b.id });
+  if (!opts.quiet) emit(state, 'projectileFired', { id: p.id, kind: p.kind, sourceId: b.id, mega: !!p.mega, bolt: !!p.bolt });
   return p;
+}
+
+/** A Mega Cannon shot's roll: its config, made longer by Heavy Shot's pierce perks and the Heavier Ball Mastery. */
+function rollFor(R, fx, mfx) {
+  const extra = fx.pierce ? (fx.pierceLength || 0) * (R.pierceLengthShare || 0) : 0;
+  return {
+    length: R.length + (mfx.rollAdd || 0) + extra, speed: R.speed, hitRadius: R.hitRadius, burstRadius: R.burstRadius, burstDamage: R.burstDamage,
+    bossSlow: R.bossSlow, burstStun: mfx.burstStun || 0, trailDps: mfx.trailDps || 0, trailSeconds: mfx.trailSeconds || 0, trailRadius: mfx.trailRadius || 0.5
+  };
+}
+
+/**
+ * Hold an enemy for `seconds` (a stun), or, for a boss (Da Baby Car), slow it by `bossSlow` instead: bosses are never
+ * held by the merged abilities. Returns true if it was held.
+ */
+function holdOrSlow(e, seconds, bossSlow) {
+  if (!e.alive || !(seconds > 0)) return false;
+  if (CONFIG.enemies[e.kind].boss) { applySlow(e, bossSlow || 0.5, seconds); return false; }
+  applyStun(e, seconds);
+  return true;
+}
+
+/**
+ * Locklair Citadel's Ballista Bolt: pins the enemy for `seconds` (held: no moving or attacking; a flyer hangs in the
+ * air; a dashing Quandale Dingle's dash ends with no impact, see applyStun). Barbed Bolt: it takes `vuln` more damage
+ * from everything while pinned. Bosses are only slowed (bossSlow). Emits 'enemyPinned'. Returns true if pinned.
+ */
+export function pinEnemy(state, e, { seconds, vuln = 0, bossSlow = 0.5 } = {}) {
+  if (!e || !e.alive || !(seconds > 0)) return false;
+  const pinned = holdOrSlow(e, seconds, bossSlow);
+  if (pinned) {
+    e.pinT = Math.max(e.pinT || 0, seconds);
+    if (vuln) applyVuln(e, vuln, seconds);
+  }
+  emit(state, 'enemyPinned', { id: e.id, kind: e.kind, x: e.x, y: e.y, seconds, boss: !pinned });
+  return pinned;
 }
 
 /**
@@ -271,7 +319,8 @@ function shoot(state, b, target) {
   const fx = abilityFx(b);
   b.shots = (b.shots || 0) + 1;
   const every = (n) => n && b.shots % n === 0;
-  let mult = 1;
+  const merge = mergedConfigOf(b);
+  let mult = mergeShotMult(b); // a merged defense's shots hit harder (Mega Cannon 3.2x in all, with towerDamageMult)
   if (fx.surgeIdle && (b.sinceShot ?? Infinity) >= fx.surgeIdle) mult *= fx.surgeMult;            // Gandolf Mana Surge
   b.sinceShot = 0;
   if (fx.firstShotMult && b.lastShotTarget !== target.id) mult *= fx.firstShotMult;            // Locklair Ambush
@@ -284,23 +333,108 @@ function shoot(state, b, target) {
   if (every(fx.starEvery)) extra.star = true;                                                    // Firework Star Shells
   // Catapult Boulder: every Nth shot rolls a boulder instead.
   if (every(fx.boulderEvery)) { fireBoulder(state, b, target, fx); return; }
+  // Locklair Citadel's Ballista Bolt: every Nth shot (Quick Crank: sooner) is a bolt that pins its target. The other
+  // arrows of a multi-shot still fly, and a Headshot due on this shot comes too.
+  if (merge && merge.bolt) {
+    const mfx = masteryFxOf(b), B = merge.bolt;
+    b.boltCount = (b.boltCount || 0) + 1;
+    if (b.boltCount >= (mfx.boltEvery || B.every)) {
+      b.boltCount = 0;
+      const bolt = { seconds: mfx.pinSeconds || B.pinSeconds, vuln: mfx.pinVuln || 0, bossSlow: B.bossSlow, skewer: mfx.skewer ? B.skewerLength : 0 };
+      fireDefense(state, b, target, { ...extra, damageMult: mult * B.mult, bolt, source: 'bolt' });
+      for (const t of spreadTargets(state, b, target, Math.max(1, fx.multiShot || 1)).slice(1)) fireDefense(state, b, t, { ...extra, damageMult: mult });
+      if (every(fx.headshotEvery)) fireDefense(state, b, toughestTarget(state, b) || target, { ...extra, damageMult: mult * fx.headshotMult, source: 'headshot' });
+      return;
+    }
+  }
   // Locklair Headshot: every Nth arrow goes to the toughest enemy for a big multiplier.
   if (every(fx.headshotEvery)) {
     const t = toughestTarget(state, b) || target;
     fireDefense(state, b, t, { ...extra, damageMult: mult * fx.headshotMult, source: 'headshot' });
     return;
   }
-  for (const t of spreadTargets(state, b, target, Math.max(1, fx.multiShot || 1))) {
-    const crit = fx.critChance && random(state) < fx.critChance;
-    fireDefense(state, b, t, crit ? { ...extra, damageMult: mult * fx.critMult, crit: true, source: 'crit' } : { ...extra, damageMult: mult });
+  if (merge && merge.triple) fireTriple(state, b, target, extra, mult, merge.triple); // Litman Triple Mortar: Triple Strike
+  else {
+    for (const t of spreadTargets(state, b, target, Math.max(1, fx.multiShot || 1))) {
+      const crit = fx.critChance && random(state) < fx.critChance;
+      fireDefense(state, b, t, crit ? { ...extra, damageMult: mult * fx.critMult, crit: true, source: 'crit' } : { ...extra, damageMult: mult });
+    }
   }
   // Cannon Grapeshot: every Nth shot also sprays pellets at other enemies.
   if (fx.grapeEvery && b.shots % fx.grapeEvery === 0) {
     const pellets = spreadTargets(state, b, target, 1 + fx.grapePellets).slice(1);
-    for (const t of pellets) fireDefense(state, b, t, { damageMult: fx.grapeDamage, kind: 'pellet' });
+    for (const t of pellets) fireDefense(state, b, t, { damageMult: fx.grapeDamage * mergeShotMult(b), kind: 'pellet' });
   }
   // Mortar Barrage: more shells follow this one.
   if (fx.burst > 1) { b.burstLeft = fx.burst - 1; b.burstTimer = BURST_GAP; }
+}
+
+/**
+ * Litman Triple Mortar's Triple Strike: `T.shells` shells at once, each T.shellMult of a shell's damage. The main one
+ * lands on the target with every perk; the others go to the next enemies in range (sideTargets) with the heavy
+ * once-per-shot perks left out (T.sideShellDrops: Cluster Shell, Seismic Charge, Fault Line, Aftershock, Craters, fire
+ * patches), else T.spread tiles to either side of the target. Synchronized Impact (Mastery): the volley is tracked so a
+ * combined blast can go off when they land (volleyLanded).
+ */
+function fireTriple(state, b, target, extra, mult, T) {
+  const fx = abilityFx(b), mfx = masteryFxOf(b);
+  const sideFx = {};
+  for (const [k, v] of Object.entries(fx)) if (!T.sideShellDrops.includes(k)) sideFx[k] = v;
+  const volley = mfx.syncRadius ? { left: T.shells, landed: [], radius: mfx.syncRadius, mult: mfx.syncDamage, stun: mfx.syncStun, damage: 0 } : null;
+  const opts = { damageMult: mult * T.shellMult, volley };
+  const main = fireDefense(state, b, target, { ...extra, ...opts });
+  if (volley) volley.damage = main.damage;
+  const picks = sideTargets(state, b, target, T.shells - 1, T.spreadApart);
+  const c = footprintCenter(b);
+  const away = Math.atan2(main.targetY - c.y, main.targetX - c.x);
+  let spare = 0;
+  for (let i = 0; i < T.shells - 1; i++) {
+    const e = picks[i];
+    if (e) { fireDefense(state, b, e, { ...opts, fx: sideFx, quiet: true }); continue; }
+    // Not enough targets: land beside the main shell, alternating sides across the line of fire (a wider volley).
+    const a = away + (spare % 2 === 0 ? Math.PI / 2 : -Math.PI / 2), r = T.spread * (1 + Math.floor(spare / 2) * 0.5);
+    spare++;
+    fireDefense(state, b, target, { ...opts, fx: sideFx, quiet: true, aim: { x: main.targetX + Math.cos(a) * r, y: main.targetY + Math.sin(a) * r } });
+  }
+}
+
+/**
+ * Up to `n` enemies for Triple Strike's other shells: valid targets other than the main one, those not already under a
+ * shell first, then those at least `apart` tiles from where the shells so far will land, then the nearest to the target.
+ */
+export function sideTargets(state, b, main, n, apart = 1) {
+  const busy = new Set(state.projectiles.filter((p) => !p.done && p.owner === 'tower' && p.targetId).map((p) => p.targetId));
+  const out = [], spots = [{ x: main.x, y: main.y }];
+  const pool = validTargets(state, b).filter((e) => e !== main);
+  for (let k = 0; k < n; k++) {
+    let best = null, bestKey = null;
+    for (const e of pool) {
+      if (out.includes(e)) continue;
+      const dmin = Math.min(...spots.map((s) => distance(s.x, s.y, e.x, e.y)));
+      const key = [busy.has(e.id) ? 1 : 0, dmin >= apart ? 0 : 1, distance(main.x, main.y, e.x, e.y)];
+      if (!bestKey || key[0] < bestKey[0] || (key[0] === bestKey[0] && (key[1] < bestKey[1] || (key[1] === bestKey[1] && key[2] < bestKey[2])))) { best = e; bestKey = key; }
+    }
+    if (!best) break;
+    out.push(best);
+    spots.push({ x: best.x, y: best.y });
+  }
+  return out;
+}
+
+/**
+ * A Triple Strike shell landed. Once the whole volley is down, Synchronized Impact: if 2+ shells landed within the
+ * Mastery's radius of each other, one combined blast at their middle (syncDamage x a shell's damage, ground only) that
+ * holds what it hits (bosses slowed).
+ */
+function volleyLanded(state, p) {
+  const v = p.volley;
+  v.landed.push({ x: p.targetX, y: p.targetY });
+  if (--v.left > 0) return;
+  const near = v.landed.filter((s, i) => v.landed.some((o, j) => j !== i && distance(s.x, s.y, o.x, o.y) <= v.radius));
+  if (near.length < 2) return;
+  const x = near.reduce((a, s) => a + s.x, 0) / near.length, y = near.reduce((a, s) => a + s.y, 0) / near.length;
+  const hit = applySplash(state, x, y, p.splashRadius || 1.5, v.damage * v.mult, true, false, 'syncBlast');
+  for (const e of hit) holdOrSlow(e, v.stun, 0.5);
 }
 
 /** Is this a tower that shoots projectiles (not a support tower, trap or beam)? */
@@ -314,6 +448,7 @@ export function isShooter(b) {
 export function stepDefenses(state, dt) {
   for (const b of state.buildings) {
     if (b.destroyed || !isShooter(b)) continue;
+    if (b.stunT > 0) continue; // stunned by Quandale's dash impact: no firing (the cooldown and bursts wait)
     b.cooldown = Math.max(0, (b.cooldown || 0) - dt);
     b.sinceShot = (b.sinceShot ?? Infinity) + dt;
     const fx = abilityFx(b);
@@ -460,6 +595,8 @@ export function damageEnemy(state, e, amount, source = null) {
     // Wall Breakers blow up however they die (shot down included), hitting everything around them.
     const cfg = CONFIG.enemies[e.kind];
     if (cfg.explodes && !e.exploded) explode(state, e, cfg);
+    // Grimace Golem: one big puddle of goo where he falls (v0.8).
+    if (cfg.goo && !state.gameOver) dropGoo(state, e.x, e.y, cfg.goo, true);
     // Spreading Plague: a poisoned enemy passes its poison on to everyone close by.
     if (e.poisonTime > 0 && e.poisonSpread > 0) {
       for (const o of state.enemies) {
@@ -916,9 +1053,46 @@ function stepLineProjectile(state, p, dt) {
     damageEnemy(state, e, p.damage * mult, p.source);
     if (!e.alive) onTowerKill(state, p, e);
     else hitEffects(state, p, e, { x: p.dirX, y: p.dirY });
+    if (p.bolt && e.alive) pinEnemy(state, e, p.bolt); // a Skewer bolt pins the enemy behind too
     if (state.gameOver) return;
   }
   if (p.travelLeft <= 1e-6 || p.pierceLeft <= 0) p.done = true;
+  if (p.rolling) stepRoll(state, p, step);
+}
+
+/**
+ * Rolling Thunder: the Mega Cannon's ball, having hit its target, rolls on `roll.length` tiles along the ground the way it
+ * was going, hitting every ground enemy near its path once (full damage, the cannon's knockback / stun perks).
+ */
+function startRoll(state, p, target, dir) {
+  let dx = dir.x, dy = dir.y;
+  if (Math.hypot(dx, dy) < 1e-6) { dx = target.x - p.startX; dy = target.y - p.startY; }
+  const len = Math.hypot(dx, dy) || 1, R = p.roll;
+  Object.assign(p, {
+    done: false, homing: false, line: true, rolling: true, dirX: dx / len, dirY: dy / len, speed: R.speed, travelLeft: R.length,
+    pierceLeft: Infinity, hitIds: [target.id], hitRadius: R.hitRadius, hitsGround: true, hitsAir: false, targetId: null, rolled: 0, trailNext: 0
+  });
+  emit(state, 'megaRoll', { id: p.id, x: p.x, y: p.y });
+}
+
+/** Each step of a roll: Scorched Path's burning trail (a fire pool every tile), and the burst where it stops. */
+function stepRoll(state, p, step) {
+  const R = p.roll;
+  p.rolled += step;
+  if (R.trailDps && !state.gameOver) {
+    while (p.rolled >= p.trailNext) {
+      const back = p.rolled - p.trailNext; // the trail spot is this far behind the ball
+      createPool(state, p.x - p.dirX * back, p.y - p.dirY * back, { radius: R.trailRadius, duration: R.trailSeconds, dps: p.damage * R.trailDps, slow: 0 }, 'fire');
+      p.trailNext += 1;
+    }
+  }
+  if (!p.done || state.gameOver) return;
+  // The end of the roll: a small burst (ground only); Shockwave holds what it hits for a moment (bosses slowed).
+  const hit = applySplash(state, p.x, p.y, R.burstRadius, p.damage * R.burstDamage, true, false, 'megaBurst');
+  for (const e of hit) {
+    if (!e.alive) onTowerKill(state, p, e);
+    else if (R.burstStun) holdOrSlow(e, R.burstStun, R.bossSlow);
+  }
 }
 
 function stepTowerProjectile(state, p, dt) {
@@ -938,8 +1112,20 @@ function stepTowerProjectile(state, p, dt) {
         else hitEffects(state, p, target, Math.hypot(dir.x, dir.y) > 1e-6 ? dir : { x: target.x - p.startX, y: target.y - p.startY });
         const fx = p.fx || {};
         if (fx.chainCount) chainLightning(state, p, target, p.x, p.y);
-        // Cannon Piercing Shot: keep flying straight on through the enemies behind it.
-        if (fx.pierce && !state.gameOver) {
+        if (p.bolt && target.alive) pinEnemy(state, target, p.bolt); // Ballista Bolt
+        // Locklair Citadel's Skewer (Mastery): the bolt flies on through and pins one more enemy behind, in its layer.
+        if (p.bolt && p.bolt.skewer && !state.gameOver) {
+          let dx = dir.x, dy = dir.y;
+          if (Math.hypot(dx, dy) < 1e-6) { dx = target.x - p.startX; dy = target.y - p.startY; }
+          const len = Math.hypot(dx, dy) || 1, air = enemyIsAir(target);
+          Object.assign(p, {
+            done: false, homing: false, line: true, dirX: dx / len, dirY: dy / len, speed: PIERCE_SPEED, hitsAir: air, hitsGround: !air,
+            travelLeft: p.bolt.skewer, pierceLeft: 1, hitIds: [target.id], targetId: null, bolt: { ...p.bolt, skewer: 0 }
+          });
+          emit(state, 'projectilePierced', { id: p.id });
+        }
+        // Cannon Piercing Shot: keep flying straight on through the enemies behind it (a Mega Cannon rolls instead).
+        else if (fx.pierce && !p.roll && !state.gameOver) {
           let dx = dir.x, dy = dir.y;
           if (Math.hypot(dx, dy) < 1e-6) { dx = target.x - p.startX; dy = target.y - p.startY; }
           const len = Math.hypot(dx, dy) || 1;
@@ -950,6 +1136,8 @@ function stepTowerProjectile(state, p, dt) {
           emit(state, 'projectilePierced', { id: p.id });
         }
       }
+      // Mega Cannon's Rolling Thunder: the ball rolls on along the ground through everything in its way.
+      if (p.roll && !state.gameOver) startRoll(state, p, target, dir);
     } else {
       p.x += ((target.x - p.x) / d) * step;
       p.y += ((target.y - p.y) / d) * step;
@@ -964,6 +1152,7 @@ function stepTowerProjectile(state, p, dt) {
       p.done = true;
       landSplash(state, p, p.targetX, p.targetY, null);
       if (p.pool && !state.gameOver) createPool(state, p.targetX, p.targetY, p.pool, p.kind);
+      if (p.volley && !state.gameOver) volleyLanded(state, p); // Triple Strike's Synchronized Impact
     }
   }
 }
@@ -973,9 +1162,9 @@ function stepTowerProjectile(state, p, dt) {
  * glue ('glue'). Hurts (dps) and slows the ground enemies standing in it. `stick` (glue): a Neegy that lands
  * in it is held that long, once.
  */
-export function createPool(state, x, y, { radius, duration, dps, slow, stick = 0, air = false, airMult = 0, grow = 0, ash = false }, kind = null) {
+export function createPool(state, x, y, { radius, duration, dps, slow, stick = 0, air = false, airMult = 0, grow = 0, ash = false, rage = null }, kind = null) {
   if (!state.pools) state.pools = [];
-  const pool = { id: nextId(state, 'pool'), kind, x, y, radius, duration, dps, slow, stick, air, airMult, grow, grown: 0, ash, age: 0, tick: 0 };
+  const pool = { id: nextId(state, 'pool'), kind, x, y, radius, duration, dps, slow, stick, air, airMult, grow, grown: 0, ash, rage, age: 0, tick: 0 };
   state.pools.push(pool);
   emit(state, 'poolCreated', { id: pool.id, x, y, radius, kind });
   return pool;
@@ -999,6 +1188,13 @@ export function stepPools(state, dt) {
       if (pool.air ? !air : air && !(pool.airMult > 0)) continue;
       if (pool.kind === 'catapult') e.inPoolT = 0.3; // Splash Zone
       if (pool.kind === 'fire') e.inFireT = 0.3;     // Kindling
+      // Grimace Golem's goo (v0.8, an enemy pool): enrages the other enemies standing in it (not Grimaces), no stacking.
+      if (pool.rage && !air && !CONFIG.enemies[e.kind]?.goo) {
+        if (!(e.gooT > 0)) emit(state, 'gooRage', { id: e.id, x: e.x, y: e.y });
+        e.gooT = pool.rage.seconds;
+        e.gooSpeed = pool.rage.speed;
+        e.gooDamage = pool.rage.damage;
+      }
       if (pool.slow > 0 && !air) {
         e.slow = Math.max(e.slowTimer > 0 ? e.slow || 0 : 0, pool.slow);
         e.slowTimer = Math.max(e.slowTimer || 0, SLOW_LINGER);

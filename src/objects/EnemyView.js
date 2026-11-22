@@ -17,7 +17,8 @@ const ENEMY_BADGE = 0x8e1f2a; // level badge on enemy health bars (buildings' is
 const DISPLAY_HEIGHT = {
   grunt: 40, slinger: 44, bomber: 46, tank: 62, shark: 50, thief: 50, breaker: 46, balloon: 84, neegy: 48, babycar: 78, toilet: 50,
   pork: 54, skeleton: 52, bones: 38, vaca: 64, yahu: 56, patapim: 82,
-  lirili: 82, chimp: 40, bicus: 56, frigo: 58, bombo: 60 // v0.7
+  lirili: 82, chimp: 40, bicus: 56, frigo: 58, bombo: 60, // v0.7
+  quandale: 54, grimace: 80 // v0.8
 };
 // A dropped Neegy starts this far up (px) and floats down over its landing time.
 const DROP_HEIGHT = 95;
@@ -31,7 +32,8 @@ const FACES_LEFT = new Set([
   'enemy_bomber', 'enemy_shark', 'enemy_balloon', 'enemy_babycar',
   'enemy_shark_attack', 'enemy_shark_death', 'enemy_tank_death', 'enemy_thief_death',
   'enemy_bones', 'enemy_bones_attack',
-  'enemy_bicus', 'enemy_frigo', 'enemy_frigo_attack', 'enemy_frigo_death' // v0.7
+  'enemy_bicus', 'enemy_frigo', 'enemy_frigo_attack', 'enemy_frigo_death', // v0.7
+  'enemy_quandale', 'enemy_quandale_attack', 'enemy_quandale_death' // v0.8 (Grimace's pictures face right / front)
 ]);
 // Extra poses: enemy_<kind>_attack / enemy_<kind>_death in art-source/enemies/, used when present. v0.6 abilities have
 // their own: enemy_pork_call (John Pork on the phone, while he calls) and enemy_skeleton_rage (Rahhh Skeleton's shield
@@ -51,7 +53,14 @@ const HIDDEN_SHIMMER = 0.07;
 // Enemies of a wave that has stalled too long (see src/logic/enrage.js) are tinted this red.
 const ENRAGED_TINT = 0xff7a6a;
 const RESTLESS_TINT = 0xffc2b8; // night attackers (restless nights)
+const GOO_TINT = 0xc58cff;      // enraged by Grimace's goo (e.gooT > 0): a pulsing purple
+const DASH_TRAIL_MS = 45;       // Quandale's dash leaves an afterimage this often
 const CHILL_TINT = 0xa8dcff;    // chilled by a KSI Tower (frozen solid is the Ice Bag's deeper 0x8fd8ff)
+/** Blend two 0xRRGGBB colors (t 0..1). */
+function lerpColor(a, b, t) {
+  const ch = (s) => Math.round(((a >> s) & 255) * (1 - t) + ((b >> s) & 255) * t) << s;
+  return ch(16) | ch(8) | ch(0);
+}
 /** Multiply two 0xRRGGBB colors channel by channel. */
 function mulColor(a, b) {
   const ch = (s) => Math.round((((a >> s) & 255) * ((b >> s) & 255)) / 255) << s;
@@ -150,6 +159,7 @@ export class EnemyView {
     // Pose: John Pork on the phone while he calls; Rahhh Skeleton's summoning bash flashing between his rage picture
     // and his stance; the attack picture right after a hit (or while Brr Brr Patapim stomps); otherwise walking.
     let pose = this.keys.attack && (time < this.attackUntil || e.stompT > 0) ? 'attack' : 'walk';
+    if (this.keys.attack && e.dashT > 0 && e.alive) pose = 'attack'; // Quandale's dash: his punching picture
     if (this.keys.call && e.callT > 0 && e.alive) pose = 'call';
     if (this.keys.rage && e.bashT > 0 && e.alive) {
       const total = CONFIG.enemies[e.kind].summon?.poseSeconds || 0.8;
@@ -163,6 +173,7 @@ export class EnemyView {
       this.applyFacing();
     }
     this.lastX = s.x;
+    if (e.dashT > 0 && e.alive && !isLowQuality()) this.dashTrail(time);
     // Armored (Bri Bri Bicus Dicus): its bar shows from the start, with the armor bar and shield while it holds.
     const armor = e.maxArmor ? e.armor / e.maxArmor : null;
     this.hpBar.draw(s.x, s.y - this.lift - this.sprite.displayHeight - 10, e.hp / e.maxHp, (e.hit || armor > 0) && e.alive && !(tunneling && !e.flockSeen), enemyLevel(e), armor);
@@ -170,13 +181,16 @@ export class EnemyView {
     const marked = (e.markBonus || 0) > 0 && e.alive;
     this.eye.setVisible(marked);
     if (marked) this.eye.setPosition(s.x, s.y - this.lift - this.sprite.displayHeight - (e.hit ? 26 : 12) + Math.sin(time * 0.006 + this.phase) * 1.5);
+    this.drawPin(e, s, depth);
     if (this.flashUntil && time > this.flashUntil) this.flashUntil = 0;
     if (!this.flashUntil) {
       // Moonlit at night; a stalled wave's enraged enemies also glow angry red.
       const base = this.scene.ambientTint ?? 0xffffff;
       // Hacked by a F.L.O.C.K Override: purple. Dazzled by Showstopper: a pale flicker.
       if (e.frozenT > 0) this.sprite.setTint(mulColor(base, 0x8fd8ff)); // held by a Freeze spell (or frozen solid by a KSI Tower): icy blue
+      else if (e.pinT > 0) this.sprite.setTint(mulColor(base, 0xe0cfa8)); // pinned by a Ballista Bolt: a dusty, held-still beige
       else if (e.chillT > 0) this.sprite.setTint(mulColor(base, CHILL_TINT)); // chilled by a KSI Tower: a paler icy blue
+      else if (e.gooT > 0) this.sprite.setTint(mulColor(base, lerpColor(0xa05cf0, 0xe0baff, 0.5 + 0.5 * Math.sin(time * 0.012 + this.phase)))); // enraged by goo: pulsing purple
       else if (e.hackedT > 0) this.sprite.setTint(mulColor(base, 0xc58cff));
       else if (e.disarmT > 0 && Math.sin(time * 0.03) > 0) this.sprite.setTint(mulColor(base, 0xfff3b0));
       else {
@@ -187,14 +201,26 @@ export class EnemyView {
     }
     const dark = darkness(this.scene.night || 0); // 0 until it's dark enough, then up to 1
     const night = dark;
-    const glowOn = dark > 0.01 && !isLowQuality(); // (low graphics quality: no glows, one sprite less per enemy)
+    const gooOn = e.gooT > 0 && e.alive && !isLowQuality(); // enraged by goo: a purple glow too (the night glow's picture)
+    const glowOn = (dark > 0.01 || gooOn) && !isLowQuality(); // (low graphics quality: no glows, one sprite less per enemy)
     this.glow.setVisible(glowOn);
     if (glowOn) {
       const w = Math.max(48, this.sprite.displayWidth * 1.5);
       const cy = this.air ? s.y - this.lift - this.sprite.displayHeight * 0.4 : s.y - 4;
       this.glow.setPosition(s.x, cy).setDisplaySize(w, this.air ? w * 0.8 : w * 0.55)
-        .setAlpha(night * NIGHT_GLOW_ALPHA * this.alpha).setDepth(depth - 0.3);
+        .setAlpha(gooOn ? (0.55 + 0.25 * Math.sin(time * 0.012 + this.phase)) * this.alpha : night * NIGHT_GLOW_ALPHA * this.alpha).setDepth(depth - 0.3)
+        .setTint(gooOn ? 0xb060ff : NIGHT_GLOW_COLOR);
     }
+  }
+
+  /** Quandale's dash: a fading, stretched afterimage of him left behind every few ms (not in low quality). */
+  dashTrail(time) {
+    if (time < (this.nextTrail || 0)) return;
+    this.nextTrail = time + DASH_TRAIL_MS;
+    const s = this.sprite;
+    const img = this.scene.add.image(s.x, s.y, s.texture.key).setOrigin(0.5, 1).setScale(s.scaleX, s.scaleY)
+      .setFlipX(s.flipX).setDepth(s.depth - 0.1).setTint(0xcfe6ff).setAlpha(0.45);
+    this.scene.tweens.add({ targets: img, alpha: 0, duration: 260, onComplete: () => img.destroy() });
   }
 
   poseHeight(pose) {
@@ -250,7 +276,29 @@ export class EnemyView {
     this.flashUntil = time + 80;
   }
 
+  /**
+   * Pinned by a Locklair Citadel's Ballista Bolt: a big bolt stuck through it at an angle and a ring on the ground (or
+   * under a flyer's body), fading as the pin runs out.
+   */
+  drawPin(e, s, depth) {
+    const on = e.pinT > 0 && e.alive;
+    if (!on) { if (this.pinGfx) this.pinGfx.setVisible(false); return; }
+    if (!this.pinGfx) this.pinGfx = this.scene.add.graphics();
+    const g = this.pinGfx.setVisible(true).setDepth(depth + 0.2).setAlpha(Math.min(1, e.pinT / 0.3));
+    g.clear();
+    const body = s.y - this.lift - this.sprite.displayHeight * 0.45, r = Math.max(10, this.sprite.displayWidth * 0.32);
+    g.lineStyle(2, 0xf5e6c0, 0.9).strokeEllipse(s.x, s.y - this.lift + 2, r * 2.2, r * 0.9);
+    // The bolt: from upper left through the body, its steel head poking out low right.
+    const x0 = s.x - r * 1.3, y0 = body - r * 1.1, x1 = s.x + r * 0.9, y1 = body + r * 0.7;
+    g.lineStyle(5, 0x3a2412, 1).lineBetween(x0, y0, x1, y1);
+    g.lineStyle(3, 0xb07a3c, 1).lineBetween(x0, y0, x1, y1);
+    const a = Math.atan2(y1 - y0, x1 - x0), hx = x1 + Math.cos(a) * 7, hy = y1 + Math.sin(a) * 7;
+    g.fillStyle(0xdfe6ee, 1).fillTriangle(hx, hy, x1 + Math.cos(a + 2.4) * 6, y1 + Math.sin(a + 2.4) * 6, x1 + Math.cos(a - 2.4) * 6, y1 + Math.sin(a - 2.4) * 6);
+    g.fillStyle(0xd23c3c, 1).fillTriangle(x0, y0, x0 - Math.cos(a - 0.5) * 9, y0 - Math.sin(a - 0.5) * 9, x0 - Math.cos(a + 0.5) * 9, y0 - Math.sin(a + 0.5) * 9);
+  }
+
   destroy() {
+    if (this.pinGfx) this.pinGfx.destroy();
     this.sprite.destroy();
     if (this.shadow) this.shadow.destroy();
     this.glow.destroy();

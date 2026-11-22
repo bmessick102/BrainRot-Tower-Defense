@@ -55,6 +55,24 @@ export class Modal {
     scene.events.once('shutdown', this.onShutdown = () => this.destroy());
   }
 
+  /**
+   * A new height, staying centered (the RV Lab window grows for a merged type's Mastery row). Redraws the frame and moves
+   * the title and close button; content uses m.y, so redraw it after.
+   */
+  resize(height) {
+    if (!this.frame || height === this.h) return this;
+    const sh = this.scene.scale.height;
+    const dy = Math.round(sh / 2 - height / 2) - this.y;
+    this.h = height;
+    this.y += dy;
+    const [, g, title, close] = this.frame;
+    g.clear();
+    drawWindow(g, this.x, this.y, this.w, height, { header: this.header });
+    title.y += dy;
+    if (close) close.y += dy;
+    return this;
+  }
+
   setTitle(text) {
     this.titleText.setText(text).setScale(1);
     const room = this.w - 150; // clear of the close button on the right (and balanced on the left)

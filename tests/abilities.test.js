@@ -10,7 +10,6 @@ import { stepBeams } from '../src/logic/beams.js';
 import { stepFlockTowers } from '../src/logic/flock.js';
 import { stepTraps, springTrap } from '../src/logic/traps.js';
 import { stepSpecials } from '../src/logic/abilityEffects.js';
-import { sellRefund } from '../src/logic/economy.js';
 import { serializeGame, parseSave, validateSave, SAVE_VERSION } from '../src/logic/save.js';
 import { rpCap, addResearchPoints } from '../src/logic/researchPoints.js';
 import { GameState } from '../src/state/GameState.js';
@@ -27,7 +26,7 @@ function memoryStorage() {
 
 describe('ability trees', () => {
   it('every defense and economy building has three paths (A, B, C) of five tiers, each with a name, text and effects', () => {
-    expect([...DEFENSE_ABILITY_TYPES].sort()).toEqual([...DEFENSE_TYPES, 'altar'].sort()); // (+ the Brisket King's altar)
+    expect([...DEFENSE_ABILITY_TYPES].sort()).toEqual([...DEFENSE_TYPES, 'altar', 'queenAltar'].sort()); // (+ the heroes' altars)
     expect([...ECONOMY_ABILITY_TYPES].sort()).toEqual(['dj', 'fuelStation', 'house', 'mine', 'storage']);
     expect([...ABILITY_TYPES].sort()).toEqual([...DEFENSE_ABILITY_TYPES, ...ECONOMY_ABILITY_TYPES].sort());
     // Every tier name is unique across the whole game (no repeats).
@@ -86,7 +85,7 @@ describe('RV Lab', () => {
     expect(checkUpgrade(s, lab)).toMatchObject({ ok: true, currency: 'rp', cost: CONFIG.rvlab.levels[1].cost });
   });
 
-  it('costCurrency: "rp" levels are paid in RP, not gold, and are not refunded as gold', () => {
+  it('costCurrency: "rp" levels are paid in RP, not gold', () => {
     const gs = new GameState({ storage: memoryStorage() });
     gs.startNew();
     gs.buildings[0].level = 10;
@@ -101,7 +100,6 @@ describe('RV Lab', () => {
     expect(lab.level).toBe(2);
     expect(gs.researchPoints).toBe(7);
     expect(gs.gold).toBe(50000);
-    expect(sellRefund(lab)).toBe(Math.round(CONFIG.rvlab.levels[0].cost * CONFIG.rules.sellRefund)); // gold levels only
     expect(checkUpgrade(gs, createBuilding(gs, 'cannon', 2, 2, 1)).currency).toBe('gold');
   });
 
@@ -251,8 +249,6 @@ describe('RV Lab', () => {
     expect(gs.gold).toBe(gold0);
     // A new cannon has them too.
     expect(createBuilding(gs, 'cannon', 2, 2, 1).picks).toEqual(['a', 'a']);
-    // Selling refunds gold for levels only.
-    expect(sellRefund(c1)).toBe(Math.round((150 + 300 + 600 + 1200) * CONFIG.rules.sellRefund));
     // Other types aren't touched.
     expect(abilityFx(gs.buildings.find((b) => b.type === 'storage'))).toEqual({});
   });

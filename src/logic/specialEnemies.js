@@ -14,6 +14,8 @@
 //                              (b.frigoSlow / hero.frigoSlow, set each step by stepSpecialEnemies).
 //   Bombombini Gusini (bombo) - breathes fire: its target, plus a share on what's right next to it (breatheFire).
 //   La Vaca Saturno (vaca)   - throws boulders that bounce on behind the target (fireBoulderAt / landEnemyShot).
+//   Grimace Golem (grimace)  - v0.8: drops a goo puddle every goo.every tiles he walks (stepGooTrails), and a big one
+//                              where he dies (combat.js); other enemies standing in goo are enraged (stepPools).
 //   Big Yahu (yahu)          - calls a missile down on one building, with a warning ring first; it hits only that
 //                              building (v0.7.1; it used to blast everything around it) (fireMissileAt / stepEnemyShot).
 // stepEnemyAbility runs inside stepEnemy (enemies.js); stepSpecialEnemies once per step (simulate.js).
@@ -22,6 +24,7 @@ import { footprintCenter, distanceToFootprint, fpW, fpH } from './grid.js';
 import { distance } from './iso.js';
 import { towerRange } from './abilities.js';
 import { emit, nextId } from './util.js';
+import { createPool } from './combat.js';
 
 const cfgOf = (e) => CONFIG.enemies[e.kind];
 
@@ -38,12 +41,31 @@ export function buildingsNear(state, x, y, radius) {
 /** Once per step: silenced F.L.O.C.K Towers count down; Frigo Camillo's aura slows what's near it. */
 export function stepSpecialEnemies(state, dt) {
   for (const b of state.buildings) {
+    if (b.stunT > 0) b.stunT = Math.max(0, b.stunT - dt); // stunned by Quandale's dash impact (read by stepDefenses, stepBeams)
     if (b.silencedT > 0) {
       b.silencedT = Math.max(0, b.silencedT - dt);
       if (!b.silencedT) emit(state, 'flockUnsilenced', { id: b.id });
     }
   }
   stepChillAuras(state);
+  stepGooTrails(state);
+}
+
+/** A goo puddle (a pool of kind 'goo' that enrages enemies, no damage): his trail, or the big one where he died. */
+export function dropGoo(state, x, y, goo, big = false) {
+  const rage = { seconds: goo.rageSeconds, speed: goo.speedMult, damage: goo.damageMult };
+  return createPool(state, x, y, { radius: big ? goo.deathRadius : goo.radius, duration: big ? goo.deathSeconds : goo.seconds, dps: 0, slow: 0, rage }, 'goo');
+}
+
+/** Grimace Golem's trail: every goo.every tiles he has walked since his last puddle, a new one where he stands. */
+function stepGooTrails(state) {
+  if (state.gameOver) return;
+  for (const e of state.enemies) {
+    const goo = e.alive && cfgOf(e).goo;
+    if (!goo) continue;
+    if (e.gooX === undefined) { e.gooX = e.x; e.gooY = e.y; dropGoo(state, e.x, e.y, goo); continue; }
+    if (distance(e.x, e.y, e.gooX, e.gooY) >= goo.every) { e.gooX = e.x; e.gooY = e.y; dropGoo(state, e.x, e.y, goo); }
+  }
 }
 
 /**
@@ -62,8 +84,8 @@ export function stepChillAuras(state) {
     }
     b.frigoSlow = slow;
   }
-  const h = state.hero;
-  if (h) {
+  for (const h of [state.hero, state.queen]) { // both heroes (the Hatsune Queen reloads slower too)
+    if (!h) continue;
     let slow = 0;
     for (const f of frigos) {
       const A = cfgOf(f).chillAura;

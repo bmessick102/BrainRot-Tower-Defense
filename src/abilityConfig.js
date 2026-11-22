@@ -510,3 +510,36 @@ registerPerkTree('ksi', {
     t('Mega Snowball', '+40% damage and +1 tile range.', { damagePct: 40, rangeAdd: 1 })
   ] }
 });
+
+// ---------- the Hatsune Queen (her altar's tree; read by src/logic/queen.js through queenStats) ----------
+// queenDamagePct / queenRangeAdd: her bolts' damage and range. queenCrit / queenCritMult: a chance for a bolt to deal
+// more. queenPierce: bolts fly on through that many more enemies. headlinerEvery / headlinerMult / headlinerVuln /
+// headlinerSeconds: every Nth bolt hits harder and marks its target (takes more damage from everything).
+// queenWarmupPct: defenses in her guard range fire faster while she's awake (towerFireInterval reads b._queenWarmup).
+// encoreSecondsAdd: a longer Encore Cloak. encoreDefensePct: defenses in her guard range deal more while it lasts
+// (towerDamageMult reads b._queenEncore). queenKillHeal: share of her health back per enemy she defeats.
+// encoreCharges: Encore Cloaks per wave. queenHpPct / queenSpeedPct / queenSleepFasterPct: health, move speed, nap.
+// queenDodge: chance to dodge a melee hit. queenReviveSeconds / queenReviveHpPct: back up after a knockout, once a wave.
+registerPerkTree('queenAltar', {
+  a: { name: 'Sharpshooter', tiers: [
+    t('Sharp Tips', 'The Hatsune Queen\'s bolts deal 25% more damage.', { queenDamagePct: 25 }),
+    t('Long Draw', 'She shoots 1.5 tiles farther.', { queenRangeAdd: 1.5 }),
+    t('Critical Note', 'Each bolt has a 20% chance to deal double damage.', { queenCrit: 0.2, queenCritMult: 2 }),
+    t('Piercing Bolt', 'Her bolts fly on through 1 more enemy.', { queenPierce: 1 }),
+    t('Headliner', 'Every 4th bolt deals triple damage and marks its target: it takes 20% more damage from everything for 3 s.', { headlinerEvery: 4, headlinerMult: 3, headlinerVuln: 0.2, headlinerSeconds: 3 })
+  ] },
+  b: { name: 'Idol', tiers: [
+    t('Warm-Up', 'While she\'s awake, defenses within her guard range fire 10% faster.', { queenWarmupPct: 10 }),
+    t('Backup Chorus', 'Encore Cloak lasts 6 s instead of 4 s.', { encoreSecondsAdd: 2 }),
+    t('Encore+', 'While Encore Cloak lasts, defenses within her guard range deal 25% more damage.', { encoreDefensePct: 25 }),
+    t('Fan Favorite', 'Every enemy she defeats heals her 5% of her health.', { queenKillHeal: 0.05 }),
+    t('Sold Out Show', 'Encore Cloak can be used twice per wave.', { encoreCharges: 2 })
+  ] },
+  c: { name: 'Stagecraft', tiers: [
+    t('Stage Armor', 'The Hatsune Queen has 30% more health.', { queenHpPct: 30 }),
+    t('Quick Step', 'She moves 30% faster.', { queenSpeedPct: 30 }),
+    t('Dodge Roll', 'She dodges 25% of the hits from enemies right next to her.', { queenDodge: 0.25 }),
+    t('Understudy', 'She sleeps 40% shorter after a wave.', { queenSleepFasterPct: 40 }),
+    t('Curtain Call', 'Knocked out in a raid, she gets back up after 20 s with 40% health (once per wave).', { queenReviveSeconds: 20, queenReviveHpPct: 0.4 })
+  ] }
+});

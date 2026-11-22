@@ -16,7 +16,7 @@ describe('crowd cap', () => {
   });
 
   it('a huge late wave keeps its mix at about the cap, and its strength, through the pack factor', () => {
-    const raw = scaledWaveComposition(10, 128);
+    const raw = scaledWaveComposition(10, 140);
     expect(count(raw)).toBeGreaterThan(1500);
     const c = applyCrowdCap(raw);
     expect(count(c)).toBeLessThanOrEqual(CAP + ENEMY_KINDS.length); // rounding can add a few

@@ -1,6 +1,6 @@
 // Enemy creation, nearest-building targeting, movement (ground: pathfinding; air: straight), attacks,
 // and separation so enemies never stack on top of each other.
-import { heroAwake, damageHero } from './hero.js';
+import { fightableHeroes, hitHero } from './heroes.js';
 import { CONFIG } from '../config.js';
 import { MAP } from '../mapTiles.js';
 import { closestPointOnFootprint, distanceToFootprint, footprintCenter, isInsideFootprint, fpW, fpH } from './grid.js';
@@ -18,16 +18,31 @@ function baseWaveFor(th) {
   const scripted = CONFIG.waves;
   if (th <= scripted.length) return scripted[th - 1];
   const last = scripted[scripted.length - 1];
-  const k = th - scripted.length;
+  const grow = hallWaveGrowth(scripted.length, th);
   const out = {};
-  for (const kind of ENEMY_KINDS) out[kind] = Math.round((last[kind] || 0) * CONFIG.rules.endlessCountGrowth ** k);
+  for (const kind of ENEMY_KINDS) out[kind] = Math.round((last[kind] || 0) * grow);
   return out;
+}
+
+/**
+ * How much a Village Hall's base wave grows from Village Hall `from` to `to` (which: 'count' or 'hp'): x
+ * rules.endlessCountGrowth / endlessHpGrowth per hall up to Village Hall topHallGrowth.from - 1 (11), then x
+ * topHallGrowth.count / hp per hall (Village Halls 12-15 get a few more defenses per hall, not new levels).
+ */
+export function hallWaveGrowth(from, to, which = 'count') {
+  const R = CONFIG.rules, top = R.topHallGrowth;
+  const early = which === 'hp' ? R.endlessHpGrowth : R.endlessCountGrowth;
+  const late = top ? (which === 'hp' ? top.hp : top.count) : early;
+  const split = top ? top.from - 1 : Infinity;
+  const a = Math.max(0, Math.min(to, split) - from); // halls at the endless rate
+  const b = Math.max(0, to - Math.max(from, split));  // halls past it, at the gentler rate
+  return early ** a * late ** b;
 }
 
 // Re-exported: they live in combat.js so a Wall Breaker can blow up from any death (being shot included).
 export { matchesTypes, enemyDamageVs, explode };
 
-export const ENEMY_KINDS = ['grunt', 'slinger', 'bomber', 'tank', 'shark', 'thief', 'breaker', 'balloon', 'neegy', 'babycar', 'toilet', 'pork', 'skeleton', 'bones', 'vaca', 'yahu', 'patapim', 'lirili', 'chimp', 'bicus', 'frigo', 'bombo'];
+export const ENEMY_KINDS = ['grunt', 'slinger', 'bomber', 'tank', 'shark', 'thief', 'breaker', 'balloon', 'neegy', 'babycar', 'toilet', 'pork', 'skeleton', 'bones', 'vaca', 'yahu', 'patapim', 'lirili', 'chimp', 'bicus', 'frigo', 'bombo', 'quandale', 'grimace'];
 // A Neegy dropped by a balloon floats down for this long (no moving or attacking) before it lands.
 export const LANDING_SECONDS = 0.7;
 
@@ -254,14 +269,65 @@ function stepGround(state, e, target, cfg, step, nav) {
   return distanceToFootprint(target, e.x, e.y) <= range + EPS ? target : null;
 }
 
+/**
+ * Quandale Dingle (cfg.dash, v0.8). Walking, he starts a dash when the building he's going for is dash.minRange to
+ * dash.range tiles away, his dash is ready (dash.cooldown) and his route doesn't need breaking a wall (e.breakingId,
+ * set by stepGround). Dashing, he moves along his normal route at dash.speed; reaching the building he lands an
+ * impact hit (dash.impactMult x his damage) and goes on punching normally. A wall in the way, or running past
+ * dash.maxSeconds, ends the dash with no impact. Returns what stepGround returns (the building to attack, or null).
+ */
+function stepDasher(state, e, target, cfg, step, dt, rage, nav) {
+  const D = cfg.dash;
+  if (e.dashCd > 0) e.dashCd = Math.max(0, e.dashCd - dt);
+  if (!(e.dashT > 0)) {
+    const d = distanceToFootprint(target, e.x, e.y);
+    // (breakingId is null once stepGround has checked his route and found no wall to break in it)
+    if (!e.attacking && e.breakingId === null && !(e.dashCd > 0) && d >= D.minRange && d <= D.range) {
+      e.dashT = D.maxSeconds;
+      e.dashCd = D.cooldown;
+      e.dashTargetId = target.id;
+      emit(state, 'enemyDash', { id: e.id, kind: e.kind, x: e.x, y: e.y, targetId: target.id });
+    } else {
+      return stepGround(state, e, target, cfg, step, nav);
+    }
+  }
+  // Dashing: the same route, much faster (slows and rage still count: step is his walk step for this frame).
+  e.dashT = Math.max(0, e.dashT - dt);
+  const hit = stepGround(state, e, target, cfg, step * (D.speed / cfg.speed), nav);
+  const endDash = () => { e.dashT = 0; e.dashTargetId = null; };
+  if (hit && hit.id === e.dashTargetId && hit.type !== 'wall') {
+    endDash();
+    const dealt = enemyDamageVs(cfg, hit) * D.impactMult * rage.damage * (e.pack || 1) * (1 - enemyWeaken(e));
+    e.cooldown = cfg.attackInterval; // his next normal punch comes one attack later
+    e.impacted = true;
+    revealEnemy(state, e);
+    emit(state, 'dashImpact', { id: e.id, kind: e.kind, x: e.x, y: e.y, targetId: hit.id, amount: dealt });
+    damageBuilding(state, hit, dealt, e);
+    if (D.stunSeconds && !hit.destroyed) { hit.stunT = Math.max(hit.stunT || 0, D.stunSeconds); emit(state, 'buildingStunned', { id: hit.id, seconds: D.stunSeconds }); }
+    return hit;
+  }
+  if (hit || e.breakingId || target.id !== e.dashTargetId || e.dashT <= 0) endDash(); // a wall, a new target, or too long
+  return hit;
+}
+
 /** Move one enemy toward its target and attack when in range. */
 export function stepEnemy(state, e, dt, nav = null) {
+  const dashT = e.dashT;
+  stepEnemyBody(state, e, dt, nav);
+  // Quandale Dingle: a step that didn't reach stepDasher (held by a Mousetrap, fighting a hero, hacked, staggering...)
+  // ends his dash on the spot, with no impact, instead of freezing it (afterimages while standing) to resume later.
+  if (dashT > 0 && dt > 0 && e.dashT === dashT) { e.dashT = 0; e.dashTargetId = null; }
+}
+
+function stepEnemyBody(state, e, dt, nav) {
   if (!e.alive) return;
   const cfg = enemyConfig(e.kind);
   e.cooldown = Math.max(0, e.cooldown - dt);
+  if (e.pinT > 0) e.pinT = Math.max(0, e.pinT - dt); // pinned by a Ballista Bolt: drawn while it lasts (the hold is e.held)
   // Slowed (a Catapult pool): stepPools refreshes slowTimer while the enemy stands in one.
   const slowed = e.slowTimer > 0 ? 1 - (e.slow || 0) : 1;
   e.slowTimer = Math.max(0, (e.slowTimer || 0) - dt);
+  if (e.gooT > 0) e.gooT = Math.max(0, e.gooT - dt); // Grimace's goo rage wears off (enrageFactor reads it)
   const rage = enrageFactor(state, e); // a stalled wave's enemies get faster and hit harder (and restless at night)
   const step = cfg.speed * slowed * rage.speed * dt;
   // Firework Grounding Burst: a flyer knocked out of the sky lies stunned until it takes off again.
@@ -335,6 +401,10 @@ export function stepEnemy(state, e, dt, nav = null) {
       moveToward(e, c.x, c.y, step);
       if (distance(e.x, e.y, c.x, c.y) <= Math.max(cfg.attackRange, ARRIVE_EPSILON) || distanceToFootprint(target, e.x, e.y) <= ARRIVE_EPSILON) attackTarget = target;
     }
+  } else if (cfg.dash) {
+    // Quandale Dingle: dashes to his building and lands an impact hit (stepDasher). An impact uses up this step's attack.
+    attackTarget = stepDasher(state, e, target, cfg, step, dt, rage, nav || getNav(state));
+    if (e.impacted) { e.impacted = false; e.attacking = true; return; }
   } else {
     attackTarget = stepGround(state, e, target, cfg, step, nav || getNav(state));
   }
@@ -406,20 +476,29 @@ function stepBabyCar(state, e, cfg, hall, step, dt, rage) {
 }
 
 /**
- * Ground enemies fight the Brisket King when he's in their reach (melee: next to him; ranged: within their
- * range). Picky raiders (Mr. Least, Neegies...) ignore him unless his Royal Taunt pulls them in, and
- * Wall Breakers, flyers, bosses and tunnelers never stop for him. Returns true if it dealt with him this step.
+ * Ground enemies fight a hero (the Brisket King or the Hatsune Queen, whichever is nearest) when one is in their
+ * reach (melee: next to the hero; ranged: within their range). Picky raiders (Mr. Least, Neegies...) ignore heroes
+ * unless the Brisket King's Royal Taunt pulls them in, and Wall Breakers, flyers, bosses and tunnelers never stop
+ * for a hero. The Queen hidden by Encore Cloak can't be picked (heroes.js fightableHeroes). Returns true if it dealt
+ * with a hero this step.
  */
 function fightHero(state, e, cfg, step, rage) {
-  // (Chimpanzinis only go for buildings: they never stop for him.)
-  if (!heroAwake(state) || cfg.type === 'air' || cfg.explodes || cfg.ramsToHall || cfg.burrows || cfg.kamikaze || e.entry || e.hackedT > 0) return false;
-  const h = state.hero;
-  const d = distance(e.x, e.y, h.x, h.y);
-  const reach = cfg.attackRange <= MELEE_REACH ? MELEE_REACH + 0.3 : cfg.attackRange;
-  const altar = state.buildings.find((b) => b.id === h.altarId);
-  const taunt = altar ? abilityFx(altar).heroTaunt || 0 : 0;
-  const taunted = taunt > 0 && d <= taunt;
-  if (cfg.prefers && !taunted) return false;
+  // (Chimpanzinis only go for buildings: they never stop for heroes.)
+  if (cfg.type === 'air' || cfg.explodes || cfg.ramsToHall || cfg.burrows || cfg.kamikaze || e.entry || e.hackedT > 0) return false;
+  const heroes = fightableHeroes(state);
+  if (!heroes.length) return false;
+  const melee = cfg.attackRange <= MELEE_REACH;
+  const reach = melee ? MELEE_REACH + 0.3 : cfg.attackRange;
+  let h = null, d = Infinity, taunted = false;
+  for (const x of heroes) {
+    const dx = distance(e.x, e.y, x.x, x.y);
+    const altar = state.buildings.find((b) => b.id === x.altarId);
+    const taunt = altar ? abilityFx(altar).heroTaunt || 0 : 0;
+    const t = taunt > 0 && dx <= taunt;
+    if ((cfg.prefers && !t) || (dx > reach && !t) || dx >= d) continue;
+    h = x; d = dx; taunted = t;
+  }
+  if (!h) return false;
   if (d > reach) {
     if (!taunted) return false;
     moveToward(e, h.x, h.y, step); // Royal Taunt: drawn to him
@@ -429,8 +508,8 @@ function fightHero(state, e, cfg, step, rage) {
   e.attacking = true;
   if (e.cooldown > 0 || e.disarmT > 0) return true;
   e.cooldown = cfg.attackInterval;
-  damageHero(state, cfg.damage * rage.damage * (e.pack || 1) * (1 - enemyWeaken(e)));
-  emit(state, 'enemyAttack', { id: e.id, kind: e.kind, targetId: 'hero' });
+  hitHero(state, h, cfg.damage * rage.damage * (e.pack || 1) * (1 - enemyWeaken(e)), melee);
+  emit(state, 'enemyAttack', { id: e.id, kind: e.kind, targetId: h === state.queen ? 'queen' : 'hero' });
   return true;
 }
 

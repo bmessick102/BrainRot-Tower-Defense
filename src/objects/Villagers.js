@@ -290,7 +290,7 @@ export class Villagers {
     if (out && !this.wasOut) this.headingOffset = Math.random() * Math.PI * 2; // a new morning: new favorite spots
     this.wasOut = out;
 
-    // Gnomes whose house was sold (or that no longer exist) vanish.
+    // Gnomes whose house is gone (or that no longer exist) vanish.
     for (const [id, g] of this.gnomes) if (!jobs.has(id)) { g.sprite.destroy(); g.coin.destroy(); this.gnomes.delete(id); }
     const wanderers = [...jobs.values()].filter((a) => a.task === 'wander');
     for (const a of jobs.values()) {

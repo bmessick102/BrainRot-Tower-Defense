@@ -12,7 +12,7 @@ import { ENEMY_KINDS } from '../src/logic/enemies.js';
 import { makeStateWithTownHall, seededRng } from './helpers.js';
 
 // The kinds that join the waves later (fromTownHall), all 0 in the first base waves.
-const LATE_ZERO = { toilet: 0, pork: 0, skeleton: 0, vaca: 0, yahu: 0, patapim: 0, lirili: 0, bicus: 0, frigo: 0, bombo: 0 };
+const LATE_ZERO = { toilet: 0, pork: 0, skeleton: 0, vaca: 0, yahu: 0, patapim: 0, lirili: 0, bicus: 0, frigo: 0, bombo: 0, quandale: 0, grimace: 0 };
 const w4 = CONFIG.waves[3];
 const w5 = CONFIG.waves[4];
 
@@ -34,7 +34,7 @@ describe('waves.js', () => {
   });
 
   it('the v0.6 and v0.7 enemies join by Village Hall (John Pork 4 ... Brr Brr Patapim 10)', () => {
-    const from = { pork: 4, bicus: 5, skeleton: 6, frigo: 6, vaca: 7, yahu: 8, bombo: 8, lirili: 9, patapim: 10 };
+    const from = { pork: 4, bicus: 5, skeleton: 6, frigo: 6, vaca: 7, yahu: 8, bombo: 8, lirili: 9, patapim: 10, quandale: 7, grimace: 11 };
     for (const [k, th] of Object.entries(from)) {
       expect(waveComposition(th - 1)[k]).toBe(0);
       expect(waveComposition(th)[k]).toBe(CONFIG.enemies[k].baseCount);
@@ -208,7 +208,7 @@ describe('waves.js', () => {
     for (let th = 1; th <= 3; th++) expect(scaledWaveComposition(th, 1)).toEqual({ ...CONFIG.waves[th - 1], babycar: 0, bones: 0, chimp: 0, ...LATE_ZERO }); // (no Da Baby Cars or late kinds in these base waves)
     expect(scaledWaveComposition(4, 1)).toEqual({ ...waveComposition(4), babycar: 0, bones: 0, chimp: 0 });
     expect(scaledWaveComposition(7, 1)).toEqual(waveComposition(7));
-    expect(scaledWaveComposition(12, 1)).toEqual(waveComposition(CONFIG.rules.maxTownHallLevel)); // capped
+    expect(scaledWaveComposition(16, 1)).toEqual(waveComposition(CONFIG.rules.maxTownHallLevel)); // capped
   });
 
   it('every wave survived ramps up enemies and HP, even at the same Village Hall', () => {
@@ -282,7 +282,8 @@ describe('waves.js', () => {
       expect(themesAt(4)).not.toContain('ironLegion'); // Bri Bri Bicus Dicus from Village Hall 5
       expect(themesAt(5)).toContain('ironLegion');
       expect(themesAt(9)).not.toContain('jungle');     // Brr Brr Patapim from Village Hall 10
-      expect(themesAt(10)).toEqual(T.order);
+      expect(themesAt(10)).toEqual(T.order.filter((k) => k !== 'gooParade')); // (Grimace Golem from Village Hall 11)
+      expect(themesAt(11)).toEqual(T.order);
     });
 
     it('a headliner theme puts its share into its enemies and keeps the rest of the mix; strength stays about the same', () => {

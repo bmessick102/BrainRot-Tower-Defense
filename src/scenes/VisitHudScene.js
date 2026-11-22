@@ -5,10 +5,10 @@
 // its researched perks as chips in their path's color.
 import Phaser from 'phaser';
 import { Button } from '../objects/Button.js';
-import { drawHudPill, drawWindow, drawShowcaseCard, drawGlossy, fitWidth, fitIcon, addHeroBadge } from '../objects/uiDraw.js';
-import { buildingTextureKey } from '../objects/BuildingView.js';
+import { drawHudPill, drawWindow, drawShowcaseCard, drawGlossy, fitWidth, fitIcon, addHeroBadge, heroKindOf } from '../objects/uiDraw.js';
+import { buildingTextureKey, buildingPictureKey, MERGE_GEAR } from '../objects/BuildingView.js';
 import { COLORS, bodyStyle, textStyle } from '../theme.js';
-import { buildingName, maxLevel, maxHp, levelStats, typeConfig, isDefense } from '../logic/buildings.js';
+import { buildingName, maxLevel, maxHp, levelStats, typeConfig, isDefense, displayName, mergedConfigOf } from '../logic/buildings.js';
 import { formatGold } from '../logic/economy.js';
 import { fpW, fpH } from '../logic/grid.js';
 import { picksOf, hasAbilities } from '../logic/abilities.js';
@@ -29,7 +29,7 @@ export class VisitHudScene extends Phaser.Scene {
     this.titleG = this.add.graphics();
     this.title = this.add.text(width / 2, 30, `${this.visit.username}'s village`, textStyle(22)).setOrigin(0.5);
     this.sub = this.add.text(width / 2, 56, '', bodyStyle(15, COLORS.text)).setOrigin(0.5);
-    this.statusText = this.add.text(width / 2, this.scale.height / 2, '', textStyle(24)).setOrigin(0.5);
+    this.statusText = this.add.text(width / 2, this.scale.height / 2, this.visit.statusMsg || '', textStyle(24)).setOrigin(0.5).setAlign('center');
     this.card = null;
     this.drawSwitcher();
     this.drawTitle();
@@ -88,10 +88,11 @@ export class VisitHudScene extends Phaser.Scene {
     c.add(blocker);
 
     // Header: name, and the level in gold (like the building panel in the game).
-    const name = this.add.text(pad, 10, buildingName(b.type), textStyle(22));
+    const name = this.add.text(pad, 10, displayName(b), textStyle(22)); // (a merged defense: "Mega Cannon")
     fitWidth(name, W - pad - 60);
     const ruin = b.type === 'townHall' && b.level === 0;
-    const lv = this.add.text(pad, 37, ruin ? 'In ruins' : `Level ${b.level} / ${maxLevel(b.type)}`, textStyle(15, COLORS.textGold));
+    const merge = mergedConfigOf(b);
+    const lv = this.add.text(pad, 37, ruin ? 'In ruins' : `Level ${b.level} / ${maxLevel(b.type)}${merge ? '  ·  Merged' : ''}`, textStyle(15, COLORS.textGold));
     c.add([name, lv]);
     c.add(new Button(this, W - 10, 10, 40, 40, '', () => this.visit.select(null), { color: COLORS.buttonDanger, icon: 'x', radius: 9 }));
 
@@ -101,13 +102,14 @@ export class VisitHudScene extends Phaser.Scene {
     c.add(pg);
     const tileY = top + PIC.h - 32, tileW = 54;
     drawShowcaseCard(pg, pad, top, PIC.w, PIC.h, { tileY, tileW });
-    const key = buildingTextureKey(this, b.type, Math.max(1, b.level));
+    const key = b.level >= 1 ? buildingPictureKey(this, b) : buildingTextureKey(this, b.type, 1); // (a merged one's own art)
     if (key && this.textures.exists(key)) {
       const pic = this.add.image(pad + PIC.w / 2, tileY + tileW * 0.3, key).setOrigin(0.5, 1);
       fitIcon(pic, PIC.w - 20, PIC.h - 40);
       c.add(pic);
     }
-    if (b.type === 'altar') c.add(addHeroBadge(this, pad + PIC.w - 22, top + 22, 32));
+    if (b.type === 'altar' || b.type === 'queenAltar') c.add(addHeroBadge(this, pad + PIC.w - 22, top + 22, 32, heroKindOf(b.type))); // the hero's portrait
+    if (merge && this.textures.exists(MERGE_GEAR)) c.add(fitIcon(this.add.image(pad + PIC.w - 20, top + 20, MERGE_GEAR), 32)); // merged: the gear
     const col = pad + PIC.w + 16, colW = W - col - pad;
     let sy = top + 2;
     for (const [label, value] of this.statRows(b)) {
@@ -120,6 +122,12 @@ export class VisitHudScene extends Phaser.Scene {
       sy += 32;
     }
     let y = Math.max(top + PIC.h, sy) + 14;
+    // A merged defense: its ability in one line, in gold.
+    if (merge) {
+      const ab = this.add.text(pad, y, `${merge.ability}: ${merge.abilityShort}`, bodyStyle(14, '#8a5a00', { fontStyle: 'bold', wordWrap: { width: W - pad * 2 } }));
+      c.add(ab);
+      y += ab.height + 12;
+    }
 
     // Perks: a chip per researched tier, in its path's color (the RV Lab's look).
     if (hasAbilities(b.type)) {
@@ -159,8 +167,9 @@ export class VisitHudScene extends Phaser.Scene {
     const rows = [['Health', formatGold(maxHp(b))], ['Size', `${fpW(b)} x ${fpH(b)} tiles`]];
     if (isDefense(b.type)) {
       const cfg = typeConfig(b.type), st = levelStats(b.type, b.level) || {};
-      if (st.damage) rows.push(['Damage', formatGold(Math.round(st.damage))]);
-      if (cfg.range) rows.push(['Range', `${cfg.range} tiles`]);
+      const m = mergedConfigOf(b); // merged: its damage per shot (per shell) and its extra range
+      if (st.damage) rows.push(['Damage', m && m.triple ? `${m.triple.shells} x ${formatGold(Math.round(st.damage * m.triple.shellMult))}` : formatGold(Math.round(st.damage * (m ? m.damageMult : 1)))]);
+      if (cfg.range) rows.push(['Range', `${Math.round((cfg.range + (m ? m.rangeAdd : 0)) * 10) / 10} tiles`]);
       if (cfg.hitsGround || cfg.hitsAir) rows.push(['Targets', cfg.hitsGround && cfg.hitsAir ? 'Ground & Air' : cfg.hitsAir ? 'Air' : 'Ground']);
     }
     return rows;

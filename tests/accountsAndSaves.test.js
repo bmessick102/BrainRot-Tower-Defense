@@ -476,7 +476,7 @@ describe('several players, several villages each', () => {
     expect(bob.deviceVillages().some((v) => v.key.startsWith('unreadable:'))).toBe(false);
   });
 
-  it('the leaderboard has one row per player, their best across villages, kept when a village is deleted', async () => {
+  it('the leaderboard has one row per village (a player can have several), best wave first, earlier wins ties', async () => {
     const ann = tab();
     await ann.signUp('ann@example.com', 'secret123', 'Ann');
     const a1 = await ann.createBase('A1');
@@ -484,7 +484,6 @@ describe('several players, several villages each', () => {
     await ann.createBase('A2');
     ann.recordWave(5);
     await ann.flush();
-    await ann.deleteBase(a1.id);
     await ann.flush();
     await ann.signOut();
     const bob = tab();
@@ -493,7 +492,31 @@ describe('several players, several villages each', () => {
     bob.recordWave(8);
     await bob.flush();
     const board = await bob.backend.leaderboard(10);
-    expect(board.map((r) => [r.username, r.bestWave, r.isMe])).toEqual([['Ann', 12, false], ['Bob', 8, true]]);
+    expect(board.map((r) => [r.rank, r.username, r.villageName, r.bestWave, r.isMe]))
+      .toEqual([[1, 'Ann', 'A1', 12, false], [2, 'Bob', 'B', 8, true], [3, 'Ann', 'A2', 5, false]]);
+    // A deleted village leaves the board.
+    await bob.signOut();
+    await ann.signIn('ann@example.com', 'secret123');
+    await ann.deleteBase(a1.id);
+    expect((await ann.backend.leaderboard(10)).map((r) => [r.username, r.villageName])).toEqual([['Bob', 'B'], ['Ann', 'A2']]);
+  });
+
+  it('the leaderboard adds your best village when none of yours is in the top list', async () => {
+    const ann = tab();
+    await ann.signUp('ann@example.com', 'secret123', 'Ann');
+    for (const [n, w] of [['A1', 3], ['A2', 2]]) { await ann.createBase(n); ann.recordWave(w); }
+    await ann.flush();
+    await ann.signOut();
+    const bob = tab();
+    await bob.signUp('bob@example.com', 'secret456', 'Bob');
+    for (const [n, w] of [['B1', 20], ['B2', 19]]) { await bob.createBase(n); bob.recordWave(w); }
+    await bob.flush();
+    const rows = await bob.backend.leaderboard(2);
+    expect(rows.map((r) => r.villageName)).toEqual(['B1', 'B2']);
+    await bob.signOut();
+    await ann.signIn('ann@example.com', 'secret123');
+    const mine = (await ann.backend.leaderboard(2)).filter((r) => r.isMe);
+    expect(mine.map((r) => [r.villageName, r.rank])).toEqual([['A1', 3]]); // only her best one, not A2
   });
 
   it('the browser-only backend refuses everything without a login, like the server rules', async () => {
@@ -521,6 +544,26 @@ describe('Supabase backend guards (mocked, no network)', () => {
     be.userId = 'user-a';
     return be;
   };
+
+  it('the village leaderboard maps the server rows, and falls back to one row per player before the migration', async () => {
+    const be = make();
+    const rows = [{ rank: 1, username: 'Ann', village_name: 'Home', best_wave: 9, town_hall: 4, is_me: true }, { rank: 2, username: 'Bob', village_name: null, best_wave: 7, town_hall: 3, is_me: false }];
+    const calls = [];
+    be.db = { rpc: async (name) => { calls.push(name); return { data: rows, error: null }; } };
+    expect(await be.leaderboard(10)).toEqual([
+      { rank: 1, username: 'Ann', villageName: 'Home', bestWave: 9, bestTownHall: 4, isMe: true },
+      { rank: 2, username: 'Bob', villageName: null, bestWave: 7, bestTownHall: 3, isMe: false }]);
+    be.db = { rpc: async (name) => {
+      calls.push(name);
+      return name === 'get_village_leaderboard'
+        ? { data: null, error: { code: 'PGRST202', message: 'Could not find the function public.get_village_leaderboard' } }
+        : { data: [{ rank: 1, username: 'Ann', best_wave: 9, best_town_hall: 4, is_me: true }], error: null };
+    } };
+    expect(await be.leaderboard(10)).toEqual([{ rank: 1, username: 'Ann', villageName: null, bestWave: 9, bestTownHall: 4, isMe: true }]);
+    expect(calls.slice(-2)).toEqual(['get_village_leaderboard', 'get_leaderboard']);
+    be.db = { rpc: async () => ({ data: null, error: { code: '42501', message: 'permission denied' } }) };
+    await expect(be.leaderboard(10)).rejects.toThrow();
+  });
 
   it('a village update that changed no row (deleted elsewhere, or another login) fails, so it stays unsent', async () => {
     const be = make();

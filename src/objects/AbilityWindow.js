@@ -22,6 +22,9 @@ import { formatGold } from '../logic/economy.js';
 import { isWaveActive } from '../logic/util.js';
 import { labGuideHint } from '../logic/labGuide.js';
 import { TEX } from '../assetKeys.js';
+import { isMergeable, hasMergedOf, masteryLevel, masteryTier, masteryTierCount, checkMastery } from '../logic/merge.js';
+import { mergeConfig } from '../logic/buildings.js';
+import { MERGE_GEAR } from './BuildingView.js';
 
 // Layout (pixels). The grid has a "Tier N" gutter, then three path columns; the details panel sits to its right.
 const GUTTER = 46;
@@ -31,11 +34,14 @@ const TOP = 112;                                      // grid / panel top, below
 const INFO_Y = 84;                                    // the info line / tabs / balance row: clear of the title bar (ends at 60)
 const GRID_H = COL_HEAD + 8 + ROW_STEP * (MAX_TIER - 1) + NODE_H;
 const RESPEC_H = 46;                                  // the "Reset path" row under the tree
+// Merged defenses' Mastery (merge.js): a gold 4th column ("★ Mastery", 3 tiers) next to the three paths, only for a type with
+// a merged building. The window is always as wide as the 4-column layout needs; with 3 columns they are just wider.
+const GOLD = 0xffc83a, GOLD_INK = '#8a5a00';
 const WIN_H = TOP + GRID_H + RESPEC_H + 24;
 const INK = { a: '#b8640a', b: '#2a6fb0', c: '#2f8a2f' }; // path colors that read on the light body
 // Events that can change what the windows show.
 const REFRESH_ON = ['goldChanged', 'abilityResearched', 'abilitiesApplied', 'buildingPlaced', 'buildingUpgraded', 'buildingDestroyed',
-  'buildingRepaired', 'buildingSold', 'waveStarted', 'waveCleared', 'labGuideChanged', 'researchPointsChanged'];
+  'buildingRepaired', 'waveStarted', 'waveCleared', 'labGuideChanged', 'researchPointsChanged', 'buildingsMerged', 'masteryResearched', 'abilityRespecced'];
 
 /** Keep a window in sync with the game until it closes. Returns the unsubscribe function. */
 function follow(scene, gs, refresh) {
@@ -87,32 +93,47 @@ function gem(g, x, y, R, color, filled, dim) {
 }
 
 /**
- * The skill tree: path headers, a "Tier N" gutter, connectors, and one node per (path, tier).
+ * The skill tree: column headers, a "Tier N" gutter, connectors, and one node per (column, tier). Columns are the three
+ * paths and, for a type with a merged building, a gold "★ Mastery" column (3 tiers, merge.js) as the 4th, drawn alike.
  * `nodeState(path, tier)` returns { state: 'owned' | 'available' | 'locked' | 'taken' | 'future', line, short }
  * where `line` is the short state text under the node's name. `route` (optional): the building's picks, drawn
- * as a gold line through its owned nodes. Available nodes get a steady green outline.
+ * as a gold line through its owned nodes. Available nodes get a steady green outline. `mastery` (or null):
+ * { stateOf(tier) } for the 4th column; its nodes select as { mastery: true, tier }.
  */
-function drawTree(scene, m, x, y, colW, gap, type, nodeState, selected, onSelect, route = null) {
+function drawTree(scene, m, x, y, colW, gap, type, nodeState, selected, onSelect, route = null, mastery = null) {
   const g = m.add(scene.add.graphics());
   const nx = (i) => x + GUTTER + i * (colW + gap);
   const ny = (tier) => y + COL_HEAD + 8 + (tier - 1) * ROW_STEP;
+  const cols = PATH_KEYS.map((p) => ({
+    color: PATH_COLORS[p], ink: INK[p], tiers: MAX_TIER, head: `${p.toUpperCase()} · ${pathName(type, p)}`,
+    state: (t) => nodeState(p, t), title: (t, st) => (st.hidden ? '? ? ?' : tierInfo(type, p, t).name),
+    isSel: (t) => !!selected && !selected.mastery && selected.path === p && selected.tier === t, pick: (t) => ({ path: p, tier: t })
+  }));
+  if (mastery) {
+    cols.push({
+      color: GOLD, ink: GOLD_INK, tiers: masteryTierCount(type), head: '★ Mastery', gold: true,
+      state: (t) => mastery.stateOf(t), title: (t) => masteryTier(type, t).name,
+      isSel: (t) => !!selected && !!selected.mastery && selected.tier === t, pick: (t) => ({ mastery: true, tier: t })
+    });
+  }
+  if (mastery) masteryAura(scene, m, nx(cols.length - 1), y, colW, COL_HEAD + 8 + ROW_STEP * (masteryTierCount(type) - 1) + NODE_H);
   // Tier bands and gutter labels: one row per tier makes "one pick per tier" easy to see.
   for (let t = 1; t <= MAX_TIER; t++) {
     const top = ny(t) - 4;
-    g.fillStyle(COLORS.frame, t % 2 ? 0.05 : 0.1).fillRoundedRect(x, top, GUTTER + colW * 3 + gap * 2, NODE_H + 8, 10);
+    g.fillStyle(COLORS.frame, t % 2 ? 0.05 : 0.1).fillRoundedRect(x, top, GUTTER + colW * cols.length + gap * (cols.length - 1), NODE_H + 8, 10);
     m.add(scene.add.text(x + GUTTER / 2, top + (NODE_H + 8) / 2 - 9, 'TIER', bodyStyle(10, COLORS.inkDim, { fontStyle: 'bold' })).setOrigin(0.5));
     m.add(scene.add.text(x + GUTTER / 2, top + (NODE_H + 8) / 2 + 8, String(t), textStyle(19)).setOrigin(0.5));
   }
-  PATH_KEYS.forEach((p, i) => {
-    const color = PATH_COLORS[p], cx = nx(i);
+  cols.forEach((col, i) => {
+    const color = col.color, cx = nx(i);
     g.fillStyle(COLORS.frame, 1).fillRoundedRect(cx, y, colW, COL_HEAD - 2, 10);
     g.fillStyle(color, 1).fillRoundedRect(cx + 2, y + 2, colW - 4, COL_HEAD - 6, 9);
     g.fillStyle(0xffffff, 0.22).fillRoundedRect(cx + 6, y + 4, colW - 12, 7, 4);
-    const head = m.add(scene.add.text(cx + colW / 2, y + (COL_HEAD - 2) / 2, `${p.toUpperCase()} · ${pathName(type, p)}`, textStyle(16)).setOrigin(0.5));
+    const head = m.add(scene.add.text(cx + colW / 2, y + (COL_HEAD - 2) / 2, col.head, textStyle(16)).setOrigin(0.5));
     fitWidth(head, colW - 16);
-    // Connectors down the column: solid in the path's color once the tier above is owned / researched.
-    for (let t = 1; t < MAX_TIER; t++) {
-      const done = nodeState(p, t).state === 'owned';
+    // Connectors down the column: solid in the column's color once the tier above is owned / researched.
+    for (let t = 1; t < col.tiers; t++) {
+      const done = col.state(t).state === 'owned';
       g.lineStyle(done ? 5 : 3, done ? color : 0xb9b1a2, done ? 0.95 : 0.6).lineBetween(cx + colW / 2, ny(t) + NODE_H, cx + colW / 2, ny(t + 1));
     }
   });
@@ -126,24 +147,24 @@ function drawTree(scene, m, x, y, colW, gap, type, nodeState, selected, onSelect
     });
     g.strokePath();
   }
-  PATH_KEYS.forEach((p, i) => {
-    const color = PATH_COLORS[p];
-    for (let t = 1; t <= MAX_TIER; t++) {
-      const st = nodeState(p, t);
+  cols.forEach((col, i) => {
+    const color = col.color;
+    for (let t = 1; t <= col.tiers; t++) {
+      const st = col.state(t);
       const cx = nx(i), cy = ny(t);
-      const isSel = selected && selected.path === p && selected.tier === t;
+      const isSel = col.isSel(t);
       const owned = st.state === 'owned', avail = st.state === 'available';
       const dim = st.state === 'taken' || st.state === 'future';
       const ng = m.add(scene.add.graphics());
       ng.fillStyle(COLORS.frame, isSel ? 1 : dim ? 0.18 : 0.32).fillRoundedRect(cx, cy, colW, NODE_H, 11);
-      const face = owned ? mix(0xfff6dc, color, 0.3) : avail ? 0xfffaf0 : dim ? 0xe3dccd : 0xebe4d5;
+      const face = owned ? mix(0xfff6dc, color, col.gold ? 0.45 : 0.3) : avail ? 0xfffaf0 : dim ? 0xe3dccd : 0xebe4d5;
       ng.fillStyle(face, 1).fillRoundedRect(cx + 2, cy + 2, colW - 4, NODE_H - 5, 10);
       if (owned) ng.fillStyle(color, 1).fillRoundedRect(cx + 2, cy + 2, 6, NODE_H - 5, 3);
-      gem(ng, cx + 22, cy + NODE_H / 2, 11, color, owned, dim);
-      const name = m.add(scene.add.text(cx + 40, cy + 10, st.hidden ? '? ? ?' : tierInfo(type, p, t).name, bodyStyle(14.5, dim || st.hidden ? '#a89c88' : COLORS.ink, { fontStyle: 'bold' })));
-      fitWidth(name, colW - 48);
-      const lineInk = owned ? INK[p] : avail ? (st.short ? COLORS.inkBad : COLORS.inkGood) : dim ? '#b3a892' : COLORS.inkDim;
-      m.add(scene.add.text(cx + 40, cy + 33, st.line || '', bodyStyle(12.5, lineInk, { fontStyle: owned || avail ? 'bold' : 'normal' })));
+      gem(ng, cx + 20, cy + NODE_H / 2, 10, color, owned, dim);
+      const name = m.add(scene.add.text(cx + 36, cy + 10, col.title(t, st), bodyStyle(14.5, dim || st.hidden ? '#a89c88' : COLORS.ink, { fontStyle: 'bold' })));
+      fitWidth(name, colW - 42);
+      const lineInk = owned ? col.ink : avail ? (st.short ? COLORS.inkBad : COLORS.inkGood) : dim ? '#b3a892' : COLORS.inkDim;
+      fitWidth(m.add(scene.add.text(cx + 36, cy + 33, st.line || '', bodyStyle(12.5, lineInk, { fontStyle: owned || avail ? 'bold' : 'normal' }))), colW - 42); // ("Research · 1,400 Burgers" fits)
       if (isSel) {
         const sel = m.add(scene.add.graphics());
         sel.lineStyle(3, 0xffc83a, 1).strokeRoundedRect(cx - 2, cy - 2, colW + 4, NODE_H + 4, 13);
@@ -157,9 +178,29 @@ function drawTree(scene, m, x, y, colW, gap, type, nodeState, selected, onSelect
       const zone = m.add(scene.add.zone(cx, cy, colW, NODE_H).setOrigin(0).setInteractive({ useHandCursor: true }));
       zone.on('pointerover', () => hover.setVisible(true));
       zone.on('pointerout', () => hover.setVisible(false));
-      zone.on('pointerdown', () => onSelect({ path: p, tier: t }));
+      zone.on('pointerdown', () => onSelect(col.pick(t)));
     }
   });
+}
+
+/**
+ * The Mastery column's effects: a soft gold glow behind it that breathes, and gold sparkles twinkling around its
+ * edge (x, y, w, h: the column). Every tween is killed with its object, so a refresh leaves nothing running.
+ */
+function masteryAura(scene, m, x, y, w, h) {
+  const tweenOn = (obj, cfg) => { scene.tweens.add({ targets: obj, ...cfg }); obj.once('destroy', () => scene.tweens.killTweensOf(obj)); };
+  const glow = m.add(scene.add.graphics());
+  for (let k = 3; k >= 1; k--) glow.fillStyle(GOLD, 0.07 * (4 - k)).fillRoundedRect(x - 4 * k, y - 4 * k, w + 8 * k, h + 8 * k, 12 + 4 * k);
+  glow.lineStyle(2, GOLD, 0.8).strokeRoundedRect(x - 5, y - 5, w + 10, h + 10, 15);
+  tweenOn(glow, { alpha: { from: 1, to: 0.45 }, duration: 1100, yoyo: true, repeat: -1, ease: 'Sine.easeInOut' });
+  const spots = 10;
+  for (let i = 0; i < spots; i++) {
+    // Spread around the column's outline: down the left and right edges, a couple on top and bottom.
+    const side = i % 2 ? x + w + 8 : x - 8;
+    const sy = y + (h * (Math.floor(i / 2) + 0.5)) / Math.ceil(spots / 2);
+    const sp = m.add(scene.add.text(side, sy, '✦', textStyle(14 + (i % 3) * 3, '#ffe27a')).setOrigin(0.5).setAlpha(0));
+    tweenOn(sp, { alpha: { from: 0, to: 1 }, scale: { from: 0.6, to: 1.15 }, angle: 45, duration: 700, delay: i * 230, hold: 150, yoyo: true, repeat: -1, repeatDelay: 900 + (i % 4) * 300, ease: 'Sine.easeInOut' });
+  }
 }
 
 /**
@@ -171,15 +212,15 @@ function drawDetails(scene, m, x, y, w, h, d) {
   const g = m.add(scene.add.graphics());
   g.fillStyle(COLORS.frame, 0.25).fillRoundedRect(x, y, w, h, 14);
   g.fillStyle(0xf6f1e6, 1).fillRoundedRect(x + 2, y + 2, w - 4, h - 5, 13);
-  g.fillStyle(PATH_COLORS[d.path], 1).fillRoundedRect(x + 2, y + 2, w - 4, 10, { tl: 13, tr: 13, bl: 0, br: 0 });
-  const info = d.hidden
+  g.fillStyle(d.color ?? PATH_COLORS[d.path], 1).fillRoundedRect(x + 2, y + 2, w - 4, 10, { tl: 13, tr: 13, bl: 0, br: 0 });
+  const info = d.info || (d.hidden
     ? { name: 'Locked tier', desc: `Level up your RV Lab to ${d.tier} to reveal this tier and research it.` }
-    : tierInfo(d.type, d.path, d.tier);
+    : tierInfo(d.type, d.path, d.tier));
   let cy = y + 24;
   const title = m.add(scene.add.text(x + 20, cy, info.name, textStyle(26)));
   fitWidth(title, w - 40);
   cy += 38;
-  m.add(scene.add.text(x + 20, cy, `Path ${d.path.toUpperCase()} · ${pathName(d.type, d.path)} · Tier ${d.tier}`, bodyStyle(14, INK[d.path], { fontStyle: 'bold' })));
+  fitWidth(m.add(scene.add.text(x + 20, cy, d.subtitle || `Path ${d.path.toUpperCase()} · ${pathName(d.type, d.path)} · Tier ${d.tier}`, bodyStyle(14, d.ink || INK[d.path], { fontStyle: 'bold' }))), w - 40);
   cy += 30;
   const desc = m.add(scene.add.text(x + 20, cy, info.desc, bodyStyle(16, COLORS.ink, { wordWrap: { width: w - 40 }, lineSpacing: 4 })));
   cy += desc.height + 14;
@@ -199,7 +240,7 @@ function drawDetails(scene, m, x, y, w, h, d) {
   const by = y + h - 42;
   if (d.button) {
     // The price is on the button ("Research · 240 RP"); the RP balance is at the top right.
-    const b = new Button(scene, x + w / 2, by, w - 40, 56, d.button.label, d.button.onClick, { color: d.rp ? 0x8e5bd6 : COLORS.buttonGood, fontSize: 22, radius: 12 });
+    const b = new Button(scene, x + w / 2, by, w - 40, 56, d.button.label, d.button.onClick, { color: d.buttonColor ?? (d.rp ? 0x8e5bd6 : COLORS.buttonGood), fontSize: 22, radius: 12 });
     b.setLabel(d.button.label, d.button.ok ? '' : d.button.sub || '').setEnabled(!!d.button.ok);
     m.add(b);
   } else if (d.note) {
@@ -223,9 +264,10 @@ function drawPips(g, x, y, picks) {
 
 // ======================= the RV Lab's Research =======================
 /** The RV Lab window: pick a defense on the left, research its tree (in RP). `startType` opens on a defense. */
-export function openResearchWindow(scene, gs, { onClose = null, startType = null } = {}) {
-  const LIST_W = 196, PANEL_W = 330, COL_W = 182, GAP = 10;
-  const W = 22 + LIST_W + 14 + GUTTER + COL_W * 3 + GAP * 2 + 16 + PANEL_W + 22;
+export function openResearchWindow(scene, gs, { onClose = null, startType = null, focusMastery = false } = {}) {
+  // Fixed width, sized for four columns (3 paths + Mastery): a type without a merged building spreads three wider columns over it.
+  const LIST_W = 184, PANEL_W = 310, COL4_W = 150, GAP = 10;
+  const GRID_W = GUTTER + COL4_W * 4 + GAP * 3, W = 22 + LIST_W + 14 + GRID_W + 16 + PANEL_W + 22;
   let type = startType && ABILITY_TYPES.includes(startType) ? startType : null;
   let unfollow = () => {};
   let selected = null;
@@ -265,10 +307,20 @@ export function openResearchWindow(scene, gs, { onClose = null, startType = null
     return `${owned ? 'On' : 'Applies to'} every ${buildingName(type)}${n ? ` (${n} now)` : ''}, whatever its level.`;
   };
 
+  /** Does this type show its Mastery row? (A mergeable type with a merged building in the village.) */
+  const masteryShown = (t) => isMergeable(t) && hasMergedOf(gs, t);
+  // A merged building's Mastery button opens on the Mastery column (its next tier), when the type has one.
+  if (focusMastery && type && masteryShown(type)) selected = { mastery: true, tier: Math.min(masteryTierCount(type), masteryLevel(gs, type) + 1) };
   const refresh = () => {
     if (!m.frame) return;
     m.clear();
     const lab = labLevel(gs);
+    // The tree, plus the gold Mastery column for a merged type.
+    const mastery = masteryShown(type);
+    const COL_W = mastery ? COL4_W : Math.floor((GRID_W - GUTTER - GAP * 2) / 3);
+    const treeH = GRID_H;
+    m.resize(TOP + treeH + RESPEC_H + 24);
+    if (selected && selected.mastery && !mastery) selected = null;
     m.setTitle(lab ? `RV Lab · Research (level ${lab}: tiers 1-${lab})` : 'RV Lab · Research');
     infoLine(scene, m, gs, 'research', lab
       ? 'Your first pick locks the path (A, B or C). Perks go onto every building of that type.'
@@ -307,7 +359,7 @@ export function openResearchWindow(scene, gs, { onClose = null, startType = null
     // pick), centered together in the row, and a "!" badge on the right when research is ready. Everything is
     // placed from the row's height (12 defenses make short rows), so nothing overlaps.
     const types = TABS.find((tb) => tb.key === tab).types;
-    const lx = m.x + 22, ly = m.y + TOP, itemH = Math.min(58, Math.floor((GRID_H + RESPEC_H + 4) / types.length)); // (down past the tree, beside its Reset path row)
+    const lx = m.x + 22, ly = m.y + TOP, itemH = Math.min(58, Math.floor((treeH + RESPEC_H + 4) / types.length)); // (down past the tree, beside its Reset path row)
     types.forEach((t, i) => {
       const y = ly + i * itemH, sel = t === type;
       const top = y + 2, inner = itemH - 8; // the row's face
@@ -319,6 +371,8 @@ export function openResearchWindow(scene, gs, { onClose = null, startType = null
       g.fillStyle(sel ? 0x4f9a22 : 0xe3dac6, 1).fillRoundedRect(tileX, top + 2, tileW, inner - 4, 6);
       const pic = m.add(scene.add.image(tileX + tileW / 2, top + inner / 2, buildingTextureKey(scene, t, 1)));
       fitIcon(pic, tileW - 4, inner - 6);
+      // A type with a merged building: the gear on its picture's corner.
+      if (masteryShown(t) && scene.textures.exists(MERGE_GEAR)) m.add(fitIcon(scene.add.image(tileX + tileW - 4, top + 7, MERGE_GEAR), Math.min(18, inner / 2)));
       // Name over the tier bars, as one block centered in the row.
       const ready = canResearchFor(gs, t);
       const nx = tileX + tileW + 7, barH = Math.max(4, Math.min(6, Math.round(inner / 7)));
@@ -347,8 +401,41 @@ export function openResearchWindow(scene, gs, { onClose = null, startType = null
     const st = stateOf(lab);
     if (!selected) selected = firstPick(st);
     const gx = lx + LIST_W + 14, gy = ly;
-    drawTree(scene, m, gx, gy, COL_W, GAP, type, st, selected, (sel) => { selected = sel; refresh(); }, labPicks(gs, type));
+    const panelX = gx + GRID_W + 16;
+    let mState = null;
+    if (mastery) {
+      const have = masteryLevel(gs, type);
+      mState = (t) => {
+        if (t <= have) return { state: 'owned', line: '✔ Mastered' };
+        if (t > have + 1) return { state: 'future', line: `After Mastery ${t - 1}` };
+        const info = masteryTier(type, t);
+        if (lab < info.labLevel) return { state: 'locked', line: `Locked · RV Lab lv ${info.labLevel}` };
+        return { state: 'available', line: `Research · ${rpText(info.cost)}`, short: (gs.researchPoints || 0) < info.cost };
+      };
+      if (selected.mastery) {
+        // The Mastery tier's details: what it does, what it needs, and its Research button (gold).
+        const t = selected.tier, info = masteryTier(type, t), mc = checkMastery(gs, type, t), s = mState(t), M = mergeConfig(type);
+        const n = gs.buildings.filter((b) => b.type === type && b.merged).length;
+        const detail = {
+          type, path: 'a', tier: t, rp: true, color: GOLD, ink: GOLD_INK, buttonColor: 0xd9a21b,
+          info: { name: info.name, desc: info.desc }, subtitle: `Mastery ${t} · ${M.ability} (${M.name})`,
+          applies: `${s.state === 'owned' ? 'On' : 'Applies to'} every ${M.name} (${n} now). Not part of the path lock.`,
+          checks: s.state === 'owned' ? [] : [
+            [lab >= info.labLevel, `RV Lab level ${info.labLevel}${lab ? ` (yours: ${lab})` : ''}`],
+            ...(t > 1 ? [[have >= t - 1, `Mastery ${t - 1} first`]] : []),
+            [!isWaveActive(gs), 'Not during a wave']
+          ],
+          button: null
+        };
+        if (s.state === 'owned') { detail.note = '✔ Mastered'; detail.noteGood = true; }
+        else if (s.state === 'future') detail.note = `Research Mastery ${have + 1} first`;
+        else detail.button = { label: `Research · ${rpText(info.cost)}`, ok: mc.ok, sub: mc.reason, onClick: () => { if (gs.researchMastery(type).ok) { selected = { mastery: true, tier: Math.min(masteryTierCount(type), t + 1) }; refresh(); } } };
+        drawDetails(scene, m, panelX, gy, PANEL_W, treeH, detail);
+      }
+    }
+    drawTree(scene, m, gx, gy, COL_W, GAP, type, st, selected, (sel) => { selected = sel; refresh(); }, labPicks(gs, type), mState ? { stateOf: mState } : null);
 
+    if (!selected.mastery) {
     const { path, tier } = selected;
     const s = st(path, tier);
     const c = checkResearch(gs, type, path, tier);
@@ -366,20 +453,25 @@ export function openResearchWindow(scene, gs, { onClose = null, startType = null
     else if (s.state === 'taken') detail.note = `Your ${buildingName(type)}s are locked to Path ${locked.toUpperCase()}. Reset the path to switch.`;
     else if (s.state === 'future') detail.note = `Research tier ${count + 1} first`;
     else detail.button = { label: c.cost === 0 ? 'Research (free)' : `Research · ${rpText(c.cost ?? researchCost(tier))}`, ok: c.ok, sub: c.reason, onClick: () => { if (gs.researchAbility(type, path, tier).ok) { selected = { path, tier: Math.min(MAX_TIER, tier + 1) }; refresh(); } } };
-    drawDetails(scene, m, gx + GUTTER + COL_W * 3 + GAP * 2 + 16, gy, PANEL_W, GRID_H, detail);
+    drawDetails(scene, m, panelX, gy, PANEL_W, treeH, detail);
+    }
 
-    // Paid respec, under the tree: clears this type's path (its picks are not refunded) so it can take another.
+    // Paid respec, under the tree: clears this type's path (its picks are not refunded) so it can take another. After a
+    // merge the type has one free reset (the button says so).
+    const count = labTierCount(gs, type);
+    const locked = lockedPath(gs, type);
     if (count > 0) {
-      const rc = checkRespec(gs, type), ry = gy + GRID_H + 8 + RESPEC_H / 2;
+      const rc = checkRespec(gs, type), ry = gy + treeH + 8 + RESPEC_H / 2;
       m.add(scene.add.text(gx, ry, `${buildingName(type)}s are locked to Path ${locked.toUpperCase()} · ${pathName(type, locked)}${rc.ok ? '' : ` (${rc.reason})`}`, bodyStyle(14, COLORS.inkDim, { fontStyle: 'bold' })).setOrigin(0, 0.5));
-      const rb = new Button(scene, gx + GUTTER + COL_W * 3 + GAP * 2 + 16 + PANEL_W - 150, ry, 300, 42, `Reset path · ${rpText(rc.cost)}`, () => {
+      const rb = new Button(scene, panelX + PANEL_W - 150, ry, 300, 42, rc.free ? 'Free Reset' : `Reset path · ${rpText(rc.cost)}`, () => {
         confirmDialog(scene, {
           title: 'Reset path?',
-          lines: [`Reset the ${buildingName(type)} path for ${rpText(rc.cost)}?`,
-            `Its ${count} researched tier${count > 1 ? 's' : ''} are lost (no refund) and you pick a path again.`],
+          lines: [rc.free ? `Reset the ${buildingName(type)} path for free?` : `Reset the ${buildingName(type)} path for ${rpText(rc.cost)}?`,
+            rc.free ? 'Your free reset from merging. Mastery stays.' : `Its ${count} researched tier${count > 1 ? 's' : ''} are lost (no refund) and you pick a path again.`],
           confirmLabel: 'Reset', onConfirm: () => { if (gs.respecPath(type).ok) { selected = null; refresh(); } }
         });
-      }, { color: 0x8e5bd6, fontSize: 18, radius: 12 });
+      }, { color: rc.free ? 0xd9a21b : 0x8e5bd6, fontSize: 18, radius: 12 });
+      rb.setLabel(rc.free ? 'Free Reset' : `Reset path · ${rpText(rc.cost)}`, rc.free ? 'From merging' : '');
       rb.setEnabled(rc.ok);
       m.add(rb);
     }

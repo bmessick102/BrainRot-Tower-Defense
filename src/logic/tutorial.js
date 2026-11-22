@@ -13,8 +13,8 @@ export const STARTER_BASE = [
   { type: 'cannon', col: 17, row: 11 }
 ];
 
-const NONE = { shop: false, cards: [], select: [], collect: false, upgrade: [], move: false, sell: false, repair: false };
-const ALL = { shop: true, cards: 'all', select: 'all', collect: true, upgrade: 'all', move: true, sell: true, repair: true };
+const NONE = { shop: false, cards: [], select: [], collect: false, upgrade: [], move: false, repair: false };
+const ALL = { shop: true, cards: 'all', select: 'all', collect: true, upgrade: 'all', move: true, repair: true };
 
 /**
  * advanceOn: the event that completes the step. match: payload fields that must match.

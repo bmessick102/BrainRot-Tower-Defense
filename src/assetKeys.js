@@ -72,6 +72,7 @@ export const SFX = {
   upgrade: 'sfx_upgrade',
   beatDrop: 'sfx_beat_drop',             // DJ Babyface drops the beat
   abilityUnlocked: 'sfx_ability_unlocked', // a building gets a new ability tier (RV Lab research, or a level-up)
+  merge: 'sfx_merge',                    // two defenses merge into one (replaces the upgrade + unlock sounds)
   sell: 'sfx_sell',
   coinCollect: 'sfx_coin_collect',
   cannonFire: 'sfx_cannon_fire',
@@ -116,6 +117,7 @@ export const SFX = {
   altarSelect: 'sfx_altar_select',       // clicking the Brisket King's altar
   heroFeast: 'sfx_hero_feast',           // Brisket Feast goes off
   heroSnore: 'sfx_hero_snore',           // looping softly while the Brisket King is asleep (HeroView's SnoreLoop)
+  queenSelect: 'sfx_queen_select',       // clicking the Hatsune Queen or her altar (her voice; never talks over itself)
   invalid: 'sfx_invalid',               // placing/dropping a building on an invalid spot
   hit: 'sfx_hit',
   buildingDestroyed: 'sfx_building_destroyed',
@@ -131,7 +133,9 @@ export const SFX = {
   skeletonRage: 'sfx_skeleton_rage',      // Rahhh Skeleton's shield bash (as he summons Skeletons)
   skeletonAttack: 'sfx_skeleton_attack',  // ...and his sword swing
   patapimQuake: 'sfx_patapim_quake',      // the earthquake (Lirili Larila since v0.7; Brr Brr Patapim before): a clip per quake
-  bicusArmorBreak: 'sfx_bicus_armor_break' // Bri Bri Bicus Dicus's armor breaking (v0.7)
+  bicusArmorBreak: 'sfx_bicus_armor_break', // Bri Bri Bicus Dicus's armor breaking (v0.7)
+  quandaleDash: 'sfx_quandale_dash',        // Quandale Dingle starts a dash (v0.8)
+  quandaleVoice: 'sfx_quandale_voice'       // ...and his random line
 };
 
 /** Each Fuel Station spell's cast sound (SpellFx.onCast). */
@@ -167,7 +171,9 @@ export const ENEMY_ATTACK_SFX = {
   bicus: SFX.skeletonAttack, // (a sword, like Rahhh Skeleton's)
   frigo: SFX.enemyHitBig,
   lirili: SFX.enemyHitBig,
-  patapim: SFX.enemyHitBig
+  patapim: SFX.enemyHitBig,
+  quandale: SFX.enemyHitSmall, // v0.8
+  grimace: SFX.enemyHitBig
 };
 
 /** Enemies that say their line now and then while they're on the map (see GameScene.enemyChatter). */
@@ -178,7 +184,8 @@ export const ENEMY_VOICE = {
   frigo: SFX.frigoVoice,
   patapim: SFX.patapimVoice,
   lirili: SFX.liriliVoice,
-  babycar: SFX.babycarVoice
+  babycar: SFX.babycarVoice,
+  quandale: SFX.quandaleVoice
 };
 
 /** Which sound a tower plays when it fires. */

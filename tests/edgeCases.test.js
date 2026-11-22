@@ -73,7 +73,7 @@ describe('frame time spikes', () => {
 });
 
 describe('buildings during a wave', () => {
-  it("can't be sold or moved mid-wave (they can during the countdown)", () => {
+  it("can't be moved mid-wave (they can during the countdown); there's no selling (v0.8)", () => {
     const gs = new GameState({ storage: noStorage, rng: () => 0.5 });
     gs.startNew();
     gs.skipTutorial();
@@ -85,7 +85,7 @@ describe('buildings during a wave', () => {
     gs.startWaveNow();
     gs.update(0.05);
     expect(gs.wave.phase).toBe('active');
-    expect(gs.sellBuilding(b.id).ok).toBe(false);
+    expect(gs.sellBuilding).toBeUndefined();
     expect(gs.moveBuilding(b.id, b.col + 1, b.row).ok).toBe(false);
     expect(gs.getBuilding(b.id)).toBe(b);
   });

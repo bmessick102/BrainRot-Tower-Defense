@@ -20,6 +20,8 @@ import { showLockOverlay } from './objects/LockOverlay.js';
 import { installPhaserPerf } from './phaserPerf.js';
 import { isLowQuality, qualityMode, setQualityMode, setAutoLow, LowFpsWatch } from './quality.js';
 import { loadGraphicsSetting } from './logic/save.js';
+import { webpSupported, showWebpMessage, installAssetNotice } from './assetNotice.js';
+import { setPicturesUnsupported } from './assetLoader.js';
 
 // Cheaper Graphics arcs (rounded buttons, circles), and fewer particles in low graphics quality: phaserPerf.js.
 installPhaserPerf(Phaser, isLowQuality);
@@ -40,12 +42,18 @@ const game = new Phaser.Game({
   backgroundColor: '#10140f',
   banner: false,
   scale: { mode: Phaser.Scale.FIT, autoCenter: Phaser.Scale.CENTER_BOTH },
+  loader: { timeout: 60000 }, // a stalled download becomes an error (then retried) instead of hanging the loading screen
   dom: { createContainer: true }, // text boxes on the login screen and name dialogs
   input: { activePointers: 2 },     // two fingers: pinch to zoom the map
   // TitleBackdropScene sits right after PreloadScene so it draws under the loading, login and title screens.
   // AssetStreamScene draws nothing: it streams the files that aren't loaded up front (src/assetLoader.js).
   scene: [PreloadScene, TitleBackdropScene, BootScene, AuthScene, TitleScene, HowToPlayScene, GameScene, UIScene, PauseScene, GameOverScene, VisitScene, VisitHudScene, VersionScene, AssetStreamScene]
 });
+
+// Pictures that can't load: a notice with Retry when several stay missing, and, for a browser that can't show WebP
+// (Safari before 14, iOS 13 and older: every picture would fail), a message to update instead of a village of grey blocks.
+installAssetNotice();
+webpSupported().then((ok) => { if (!ok) { setPicturesUnsupported(); showWebpMessage(() => {}); } });
 
 // Graphics 'auto': a game that keeps running under 30 fps (not while loading) switches to low quality.
 const fpsWatch = new LowFpsWatch();

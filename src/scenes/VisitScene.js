@@ -13,11 +13,15 @@ import { getCapacity } from '../logic/economy.js';
 import { BuildingView } from '../objects/BuildingView.js';
 import { WallView } from '../objects/WallView.js';
 import { requestImages } from '../assetLoader.js';
+import { Button } from '../objects/Button.js';
+import { COLORS, textStyle } from '../theme.js';
 import { villageImageKeys } from '../assetPlan.js';
 import { session } from '../net/account.js';
 
 const ZOOM_STEP = 1.15;
-const ART_WAIT_MS = 8000; // at most this long for the village's building pictures (they stream in)
+// At most this long for the village's building pictures before it is drawn anyway (the views pick the pictures up as
+// they stream in, drawing the closest lower level meanwhile). Waiting longer left a blank dark screen on a slow connection.
+const ART_WAIT_MS = 2500;
 const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
 
 export class VisitScene extends Phaser.Scene {
@@ -35,23 +39,53 @@ export class VisitScene extends Phaser.Scene {
     this.baseId = data.baseId;
     this.username = data.username;
     this.bases = data.bases || [];
+    this.from = data.from || null; // the title screen window the card was opened from ('leaderboard' / 'search')
     this.gs = null;
     this.views = new Map();
     this.selectedId = null;
     this.press = null;
     this.pinch = null;
+    this.statusMsg = '';
+    this.failed = false;
+    this.failUi = null;
+    this.brokenViews = new Set();
   }
 
   create() {
     this.cameras.main.setBackgroundColor('#10140f');
     this.scene.launch('VisitHudScene', { visit: this });
     this.hud = this.scene.get('VisitHudScene');
+    // The map shows at once (the village is drawn on it when it arrives), so the screen is never just a dark void.
+    try { this.add.image(0, 0, TEX.map).setOrigin(0, 0).setDisplaySize(MAP.imageWidth, MAP.imageHeight).setDepth(-10000); this.setupCamera(true); } catch (e) { console.error('VisitScene: map', e); }
+    this.setStatus('Loading village…');
     this.loadVillage();
   }
 
+  /** The message in the middle of the screen (the HUD draws it; it reads statusMsg when it starts, being launched later). */
+  setStatus(text) {
+    this.statusMsg = text || '';
+    if (this.hud && this.hud.setStatus) this.hud.setStatus(this.statusMsg);
+  }
+
+  /** Loading or drawing the village failed: say so, log it, and make sure there is a Back button. */
+  fail(e, fallback = 'Couldn’t load that village.') {
+    console.error('VisitScene:', e);
+    this.failed = true;
+    const msg = (e && e.message && !/^(Cannot|undefined|null|\w+ is not)/.test(e.message) ? e.message : '') || fallback;
+    this.setStatus(`${msg}
+Tap Back to return.`);
+    if (this.hud && this.hud.statusText && this.hud.sys && this.hud.sys.isActive()) return; // the HUD has its own Back button
+    try {
+      const { width, height } = this.scale;
+      this.failUi = [
+        this.add.text(width / 2, height / 2, `${msg}
+Tap Back to return.`, textStyle(24)).setOrigin(0.5).setAlign('center').setScrollFactor(0).setDepth(100000),
+        this.add.existing(new Button(this, 74, 40, 120, 48, 'Back', () => this.leave(), { color: COLORS.buttonDanger, fontSize: 20 })).setScrollFactor(0).setDepth(100000)
+      ];
+    } catch (e2) { console.error('VisitScene: fallback Back', e2); }
+  }
+
   async loadVillage() {
-    const status = (t) => this.hud && this.hud.setStatus && this.hud.setStatus(t);
-    status('Loading village…');
     try {
       const base = await session.backend.playerBase(this.baseId);
       if (!this.sys.isActive()) return;
@@ -59,25 +93,26 @@ export class VisitScene extends Phaser.Scene {
       if (parsed.status !== 'ok') throw new Error('That village can’t be shown.');
       this.base = base;
       // Its building pictures first (they stream in), for at most ART_WAIT_MS.
-      await Promise.race([requestImages(villageImageKeys(parsed.data.buildings), { front: true }), new Promise((r) => setTimeout(r, ART_WAIT_MS))]);
+      await Promise.race([requestImages(villageImageKeys(parsed.data.buildings), { front: true }).catch(() => false), new Promise((r) => setTimeout(r, ART_WAIT_MS))]);
       if (!this.sys.isActive()) return;
       this.build(deserializeGame(parsed.data)); // (validated save -> buildings with their footprints, perks...)
-      status('');
+      this.setStatus('');
       if (this.hud && this.hud.showVillage) this.hud.showVillage(base);
     } catch (e) {
-      if (this.sys.isActive()) status(e.message || 'Couldn’t load that village.');
+      if (this.sys.isActive()) this.fail(e);
     }
   }
 
   /** A read-only stand-in for GameState: what the building views read (gold for the storages' fill, no enemies). */
   build(data) {
-    const gs = { buildings: data.buildings, gold: data.gold || 0, enemies: [], wave: { phase: 'idle' }, research: data.research };
+    const gs = { buildings: data.buildings, gold: data.gold || 0, enemies: [], wave: { phase: 'idle' }, research: data.research, mastery: data.mastery || {} };
     gs.capacity = getCapacity(gs);
     gs.townHall = data.buildings.find((b) => b.type === 'townHall') || null;
     gs.getBuilding = (id) => data.buildings.find((b) => b.id === id) || null;
     this.gs = gs;
-    this.add.image(0, 0, TEX.map).setOrigin(0, 0).setDisplaySize(MAP.imageWidth, MAP.imageHeight).setDepth(-10000);
-    for (const b of data.buildings) this.views.set(b.id, b.type === 'wall' ? new WallView(this, b) : new BuildingView(this, b));
+    for (const b of data.buildings) {
+      try { this.views.set(b.id, b.type === 'wall' ? new WallView(this, b) : new BuildingView(this, b)); } catch (e) { console.error('VisitScene: could not draw', b.type, e); }
+    }
     this.setupCamera();
     this.setupInput();
   }
@@ -87,7 +122,12 @@ export class VisitScene extends Phaser.Scene {
 
   update(time) {
     if (!this.gs) return;
-    for (const b of this.gs.buildings) { const v = this.views.get(b.id); if (v) v.sync(b, time); }
+    for (const b of this.gs.buildings) {
+      const v = this.views.get(b.id);
+      if (!v || this.brokenViews.has(b.id)) continue;
+      // One building that can't draw must not stop the whole game loop (an exception here ends it: a frozen screen).
+      try { v.sync(b, time); } catch (e) { this.brokenViews.add(b.id); console.error('VisitScene: could not update', b.type, e); }
+    }
   }
 
   // ---------- camera (the same rules as GameScene's) ----------
@@ -96,10 +136,10 @@ export class VisitScene extends Phaser.Scene {
     return Math.max(CONFIG.camera.minZoom, cam.width / MAP.imageWidth, cam.height / MAP.imageHeight);
   }
 
-  setupCamera() {
+  setupCamera(early = false) {
     const cam = this.cameras.main;
     cam.setZoom(Math.max(CONFIG.camera.startZoom, this.minZoom()));
-    const th = this.gs.townHall;
+    const th = this.gs && this.gs.townHall;
     const c = th ? footprintCenter(th) : { x: MAP.cols / 2, y: MAP.rows / 2 };
     const s = gridToScreen(c.x, c.y);
     cam.centerOn(s.x, s.y);
@@ -192,12 +232,12 @@ export class VisitScene extends Phaser.Scene {
   switchTo(baseId) {
     if (baseId === this.baseId) return;
     this.scene.stop('VisitHudScene');
-    this.scene.restart({ baseId, username: this.username, bases: this.bases });
+    this.scene.restart({ baseId, username: this.username, bases: this.bases, from: this.from });
   }
 
-  /** Back to the title screen, reopening the owner's card. */
+  /** Back to the title screen: the owner's card again, over the window it was opened from (closing it lands there). */
   leave() {
     this.scene.stop('VisitHudScene');
-    this.scene.start('TitleScene', { reopenPlayer: this.username });
+    this.scene.start('TitleScene', { reopenPlayer: this.username, reopenFrom: this.from });
   }
 }

@@ -8,6 +8,7 @@
 --   player_stats  a player reads / writes only their own; best wave and best Village Hall never go down
 --   achievements  a player reads / records / claims only their own
 --   get_leaderboard()  top players by furthest wave: username, best wave, best Village Hall (no emails)
+--   get_village_leaderboard()  top villages by best wave: player, village name, best wave, Village Hall (no emails)
 --
 -- Anti-cheat (the game runs in the player's browser, so the database checks what it's told):
 --   a village's best wave can't be higher than the waves the database itself has counted for it
@@ -46,9 +47,12 @@ create index if not exists bases_user on public.bases (user_id);
 alter table public.bases add column if not exists verified_cleared int not null default 0; -- nights counted so far
 alter table public.bases add column if not exists max_nights int not null default 0;       -- of those, at Village Hall 10
 alter table public.bases add column if not exists last_night_at timestamptz;               -- when the last one was counted
+alter table public.bases add column if not exists best_wave_at timestamptz;                -- when best_wave last went up (earlier wins leaderboard ties)
 -- Villages from before these columns existed start counted as they are (runs once: before the check trigger exists).
 update public.bases set verified_cleared = greatest(coalesce((save ->> 'wavesCleared')::int, 0), 0), last_night_at = now()
   where last_night_at is null;
+update public.bases set best_wave_at = updated_at where best_wave > 0 and best_wave_at is null;
+create index if not exists bases_board on public.bases (best_wave desc, best_wave_at asc);
 
 create table if not exists public.player_stats (
   user_id uuid primary key default auth.uid() references auth.users (id) on delete cascade,
@@ -119,7 +123,7 @@ declare
   credit int := 0;
   supported int;
 begin
-  th := least(greatest(coalesce((new.save ->> 'townHallLevel')::int, 0), 0), 11); -- Village Hall 11 is the top level (v0.6)
+  th := least(greatest(coalesce((new.save ->> 'townHallLevel')::int, 0), 0), 15); -- Village Hall 15 is the top level (v0.8)
   cleared := greatest(coalesce((new.save ->> 'wavesCleared')::int, 0), 0);
   new.town_hall := th;
   if tg_op = 'INSERT' then
@@ -129,6 +133,7 @@ begin
     new.max_nights := 0;
     new.last_night_at := now();
     new.best_wave := least(greatest(new.best_wave, 0), new.verified_cleared);
+    new.best_wave_at := case when new.best_wave > 0 then now() end;
     return new;
   end if;
   new.user_id := old.user_id;
@@ -150,6 +155,7 @@ begin
   -- The furthest wave this village can have survived: every wave counted for it. It only goes up.
   supported := new.verified_cleared;
   new.best_wave := greatest(old.best_wave, least(greatest(new.best_wave, 0), supported));
+  new.best_wave_at := case when new.best_wave > old.best_wave then now() else old.best_wave_at end;
   return new;
 end $$;
 
@@ -188,7 +194,7 @@ begin
   select coalesce(max(best_wave), 0), coalesce(max(town_hall), 0) into cap_wave, cap_hall
     from public.bases where user_id = new.user_id;
   new.best_wave := least(greatest(new.best_wave, 0), cap_wave);
-  new.best_town_hall := least(greatest(new.best_town_hall, 0), cap_hall, 11);
+  new.best_town_hall := least(greatest(new.best_town_hall, 0), cap_hall, 15); -- Village Hall 15 is the top level (v0.8)
   if tg_op = 'INSERT' then
     new.reached_at := case when new.best_wave > 0 then now() end;
   elsif new.best_wave > old.best_wave then
@@ -219,6 +225,28 @@ language sql security definer set search_path = '' stable as $$
     where s.best_wave > 0
   )
   select * from ranked where rank <= least(greatest(lim, 1), 100) or is_me order by rank;
+$$;
+
+-- One row per village (v0.8): the top `lim` villages by best wave (bases.best_wave is capped by check_base, so it is
+-- verified; earlier best_wave_at wins ties), plus the caller's own best village if it is lower. A village's name is
+-- shown only if its owner lets others view their villages. See migration-2026-11-22-v0.8.sql.
+create or replace function public.get_village_leaderboard(lim int default 10)
+returns table (rank bigint, username text, village_name text, best_wave int, town_hall int, is_me boolean)
+language sql security definer set search_path = '' stable as $$
+  with ranked as (
+    select rank() over (order by b.best_wave desc, b.best_wave_at asc nulls last) as rank,
+           row_number() over (partition by b.user_id order by b.best_wave desc, b.best_wave_at asc nulls last, b.id) as own_order,
+           p.username,
+           case when p.public_bases or b.user_id = auth.uid() then b.name end as village_name,
+           b.best_wave, b.town_hall, (b.user_id = auth.uid()) as is_me
+    from public.bases b
+    join public.profiles p on p.id = b.user_id
+    where b.best_wave > 0 and auth.uid() is not null
+  )
+  select rank, username, village_name, best_wave, town_hall, is_me
+  from ranked
+  where rank <= least(greatest(lim, 1), 100) or (is_me and own_order = 1)
+  order by rank, username, village_name;
 $$;
 
 -- ---------------------------------------------------------------- other players (v0.7)
@@ -346,6 +374,8 @@ grant select, insert, update on public.achievements to authenticated;
 
 revoke execute on function public.get_leaderboard(int) from public, anon;
 grant execute on function public.get_leaderboard(int) to authenticated;
+revoke execute on function public.get_village_leaderboard(int) from public, anon;
+grant execute on function public.get_village_leaderboard(int) to authenticated;
 revoke execute on function public.username_available(text) from public;
 grant execute on function public.username_available(text) to anon, authenticated;
 revoke execute on function public.handle_new_user() from public, anon, authenticated;

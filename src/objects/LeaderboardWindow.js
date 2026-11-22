@@ -1,16 +1,17 @@
-// Leaderboard: the top players by furthest wave survived (one row per player: their best village), each
+// Leaderboard: the top villages by furthest wave survived (v0.8: one row per village, so a player can have several;
+// each row shows the player's name with the village's name small under it), each
 // with their league badge (src/logic/leagues.js), your own row highlighted, and added at the bottom if
 // you're not in the top list. The footer shows your league and what the next one takes. v0.7: click a row for that
-// player's card (PlayerCardWindow); its green Visit button goes straight to their best village. Medals are graded
+// player's card (PlayerCardWindow); so does its green Profile button (v0.8.0; visiting their villages is on the card). Medals are graded
 // (gold biggest, bronze smallest) and ranks 4+ sit on a dark rank badge so the numbers stand out.
 import { Modal } from './Modal.js';
 import { Button } from './Button.js';
 import { COLORS, bodyStyle, textStyle } from '../theme.js';
 import { leagueFor, nextLeague, leagueBadgeSize } from '../logic/leagues.js';
 import { fitIcon, fitWidth } from './uiDraw.js';
-import { visitButton, VISIT_W } from './PlayerCardWindow.js';
+import { profileButton, VISIT_W } from './PlayerCardWindow.js';
 
-const W = 640, H = 640, TOP = 40, TOP_N = 10, ROW_H = 38, ROW_GAP = 4;
+const W = 640, H = 640, TOP = 40, TOP_N = 10, ROW_H = 38, ROW_GAP = 2;
 const MEDALS = [0xffc83a, 0xc9d1da, 0xd08a4a];
 // Medal sizes by rank: gold is a touch bigger than silver, and bronze a touch smaller, so the podium reads in order.
 const MEDAL_SIZE = [36, 34, 32];
@@ -18,11 +19,10 @@ const MEDAL_SIZE = [36, 34, 32];
 const BADGE_W = 34, BADGE_H = 26;
 
 export class LeaderboardWindow {
-  constructor(scene, { session, onClose = null, onOpenPlayer = null, onVisitBest = null }) {
+  constructor(scene, { session, onClose = null, onOpenPlayer = null }) {
     this.scene = scene;
     this.session = session;
     this.onOpenPlayer = onOpenPlayer;
-    this.onVisitBest = onVisitBest;
     this.modal = new Modal(scene, { width: W, height: H, title: 'Leaderboard', y: TOP, onClose });
     this.load();
   }
@@ -53,25 +53,25 @@ export class LeaderboardWindow {
     const m = this.modal, s = this.scene;
     if (!m.frame) return;
     m.clear();
-    m.add(s.add.text(m.cx, m.y + 84, 'Furthest wave survived', bodyStyle(18, COLORS.inkDim)).setOrigin(0.5));
+    m.add(s.add.text(m.cx, m.y + 84, 'Furthest wave survived, by village', bodyStyle(18, COLORS.inkDim)).setOrigin(0.5));
     const left = m.x + 28, w = W - 56;
     const cols = { rank: left + 34, badge: left + 82, name: left + 110, hall: left + w - 220, wave: left + w - 110 };
     const hy = m.y + 116;
     m.add(s.add.text(cols.rank, hy, 'Rank', bodyStyle(14, COLORS.inkDim)).setOrigin(0.5));
-    m.add(s.add.text(cols.name, hy, 'Player', bodyStyle(14, COLORS.inkDim)).setOrigin(0, 0.5));
+    m.add(s.add.text(cols.name, hy, 'Player · Village', bodyStyle(14, COLORS.inkDim)).setOrigin(0, 0.5));
     m.add(s.add.text(cols.hall, hy, 'Village Hall', bodyStyle(14, COLORS.inkDim)).setOrigin(0.5));
     m.add(s.add.text(cols.wave, hy, 'Wave', bodyStyle(14, COLORS.inkDim)).setOrigin(0.5));
 
     const top = rows.filter((r) => r.rank <= TOP_N);
-    const mine = rows.find((r) => r.isMe && r.rank > TOP_N);
+    const mine = rows.find((r) => r.isMe && r.rank > TOP_N); // your best village, when none of yours is in the top list
     let y = m.y + 136;
     if (!top.length) {
       m.add(s.add.text(m.cx, y + 160, 'Nobody is on the board yet.\nSurvive a wave to be the first!', bodyStyle(20, COLORS.inkDim, { align: 'center', lineSpacing: 8 })).setOrigin(0.5));
     }
     for (const r of top) { this.row(r, left, y, w, cols); y += ROW_H + ROW_GAP; }
     if (mine) {
-      m.add(s.add.text(m.cx, y + 8, '· · ·', bodyStyle(18, COLORS.inkDim)).setOrigin(0.5));
-      this.row(mine, left, y + 22, w, cols);
+      m.add(s.add.text(m.cx, y + 5, '· · ·', bodyStyle(18, COLORS.inkDim)).setOrigin(0.5));
+      this.row(mine, left, y + 16, w, cols);
     }
     // Footer: your league, and the wave the next one needs.
     const me = this.session.stats.bestWave, myLeague = leagueFor(me), next = nextLeague(me);
@@ -80,7 +80,7 @@ export class LeaderboardWindow {
     if (next) parts.push(`${next.name} at wave ${next.minWave}`);
     else if (myLeague) parts.push('the top league!');
     const foot = me > 0 ? parts.join('  ·  ') : `Survive a wave to get on the board (${next.name} league)`;
-    const fy = m.y + H - 30;
+    const fy = m.y + H - 22;
     const ft = m.add(s.add.text(m.cx, fy, foot, bodyStyle(17, COLORS.inkDim)).setOrigin(0.5));
     if (myLeague && s.textures.exists(myLeague.texture)) {
       const img = m.add(s.add.image(ft.x - ft.width / 2 - 22, fy, myLeague.texture));
@@ -110,25 +110,26 @@ export class LeaderboardWindow {
       g.fillStyle(face, 1).fillRoundedRect(bx + 4, by + 3, BADGE_W - 8, 8, 4);
       m.add(s.add.text(cols.rank, cy, String(r.rank), textStyle(17, '#ffffff')).setOrigin(0.5));
     }
-    // Your own row shows the wave your profile does (the server only counts waves it has verified, so it can be a
-    // little behind for a while after a long offline stretch).
-    const wave = r.isMe ? Math.max(r.bestWave, this.session.stats.bestWave || 0) : r.bestWave;
+    const wave = r.bestWave; // the server only counts waves it has verified, so a village can be a little behind after a long offline stretch
     const league = leagueFor(wave);
     if (league && s.textures.exists(league.texture)) {
       const img = m.add(s.add.image(cols.badge, cy, league.texture));
       fitIcon(img, leagueBadgeSize(league, 36)); // v0.7.1: bigger for higher leagues, like the medals
     }
-    const name = m.add(s.add.text(cols.name, cy, r.username, bodyStyle(18)).setOrigin(0, 0.5));
-    fitWidth(name, cols.hall - cols.name - 110);
-    if (r.isMe) m.add(s.add.text(cols.name + name.displayWidth + 8, cy, '(you)', bodyStyle(15, COLORS.inkAccent)).setOrigin(0, 0.5));
+    // The player's name, with the village's name small under it (hidden villages and the old one-per-player board have none).
+    const hasVillage = !!r.villageName, maxW = cols.hall - cols.name - 40;
+    const name = m.add(s.add.text(cols.name, hasVillage ? cy - 7 : cy, r.username, bodyStyle(hasVillage ? 16 : 18)).setOrigin(0, 0.5));
+    fitWidth(name, maxW - (r.isMe ? 44 : 0));
+    if (r.isMe) m.add(s.add.text(cols.name + name.displayWidth + 6, name.y, '(you)', bodyStyle(13, COLORS.inkAccent)).setOrigin(0, 0.5));
+    if (hasVillage) fitWidth(m.add(s.add.text(cols.name, cy + 9, r.villageName, bodyStyle(12, COLORS.inkDim)).setOrigin(0, 0.5)), maxW);
     m.add(s.add.text(cols.hall, cy, String(r.bestTownHall || '-'), bodyStyle(18, COLORS.ink)).setOrigin(0.5));
     m.add(s.add.text(cols.wave, cy, String(wave), textStyle(22, COLORS.textGold)).setOrigin(0.5));
-    // v0.7: the row opens the player's card; Visit looks at their best village.
+    // The row opens the player's card, and so does its Profile button.
     if (this.onOpenPlayer) {
       const zone = m.add(s.add.zone(x, y, w - VISIT_W - 12, ROW_H).setOrigin(0).setInteractive({ useHandCursor: true }));
       zone.on('pointerup', () => this.onOpenPlayer(r.username));
     }
-    if (this.onVisitBest) m.add(visitButton(s, x + w - 6, cy, 30, () => this.onVisitBest(r.username)));
+    if (this.onOpenPlayer) m.add(profileButton(s, x + w - 6, cy, 30, () => this.onOpenPlayer(r.username)));
   }
 
   close() { this.modal.close(); }

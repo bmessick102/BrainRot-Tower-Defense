@@ -2,6 +2,7 @@ import { describe, it, expect } from 'vitest';
 import { CONFIG } from '../src/config.js';
 import { chooseTarget, stepDefenses, stepProjectiles, applySplash, isValidTarget, fireDefense, fireEnemyProjectile } from '../src/logic/combat.js';
 import { footprintCenter } from '../src/logic/grid.js';
+import { limitFor } from '../src/logic/buildings.js';
 import { makeStateWithTownHall, addBuilding, addEnemy } from './helpers.js';
 
 function setup(type, level = 1) {
@@ -140,8 +141,10 @@ describe('combat.js', () => {
     expect(fw.levels[0].damage).toBeGreaterThan(archer.levels[0].damage * 3);
     expect(fw.levels[0].hp).toBeLessThan(archer.levels[0].hp);
     expect(fw.unlockTownHall).toBe(3);
-    expect(Math.max(...CONFIG.limits.firework)).toBe(3);
-    expect(CONFIG.limits.wall).toEqual([24, 36, 48, 60, 72, 84, 96, 108, 120, 132, 144]); // single-tile walls: 3x the old 3-tile segments; VH11 +12
+    expect(Math.max(...CONFIG.limits.firework.slice(0, 14))).toBe(3); // (Village Hall 15 allows a 4th)
+    expect(limitFor('firework', 15)).toBe(4);
+    // Single-tile walls: 3x the old 3-tile segments; every hall from 11 adds 12.
+    expect(CONFIG.limits.wall).toEqual([24, 36, 48, 60, 72, 84, 96, 108, 120, 132, 144, 156, 168, 180, 192]);
   });
 
   it('destroyed defenses never fire', () => {

@@ -2,7 +2,7 @@
 // `storage` is passed in (window.localStorage in the game, a fake in tests). Every access is try/catch.
 import { validHeroSleep } from './hero.js';
 import { CONFIG } from '../config.js';
-import { BUILDING_TYPES, WALL_ORIENTS, footprintDims, buildingSize, maxLevel, levelStats, isDefense, maxHp, wallLevel, commonWallLevel } from './buildings.js';
+import { BUILDING_TYPES, HERO_TYPES, WALL_ORIENTS, footprintDims, buildingSize, maxLevel, levelStats, isDefense, maxHp, wallLevel, commonWallLevel } from './buildings.js';
 import { isRectOnGrass, footprintsOverlap } from './grid.js';
 import { serializeResearch, validResearch, deserializeResearch, hasAbilities, convertOldResearch, convertMixedResearch, picksFor } from './abilities.js';
 import { validLabGuide } from './labGuide.js';
@@ -12,6 +12,7 @@ import { serializeTips, validTips, deserializeTips } from './tips.js';
 import { validResearchPoints } from './researchPoints.js';
 import { serializeSpells, validSpells, deserializeSpells, validFuelGuide } from './spells.js';
 import { PATHS } from './waves.js';
+import { isMergeable, serializeMastery, validMastery, serializeFreeRespecs, validFreeRespecs, deserializeFreeRespecs } from './merge.js';
 
 // Version 2 adds the day/night clock and nightsAtMaxTownHall (waves come at night).
 // Version 1 saves (waves on Town Hall upgrade) still load: see migrateV1.
@@ -61,12 +62,15 @@ export function serializeGame(state, now = new Date()) {
     fuelGuide: state.fuelGuide || 0,   // Fuel Station guide step (spells.js); missing in older saves
     wallLevel: wallLevel(state), // every wall's level (walls upgrade all at once); missing in older saves
     debuted: [...(state.debuted || [])], // enemies whose debut wave this village has had (waves.js); missing in older saves
+    mastery: serializeMastery(state),           // merged defenses' Mastery tiers per type ({ cannon: 2 }, merge.js); missing in older saves
+    freeRespecs: serializeFreeRespecs(state),   // types with a free path reset from a merge (['cannon']); missing in older saves
     buildings: state.buildings.map((b) => {
       const out = { id: b.id, type: b.type, level: b.level, col: b.col, row: b.row };
       if (b.type === 'mine') out.stock = Math.round((b.stock || 0) * 100) / 100;
       if (b.type === 'dj' && b.hype) out.hype = Math.floor(b.hype); // DJ Babyface's meter keeps its charge
-      if (b.type === 'altar' && b.heroSleep > 0) out.heroSleep = Math.round(b.heroSleep * 10) / 10; // the Brisket King's nap
+      if (HERO_TYPES.includes(b.type) && b.heroSleep > 0) out.heroSleep = Math.round(b.heroSleep * 10) / 10; // a hero's nap (the Brisket King's, the Hatsune Queen's)
       if (b.type === 'wall') out.orient = b.orient || 'x';
+      if (b.merged) out.merged = true; // a merged defense (merge.js): its Mastery comes from `mastery`, by type
       // Ruins only exist mid-night (everything is rebuilt free when the wave is beaten).
       if (b.destroyed && b.type !== 'townHall') out.destroyed = true;
       return out;
@@ -197,6 +201,7 @@ export function validateSave(obj) {
   if (!validResearchPoints(obj.researchPoints)) return false;
   if (!validSpells(obj.spells)) return false;
   if (!validFuelGuide(obj.fuelGuide)) return false;
+  if (!validMastery(obj.mastery) || !validFreeRespecs(obj.freeRespecs)) return false;
   if (obj.wallLevel !== undefined && (!isInt(obj.wallLevel) || obj.wallLevel < 1 || obj.wallLevel > Math.min(maxLevel('wall'), Math.max(1, obj.townHallLevel)))) return false;
 
   const seen = new Set();
@@ -219,8 +224,10 @@ export function validateSave(obj) {
     }
     if (b.type === 'mine' && b.stock !== undefined && (typeof b.stock !== 'number' || !Number.isFinite(b.stock) || b.stock < 0)) return false;
     if (b.hype !== undefined && (b.type !== 'dj' || !validHype(b.hype))) return false;
-    if (b.heroSleep !== undefined && (b.type !== 'altar' || !validHeroSleep(b.heroSleep))) return false;
+    if (b.heroSleep !== undefined && (!HERO_TYPES.includes(b.type) || !validHeroSleep(b.heroSleep))) return false;
     if (b.destroyed !== undefined && (b.destroyed !== true || b.type === 'townHall')) return false;
+    // Merged (v0.8): only a mergeable type, at its top level.
+    if (b.merged !== undefined && (b.merged !== true || !isMergeable(b.type) || b.level !== maxLevel(b.type))) return false;
   }
   if (townHalls !== 1) return false;
   // Level 1 buildings are allowed beside the ruined level 0 hall (the skip-tutorial starter base).
@@ -231,6 +238,7 @@ export function validateSave(obj) {
 export function deserializeGame(obj) {
   let maxId = 0;
   const research = deserializeResearch(obj.research);
+  const mastery = obj.mastery && validMastery(obj.mastery) ? { ...obj.mastery } : {};
   // Walls all share one level. Saves from before that (no wallLevel) take their walls' most common level
   // (ties: the higher one; commonWallLevel), and every wall is brought to it, up or down.
   const walls = obj.wallLevel !== undefined ? obj.wallLevel : commonWallLevel(obj.buildings);
@@ -243,10 +251,11 @@ export function deserializeGame(obj) {
     else b.size = buildingSize(s.type);
     if (s.type === 'mine') b.stock = s.stock || 0; // clamped below, once its perks (Deep Vault) are known
     if (s.type === 'dj') b.hype = s.hype || 0;
-    if (s.type === 'altar') b.heroSleep = s.heroSleep || 0;
+    if (HERO_TYPES.includes(s.type)) b.heroSleep = s.heroSleep || 0;
     if (isDefense(s.type)) { b.cooldown = 0; b.targetId = null; }
     if (hasAbilities(s.type)) b.picks = picksFor(research, s.type);
-    b.hp = maxHp(b); // with any health tiers
+    if (s.merged) { b.merged = true; if (mastery[s.type]) b.mastery = mastery[s.type]; } // a merged defense, with its type's Mastery
+    b.hp = maxHp(b); // with any health tiers (and a merged one's extra health)
     if (s.type === 'mine') b.stock = Math.min(b.stock, mineStockCap(b));
     if (s.destroyed) { b.destroyed = true; b.hp = 0; }
     return b;
@@ -259,6 +268,8 @@ export function deserializeGame(obj) {
     tutorialStep: obj.tutorialStep,
     tutorialDone: obj.tutorialDone,
     research,
+    mastery,
+    freeRespecs: deserializeFreeRespecs(validFreeRespecs(obj.freeRespecs) ? obj.freeRespecs : []),
     labGuideStep: obj.labGuide || 0,
     tipsSeen: deserializeTips(obj.tips),
     wavePlan: obj.wavePlan && validWavePlan(obj.wavePlan) ? { number: obj.wavePlan.number, paths: [...new Set(obj.wavePlan.paths)] } : null,
@@ -358,7 +369,24 @@ export function loadSettings(storage) {
 
 export function saveSettings(storage, settings) {
   const graphics = loadGraphicsSetting(storage); // kept: it's saved on its own (saveGraphicsSetting)
-  return writeKey(storage, SAVE_KEYS.settings, JSON.stringify({ music: settings.music, sfx: settings.sfx, graphics }));
+  return writeKey(storage, SAVE_KEYS.settings, JSON.stringify(withFast({ music: settings.music, sfx: settings.sfx, graphics }, loadFastSetting(storage))));
+}
+
+// The 2x wave speed toggle (src/logic/fastForward.js) lives in the same settings object: written only when on,
+// and kept by every other settings save.
+const withFast = (obj, fast) => (fast ? { ...obj, fast: true } : obj);
+
+export function loadFastSetting(storage) {
+  try {
+    return JSON.parse(readKey(storage, SAVE_KEYS.settings) || 'null')?.fast === true;
+  } catch {
+    return false;
+  }
+}
+
+export function saveFastSetting(storage, fast) {
+  const { music, sfx } = loadSettings(storage);
+  return writeKey(storage, SAVE_KEYS.settings, JSON.stringify(withFast({ music, sfx, graphics: loadGraphicsSetting(storage) }, !!fast)));
 }
 
 /** Graphics quality saved with the settings (src/quality.js): 'auto' (the default), 'high' or 'low'. */
@@ -377,5 +405,5 @@ export function loadGraphicsSetting(storage) {
 export function saveGraphicsSetting(storage, graphics) {
   const { music, sfx } = loadSettings(storage);
   const g = GRAPHICS_SETTINGS.includes(graphics) ? graphics : 'auto';
-  return writeKey(storage, SAVE_KEYS.settings, JSON.stringify({ music, sfx, graphics: g }));
+  return writeKey(storage, SAVE_KEYS.settings, JSON.stringify(withFast({ music, sfx, graphics: g }, loadFastSetting(storage))));
 }

@@ -4,6 +4,7 @@
 
 import { requestAudio } from './assetLoader.js';
 import { audioPath } from './assetPlan.js';
+import { clamp01, scaleVolume, musicTrackVolume, ambienceVolumes } from './logic/volume.js';
 
 // Music sits under sound effects so it never drowns them out.
 const MUSIC_MIX = 0.45;
@@ -61,8 +62,22 @@ const lastPlayed = new Map();
 
 let musicLevel = 0.7;
 let sfxLevel = 0.7;
-const clamp01 = (v) => Math.max(0, Math.min(1, v));
-const musicVolume = (key = musicKey) => Math.min(1, MUSIC_MIX * (TRACK_GAIN[key] ?? 1)) * musicLevel;
+// Every music sound (the current track and ones fading out) carries a fade factor 0..1; its volume is always
+// factor x track volume x Music level, recomputed whenever the slider moves (so a slider at 0 silences a mid-fade
+// track too, and a fade tween never writes a stale full volume).
+const FADE = Symbol('fade');
+const fadeOf = (s) => (typeof s[FADE] === 'number' ? s[FADE] : 1);
+const musicVolume = (key = musicKey, fade = 1) => musicTrackVolume(MUSIC_MIX, TRACK_GAIN[key] ?? 1, musicLevel, fade);
+const applyMusicVolume = (s) => { if (isAlive(s)) s.setVolume(musicVolume(s.key, fadeOf(s))); };
+// Effect sounds that are playing: sound -> its own base volume, rescaled when the Effects slider moves.
+const liveSfx = new Map();
+function trackSfx(snd, base) {
+  liveSfx.set(snd, base);
+  const drop = () => liveSfx.delete(snd);
+  snd.once('complete', drop);
+  snd.once('stop', drop);
+  snd.once('destroy', drop);
+}
 
 export function getMusicLevel() { return musicLevel; }
 export function getSfxLevel() { return sfxLevel; }
@@ -70,16 +85,21 @@ export function getSfxLevel() { return sfxLevel; }
 /** Music slider: also applies to the track playing now (unless it's mid-fade). */
 export function setMusicLevel(v) {
   musicLevel = clamp01(v);
-  if (isAlive(music) && !fades.size) music.setVolume(musicVolume());
+  applyMusicVolume(music);
+  for (const s of fading) applyMusicVolume(s);
+  applyAmbience();
 }
 
 export function setSfxLevel(v) {
   sfxLevel = clamp01(v);
+  for (const [snd, base] of liveSfx) {
+    if (isAlive(snd)) snd.setVolume(scaleVolume(base, sfxLevel)); else liveSfx.delete(snd);
+  }
 }
 
 /** Scale an effect's own volume (default 1) by the SFX level. For looping sounds that set their own volume. */
 export function sfxVolume(v = 1) {
-  return v * sfxLevel;
+  return scaleVolume(v, sfxLevel);
 }
 
 // While the browser still blocks audio (no click or tap yet), Phaser queues every sound it's asked to play and
@@ -92,7 +112,11 @@ export function playSfx(scene, key, config = undefined) {
   if (now - (lastPlayed.get(key) || 0) < SFX_MIN_GAP_MS) return;
   lastPlayed.set(key, now);
   if (sfxLevel <= 0) return;
-  scene.sound.play(key, { ...config, volume: sfxVolume(config && config.volume !== undefined ? config.volume : 1) });
+  const base = config && config.volume !== undefined ? config.volume : 1;
+  const snd = scene.sound.add(key, { ...config, volume: sfxVolume(base) });
+  trackSfx(snd, base);
+  snd.once('complete', () => snd.destroy());
+  snd.play();
 }
 
 /**
@@ -107,7 +131,9 @@ export function playVoiceLine(scene, keys, group = null) {
   if (audioLocked(scene)) return;
   const loaded = keys.filter((k) => scene.cache.audio.exists(k));
   if (!loaded.length) return;
+  if (sfxLevel <= 0) return;
   const snd = scene.sound.add(loaded[Math.floor(Math.random() * loaded.length)], { volume: sfxVolume() });
+  trackSfx(snd, 1);
   snd.once('complete', () => { snd.destroy(); if (voices.get(id) === snd) voices.delete(id); });
   voices.set(id, snd);
   snd.play();
@@ -136,13 +162,14 @@ export function playSfxClip(scene, key, { maxSeconds = 0, fadeMs = 400, maxAtOnc
   if (scene.sound.getAll(key).filter((s) => s.isPlaying).length >= maxAtOnce) return null;
   clipStarts.set(key, now);
   const snd = scene.sound.add(key, { volume: sfxVolume(volume) });
+  trackSfx(snd, volume);
   snd.once('complete', () => destroySound(snd));
   snd.play();
   if (maxSeconds > 0 && soundDuration(scene, key) > maxSeconds) {
     scene.time.delayedCall(Math.max(0, maxSeconds * 1000 - fadeMs), () => {
       if (!isAlive(snd)) return;
-      const v = { value: snd.volume };
-      scene.tweens.add({ targets: v, value: 0, duration: fadeMs, onUpdate: () => { if (isAlive(snd)) snd.setVolume(v.value); }, onComplete: () => destroySound(snd) });
+      const v = { value: 1 }; // fade factor on top of the (live) Effects level
+      scene.tweens.add({ targets: v, value: 0, duration: fadeMs, onUpdate: () => { if (isAlive(snd)) { liveSfx.set(snd, volume * v.value); snd.setVolume(scaleVolume(volume * v.value, sfxLevel)); } }, onComplete: () => destroySound(snd) });
     });
   }
   return snd;
@@ -175,6 +202,7 @@ export function playMusic(scene, key, { loop = true, seek = 0 } = {}) {
   stopMusic();
   if (!whenLoaded(scene, key, () => playMusic(scene, key, { loop, seek }))) return;
   music = scene.sound.add(key, { loop, volume: musicVolume(key) });
+  music[FADE] = 1;
   musicKey = key;
   music.play({ seek: Math.max(0, seek) });
 }
@@ -200,9 +228,10 @@ export function crossfadeMusic(scene, key, ms = 1500, { loop = true } = {}) {
     fadeVolume(scene, old, 0, ms, () => { destroySound(old); fading.delete(old); });
   }
   music = scene.sound.add(key, { loop, volume: 0 });
+  music[FADE] = 0;
   musicKey = key;
   music.play();
-  fadeVolume(scene, music, musicVolume(), ms);
+  fadeVolume(scene, music, 1, ms);
 }
 
 /**
@@ -231,10 +260,10 @@ function destroySound(s) {
 // stopped mid-fade (quit to title, game over) can't throw. stopMusic() also cancels them.
 const fades = new Set();
 function fadeVolume(scene, s, to, ms, onDone) {
-  const v = { value: s.volume };
+  const v = { value: fadeOf(s) }; // the fade factor 0..1, not a raw volume
   const tween = scene.tweens.add({
     targets: v, value: to, duration: ms,
-    onUpdate: () => { if (isAlive(s)) s.setVolume(v.value); },
+    onUpdate: () => { if (isAlive(s)) { s[FADE] = v.value; applyMusicVolume(s); } },
     onComplete: () => { fades.delete(tween); if (onDone) onDone(); }
   });
   fades.add(tween);
@@ -270,7 +299,8 @@ export function startAmbience(scene, dayKey, nightKey, { presence = 0 } = {}) {
   const night = scene.sound.add(nightKey, { loop: true, volume: 0 });
   day.play();
   night.play();
-  ambience = { day, night, presence };
+  ambience = { day, night, presence, dark: 0 };
+  applyAmbience();
 }
 
 /**
@@ -283,10 +313,18 @@ export function updateAmbience(night, on, dt) {
   const target = on ? 1 : 0;
   const step = AMBIENCE_FADE_PER_S * dt;
   a.presence = a.presence < target ? Math.min(target, a.presence + step) : Math.max(target, a.presence - step);
-  const base = Math.min(1, MUSIC_MIX * AMBIENCE_GAIN) * musicLevel * a.presence;
-  const n = clamp01(night);
-  if (isAlive(a.day)) a.day.setVolume(base * (1 - n));
-  if (isAlive(a.night)) a.night.setVolume(base * n);
+  a.dark = night;
+  applyAmbience();
+}
+
+/** Set both beds' volumes from the last clock/presence values (also called when the Music slider moves, so the
+ *  beds go quiet at once even while the game is paused and updateAmbience isn't running). */
+function applyAmbience() {
+  const a = ambience;
+  if (!a) return;
+  const v = ambienceVolumes(MUSIC_MIX * AMBIENCE_GAIN, musicLevel, a.presence, a.dark);
+  if (isAlive(a.day)) a.day.setVolume(v.day);
+  if (isAlive(a.night)) a.night.setVolume(v.night);
 }
 
 export function stopAmbience() {

@@ -11,7 +11,7 @@
 // No Phaser, no spending here (GameState does that).
 import { CONFIG } from '../config.js';
 import { ABILITIES, ABILITY_COSTS, MAX_TIER, PATH_KEYS, picksFor } from '../abilityConfig.js';
-import { defenseRange, typeConfig, maxHp } from './buildings.js';
+import { defenseRange, typeConfig, maxHp, mergedConfigOf, mergeDpsMult, masteryFxOf } from './buildings.js';
 import { isWaveActive } from './util.js';
 import { researchPoints, needRpReason } from './researchPoints.js';
 
@@ -157,7 +157,8 @@ const aura = auraOf;
 export function towerRange(b) {
   const fx = abilityFx(b);
   // b._crowdRange: Gandolf Storm Front (set each step by stepDefenses while a crowd is in range).
-  return defenseRange(b.type, b.level) + (fx.rangeAdd || 0) + (b.type === 'flock' ? 0 : aura(b).rangeAdd || 0) + (b._crowdRange || 0);
+  return defenseRange(b.type, b.level) + (fx.rangeAdd || 0) + (b.type === 'flock' ? 0 : aura(b).rangeAdd || 0) + (b._crowdRange || 0)
+    + (mergedConfigOf(b)?.rangeAdd || 0); // a merged defense (CONFIG.merges[type].rangeAdd)
 }
 
 /** Blind spot in tiles (Mortar Close Support shrinks it). */
@@ -168,8 +169,9 @@ export function towerMinRange(b) {
 /** Damage multiplier from the tower's own tiers and a Commander aura (Rally). */
 export function towerDamageMult(b) {
   // (+ DJ Babyface's Main Stage while Drop the Beat lasts, + a Rage spell)
-  return 1 + ((abilityFx(b).damagePct || 0) + (aura(b).damagePct || 0) + (b.djBoostT > 0 ? b.djDmgPct || 0 : 0)
-    + (b.spellRageT > 0 ? b.spellRageDmgPct || 0 : 0)) / 100;
+  // A merged defense hits harder: its shots' DPS gain here (timed specials use only this), mergeShotMult on its shots.
+  return (1 + ((abilityFx(b).damagePct || 0) + (aura(b).damagePct || 0) + (b.djBoostT > 0 ? b.djDmgPct || 0 : 0)
+    + (b.spellRageT > 0 ? b.spellRageDmgPct || 0 : 0) + (b._queenEncore || 0)) / 100) * mergeDpsMult(b); // (+ the Hatsune Queen's Encore+)
 }
 
 /** Seconds between shots (faster with fire-rate tiers and a Commander aura). */
@@ -183,10 +185,14 @@ export function towerFireInterval(b) {
     + (fx.groundFireRatePct && b._noFlyers ? fx.groundFireRatePct : 0)     // Firework Rapid Display
     + (b.djBoostT > 0 ? b.djBoostPct || 0 : 0)                             // DJ Babyface's Drop the Beat
     + (b.spellRageT > 0 ? b.spellRagePct || 0 : 0)                         // a Rage spell (spells.js)
-    + (b._heroDecree || 0);                                                // the Brisket King's Royal Decree
+    + (b._heroDecree || 0)                                                 // the Brisket King's Royal Decree
+    + (b._queenWarmup || 0);                                               // the Hatsune Queen's Warm-Up
   // Frigo Camillo's cold aura (specialEnemies.js): slower shots while one is near.
   const chill = 1 - Math.max(0, Math.min(90, b.frigoSlow || 0)) / 100;
-  return cfg.fireInterval / (1 + pct / 100) / lastStand / chill;
+  // A merged defense: CONFIG.merges[type].fireIntervalMult, and the Mortar's Quick Reload Mastery.
+  const merged = mergedConfigOf(b);
+  const mergeK = merged ? (merged.fireIntervalMult || 1) * (masteryFxOf(b).fireIntervalMult || 1) : 1;
+  return (cfg.fireInterval * mergeK) / (1 + pct / 100) / lastStand / chill;
 }
 
 // ---------- checks (reasons are shown on the buttons) ----------
@@ -223,10 +229,21 @@ export function respecCost(state, type) {
   return Math.max(1, Math.round(sum * (CONFIG.rules.respecShare ?? 0.5)));
 }
 
-/** Can the type's path be reset now? { ok, reason, cost }. The old picks are not refunded. */
+/** A free path reset waiting for this type (merging two defenses gives one; merge.js). */
+export function hasFreeRespec(state, type) {
+  return !!(state.freeRespecs && state.freeRespecs[type]);
+}
+
+/** Can the type's path be reset now? { ok, reason, cost, free }. The old picks are not refunded. */
 export function checkRespec(state, type) {
   if (!labTierCount(state, type)) return { ok: false, reason: 'Nothing to reset', cost: 0 };
-  const cost = respecCost(state, type);
+  const free = hasFreeRespec(state, type); // a merge's free reset (used up by respecPath)
+  const cost = free ? 0 : respecCost(state, type);
+  if (free) {
+    if (!labLevel(state)) return { ok: false, reason: 'Build an RV Lab', cost, free };
+    if (isWaveActive(state)) return { ok: false, reason: 'Not during a wave', cost, free };
+    return { ok: true, reason: '', cost, free };
+  }
   if (!labLevel(state)) return { ok: false, reason: 'Build an RV Lab', cost };
   if (isWaveActive(state)) return { ok: false, reason: 'Not during a wave', cost };
   if (researchPoints(state) < cost) return { ok: false, reason: needRpReason(cost, researchPoints(state)), cost };

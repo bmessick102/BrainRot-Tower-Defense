@@ -19,7 +19,7 @@ export function round2(v) {
   return Math.round(v * 100) / 100;
 }
 
-/** Enemies are on the field (from first spawn until the wave is cleared). Shop, move, sell, upgrades locked. */
+/** Enemies are on the field (from first spawn until the wave is cleared). Shop, move, upgrades locked. */
 export function isWaveActive(state) {
   return !!state.wave && state.wave.phase === 'active';
 }

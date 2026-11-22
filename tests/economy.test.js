@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { CONFIG } from '../src/config.js';
 import { createBuilding } from '../src/logic/buildings.js';
-import { getCapacity, collectMine, produceMines, sellRefund, repairCost, checkRepair, repairBuilding, repairAll, storageDrainAmount, addGold } from '../src/logic/economy.js';
+import { getCapacity, collectMine, produceMines, repairCost, checkRepair, repairBuilding, repairAll, storageDrainAmount, addGold } from '../src/logic/economy.js';
 import { damageBuilding } from '../src/logic/combat.js';
 import { makeStateWithTownHall, addBuilding } from './helpers.js';
 
@@ -60,14 +60,6 @@ describe('economy.js', () => {
     mine.stock = 0; mine.destroyed = true;
     produceMines(state, 10);
     expect(mine.stock).toBe(0);
-  });
-
-  it('sell refunds 50% of everything spent (build plus upgrades)', () => {
-    const state = makeStateWithTownHall({}, 3);
-    const cannon = addBuilding(state, 'cannon', 13, 15, 3);
-    const spent = CONFIG.defenses.cannon.levels.slice(0, 3).reduce((s, l) => s + l.cost, 0);
-    expect(sellRefund(cannon)).toBe(Math.round(spent * CONFIG.rules.sellRefund));
-    expect(sellRefund(cannon)).toBe(Math.round(spent / 2));
   });
 
   it('rebuilding early costs 30% of the building current level cost, but never for walls', () => {

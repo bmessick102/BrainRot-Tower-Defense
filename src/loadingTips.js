@@ -5,7 +5,7 @@ export const LOADING_TIPS = [
   'Bitcoin Mines fill up on their own. Click a mine when its coin appears, or it stops producing once full.',
   'When your gold is at its limit, mines can\'t be collected. Build Bitcoin Storage to hold more.',
   'Enemies that hit your Bitcoin Storage steal a share of the gold inside. Keep it guarded!',
-  'Selling a building refunds half of what it cost. You can\'t sell while a wave is attacking.',
+  'Each Village Hall allows a set number of every building. To rearrange your village, move buildings in edit mode.',
   'Every enemy you defeat drops gold. Tougher enemies are worth more.',
 
   // Village Hall and building

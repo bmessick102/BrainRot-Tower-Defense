@@ -5,7 +5,6 @@ import {
   createBuilding, checkUpgrade, checkWallUpgrade, wallLevel, commonWallLevel, wallBuildCost, buildCost, checkBuy,
   upgradeCost, totalSpent, limitFor, maxLevel
 } from '../src/logic/buildings.js';
-import { sellRefund } from '../src/logic/economy.js';
 import { serializeGame, parseSave, deserializeGame, validateSave } from '../src/logic/save.js';
 import { GameState } from '../src/state/GameState.js';
 import { makeStateWithTownHall } from './helpers.js';
@@ -126,8 +125,6 @@ describe('new walls start at the village wall level', () => {
     expect(w.level).toBe(4);
     expect(w.hp).toBe(CONFIG.walls.levels[3].hp);
     expect(gs.gold).toBe(before - totalSpent('wall', 4));
-    // Selling it never gives back more than it cost.
-    expect(sellRefund(w)).toBeLessThan(buildCost('wall', gs));
   });
 
   it('the shop check uses that price', () => {

@@ -1,4 +1,4 @@
-// Gold, capacity, mine production and collection, selling, repair, and storage drain.
+// Gold, capacity, mine production and collection, repair, and storage drain.
 import { CONFIG } from '../config.js';
 import { levelStats, buildCost, totalSpent, maxHp } from './buildings.js';
 import { emit, isWaveActive } from './util.js';
@@ -167,12 +167,6 @@ export function sendMineToStorage(state, mine) {
   if (fx.compoundPct) mine.compound = Math.min(fx.compoundMax || 0, (mine.compound || 0) + fx.compoundPct);
   emit(state, 'mineCollected', { id: mine.id, amount: added });
   return { collected: added, storageFull: false };
-}
-
-/** Refund for selling: a share of everything spent (build + upgrades), rounded. */
-export function sellRefund(b) {
-  // Gold only: ability tiers (bought with RP) and research are never refunded.
-  return Math.round(totalSpent(b.type, b.level) * CONFIG.rules.sellRefund);
 }
 
 /** Rebuild price for a destroyed building: rules.rebuildCostShare of its current level's cost. */

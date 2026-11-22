@@ -80,7 +80,7 @@ const ORB_PULSE_MS = 900;
 // v0.6.1 took the gold Neegy out.
 const ENEMIES = [
   { key: 'enemy_patapim', x: 985, y: 606, h: 330, flip: true, depth: 0.1 },  // Brr Brr Patapim (v0.6): the tree giant, at the very back
-  { key: 'enemy_tank', x: 1150, y: 630, h: 380, flip: true, depth: 0.2 },    // Tripi Tropi, the fish giant, back right
+  { key: 'enemy_tank', x: 1150, y: 630, h: 300, flip: true, depth: 0.2 },    // Tripi Tropi, the fish giant, back right (v0.8: 380 -> 300)
   { key: 'enemy_grunt', x: 1238, y: 664, h: 300, flip: true, depth: 0.45 },  // Tung Tung Sahur, at the right edge
   { key: 'enemy_skeleton', x: 902, y: 650, h: 255, flip: true, depth: 0.5 }, // Rahhh Skeleton (v0.6), left, shield up
   { key: 'enemy_pork', x: 1072, y: 690, h: 262, flip: false, depth: 0.62 },  // John Pork (v0.6, faces front), middle

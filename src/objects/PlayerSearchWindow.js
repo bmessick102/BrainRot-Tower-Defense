@@ -1,6 +1,6 @@
 // Find Players (v0.7, from Settings): search by name, filter by league and Village Hall, sort by furthest wave,
 // Village Hall or achievements. Each result shows its league badge, name, Village Hall, wave and achievements, with an
-// green Visit button to look at their best village; clicking the row opens their card (PlayerCardWindow).
+// green Profile button (v0.8.0; visiting is on the card); clicking the row opens their card (PlayerCardWindow).
 import { Modal } from './Modal.js';
 import { Button } from './Button.js';
 import { addTextField } from './TextField.js';
@@ -8,7 +8,7 @@ import { COLORS, bodyStyle, textStyle } from '../theme.js';
 import { LEAGUES, leagueFor, leagueBadgeSize } from '../logic/leagues.js';
 import { CONFIG } from '../config.js';
 import { fitIcon, fitWidth } from './uiDraw.js';
-import { visitButton, VISIT_W } from './PlayerCardWindow.js';
+import { profileButton, VISIT_W } from './PlayerCardWindow.js';
 
 const W = 780, H = 650, ROW_H = 40, ROW_GAP = 4, PER_PAGE = 8;
 const SORTS = [['wave', 'Furthest wave'], ['hall', 'Village Hall'], ['achievements', 'Achievements']];
@@ -25,14 +25,12 @@ export class PlayerSearchWindow {
    * @param {object} o
    * @param {object} o.session
    * @param {(username) => void} o.onOpenPlayer  show a player's card
-   * @param {(username) => void} o.onVisitBest   look at a player's best village
    * @param {object} [o.filters] the last search's filters (kept when coming back)
    */
-  constructor(scene, { session, onOpenPlayer, onVisitBest, onClose = null, filters = null }) {
+  constructor(scene, { session, onOpenPlayer, onClose = null, filters = null }) {
     this.scene = scene;
     this.session = session;
     this.onOpenPlayer = onOpenPlayer;
-    this.onVisitBest = onVisitBest;
     this.f = { query: '', league: null, hall: null, sort: 'wave', ...(filters || {}) };
     this.page = 0;
     this.results = null;
@@ -146,12 +144,12 @@ export class PlayerSearchWindow {
       this.addBody(s.add.text(cols.hall, cy, r.bestTownHall ? String(r.bestTownHall) : '-', bodyStyle(18)).setOrigin(0.5));
       this.addBody(s.add.text(cols.wave, cy, String(r.bestWave || 0), textStyle(20, COLORS.textGold)).setOrigin(0.5));
       this.addBody(s.add.text(cols.ach, cy, String(r.achievements || 0), bodyStyle(18)).setOrigin(0.5));
-      // The row opens the card; Visit goes straight to their best village.
+      // The row opens the card, and so does its Profile button.
       const zone = this.addBody(s.add.zone(left, ry, w - VISIT_W - 12, ROW_H).setOrigin(0).setInteractive({ useHandCursor: true }));
       zone.on('pointerover', () => paint(true));
       zone.on('pointerout', () => paint(false));
       zone.on('pointerup', () => this.onOpenPlayer(r.username));
-      this.addBody(visitButton(s, left + w - 6, cy, 30, () => this.onVisitBest(r.username)));
+      this.addBody(profileButton(s, left + w - 6, cy, 30, () => this.onOpenPlayer(r.username)));
     });
     if (pages > 1) {
       const py = m.y + H - 40;

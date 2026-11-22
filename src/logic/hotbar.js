@@ -1,14 +1,15 @@
 // The ability hotbar (bottom middle of the HUD, UIScene): every ability the player triggers by hand, in one row.
-// Slot order: the Brisket King's Brisket Feast, DJ Babyface's Drop the Beat (one per booth), then the brewed Fuel
+// Slot order: the Brisket King's Brisket Feast, the Hatsune Queen's Encore Cloak, DJ Babyface's Drop the Beat (one per booth), then the brewed Fuel
 // Station spells (one slot per spell type, with how many are brewed). Number keys 1-9 trigger the slots. Clicking
 // the hero or the DJ booth on the map never triggers anything: these slots are the only way. Pure: no Phaser.
 import { checkFeast, getAltar, heroStats } from './hero.js';
+import { checkEncore, getQueenAltar, queenStats } from './queen.js';
 import { checkDropBeat, hypeFill, hypeNeeded, djStats } from './dj.js';
 import { SPELL_KINDS, spellCount, checkCast, spellName, spellSubtext } from './spells.js';
 import { CONFIG } from '../config.js';
 
 /**
- * The hotbar's slots right now. Each: { id, type: 'feast' | 'beat' | 'spell', name, ready, reason, meter (0..1 or
+ * The hotbar's slots right now. Each: { id, type: 'feast' | 'encore' | 'beat' | 'spell', name, ready, reason, meter (0..1 or
  * null), count (or null), kind (spell kind), buildingId (DJ booth), desc, guide (pulse it: the guide's first Karuba Coffee) }. `ready` = pressing it now does
  * something (a spell slot then starts aiming).
  */
@@ -25,6 +26,19 @@ export function hotbarSlots(state) {
       id: 'feast', type: 'feast', name: 'Brisket Feast', ready: c.ok, reason: c.reason,
       meter: st.feastCharges ? left / st.feastCharges : 0, count: st.feastCharges > 1 ? left : null,
       desc: `The Brisket King heals ${F.healPct}%, rages for ${F.boostSeconds} s and slams the enemies around him. ${st.feastCharges} per wave.`
+    });
+  }
+  const qAltar = getQueenAltar(state);
+  if (qAltar && state.queen) {
+    const st = queenStats(qAltar);
+    const used = state.queen.encoresUsed || 0;
+    const left = Math.max(0, st.encoreCharges - used);
+    const c = checkEncore(state);
+    const E = CONFIG.queenAltar.hero.encore;
+    slots.push({
+      id: 'encore', type: 'encore', name: 'Encore Cloak', ready: c.ok, reason: c.reason,
+      meter: st.encoreCharges ? left / st.encoreCharges : 0, count: st.encoreCharges > 1 ? left : null,
+      desc: `The Hatsune Queen vanishes for ${st.encoreSeconds} s: enemies lose track of her, her bolts deal +${E.damagePct}% and pierce ${E.pierce} enemies, and she heals ${E.healPct}%. ${st.encoreCharges} per wave.`
     });
   }
   for (const b of state.buildings) {

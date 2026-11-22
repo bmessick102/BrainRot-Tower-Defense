@@ -219,10 +219,23 @@ export class SupabaseBackend {
     check(await this.db.from('achievements').update({ claimed_at: new Date().toISOString() }).eq('user_id', this.userId).eq('achievement', id).is('claimed_at', null));
   }
 
-  /** Top `limit` players by furthest wave, plus the caller's own row: [{ rank, username, bestWave, bestTownHall, isMe }]. */
+  /**
+   * The top `limit` villages by best wave (v0.8: one row per village), plus the caller's own best village if it is lower:
+   * [{ rank, username, villageName, bestWave, bestTownHall, isMe }]. `villageName` is null when the owner hides their
+   * villages. Before supabase/migration-2026-11-22-v0.8.sql is run, falls back to one row per player
+   * (get_leaderboard, no village names).
+   */
   async leaderboard(limit = 10) {
+    const { data, error } = await this.db.rpc('get_village_leaderboard', { lim: limit });
+    if (!error) {
+      return (data || []).map((r) => ({
+        rank: Number(r.rank), username: r.username, villageName: r.village_name || null,
+        bestWave: r.best_wave, bestTownHall: r.town_hall, isMe: !!r.is_me
+      }));
+    }
+    if (error.code !== 'PGRST202' && !/could not find the function/i.test(error.message || '')) throw friendlyError(error);
     return check(await this.db.rpc('get_leaderboard', { lim: limit })).map((r) => ({
-      rank: Number(r.rank), username: r.username, bestWave: r.best_wave, bestTownHall: r.best_town_hall, isMe: !!r.is_me
+      rank: Number(r.rank), username: r.username, villageName: null, bestWave: r.best_wave, bestTownHall: r.best_town_hall, isMe: !!r.is_me
     }));
   }
 

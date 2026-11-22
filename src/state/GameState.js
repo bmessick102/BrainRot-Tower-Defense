@@ -1,14 +1,16 @@
 // The one game-state object plus a small event emitter.
 // Scenes call the action methods here; each action runs the pure rules in src/logic/,
 // feeds the tutorial, and autosaves. Logic emits events through state.emit(); views listen.
-import { heroWaveStarted, heroAfterWave, useFeast } from '../logic/hero.js';
+import { useFeast } from '../logic/hero.js';
+import { useEncore } from '../logic/queen.js';
+import { heroesWaveStarted, heroesAfterWave } from '../logic/heroes.js';
 import { CONFIG } from '../config.js';
 import { MAP } from '../mapTiles.js';
 import { canPlaceRect } from '../logic/grid.js';
 import {
   checkBuy, checkUpgrade, planSwap, checkWallUpgrade, wallLevel, createBuilding, applyLevelUp, buildCost, footprintDims, getTownHall, townHallLevel, DEFENSE_TYPES
 } from '../logic/buildings.js';
-import { getCapacity, spendGold, addGold, setGold, collectMine, sellRefund, repairBuilding } from '../logic/economy.js';
+import { getCapacity, spendGold, addGold, setGold, collectMine, repairBuilding } from '../logic/economy.js';
 import { createIdleWave, skipCountdown, cancelCountdown, legacyDebuted } from '../logic/waves.js';
 import { advanceTutorial, applyStarterBase, canSkipTutorial, TUTORIAL_DONE_STEP, TUTORIAL_NIGHT_STEP } from '../logic/tutorial.js';
 import { createClock, startTutorialWave, resumeClockOnLoad, startGrace, startNextWave } from '../logic/dayNight.js';
@@ -22,6 +24,7 @@ import { checkResearch, checkRespec, labPicks, syncAbilityPicks } from '../logic
 import { spendResearchPoints } from '../logic/researchPoints.js';
 import { advanceLabGuide, startLabGuideIfDue, skipLabGuide } from '../logic/labGuide.js';
 import { brewSpell, discardSpell, castSpell, fuelGuideEvent } from '../logic/spells.js';
+import { mergeBuildings, checkMastery, syncMastery } from '../logic/merge.js';
 
 // The Storage the game saves through. main.js sets it to the account session's storage (src/net/session.js),
 // which saves into the open village; without it (tests, blocked storage) it's plain localStorage.
@@ -76,8 +79,8 @@ export class GameState {
     if (LAB_GUIDE_EVENTS.includes(name)) advanceLabGuide(this, name, data || {});
     if (name === 'townHallUpgraded') startLabGuideIfDue(this); // Village Hall 4 unlocks the RV Lab
     if (name === 'labGuideChanged' || name === 'fuelGuideChanged') this.save();
-    if (name === 'waveStarted') heroWaveStarted(this);
-    if (name === 'waveCleared') { heroAfterWave(this); this.save(); } // the Brisket King naps before the save
+    if (name === 'waveStarted') heroesWaveStarted(this);
+    if (name === 'waveCleared') { heroesAfterWave(this); this.save(); } // the heroes nap before the save
     // Each night's wave: the checkpoint (for Retry) is the base as dusk falls.
     if (name === 'waveTriggered') { this.writeCheckpoint(); this.save(); }
   }
@@ -90,9 +93,14 @@ export class GameState {
     this.projectiles = [];
     this.pools = [];
     this.strikes = [];           // Arrow Storm / Meteor hits on their way down
+    this.nets = [];              // Missile Silo nets in play (skyNet.js; not saved)
     this.research = {};          // RV Lab research: { type: ['a', 'b', ...] }, the pick at each tier
+    this.mastery = {};           // merged defenses' Mastery tiers per type ({ cannon: 2 }, merge.js), saved
+    this.freeRespecs = {};       // types with a free path reset waiting (each merge leaves one, merge.js), saved
     this.labGuideStep = 0;       // RV Lab guide (labGuide.js): 0 = not started
     this.hero = null;            // the Brisket King (hero.js; rebuilt from his altar, not saved)
+    this.queen = null;           // the Hatsune Queen (queen.js; rebuilt from her altar, not saved)
+    this.queenBolts = [];        // her bolts in flight (queen.js)
     this.tipsSeen = [];          // first-time tips already shown (tips.js), saved
     this.tipQueue = [];          // tips waiting to show (not saved: they come up again if still due)
     this.researchPoints = 0;     // RP: the currency for RV Lab abilities (researchPoints.js)
@@ -135,6 +143,8 @@ export class GameState {
     this.buildings = data.buildings;
     this.wallLevel = data.wallLevel; // (its walls are already brought to it)
     this.research = data.research;
+    this.mastery = data.mastery || {};
+    this.freeRespecs = data.freeRespecs || {};
     this.labGuideStep = data.labGuideStep;
     this.tipsSeen = data.tipsSeen;
     this.wavePlan = data.wavePlan || null;
@@ -160,6 +170,11 @@ export class GameState {
   /** The Brisket King's Brisket Feast (during a wave). */
   useFeast() {
     return useFeast(this);
+  }
+
+  /** The Hatsune Queen's Encore Cloak (during a wave). */
+  useEncore() {
+    return useEncore(this);
   }
 
   /** DJ Babyface: Drop the Beat (a full hype meter, during a wave). */
@@ -287,25 +302,6 @@ export class GameState {
     return r;
   }
 
-  checkSell(b) {
-    if (!b || b.type === 'townHall') return { ok: false, reason: "Can't sell" };
-    if (isWaveActive(this)) return { ok: false, reason: 'Not during a wave' };
-    return { ok: true, reason: '', refund: sellRefund(b) };
-  }
-
-  sellBuilding(id) {
-    const b = this.getBuilding(id);
-    const check = this.checkSell(b);
-    if (!check.ok) return check;
-    this.buildings = this.buildings.filter((x) => x.id !== id);
-    setGold(this, this.gold); // selling a storage can lower capacity
-    addGold(this, check.refund);
-    this.emit('buildingSold', { id, type: b.type, refund: check.refund });
-    this.emit('goldChanged', { gold: this.gold, capacity: this.capacity });
-    this.save();
-    return { ok: true, reason: '' };
-  }
-
   /** Upgrade (instant). A town hall upgrade unlocks buildings and makes the following nights tougher. */
   upgradeBuilding(id) {
     const b = this.getBuilding(id);
@@ -367,13 +363,38 @@ export class GameState {
   respecPath(type) {
     const check = checkRespec(this, type);
     if (!check.ok) return check;
-    spendResearchPoints(this, check.cost);
+    if (check.free) delete this.freeRespecs[type]; // a merge's free reset, used up
+    else spendResearchPoints(this, check.cost);
     delete this.research[type];
     const ids = syncAbilityPicks(this);
     this.emit('abilityRespecced', { type });
     if (ids.length) this.emit('abilitiesApplied', { ids, type });
     this.save();
     return { ok: true, reason: '', cost: check.cost };
+  }
+
+  /**
+   * Merge two max-level copies of a mergeable defense (merge.js): `otherId` goes, `keepId` becomes the merged building.
+   * Returns { ok, reason, refund }.
+   */
+  mergeBuilding(keepId, otherId) {
+    const r = mergeBuildings(this, keepId, otherId);
+    if (!r.ok) return r;
+    this.emit('goldChanged', { gold: this.gold, capacity: this.capacity });
+    this.save();
+    return r;
+  }
+
+  /** RV Lab: research a merged type's next Mastery tier (merge.js). Every merged building of that type gets it. */
+  researchMastery(type) {
+    const check = checkMastery(this, type);
+    if (!check.ok) return check;
+    spendResearchPoints(this, check.cost);
+    this.mastery[type] = check.tier;
+    const ids = syncMastery(this);
+    this.emit('masteryResearched', { type, tier: check.tier, ids });
+    this.save();
+    return { ok: true, reason: '', tier: check.tier };
   }
 
   collect(id) {

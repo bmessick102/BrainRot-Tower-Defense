@@ -1,10 +1,8 @@
-// v0.6: KSI Tower, Village Hall 11 and its Bonus Slots (v0.6.1), Select Row, and the five new enemies.
+// v0.6: KSI Tower, Select Row, and the five new enemies. (Village Hall 11's Bonus Slots, v0.6.1, were replaced by fixed
+// caps per hall in v0.8: tests/townHalls.test.js.)
 import { describe, it, expect } from 'vitest';
 import { CONFIG } from '../src/config.js';
-import {
-  checkBuy, buildCost, limitFor, buildableCount, DEFENSE_TYPES, BUILDING_TYPES, unlockTownHall, maxLevel, takesBonusSlot, bonusActive,
-  bonusSlotsUsed, bonusSlotsFree, nextTakesBonusSlot, roomFor
-} from '../src/logic/buildings.js';
+import { limitFor, DEFENSE_TYPES, BUILDING_TYPES, unlockTownHall, maxLevel } from '../src/logic/buildings.js';
 import { fireDefense, stepProjectiles, stepPools, damageEnemy, chillEnemy } from '../src/logic/combat.js';
 import { stepFlockTowers } from '../src/logic/flock.js';
 import { stepEnemies, createEnemy, ENEMY_KINDS } from '../src/logic/enemies.js';
@@ -79,93 +77,6 @@ describe('KSI Tower', () => {
   });
 });
 
-describe('Village Hall 11: Bonus Slots', () => {
-  const S = () => CONFIG.rules.bonusSlots;
-  const fill = (s, type, n, start = [0, 6]) => {
-    let [c, r] = start;
-    for (let i = 0; i < n; i++) { addBuilding(s, type, c, r); c += 3; if (c > 30) { c = 0; r += 3; } }
-  };
-
-  it('5 slots for defenses only (traps and support included); defense caps stay VH10\'s, the economy gets +1 each', () => {
-    expect(S().count).toBe(5);
-    for (const t of ['townHall', 'rvlab', 'fuelStation', 'dj', 'altar', 'wall', 'mine', 'storage', 'house']) expect(takesBonusSlot(t)).toBe(false);
-    for (const t of DEFENSE_TYPES) expect(takesBonusSlot(t)).toBe(true);
-    for (const t of S().types) expect(limitFor(t, 11)).toBe(limitFor(t, 10));
-    for (const t of ['mine', 'storage', 'house']) expect(limitFor(t, 11)).toBe(limitFor(t, 10) + 1);
-    // An economy building at its cap is just at its cap (no slot).
-    const s = makeStateWithTownHall({ gold: 1e9 }, 11);
-    while (s.buildings.filter((b) => b.type === 'mine').length < limitFor('mine', 11)) fill(s, 'mine', 1, [3 * s.buildings.length % 30, 26]);
-    expect(nextTakesBonusSlot(s, 'mine')).toBe(false);
-    expect(checkBuy(s, 'mine')).toEqual({ ok: false, reason: 'Limit reached' });
-  });
-
-  it('past its cap a building takes a slot at the normal price; all 5 can be one type (5 more Towers of Rah)', () => {
-    const s = makeStateWithTownHall({ gold: 1e9 }, 11);
-    const base = CONFIG.defenses.ra.levels[0].cost, cap = limitFor('ra', 11);
-    fill(s, 'ra', cap);
-    expect(bonusSlotsUsed(s)).toBe(0);
-    expect(nextTakesBonusSlot(s, 'ra')).toBe(true);
-    expect(roomFor(s, 'ra')).toBe(S().count);
-    for (let i = 0; i < S().count; i++) {
-      expect(checkBuy(s, 'ra').ok).toBe(true);
-      expect(buildCost('ra', s)).toBe(base);
-      fill(s, 'ra', 1, [3 * i, 20]);
-    }
-    expect(bonusSlotsUsed(s)).toBe(S().count);
-    expect(checkBuy(s, 'ra')).toEqual({ ok: false, reason: 'No Bonus Slots left' });
-    // Other buildings still fill their own caps, walls and unique buildings too.
-    expect(nextTakesBonusSlot(s, 'cannon')).toBe(false);
-    expect(checkBuy(s, 'cannon').ok).toBe(true);
-    expect(checkBuy(s, 'wall').ok).toBe(true);
-    expect(checkBuy(s, 'altar').ok).toBe(true);
-    // Selling a Tower of Rah frees a slot.
-    s.buildings.splice(s.buildings.findIndex((b) => b.type === 'ra'), 1);
-    expect(bonusSlotsFree(s)).toBe(1);
-    expect(checkBuy(s, 'ra').ok).toBe(true);
-  });
-
-  it('slots are shared by every type (any mix)', () => {
-    const s = makeStateWithTownHall({ gold: 1e9 }, 11);
-    fill(s, 'cannon', limitFor('cannon', 11) + 2);
-    fill(s, 'catapult', limitFor('catapult', 11) + 1, [0, 24]);
-    expect(bonusSlotsUsed(s)).toBe(3);
-    expect(roomFor(s, 'ra')).toBe(limitFor('ra', 11) + 2);
-  });
-
-  it('a village with more extras than slots (from v0.6.0\'s shared pool) keeps them but can\'t add more', () => {
-    const s = makeStateWithTownHall({ gold: 1e9 }, 11);
-    fill(s, 'ra', limitFor('ra', 11) + 7);
-    expect(bonusSlotsUsed(s)).toBe(7);
-    expect(bonusSlotsFree(s)).toBe(0);
-    expect(checkBuy(s, 'ra').ok).toBe(false);
-    expect(checkBuy(s, 'mine').ok).toBe(true); // still under its own cap
-  });
-
-  it('below Village Hall 11 (Village Hall 10 included) nothing changes; the shop badge counts the slots once at VH11', () => {
-    for (const th of [9, 10]) {
-      const s = makeStateWithTownHall({ gold: 1e9 }, th);
-      addBuilding(s, 'ra', 2, 2); addBuilding(s, 'ra', 5, 2);
-      expect(checkBuy(s, 'ra')).toEqual({ ok: false, reason: 'Limit reached' });
-      expect(bonusActive(th)).toBe(false);
-      expect(bonusSlotsFree(s)).toBe(0);
-    }
-    expect(bonusActive(11)).toBe(true);
-    const t = makeStateWithTownHall({ gold: 0 }, 11), t10 = makeStateWithTownHall({ gold: 0 }, 10);
-    const capsRoom = (s, th) => BUILDING_TYPES.filter((x) => x !== 'townHall').reduce((n, x) => n + Math.max(0, limitFor(x, th) - s.buildings.filter((b) => b.type === x).length), 0);
-    expect(buildableCount(t)).toBe(capsRoom(t, 11) + S().count);
-    expect(buildableCount(t10)).toBe(capsRoom(t10, 10));
-  });
-
-  it('Village Hall 11 is the top level: costs no more than 5 top storages hold, tougher than VH10', () => {
-    expect(maxLevel('townHall')).toBe(11);
-    const vh11 = CONFIG.townHall.levels[10];
-    const topStorage = CONFIG.storage.levels[CONFIG.storage.levels.length - 1].capacity;
-    expect(vh11.upgradeCost).toBeLessThanOrEqual(CONFIG.limits.storage[9] * topStorage + CONFIG.townHall.levels[9].capacity);
-    expect(vh11.hp).toBeGreaterThan(CONFIG.townHall.levels[9].hp);
-    for (const t of Object.keys(CONFIG.limits)) expect(CONFIG.limits[t]).toHaveLength(11);
-  });
-});
-
 describe('Select Row (edit mode)', () => {
   const village = () => {
     const s = makeStateWithTownHall({}, 3);
@@ -198,7 +109,7 @@ describe('Select Row (edit mode)', () => {
 
 describe('the v0.6 enemies', () => {
   it('are in every list an enemy needs: kinds, descriptions, How to Play categories (each exactly once)', () => {
-    for (const k of ['pork', 'skeleton', 'vaca', 'yahu', 'patapim', 'lirili', 'chimp', 'bicus', 'frigo', 'bombo']) {
+    for (const k of ['pork', 'skeleton', 'vaca', 'yahu', 'patapim', 'lirili', 'chimp', 'bicus', 'frigo', 'bombo', 'quandale', 'grimace']) {
       expect(ENEMY_KINDS).toContain(k);
       expect(ENEMY_DESCRIPTIONS[k]).toBeTruthy();
     }

@@ -17,7 +17,8 @@ const POOL_STYLES = {
   spikes: { color: 0x7a7f88, edge: 0xc9ced6, rim: 0xeef2f6, sizzle: false },   // Mousetrap Spike Trap
   crack: { color: 0x4a3626, edge: 0x7a5a3e, rim: 0xb08a5a, sizzle: false },     // Mortar Fault Line
   star: { color: 0xffd34a, edge: 0xfff2a0, rim: 0xffffff, sizzle: false },      // Firework Star Shells
-  ice: { color: 0x8fd8ff, edge: 0xd8f2ff, rim: 0xffffff, sizzle: false }        // KSI Tower Frost Patch
+  ice: { color: 0x8fd8ff, edge: 0xd8f2ff, rim: 0xffffff, sizzle: false },       // KSI Tower Frost Patch
+  goo: { color: 0x8a3fd1, edge: 0xc08cf2, rim: 0xe4c6ff, sizzle: false }         // Grimace Golem's goo
 };
 const POOL_DEPTH = -4200;     // above the map and selection outlines, below every building and enemy
 const FADE_OUT = 1;           // seconds of fade at the end of the pool's life

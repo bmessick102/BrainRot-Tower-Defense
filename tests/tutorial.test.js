@@ -81,7 +81,7 @@ describe('tutorial.js', () => {
     const state = makeStateWithTownHall({ tutorialStep: 3, gold: 150 });
     const p = tutorialPermissions(state);
     expect(p.cards).toEqual(['mine']);
-    expect(p.sell).toBe(false);
+    expect(p.move).toBe(false);
   });
 
   it('skip after rebuilding the hall keeps it and the gold', () => {
@@ -109,6 +109,6 @@ describe('tutorial.js', () => {
       const others = state.buildings.filter((o) => o !== b);
       expect(canPlaceAt(others, b.col, b.row, b.size).ok).toBe(true);
     });
-    expect(tutorialAllows(state, 'sell')).toBe(true);
+    expect(tutorialAllows(state, 'move')).toBe(true);
   });
 });

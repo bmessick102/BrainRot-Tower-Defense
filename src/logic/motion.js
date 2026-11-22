@@ -50,6 +50,8 @@ export function applySlow(e, slow, seconds) {
 export function applyStun(e, seconds) {
   if (!e.alive || !(seconds > 0)) return;
   e.held = Math.max(e.held || 0, seconds);
+  // Quandale Dingle: a hold (a Ballista Bolt's pin, a trap, a stun) ends his dash on the spot, with no impact hit.
+  if (e.dashT > 0) { e.dashT = 0; e.dashTargetId = null; }
 }
 
 /**

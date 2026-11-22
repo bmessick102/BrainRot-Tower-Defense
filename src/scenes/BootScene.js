@@ -4,6 +4,7 @@ import Phaser from 'phaser';
 import { coreImages, coreAudio } from '../assetPlan.js';
 import { TEX, FILE_KEY_ALIASES, buildingKey, buildingDestroyedKey, enemyKey, PROJECTILE_KEYS } from '../assetKeys.js';
 import { BUILDING_TYPES, buildingSize } from '../logic/buildings.js';
+import { ENEMY_KINDS } from '../logic/enemies.js';
 import { MAP } from '../mapTiles.js';
 import { loadSettings } from '../logic/save.js';
 import { getStorage } from '../state/GameState.js';
@@ -11,6 +12,7 @@ import { setMusicLevel, setSfxLevel } from '../audio.js';
 import { COLORS, FONT, textStyle, shade } from '../theme.js';
 import { pickTip } from '../loadingTips.js';
 import { LOADED_EVENT, LOADED_FLAG } from './TitleBackdropScene.js';
+import { requestImages, markBrokenImages, picturesUnsupported } from '../assetLoader.js';
 
 const BASE = import.meta.env.BASE_URL;
 
@@ -33,7 +35,8 @@ const BUILDING_LOOK = {
   rvlab: { color: 0xe9d8b4, label: 'RV' },
   dj: { color: 0x6a3fa0, label: 'DJ' },
   fuelStation: { color: 0xc0392b, label: 'FS' },
-  altar: { color: 0xb03a2e, label: 'BK' }
+  altar: { color: 0xb03a2e, label: 'BK' },
+  queenAltar: { color: 0x2fc7c0, label: 'HQ' }
 };
 
 const TIP_MS = 4500; // how long each loading tip stays up
@@ -120,7 +123,28 @@ export class BootScene extends Phaser.Scene {
     });
   }
 
+  /** Core pictures that didn't load (a failed or stalled request). */
+  missingCore() {
+    return coreImages().filter((f) => !this.textures.exists(FILE_KEY_ALIASES[f.key] || f.key));
+  }
+
   create() {
+    // Failed pictures get two more tries (after a wait) before the placeholders are drawn: a single failed request on
+    // a flaky connection used to leave that picture as a grey block for the whole session.
+    const missing = this.missingCore();
+    this.bootRound = this.bootRound || 0;
+    if (missing.length && this.bootRound < 3 && !picturesUnsupported()) {
+      this.bootRound++;
+      console.warn(`${missing.length} core pictures failed, retrying (round ${this.bootRound})`);
+      if (!this.retryText) this.retryText = this.add.text(this.scale.width / 2, this.scale.height - 40, 'Some pictures are slow to load, trying again…', textStyle(20)).setOrigin(0.5).setDepth(LOADING_UI_DEPTH + 5);
+      this.time.delayedCall(1500 + 1500 * this.bootRound, () => {
+        for (const f of missing) this.load.image(FILE_KEY_ALIASES[f.key] || f.key, `${BASE}${f.path}?r=${this.bootRound}`);
+        this.load.once('complete', () => this.create());
+        this.load.start();
+      });
+      return;
+    }
+    if (this.retryText) { this.retryText.destroy(); this.retryText = null; }
     this.placeholderKeys = new Set();
     this.makePlaceholders();
     // Views use this to tell placeholder shapes (drawn at their own size) from real art (scaled to fit).
@@ -129,6 +153,12 @@ export class BootScene extends Phaser.Scene {
     setMusicLevel(settings.music);
     setSfxLevel(settings.sfx);
     this.scene.launch('AssetStreamScene'); // streams the rest in from now on (src/assetLoader.js)
+    // Anything still missing (placeholder drawn) keeps being asked for, with retries; each picture swaps in when it
+    // arrives, and a notice shows if several never do (src/assetNotice.js).
+    // Building pictures swap in on their own when they arrive (their views re-pick every frame); the rest (map, UI,
+    // enemies...) were sized for the placeholders, so those only get a notice with a Reload button.
+    const keys = missing.map((f) => f.key);
+    if (keys.length && !picturesUnsupported()) { requestImages(keys.filter((k) => /^bld_/.test(k)), { front: true }); markBrokenImages(keys.filter((k) => !/^bld_/.test(k))); }
     this.scene.start('AuthScene'); // logs in (or picks up a saved login), then the title screen
   }
 
@@ -150,7 +180,7 @@ export class BootScene extends Phaser.Scene {
     for (const type of BUILDING_TYPES) {
       if (type === 'wall') continue; // walls are drawn per tile below
       const size = buildingSize(type);
-      const look = BUILDING_LOOK[type];
+      const look = BUILDING_LOOK[type] || { color: 0x8a8a8a, label: '' }; // (a new type without a look yet: plain grey)
       this.isoBlock(buildingKey(type), size, size * 16, look.color, look.label);
       this.isoBlock(buildingDestroyedKey(type), size, 8, 0x3a3a3a, '', true);
     }
@@ -243,6 +273,15 @@ export class BootScene extends Phaser.Scene {
     this.canvasTexture(PROJECTILE_KEYS.archer, 22, 4, (ctx) => {
       ctx.strokeStyle = '#7a4a1e'; ctx.lineWidth = 2; ctx.beginPath(); ctx.moveTo(1, 2); ctx.lineTo(21, 2); ctx.stroke();
     });
+
+    // Any enemy kind without a picture or a shape above gets a plain grey figure, never Phaser's missing-texture box.
+    for (const kind of ENEMY_KINDS) {
+      this.canvasTexture(enemyKey(kind), 24, 32, (ctx) => {
+        ctx.fillStyle = '#7a7a82'; ctx.strokeStyle = '#25252a'; ctx.lineWidth = 2;
+        ctx.beginPath(); ctx.arc(12, 8, 6, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
+        ctx.fillRect(5, 15, 14, 16); ctx.strokeRect(5, 15, 14, 16);
+      });
+    }
 
     // Gnome villager placeholder: red pointy hat, white beard, blue body.
     this.canvasTexture(TEX.villager, 20, 30, (ctx) => {

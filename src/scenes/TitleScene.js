@@ -46,9 +46,15 @@ export class TitleScene extends Phaser.Scene {
     this.loggingOut = false;
     this.opening = false;
     this.windowOpen = false;
+    // The scene object lives on between visits: forget the windows of the last time it was open (leaving to
+    // visit a village from the leaderboard or Find Players never closed them, so closing the player card on the
+    // way back thought one was still open and every button stayed locked).
+    this.leaderboard = null;
+    this.search = null;
     this.offline = !!(data && data.offline) || !session.configured; // no server set up: always offline
     this.justLoggedIn = !!(data && data.justLoggedIn);
     this.reopenPlayer = (data && data.reopenPlayer) || null; // back from visiting a village: that player's card again
+    this.reopenFrom = (data && data.reopenFrom) || null;     // ...over the window it was opened from ('leaderboard' / 'search')
     this.notice = (data && data.notice) || '';
   }
 
@@ -140,7 +146,14 @@ export class TitleScene extends Phaser.Scene {
     }
 
     playMusic(this, MUSIC.title);
-    if (this.online && this.reopenPlayer && !this.windowOpen) { this.openPlayerCard(this.reopenPlayer); return; }
+    if (this.online && this.reopenPlayer && !this.windowOpen) {
+      // Back from a visit (v0.8.0): the leaderboard or Find Players again, with the player's card on top, so closing
+      // the card lands where the player was.
+      if (this.reopenFrom === 'leaderboard') this.openLeaderboard();
+      else if (this.reopenFrom === 'search') this.openSearch();
+      this.openPlayerCard(this.reopenPlayer);
+      return;
+    }
     // Patch notes, once per version: returning players see what changed; a brand-new player has nothing to compare
     // (their notes are just marked seen).
     if (!patchNotesSeen(this.storage)) {
@@ -214,8 +227,7 @@ export class TitleScene extends Phaser.Scene {
     this.windowOpen = true;
     this.leaderboard = new LeaderboardWindow(this, {
       session, onClose: () => { this.windowOpen = false; this.leaderboard = null; },
-      onOpenPlayer: (name) => this.openPlayerCard(name),
-      onVisitBest: (name) => this.visitBest(name)
+      onOpenPlayer: (name) => this.openPlayerCard(name)
     });
   }
 
@@ -234,22 +246,13 @@ export class TitleScene extends Phaser.Scene {
     });
   }
 
-  /** The Visit button: straight to a player's best village (their card if none can be shown). */
-  async visitBest(username) {
-    if (this.opening) return;
-    try {
-      const p = await session.backend.playerProfile(username);
-      if (!this.sys.isActive()) return;
-      if (p && p.bases.length) { this.visitVillage(p.username, p.bases[0].id, p.bases); return; }
-    } catch { /* the card says why */ }
-    this.openPlayerCard(username);
-  }
-
-  /** Look at a village (VisitScene). */
+  /** Look at a village (VisitScene), from a player's card; Back returns to the card over the window it came from. */
   visitVillage(username, baseId, bases) {
     if (this.opening) return;
     this.opening = true;
-    this.scene.start('VisitScene', { baseId, username, bases });
+    const from = this.search ? 'search' : this.leaderboard ? 'leaderboard' : null;
+    if (this.search) this.lastSearch = this.search.filters; // (its onClose never runs when the scene changes)
+    this.scene.start('VisitScene', { baseId, username, bases, from });
   }
 
   /** Find Players (from Settings). */
@@ -258,7 +261,6 @@ export class TitleScene extends Phaser.Scene {
     this.search = new PlayerSearchWindow(this, {
       session, filters: this.lastSearch,
       onOpenPlayer: (name) => this.openPlayerCard(name),
-      onVisitBest: (name) => this.visitBest(name),
       onClose: () => { if (this.search) this.lastSearch = this.search.filters; this.search = null; this.windowOpen = false; }
     });
   }

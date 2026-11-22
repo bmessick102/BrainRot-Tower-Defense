@@ -25,8 +25,11 @@ export const TIPS = {
   lirili: () => `${CONFIG.enemies.lirili.name} comes next wave! Its earthquakes hit every building and wall around it, and walls take extra damage. Slow it down and hit it hard before it reaches your walls.`,
   bicus: () => `${CONFIG.enemies.bicus.name} comes next wave! While its armor holds (the steel bar over its health) it takes 30% less damage, and the armor has to be broken before it takes any real damage. Heavy hitters like Cannons and Mortars crack it fastest.`,
   frigo: () => `${CONFIG.enemies.frigo.name} comes next wave! Its cold aura makes every defense (and the Brisket King) within ${CONFIG.enemies.frigo.chillAura.radius} tiles attack ${CONFIG.enemies.frigo.chillAura.slowPct}% slower. Take it out from range.`,
+  quandale: () => `${CONFIG.enemies.quandale.name} comes next wave! He dashes at a building and lands a ${CONFIG.enemies.quandale.dash.impactMult}x hit that stuns it for ${CONFIG.enemies.quandale.dash.stunSeconds} s. Walls in his way stop the dash.`,
+  grimace: () => `${CONFIG.enemies.grimace.name} comes next wave! He leaves purple goo as he walks: enemies in it get ${Math.round((CONFIG.enemies.grimace.goo.speedMult - 1) * 100)}% faster and stronger. Kill them before they leave the goo, and watch the big puddle where he falls.`,
   bombo: () => `${CONFIG.enemies.bombo.name} comes next wave! This flyer breathes fire on a building, and the flames also hurt the buildings right next to it. Only defenses that hit air can stop it.`,
   hero: () => 'The Brisket King guards his altar, clubbing ground enemies nearby. In a wave, use Brisket Feast on the hotbar at the bottom (or press its number key) to heal, boost and slam. He naps after waves to heal.',
+  queen: () => 'The Hatsune Queen guards her altar, shooting ground and flying enemies from range with her crossbow. In a wave, use Encore Cloak on the hotbar at the bottom (or press G): she vanishes, hits harder with piercing bolts and heals. She naps after waves to heal.',
   dj: () => 'DJ Babyface\'s hype is full! In a wave, use Drop the Beat on the hotbar at the bottom (or press its number key): every defense in its range fires much faster for a few seconds. Defeating enemies fills it again.',
   fuel: () => 'The Fuel Station (Shop, Economy tab) brews spells with Burgers: click it and press Brew. During waves, brewed spells sit on the hotbar at the bottom: click one (or press its number), then click the map to cast it. Each is used up when cast, and your Village Hall level sets how many you can carry.',
   // The Fuel Station guide (spells.js fuelGuide), one tip per step.
@@ -38,7 +41,7 @@ export const TIPS = {
 };
 export const TIP_KEYS = Object.keys(TIPS);
 // Enemies with a "comes next wave" tip, the first time a wave brings them.
-const NEW_ENEMY_TIPS = ['toilet', 'pork', 'skeleton', 'vaca', 'yahu', 'bicus', 'frigo', 'bombo', 'lirili', 'patapim'];
+const NEW_ENEMY_TIPS = ['toilet', 'pork', 'skeleton', 'vaca', 'yahu', 'bicus', 'frigo', 'bombo', 'lirili', 'patapim', 'quandale', 'grimace'];
 // (Tip keys that differ from the enemy's: Brr Brr Patapim's ability changed in v0.7, so his tip is a new one.)
 const ENEMY_TIP_KEY = { patapim: 'patapimJungle' };
 
@@ -51,6 +54,7 @@ function tipsForEvent(state, name, data) {
   if (name === 'editModeChanged' && data.active) out.push('layout');
   if (name === 'hypeFull') out.push('dj');
   if (name === 'buildingPlaced' && data.type === 'altar') out.push('hero');
+  if (name === 'buildingPlaced' && data.type === 'queenAltar') out.push('queen');
   // The Fuel Station: its guide's steps (it starts at Village Hall 2), or the plain tip for villages past that.
   const guide = state.fuelGuide || 0; // 1 build, 2 brew the free Karuba Coffee (Rage), 3 cast it (spells.js FUEL_GUIDE)
   if (name === 'fuelGuideChanged' || name === 'tipsChecked') {
