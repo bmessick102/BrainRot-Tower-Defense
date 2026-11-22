@@ -1272,13 +1272,13 @@ New walls are built at your wall level (${wallLevel(this.gs)}), so one costs wha
     // The Hero tab shows the Brisket King himself (asleep when he is).
     if (b.type === 'altar' && this.infoTab === 'hero') {
       const hs = this.gs.hero && this.gs.hero.status;
-      const k = hs === 'down' ? 'hero_brisket_defeated' : hs === 'asleep' ? 'hero_brisket_sleep' : 'hero_brisket';
+      const k = hs === 'down' ? 'hero_brisket_defeated' : hs === 'asleep' || (this.gs.hero && this.gs.hero.resting) ? 'hero_brisket_sleep' : 'hero_brisket';
       if (this.textures.exists(k)) picKey = k;
     }
     // ...and the Hatsune Queen (asleep or knocked out: her sleeping picture; shooting while she has a target).
     if (b.type === 'queenAltar' && this.infoTab === 'hero') {
       const q = this.gs.queen;
-      const k = q && (q.status === 'down' || q.status === 'asleep' || q.status === 'waking') ? 'hero_queen_sleep' : q && q.attacking ? 'hero_queen_attack' : 'hero_queen';
+      const k = q && (q.status === 'down' || q.status === 'asleep' || q.status === 'waking' || q.resting) ? 'hero_queen_sleep' : q && q.attacking ? 'hero_queen_attack' : 'hero_queen';
       if (this.textures.exists(k)) picKey = k;
     }
     this.infoHeroBadge.setVisible(b.type === 'altar' && this.infoTab !== 'hero');
@@ -1372,8 +1372,12 @@ New walls are built at your wall level (${wallLevel(this.gs)}), so one costs wha
       return rows;
     }
     if (b.type === 'flock') {
-      rows.push(row('Range', 'range', 0x4cd6ff, { unit: ' tiles', fmt: (v) => String(v) }));
-      rows.push(row('Marked damage bonus', 'markBonus', 0xff6b3d, { unit: '%' }));
+      // A F.L.O.C.K Mothership (merged): its range and mark bonus include the merge's, and its zaps get a bar.
+      const fm = mergedConfigOf(b);
+      const add = (r, extra) => (extra ? { ...r, value: r.value + extra, max: r.value + extra, next: null } : r); // (past the top level: full bars)
+      rows.push(add(row('Range', 'range', 0x4cd6ff, { unit: ' tiles', fmt: (v) => String(v) }), fm ? fm.rangeAdd : 0));
+      rows.push(add(row('Marked damage bonus', 'markBonus', 0xff6b3d, { unit: '%' }), fm ? fm.markAdd : 0));
+      if (fm && fm.zap) rows.push({ label: `Zap damage (${fm.zap.targets} at once)`, color: 0x58c6ff, value: fm.zap.damage, max: fm.zap.damage, next: null, unit: '' });
     } else if (isDefense(b.type)) rows.push(row(b.type === 'catapult' ? 'Impact damage' : 'Damage', 'damage', 0xff6b3d));
     if (b.type === 'catapult') rows.push(row('Pool damage', 'poolDps', 0xff4fa3, { unit: ' / s' }));
     if (b.type === 'ksi') rows.push(row('Chill (slow)', 'slow', 0x8fd8ff, { unit: '%', fmt: (v) => String(Math.round(v * 100)) }));
@@ -1410,6 +1414,8 @@ New walls are built at your wall level (${wallLevel(this.gs)}), so one costs wha
         b.sprung && !preview ? 'Sprung: resets when the wave ends' : 'Once per wave · resets after'];
     }
     if (b.type === 'flock') {
+      const fz = mergedConfigOf(b)?.zap;
+      if (fz) return [`Zaps ${fz.targets} enemies within ${fz.range} tiles each second`, 'Marks and reveals enemies in range'];
       return ['Never attacks: marks every enemy in range (ground & air)', 'Reveals invisible enemies in range',
         "Towers don't stack: the strongest bonus applies"];
     }
@@ -1445,13 +1451,13 @@ New walls are built at your wall level (${wallLevel(this.gs)}), so one costs wha
     if (b.type === 'wall') return [CONFIG.walls.segmentLength > 1 ? `Segment of ${CONFIG.walls.segmentLength} tiles` : 'Joins every wall it touches'];
     if (b.type === 'altar') {
       const st = heroStats(b), h = this.gs.hero;
-      const status = !h ? '' : h.status === 'asleep' ? `asleep (${Math.floor(Math.ceil(h.sleepT) / 60)}:${String(Math.ceil(h.sleepT) % 60).padStart(2, '0')})` : h.status === 'waking' ? 'waking up' : 'ready';
+      const status = !h ? '' : h.status === 'asleep' ? `asleep (${Math.floor(Math.ceil(h.sleepT) / 60)}:${String(Math.ceil(h.sleepT) % 60).padStart(2, '0')})` : h.status === 'waking' ? 'waking up' : h.resting ? 'sleeping (night)' : 'ready';
       return [`Brisket King Lv ${b.level}: ${formatGold(st.maxHp)} HP, ${formatGold(Math.round(st.damage))} per hit${preview ? '' : ` · ${status}`}`,
         `Guards ${st.guardRange} tiles · Brisket Feast ${st.feastCharges}x per wave`];
     }
     if (b.type === 'queenAltar') {
       const st = heroStatsFor(b), h = this.gs.queen;
-      const status = !h ? '' : h.status === 'asleep' ? `asleep (${Math.floor(Math.ceil(h.sleepT) / 60)}:${String(Math.ceil(h.sleepT) % 60).padStart(2, '0')})` : h.status === 'waking' ? 'waking up' : h.status === 'down' ? 'knocked out' : 'ready';
+      const status = !h ? '' : h.status === 'asleep' ? `asleep (${Math.floor(Math.ceil(h.sleepT) / 60)}:${String(Math.ceil(h.sleepT) % 60).padStart(2, '0')})` : h.status === 'waking' ? 'waking up' : h.status === 'down' ? 'knocked out' : h.resting ? 'sleeping (night)' : 'ready';
       return [`Hatsune Queen Lv ${b.level}: ${formatGold(st.maxHp)} HP, ${formatGold(Math.round(st.damage))} per bolt${preview ? '' : ` · ${status}`}`,
         `Shoots ground & air ${st.attackRange} tiles · guards ${st.guardRange} · Encore Cloak ${st.encoreCharges}x per wave`];
     }
@@ -1515,7 +1521,7 @@ New walls are built at your wall level (${wallLevel(this.gs)}), so one costs wha
     const fmt = (n) => formatGold(Math.round(n));
     const left = h ? Math.ceil(h.sleepT) : 0;
     const status = !h ? '-' : h.status === 'down' ? 'Knocked out' : h.status === 'asleep' ? `Asleep · ${Math.floor(left / 60)}:${String(left % 60).padStart(2, '0')}`
-      : h.status === 'waking' ? 'Waking up' : h.cloakT > 0 ? `Hidden (Encore) · ${Math.ceil(h.cloakT)} s` : 'Ready';
+      : h.status === 'waking' ? 'Waking up' : h.resting ? 'Sleeping (night) · wakes for a raid' : h.cloakT > 0 ? `Hidden (Encore) · ${Math.ceil(h.cloakT)} s` : 'Ready';
     const perSec = Math.round((1 / st.attackInterval) * 100) / 100;
     const rows = [
       ['Status', status, '', h && (h.status === 'asleep' || h.status === 'down') ? COLORS.inkBad : COLORS.inkGood],
@@ -1602,13 +1608,14 @@ New walls are built at your wall level (${wallLevel(this.gs)}), so one costs wha
     return y + hgt;
   }
 
-  /** A merged defense's ability: its round icon and "Name: what it does" (Info and Stats tabs). Returns the y below it. */
+  /** A merged defense's ability: its gold ability box and "Name: what it does" (Info and Stats tabs). Returns the y below it. */
   drawMergeAbility(box, merge, y) {
-    const icon = abilityIcon(this, merge.abilityIcon, INFO_COL + 20, y + 22, 40);
-    const t = this.add.text(INFO_COL + 50, y, `${merge.ability}: ${merge.abilityShort}`, bodyStyle(14, '#8a5a00', { fontStyle: 'bold', wordWrap: { width: INFO_COL_W - 50 } }));
-    t.setY(y + Math.max(0, 22 - t.height / 2));
+    const S = 56; // the ability box (MergeIcons.js), like a hero ability slot
+    const icon = abilityIcon(this, merge.abilityIcon, INFO_COL + S / 2, y + S / 2, S);
+    const t = this.add.text(INFO_COL + S + 10, y, `${merge.ability}: ${merge.abilityShort}`, bodyStyle(14, '#8a5a00', { fontStyle: 'bold', wordWrap: { width: INFO_COL_W - S - 10 } }));
+    t.setY(y + Math.max(0, S / 2 - t.height / 2));
     box.add([icon, t]);
-    return y + Math.max(44, t.height + 6) + 6;
+    return y + Math.max(S + 4, t.height + 6) + 6;
   }
 
   /** Draw the Info, Stats or Hero tab body starting at y; returns the y below it. */
@@ -1619,10 +1626,10 @@ New walls are built at your wall level (${wallLevel(this.gs)}), so one costs wha
     if (this.infoTab === 'info') {
       // A merged defense: its ability under the description.
       const mergeInfo = mergedConfigOf(b);
-      const desc = BUILDING_DESCRIPTIONS[b.type] || '';
+      const desc = (mergeInfo && mergeInfo.description) || BUILDING_DESCRIPTIONS[b.type] || ''; // (a merged one may have its own)
       const t = this.add.text(INFO_COL, y, desc, bodyStyle(15, COLORS.ink, { wordWrap: { width: INFO_COL_W }, lineSpacing: 3 }));
       // Keep the panel on screen above the three-button stack: a long description steps its font down (never below 11).
-      const maxH = SCREEN.h - 8 - INFO_TOP_MIN - y - (INFO_BTN_H + 6) * 3 - 20 - (mergeInfo ? 54 : 0);
+      const maxH = SCREEN.h - 8 - INFO_TOP_MIN - y - (INFO_BTN_H + 6) * 3 - 20 - (mergeInfo ? 66 : 0);
       for (let size = 14; t.height > maxH && size >= 11; size--) t.setFontSize(size);
       box.add(t);
       y += t.height + 12;
@@ -1887,7 +1894,8 @@ New walls are built at your wall level (${wallLevel(this.gs)}), so one costs wha
     md.add(this.add.text(left + cw * 2 + gap * 1.5, top + ch / 2, '→', textStyle(34)).setOrigin(0.5));
     // Stats: old -> new.
     const r1 = (v) => Math.round(v * 10) / 10;
-    const dmg = (s) => (s.shots > 1 ? `${s.shots} x ${formatGold(Math.round(s.damage))}` : formatGold(Math.round(s.damage)));
+    // (A F.L.O.C.K Tower does no damage before it merges: '-'; the Mothership's zaps show as "3 x 60".)
+    const dmg = (s) => (!(s.damage > 0) ? '-' : s.shots > 1 ? `${s.shots} x ${formatGold(Math.round(s.damage))}` : formatGold(Math.round(s.damage)));
     const rows = [['Damage', dmg(pv.a), dmg(pv.merged)], ['Health', formatGold(pv.a.hp), formatGold(pv.merged.hp)], ['Range', `${r1(pv.a.range)} tiles`, `${r1(pv.merged.range)} tiles`]];
     let y = top + ch + 20;
     const lx = md.x + 110, mid = md.cx + 40;
@@ -1900,11 +1908,12 @@ New walls are built at your wall level (${wallLevel(this.gs)}), so one costs wha
       y += 32;
     }
     // The ability, in one line.
-    const ab = md.add(this.add.text(0, y + 20, `${M.ability}: ${M.abilityShort}`, bodyStyle(16, '#8a5a00', { fontStyle: 'bold', wordWrap: { width: W - 50 - 52 }, align: 'left' })).setOrigin(0, 0.5));
-    const abW = ab.width, abX = md.cx - (abW + 48) / 2;
-    md.add(abilityIcon(this, M.abilityIcon, abX + 20, y + 20, 40));
-    ab.setX(abX + 48);
-    y += Math.max(46, ab.height + 8);
+    const AB = 60; // the ability box (MergeIcons.js), like a hero ability slot
+    const ab = md.add(this.add.text(0, y + AB / 2, `${M.ability}: ${M.abilityShort}`, bodyStyle(16, '#8a5a00', { fontStyle: 'bold', wordWrap: { width: W - 50 - AB - 12 }, align: 'left' })).setOrigin(0, 0.5));
+    const abW = ab.width, abX = md.cx - (abW + AB + 12) / 2;
+    md.add(abilityIcon(this, M.abilityIcon, abX + AB / 2, y + AB / 2, AB));
+    ab.setX(abX + AB + 12);
+    y += Math.max(AB + 8, ab.height + 8);
     // The price: gold and Burgers, red when short.
     const check = checkMerge(gs, a, o.id);
     const items = [[TEX.coin, `${formatGold(M.cost.gold)}`, gs.gold >= M.cost.gold, COLORS.textGold], [TEX.researchPoint, rpText(M.cost.rp), (gs.researchPoints || 0) >= M.cost.rp, '#ffe2a0']];

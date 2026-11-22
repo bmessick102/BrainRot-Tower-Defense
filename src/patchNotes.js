@@ -19,8 +19,8 @@ const allEntries = (release) => release.sections.flatMap((s) => s.entries);
 
 export const PATCH_NOTES = {
   release: '0.8',
-  version: '0.8.1',
-  title: "What's New in v0.8.1",
+  version: '0.8.2',
+  title: "What's New in v0.8.2",
   sections: [
     {
       type: 'feature',
@@ -32,6 +32,14 @@ export const PATCH_NOTES = {
         {
           version: '0.8.0', icon: { texture: 'ui_merge_gear' }, title: 'Merge your defenses',
           text: 'Two Level 10 Cannons, Locklair Towers, Litman Mortars or Firework Launchers can merge into one bigger building as strong as both, with its own special ability (the Firework Launcher becomes a Missile Silo) and a gold Mastery track. Select a Level 10 one and press Merge.'
+        },
+        {
+          version: '0.8.2', icon: { texture: 'bld_wizard_merged' }, title: 'Gandolf Towers can merge: Gandolf the Grand',
+          text: 'Two Level 10 Gandolf Towers merge into Gandolf the Grand. You Shall Not Pass: every 10 s he raises a magic wall in front of a group of ground enemies, holding them in place for his fireballs. Flyers go over it.'
+        },
+        {
+          version: '0.8.2', icon: { building: 'flock', level: 10 }, title: 'F.L.O.C.K Towers can merge: the Mothership',
+          text: 'Two Level 10 F.L.O.C.K Towers merge into the F.L.O.C.K Mothership, which finally fights back. Triple Zap: every second it zaps the 3 closest enemies at once, ground or air, and still marks everything in range.'
         },
         {
           version: '0.8.0', icon: { enemy: 'quandale' }, title: 'New enemy: Quandale Dingle (from Village Hall 7)',
@@ -75,12 +83,28 @@ export const PATCH_NOTES = {
           text: 'The button on each leaderboard and Find Players row is now Profile. Visit their villages from inside the profile; Back returns you to their profile, then the list you came from.'
         },
         {
+          version: '0.8.2', icon: { hero: true }, title: 'Heroes sleep at night',
+          text: 'At night, when no raid is on, the Brisket King and the Hatsune Queen walk home and sleep on their altars. Start a raid and they wake up to defend.'
+        },
+        {
+          version: '0.8.2', icon: { texture: 'ui_encore_ready' }, title: 'New Encore Cloak icon',
+          text: 'The Hatsune Queen’s Encore Cloak has its own picture now, a purple cloak, on her hotbar button and over her when it’s ready.'
+        },
+        {
+          version: '0.8.2', icon: { texture: 'ui_merge_gear' }, title: 'Bigger ability icons',
+          text: 'Merged defenses show their special ability in a bigger square box, like the heroes’ ability buttons.'
+        },
+        {
           version: '0.8.1', icon: { texture: 'bld_cannon_merged_dl' }, title: 'Bigger shots for merged defenses',
           text: 'The Mega Cannon fires a much bigger cannonball and the Missile Silo fires bigger rockets, so their shots stand out.'
         },
         {
           version: '0.8.1', icon: { texture: 'ui_merge_gear' }, title: 'Mastery shows when it’s ready',
           text: 'In the RV Lab, the gold Mastery column now pulses when you can research its next tier.'
+        },
+        {
+          version: '0.8.2', icon: { texture: 'ui_merge_gear' }, title: 'Mastery column look',
+          text: 'The RV Lab’s Mastery column keeps a steady gold outline (no more pulsing), and all its text is in gold.'
         },
         {
           version: '0.8.1', icon: { texture: 'title_logo' }, title: 'New app icon',
@@ -99,6 +123,10 @@ export const PATCH_NOTES = {
     {
       type: 'balance',
       entries: [
+        {
+          version: '0.8.2', icon: { building: 'wizard', level: 10 }, title: 'Gandolf Towers back to 6',
+          text: 'Village Halls give up to 6 Gandolf Towers again (Village Hall 12 gives a Gandolf instead of a Litman Mortar), and pairs can now merge into Gandolf the Grand instead.'
+        },
         {
           version: '0.8.1', icon: { building: 'wizard', level: 10 }, title: 'Fewer Gandolf Towers',
           text: 'Gandolf Towers now top out at 4 instead of 6: one each at Village Halls 3, 6, 9 and 11. Village Hall 12 gives a Litman Mortar instead. Villages keep every Gandolf they already built.'

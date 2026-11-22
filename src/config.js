@@ -742,6 +742,52 @@ export const CONFIG = {
         ]
       },
       art: { key: 'bld_firework_merged_left', facings: { left: 'bld_firework_merged_left', right: 'bld_firework_merged_right' }, scale: 1.22, standInScale: 1.15 }
+    },
+    // Gandolf the Grand (v0.8.2): 2x damage (his normal splash fireballs, 2x DPS). You Shall Not Pass (wizardWall.js): every
+    // `every` s, when a ground enemy is in range, a glowing wall `length` tiles long for `seconds`, `ahead` tiles in front of
+    // the biggest ground crowd in range (at least minFromTower from the tower). Ground troops within `thickness` of it are
+    // held there (renewed every step with `linger`), bosses only slowed (bossSlow); flyers and burrowed tunnelers pass.
+    wizard: {
+      name: 'Gandolf the Grand',
+      ability: 'You Shall Not Pass',
+      abilityIcon: 'ui_ability_shall_not_pass',
+      abilityShort: 'Every 10 s a magic wall stops ground enemies in their tracks.',
+      abilityText: 'Every 10 s he slams his staff and raises a magic wall in front of the biggest group of ground enemies in range: for 3 s nothing on the ground gets through, so they pile up for his fireballs (bosses are only slowed; flyers go over).',
+      cost: { gold: 307200, rp: 3000 },
+      hpMult: 2, rangeAdd: 0.5, damageMult: 2, fireIntervalMult: 1,
+      wall: { every: 10, seconds: 3, length: 3, thickness: 0.45, ahead: 1, minFromTower: 1.5, linger: 0.2, bossSlow: 0.5 },
+      mastery: {
+        costs: [1200, 2000, 3000], labLevel: [3, 4, 5],
+        tiers: [
+          { name: 'Wider Wall', desc: 'The wall is 1.5 tiles longer and stands 1 s longer.', fx: { wallLengthAdd: 1.5, wallSecondsAdd: 1 } },
+          { name: 'Searing Ward', desc: 'Enemies held at the wall burn for 30% of his fireball damage every second.', fx: { wallBurn: 0.3 } },
+          { name: 'Double Cast', desc: 'A second wall rises behind the crowd, trapping it between the two.', fx: { walls: 2 } }
+        ]
+      },
+      art: { key: 'bld_wizard_merged', scale: 1.3, standInScale: 1.15 }
+    },
+    // F.L.O.C.K Mothership (v0.8.2): the support tower that fights back, like a tesla coil. It keeps marking (markAdd: +5% on
+    // its marks; +0.5 mark range) and Triple Zap (flockZap.js): every `every` s it zaps the `targets` closest enemies within
+    // zap `range` tiles (ground and air, shorter than its marking range), `damage` each (its own mark adds to that).
+    flock: {
+      name: 'F.L.O.C.K Mothership',
+      ability: 'Triple Zap',
+      abilityIcon: 'ui_ability_triple_zap',
+      abilityShort: 'Zaps the 3 closest enemies at once, every second.',
+      description: 'The F.L.O.C.K fights back. It still marks every enemy in its range so your defenses hit them harder, and reveals invisible ones, but now it zaps them too.',
+      abilityText: 'The F.L.O.C.K fights back: every second it zaps the 3 closest enemies within 5.5 tiles at once (ground and air) for 60 damage each, and its own mark makes the zaps hit harder. It still marks enemies, a little stronger.',
+      cost: { gold: 150000, rp: 3000 },
+      hpMult: 2, rangeAdd: 0.5, markAdd: 5,
+      zap: { every: 1, range: 5.5, damage: 60, targets: 3, bossSlow: 0.5 },
+      mastery: {
+        costs: [1200, 2000, 3000], labLevel: [3, 4, 5],
+        tiers: [
+          { name: 'Fourth Bolt', desc: 'Zaps 4 enemies at once instead of 3.', fx: { zapTargets: 4 } },
+          { name: 'Overcharge', desc: 'Zaps deal 50% more damage to enemies under half health.', fx: { zapLowMult: 1.5 } },
+          { name: 'EMP Pulse', desc: 'Every 12 s, a pulse stuns every enemy in zap range for 0.75 s (bosses are slowed).', fx: { empEvery: 12, empSeconds: 0.75 } }
+        ]
+      },
+      art: { key: 'bld_flock_merged', scale: 1.25, standInScale: 1.25 }
     }
   },
   // Per Village Hall level (1-15). Every hall from 11 adds 12 walls. v0.8 (user, 2026-11-22; replaced v0.6.1's Bonus
@@ -756,8 +802,8 @@ export const CONFIG = {
     house: [1, 1, 2, 2, 3, 3, 4, 4, 5, 5, 6, 6, 6, 6, 7],
     cannon: [1, 2, 2, 3, 3, 4, 4, 5, 5, 6, 7, 7, 7, 8, 8],
     archer: [0, 1, 2, 2, 3, 3, 4, 4, 5, 5, 5, 5, 6, 6, 6],
-    mortar: [0, 1, 1, 2, 2, 3, 3, 4, 4, 5, 5, 6, 6, 7, 7], // (VH12 +1 since v0.8.1, in place of a Gandolf)
-    wizard: [0, 0, 1, 1, 1, 2, 2, 2, 3, 3, 4, 4, 4, 4, 4], // at most 4 (v0.8.1; it was 6): VH3, VH6, VH9, VH11
+    mortar: [0, 1, 1, 2, 2, 3, 3, 4, 4, 5, 5, 5, 5, 6, 6],
+    wizard: [0, 0, 1, 1, 2, 2, 3, 3, 4, 4, 5, 6, 6, 6, 6], // (v0.8.2: back to 6 after v0.8.1's cap of 4; they can merge instead)
     townHall: [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1],
     wall: [24, 36, 48, 60, 72, 84, 96, 108, 120, 132, 144, 156, 168, 180, 192],
     firework: [0, 0, 1, 1, 2, 2, 2, 3, 3, 3, 3, 3, 3, 3, 4],

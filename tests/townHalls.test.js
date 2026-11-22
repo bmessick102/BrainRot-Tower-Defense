@@ -56,12 +56,12 @@ describe('Village Halls 1-15: caps', () => {
     // [VH10, VH11, VH12, VH13, VH14, VH15]
     const expected = {
       ra: [2, 3, 4, 4, 4, 5],
-      wizard: [3, 4, 4, 4, 4, 4],
+      wizard: [4, 5, 6, 6, 6, 6],
       catapult: [1, 2, 2, 3, 3, 3],
       ksi: [3, 4, 4, 5, 5, 5],
       cannon: [6, 7, 7, 7, 8, 8],
       archer: [5, 5, 5, 6, 6, 6],
-      mortar: [5, 5, 6, 6, 7, 7],
+      mortar: [5, 5, 5, 5, 6, 6],
       spear: [3, 3, 3, 3, 4, 4],
       flock: [3, 3, 3, 3, 4, 4],
       firework: [3, 3, 3, 3, 3, 4],
@@ -80,7 +80,7 @@ describe('Village Halls 1-15: caps', () => {
   it('what each new hall adds (hallUnlocks: the Village Hall panel lists it)', () => {
     const adds = (th) => Object.fromEntries(hallUnlocks(th).map((u) => [u.type, u.add]));
     expect(adds(11)).toEqual({ cannon: 1, wizard: 1, ksi: 1, ra: 1, catapult: 1, mine: 1, storage: 1, house: 1, wall: 12 });
-    expect(adds(12)).toEqual({ mortar: 1, ra: 1, wall: 12 });
+    expect(adds(12)).toEqual({ ra: 1, wizard: 1, wall: 12 });
     expect(adds(13)).toEqual({ catapult: 1, ksi: 1, archer: 1, storage: 1, wall: 12 });
     expect(adds(14)).toEqual({ cannon: 1, mortar: 1, spear: 1, flock: 1, wall: 12 });
     expect(adds(15)).toEqual({ ra: 1, firework: 1, mine: 1, storage: 1, house: 1, wall: 12 });
@@ -96,9 +96,9 @@ describe('Village Halls 1-15: caps', () => {
 
   it('Village Hall 11 adds 5 defenses over Village Hall 10, as many as its 5 Bonus Slots gave', () => {
     const defenses = (th) => DEFENSE_TYPES.reduce((n, t) => n + limitFor(t, th), 0);
-    expect(defenses(10)).toBe(39); // (Gandolf capped at 4 in v0.8.1: VH10 has 3)
+    expect(defenses(10)).toBe(40);
     expect(defenses(11) - defenses(10)).toBe(5);
-    expect([12, 13, 14, 15].map(defenses)).toEqual([46, 49, 53, 55]);
+    expect([12, 13, 14, 15].map(defenses)).toEqual([47, 50, 54, 56]);
   });
 
   it('the shop allows each type up to its cap at Village Hall 13, then "Limit reached"', () => {

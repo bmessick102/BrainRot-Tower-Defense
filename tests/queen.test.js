@@ -3,7 +3,7 @@ import { CONFIG } from '../src/config.js';
 import {
   ensureQueen, stepQueen, queenStats, damageQueen, useEncore, checkEncore, queenAfterWave, queenWaveStarted, getQueenAltar
 } from '../src/logic/queen.js';
-import { ensureHero, heroStats, getAltar } from '../src/logic/hero.js';
+import { ensureHero, heroStats, getAltar, bedtime } from '../src/logic/hero.js';
 import { fightableHeroes, stepHeroes, heroesAfterWave, heroStatsFor, heroOfAltar } from '../src/logic/heroes.js';
 import { stepEnemy } from '../src/logic/enemies.js';
 import { towerFireInterval, towerDamageMult } from '../src/logic/abilities.js';
@@ -489,5 +489,57 @@ describe('hero health bar follows the altar level (queen and Brisket King)', () 
     altar.level = 4;
     stepHeroes(s, 0.05);
     expect(h.hp).toBe(heroStats(altar).maxHp);
+  });
+});
+
+describe('night rest (v0.8.2, just for looks): heroes sleep at their altar at night and get up for a raid', () => {
+  it('at night the Queen walks home and lies down; a raid (its countdown) gets her up to defend', () => {
+    const { s, h, home } = village(3);
+    h.x = home.x + 4; h.y = home.y + 2;
+    s.clock = { phase: 'night', t: 10 };
+    expect(bedtime(s)).toBe(true);
+    run(s, 25);
+    expect(h.resting).toBe(true);
+    expect(dist(h, home)).toBeLessThan(0.06);
+    expect(h.moving).toBe(false);
+    const hp = h.hp;
+    s.wave = { ...s.wave, phase: 'countdown' }; // a raid is coming
+    expect(bedtime(s)).toBe(false);
+    run(s, 0.1);
+    expect(h.resting).toBe(false);
+    expect(h.status).toBe('waking');
+    run(s, 1);
+    expect(h.status).toBe('ready');
+    expect(h.hp).toBe(hp); // only for looks: no healing
+  });
+
+  it('by day the heroes never rest, and morning gets a resting hero up', () => {
+    const { s, h, home } = village(3);
+    s.clock = { phase: 'day', t: 10 };
+    run(s, 5);
+    expect(h.resting || false).toBe(false);
+    s.clock = { phase: 'night', t: 10 };
+    run(s, 25);
+    expect(h.resting).toBe(true);
+    s.clock = { phase: 'day', t: 1 };
+    run(s, 2);
+    expect(h.resting).toBe(false);
+    expect(h.status).toBe('ready'); // (and back to roaming her guard area)
+  });
+
+  it('the Brisket King rests at his altar at night too, and a nap that ends at night just sleeps on', () => {
+    const s = makeStateWithTownHall({ tutorialDone: true, tutorialStep: 10, clock: { phase: 'night', t: 10 } }, 8);
+    const altar = addBuilding(s, 'altar', 10, 10, 3);
+    const h = ensureHero(s);
+    const home = footprintCenter(altar);
+    h.x = home.x + 3; h.y = home.y;
+    for (let t = 0; t < 25; t += 0.05) stepHeroes(s, 0.05);
+    expect(h.resting).toBe(true);
+    expect(Math.hypot(h.x - home.x, h.y - home.y)).toBeLessThan(0.06);
+    // A healing nap that runs out at night: no wake-up, straight into night rest.
+    h.resting = false; h.status = 'asleep'; h.sleepT = 0.1; h.sleepTotal = 1;
+    for (let t = 0; t < 0.3; t += 0.05) stepHeroes(s, 0.05);
+    expect(h.status).toBe('ready');
+    expect(h.resting).toBe(true);
   });
 });

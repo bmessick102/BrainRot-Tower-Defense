@@ -45,7 +45,7 @@ export const QUEEN_VIEW = {
   height: { stand: 70, attack: 66, attack2: 66, sleep: 50, wake: 50, defeated: 46, select: 70 },
   facesRight: { stand: false, attack: true, attack2: true, select: false },
   noFlip: new Set(['sleep', 'wake', 'defeated']),
-  ringColor: ENCORE_COLOR, readyIcon: (scene) => ensureEncoreTextures(scene), readyIconW: 28
+  ringColor: ENCORE_COLOR, readyIcon: (scene) => ensureEncoreTextures(scene), readyIconW: 32
 };
 const BOLT_W = 40;              // her bolt on screen (the Locklair's arrow is 34)
 const BOLT_LIFT = 34;           // px over the ground her bolts leave from (her crossbow)
@@ -178,7 +178,8 @@ export class HeroView {
     const dt = this.lastSync === null ? 0 : Math.min(0.1, Math.max(0, (time - this.lastSync) / 1000));
     this.lastSync = time;
     // Snoring while he's asleep (also in edit mode, where he isn't drawn).
-    if (this.snore) this.snore.update(!!h && h.status === 'asleep', h ? gridToScreen(h.x, h.y) : null, dt);
+    // (Night rest, h.resting: lying on the altar at night just for looks, sleeping and snoring all the same.)
+    if (this.snore) this.snore.update(!!h && (h.status === 'asleep' || (h.resting && h.status === 'ready')), h ? gridToScreen(h.x, h.y) : null, dt);
     if (spec.bolts) this.syncBolts(gs);
     const show = !!h && !this.scene.editMode;
     this.sprite.setVisible(show);
@@ -189,7 +190,8 @@ export class HeroView {
     const s = gridToScreen(h.x, h.y);
     // (The Queen holds her shooting pose while she has a target in range; his swing shows for a moment.)
     const attackPose = spec.holdAttack ? h.attacking : time < this.attackUntil;
-    const pose = h.status === 'down' ? 'defeated' : h.status === 'asleep' ? (h.knockedOut ? 'defeated' : 'sleep') : h.status === 'waking' ? 'wake'
+    const resting = h.resting && h.status === 'ready'; // night rest (hero.js): asleep on the altar, just for looks
+    const pose = h.status === 'down' ? 'defeated' : h.status === 'asleep' ? (h.knockedOut ? 'defeated' : 'sleep') : resting ? 'sleep' : h.status === 'waking' ? 'wake'
       : attackPose ? (this.swing ? 'attack2' : 'attack') : time < this.selectUntil && !h.moving ? 'select' : 'stand';
     this.setPose(pose);
     // Face where he's going (or the enemy he's hitting); each picture flips according to the way it faces.
@@ -253,6 +255,7 @@ export class HeroView {
     const barY = top - 13;
     this.hpBar.setColor(down ? HP_TEAM.enemy : asleep ? SLEEP_COLOR : HP_TEAM.player);
     this.hpBar.draw(s.x, barY, Math.max(0, h.hp) / (h.hpMax || st.maxHp), true, altar.level); // always shown (health, level, crown)
+    if (resting && time >= this.zzzAt) { this.zzzAt = time + ZZZ_EVERY_MS; floatText(this.scene, s.x + 36, top + 10, 'z Z', '#d9e4ff', 15); }
     if (asleep) {
       if (time >= this.zzzAt) { this.zzzAt = time + ZZZ_EVERY_MS; floatText(this.scene, s.x + 36, top + 10, 'z Z', '#d9e4ff', 15); }
       const left = Math.ceil(h.sleepT);

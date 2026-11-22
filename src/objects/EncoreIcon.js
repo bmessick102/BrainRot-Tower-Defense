@@ -1,7 +1,8 @@
-// The Hatsune Queen's Encore Cloak icon (no art file): a teal glossy disc with a white pair of music notes on a dark
-// outline, drawn once with Phaser graphics into a texture (like SpellIcons' fallbacks). Used by her hotbar slot, the
-// Hero tab's ability card and the icon that bobs over her while it's ready. Also a small white music note texture for
-// the notes that float around her while she's cloaked.
+// The Hatsune Queen's Encore Cloak icon: the user's cloak picture (art-source/ui/ui_encore_ready.png, v0.8.2), loaded
+// at boot under ENCORE_ICON. Only if that file is missing is a stand-in drawn once with Phaser graphics into the same key:
+// a teal glossy disc with a white pair of music notes. Used by her hotbar slot, the Hero tab's ability card and the icon
+// that bobs over her while it's ready. Also a small white music note texture for the notes that float around her while
+// she's cloaked (always drawn in code).
 import { drawGlossy } from './uiDraw.js';
 import { COLORS } from '../theme.js';
 

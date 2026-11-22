@@ -37,6 +37,8 @@ const RESPEC_H = 46;                                  // the "Reset path" row un
 // Merged defenses' Mastery (merge.js): a gold 4th column ("★ Mastery", 3 tiers) next to the three paths, only for a type with
 // a merged building. The window is always as wide as the 4-column layout needs; with 3 columns they are just wider.
 const GOLD = 0xffc83a, GOLD_INK = '#8a5a00';
+// The Mastery column's text: tier names, their status line, and not-yet tiers (all gold tones).
+const MASTERY_INK = { name: '#6b4500', line: '#a06a00', dim: '#c9a862' };
 const WIN_H = TOP + GRID_H + RESPEC_H + 24;
 const INK = { a: '#b8640a', b: '#2a6fb0', c: '#2f8a2f' }; // path colors that read on the light body
 // Events that can change what the windows show.
@@ -116,10 +118,7 @@ function drawTree(scene, m, x, y, colW, gap, type, nodeState, selected, onSelect
       isSel: (t) => !!selected && !!selected.mastery && selected.tier === t, pick: (t) => ({ mastery: true, tier: t })
     });
   }
-  if (mastery) {
-    const ready = Array.from({ length: masteryTierCount(type) }, (_, k) => mastery.stateOf(k + 1)).some((st) => st.state === 'available' && !st.short);
-    masteryAura(scene, m, nx(cols.length - 1), y, colW, COL_HEAD + 8 + ROW_STEP * (masteryTierCount(type) - 1) + NODE_H, ready);
-  }
+  if (mastery) masteryAura(scene, m, nx(cols.length - 1), y, colW, COL_HEAD + 8 + ROW_STEP * (masteryTierCount(type) - 1) + NODE_H);
   // Tier bands and gutter labels: one row per tier makes "one pick per tier" easy to see.
   for (let t = 1; t <= MAX_TIER; t++) {
     const top = ny(t) - 4;
@@ -164,20 +163,23 @@ function drawTree(scene, m, x, y, colW, gap, type, nodeState, selected, onSelect
       ng.fillStyle(face, 1).fillRoundedRect(cx + 2, cy + 2, colW - 4, NODE_H - 5, 10);
       if (owned) ng.fillStyle(color, 1).fillRoundedRect(cx + 2, cy + 2, 6, NODE_H - 5, 3);
       gem(ng, cx + 20, cy + NODE_H / 2, 10, color, owned, dim);
-      const name = m.add(scene.add.text(cx + 36, cy + 10, col.title(t, st), bodyStyle(14.5, dim || st.hidden ? '#a89c88' : COLORS.ink, { fontStyle: 'bold' })));
+      // The Mastery column keeps to its gold theme: every name and line in gold tones (no green, red or grey).
+      const nameInk = col.gold ? (dim ? MASTERY_INK.dim : MASTERY_INK.name) : dim || st.hidden ? '#a89c88' : COLORS.ink;
+      const name = m.add(scene.add.text(cx + 36, cy + 10, col.title(t, st), bodyStyle(14.5, nameInk, { fontStyle: 'bold' })));
       fitWidth(name, colW - 42);
-      const lineInk = owned ? col.ink : avail ? (st.short ? COLORS.inkBad : COLORS.inkGood) : dim ? '#b3a892' : COLORS.inkDim;
+      const lineInk = col.gold ? (owned ? col.ink : dim ? MASTERY_INK.dim : MASTERY_INK.line)
+        : owned ? col.ink : avail ? (st.short ? COLORS.inkBad : COLORS.inkGood) : dim ? '#b3a892' : COLORS.inkDim;
       fitWidth(m.add(scene.add.text(cx + 36, cy + 33, st.line || '', bodyStyle(12.5, lineInk, { fontStyle: owned || avail ? 'bold' : 'normal' }))), colW - 42); // ("Research · 1,400 Burgers" fits)
       if (isSel) {
         const sel = m.add(scene.add.graphics());
         sel.lineStyle(3, 0xffc83a, 1).strokeRoundedRect(cx - 2, cy - 2, colW + 4, NODE_H + 4, 13);
       } else if (avail) {
-        // Available nodes get a steady green outline, so the next move stands out.
+        // Available nodes get a steady outline, so the next move stands out (green; gold in the Mastery column).
         const glow = m.add(scene.add.graphics());
-        glow.lineStyle(3, 0x6cbf2c, 1).strokeRoundedRect(cx - 2, cy - 2, colW + 4, NODE_H + 4, 13);
+        glow.lineStyle(3, col.gold ? 0xd99a00 : 0x6cbf2c, 1).strokeRoundedRect(cx - 2, cy - 2, colW + 4, NODE_H + 4, 13);
       }
       const hover = m.add(scene.add.graphics().setVisible(false));
-      hover.fillStyle(0xffffff, 0.25).fillRoundedRect(cx + 2, cy + 2, colW - 4, NODE_H - 5, 10);
+      hover.fillStyle(col.gold ? GOLD : 0xffffff, col.gold ? 0.22 : 0.25).fillRoundedRect(cx + 2, cy + 2, colW - 4, NODE_H - 5, 10);
       const zone = m.add(scene.add.zone(cx, cy, colW, NODE_H).setOrigin(0).setInteractive({ useHandCursor: true }));
       zone.on('pointerover', () => hover.setVisible(true));
       zone.on('pointerout', () => hover.setVisible(false));
@@ -186,17 +188,11 @@ function drawTree(scene, m, x, y, colW, gap, type, nodeState, selected, onSelect
   });
 }
 
-/**
- * The Mastery column's gold glow (x, y, w, h: the column). It pulses while a tier is ready to research (`pulse`), so
- * the player sees there's an upgrade waiting; otherwise it stays still. The tween is killed with the glow on refresh.
- */
-function masteryAura(scene, m, x, y, w, h, pulse) {
+/** The Mastery column's gold glow and outline (x, y, w, h: the column): steady, no flashing (user, v0.8.2). */
+function masteryAura(scene, m, x, y, w, h) {
   const glow = m.add(scene.add.graphics());
-  for (let k = 3; k >= 1; k--) glow.fillStyle(GOLD, 0.13 * (4 - k)).fillRoundedRect(x - 4 * k, y - 4 * k, w + 8 * k, h + 8 * k, 12 + 4 * k);
-  glow.lineStyle(4, 0xffe066, 1).strokeRoundedRect(x - 5, y - 5, w + 10, h + 10, 15);
-  if (!pulse) { glow.setAlpha(0.35); return; }
-  scene.tweens.add({ targets: glow, alpha: { from: 1, to: 0.1 }, duration: 750, yoyo: true, repeat: -1, ease: 'Sine.easeInOut' });
-  glow.once('destroy', () => scene.tweens.killTweensOf(glow));
+  for (let k = 3; k >= 1; k--) glow.fillStyle(GOLD, 0.08 * (4 - k)).fillRoundedRect(x - 4 * k, y - 4 * k, w + 8 * k, h + 8 * k, 12 + 4 * k);
+  glow.lineStyle(3, GOLD, 0.9).strokeRoundedRect(x - 5, y - 5, w + 10, h + 10, 15);
 }
 
 /**

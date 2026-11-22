@@ -15,6 +15,9 @@ import { serializeGame, parseSave, deserializeGame } from '../src/logic/save.js'
 import { GameState } from '../src/state/GameState.js';
 import { makeStateWithTownHall, addBuilding, addEnemy } from './helpers.js';
 import { netSpots, netStats, fireNets, stepSkyNets } from '../src/logic/skyNet.js';
+import { wallStats, wallLines, raiseWalls, stepWizardWalls, distToSegment } from '../src/logic/wizardWall.js';
+import { zapStats, zapTargets, zap, empPulse, stepFlockZaps } from '../src/logic/flockZap.js';
+import { stepFlockTowers } from '../src/logic/flock.js';
 import { facingToward, mergedFacingKey } from '../src/logic/merge.js';
 
 const TOP = (type) => maxLevel(type);
@@ -35,8 +38,8 @@ const volley = (s, b, seconds = 3) => {
 const tough = (s, kind, x, y, extra = {}) => addEnemy(s, kind, x, y, { hp: 1e7, maxHp: 1e7, ...extra });
 
 describe('merging: rules', () => {
-  it('Cannon, Locklair Tower, Litman Mortar and Firework Launcher can merge, data-driven', () => {
-    expect(MERGE_TYPES).toEqual(['cannon', 'archer', 'mortar', 'firework']);
+  it('Cannon, Locklair Tower, Litman Mortar, Firework Launcher, Gandolf Tower and F.L.O.C.K Tower can merge, data-driven', () => {
+    expect(MERGE_TYPES).toEqual(['cannon', 'archer', 'mortar', 'firework', 'wizard', 'flock']);
     for (const t of MERGE_TYPES) {
       const m = CONFIG.merges[t];
       expect(m.mastery.tiers).toHaveLength(3);
@@ -163,6 +166,7 @@ describe('merged stats', () => {
       const m = CONFIG.merges[type];
       expect(maxHp(a)).toBe(Math.round(before.hp * m.hpMult));
       expect(towerRange(a)).toBeCloseTo(before.range + m.rangeAdd);
+      if (m.zap) { expect(preview.a.damage).toBe(0); expect(preview.merged.dps).toBe(m.zap.damage * m.zap.targets / m.zap.every); continue; } // the Mothership: zaps are new
       expect(towerFireInterval(a)).toBeCloseTo(before.interval * m.fireIntervalMult);
       expect(towerDamageMult(a)).toBeCloseTo(before.dmg * m.damageMult / m.fireIntervalMult); // timed specials: the DPS gain
       expect(preview.merged.hp).toBe(maxHp(a));
@@ -478,9 +482,173 @@ describe('saves', () => {
     expect(bad((o) => { o.buildings.find((x) => x.type === 'archer').level = 9; o.buildings.find((x) => x.type === 'archer').merged = true; })).toBe('invalid');
     expect(bad((o) => { o.buildings.find((x) => x.type === 'rvlab').merged = true; })).toBe('invalid');
     expect(bad((o) => { o.mastery = { archer: 4 }; })).toBe('invalid');
-    expect(bad((o) => { o.mastery = { wizard: 1 }; })).toBe('invalid');
-    expect(bad((o) => { o.freeRespecs = ['wizard']; })).toBe('invalid');
+    expect(bad((o) => { o.mastery = { spear: 1 }; })).toBe('invalid');
+    expect(bad((o) => { o.freeRespecs = ['spear']; })).toBe('invalid');
     expect(bad((o) => { o.buildings.find((x) => x.type === 'archer').merged = true; })).toBe('ok');
+  });
+});
+
+describe('Gandolf the Grand: You Shall Not Pass', () => {
+  const W = CONFIG.merges.wizard.wall;
+  const setup = (mastery = 0) => {
+    const s = village();
+    const [a, b] = pair(s, 'wizard');
+    mergeBuildings(s, a.id, b.id);
+    fight(s);
+    if (mastery) { s.mastery = { wizard: mastery }; syncMastery(s); }
+    return { s, g: a, cx: a.col + a.size / 2, cy: a.row + a.size / 2 };
+  };
+  const run = (s, seconds) => { for (let i = 0; i < seconds / 0.05; i++) stepWizardWalls(s, 0.05); };
+
+  it('the wall stands square to the crowd’s way, in front of it, and never closer to the tower than minFromTower', () => {
+    const st = { length: 3, ahead: 1, minFromTower: 1.5, count: 1 };
+    const [w] = wallLines({ x: 5, y: 0 }, { x: 0, y: 0 }, st);
+    expect(w.x1).toBeCloseTo(4); expect(w.x2).toBeCloseTo(4);       // 1 tile in front of the crowd, toward the tower
+    expect(Math.abs(w.y2 - w.y1)).toBeCloseTo(3);                     // 3 tiles long, across the way
+    const [near] = wallLines({ x: 2, y: 0 }, { x: 0, y: 0 }, st);
+    expect(near.x1).toBeCloseTo(2 - 0.5);                             // only 0.5 ahead: stays 1.5 from the tower
+    const two = wallLines({ x: 5, y: 0 }, { x: 0, y: 0 }, { ...st, count: 2 });
+    expect(two).toHaveLength(2);
+    expect(two[1].x1).toBeCloseTo(6);                                 // Double Cast: the second closes in behind the crowd
+    expect(distToSegment(4, 5, 4, -1.5, 4, 1.5)).toBeCloseTo(3.5);
+    // A crowd walking past (heading up, not at the tower): the wall goes across its way, 1 tile ahead of it.
+    const [walk] = wallLines({ x: 5, y: 0 }, { x: 0, y: 0 }, st, { x: 0, y: 2 });
+    expect(walk.y1).toBeCloseTo(1); expect(walk.y2).toBeCloseTo(1);
+    expect(Math.abs(walk.x2 - walk.x1)).toBeCloseTo(3);
+  });
+
+  it('every 10 s, with a ground enemy in range, a wall rises and holds ground troops touching it for 3 s', () => {
+    const { s, g, cx, cy } = setup();
+    const e = tough(s, 'grunt', cx + 3.5, cy);
+    run(s, W.every - 0.1);
+    expect(s.barriers || []).toHaveLength(0);
+    run(s, 0.2);
+    expect(s.barriers).toHaveLength(1);
+    expect(events(s, 'wallRaised')).toHaveLength(1);
+    const w = s.barriers[0];
+    // Walk the grunt onto the wall: it's held there while the wall stands.
+    const m = { x: (w.x1 + w.x2) / 2, y: (w.y1 + w.y2) / 2 };
+    e.x = m.x; e.y = m.y;
+    run(s, 0.1);
+    expect(e.held).toBeGreaterThan(0);
+    expect(w.held).toContain(e.id);
+    run(s, W.seconds);
+    expect(s.barriers).toHaveLength(0);
+    expect(g.wallT).toBeGreaterThan(0);
+  });
+
+  it('flyers pass over it, bosses are only slowed, and nothing is raised with only flyers in range', () => {
+    const { s, g, cx, cy } = setup();
+    tough(s, 'bomber', cx + 3, cy);
+    expect(raiseWalls(s, g)).toHaveLength(0);
+    const grunt = tough(s, 'grunt', cx + 3.5, cy + 0.5);
+    const [w] = raiseWalls(s, g);
+    const m = { x: (w.x1 + w.x2) / 2, y: (w.y1 + w.y2) / 2 };
+    const flyer = tough(s, 'bomber', m.x, m.y), car = tough(s, 'babycar', m.x, m.y);
+    grunt.x = m.x; grunt.y = m.y;
+    run(s, 0.1);
+    expect(flyer.held || 0).toBe(0);
+    expect(car.held || 0).toBe(0);
+    expect(car.slow).toBe(W.bossSlow);
+    expect(grunt.held).toBeGreaterThan(0);
+  });
+
+  it('Mastery: Wider Wall, Searing Ward (held enemies burn), Double Cast (two walls)', () => {
+    const base = wallStats(setup().g);
+    const { s, g, cx, cy } = setup(3);
+    const st = wallStats(g);
+    expect(st.length).toBe(base.length + 1.5);
+    expect(st.seconds).toBe(base.seconds + 1);
+    expect(st.count).toBe(2);
+    expect(st.burnDps).toBeGreaterThan(0);
+    const e = tough(s, 'grunt', cx + 3.5, cy);
+    const walls = raiseWalls(s, g);
+    expect(walls).toHaveLength(2);
+    const w = walls[0];
+    e.x = (w.x1 + w.x2) / 2; e.y = (w.y1 + w.y2) / 2;
+    const hp = e.hp;
+    run(s, 1);
+    expect(e.hp).toBeLessThan(hp);
+  });
+
+  it('walls are cleared when the wave ends and never saved', () => {
+    const { s, g, cx, cy } = setup();
+    tough(s, 'grunt', cx + 3.5, cy);
+    raiseWalls(s, g);
+    expect(s.barriers).toHaveLength(1);
+    const save = serializeGame(s);
+    expect(JSON.stringify(save)).not.toContain('barriers');
+  });
+});
+
+describe('F.L.O.C.K Mothership: Triple Zap', () => {
+  const Z = CONFIG.merges.flock.zap;
+  const setup = (mastery = 0) => {
+    const s = village();
+    const [a, b] = pair(s, 'flock');
+    mergeBuildings(s, a.id, b.id);
+    fight(s);
+    if (mastery) { s.mastery = { flock: mastery }; syncMastery(s); }
+    return { s, f: a, cx: a.col + a.size / 2, cy: a.row + a.size / 2 };
+  };
+
+  it('every second it zaps the 3 closest enemies in zap range at once (ground and air), not ones farther out', () => {
+    const { s, f, cx, cy } = setup();
+    const near = [tough(s, 'grunt', cx + 1, cy), tough(s, 'bomber', cx, cy + 2), tough(s, 'grunt', cx - 2.5, cy), tough(s, 'grunt', cx + 3.5, cy + 3)];
+    const far = tough(s, 'grunt', cx + Z.range + 1.5, cy);
+    const picked = zapTargets(s, f);
+    expect(picked).toHaveLength(3);
+    expect(picked).toEqual(near.slice(0, 3));
+    expect(picked).not.toContain(far);
+    const hp = near.map((e) => e.hp);
+    for (let i = 0; i < Z.every / 0.05 + 1; i++) stepFlockZaps(s, 0.05);
+    expect(events(s, 'flockZap')).toHaveLength(1);
+    near.slice(0, 3).forEach((e, i) => expect(e.hp).toBeLessThan(hp[i]));
+    expect(near[3].hp).toBe(hp[3]);
+  });
+
+  it('its own mark makes the zaps hit harder, and it marks a little stronger than a Level 10 F.L.O.C.K', () => {
+    const { s, f, cx, cy } = setup();
+    const e = tough(s, 'grunt', cx + 1, cy);
+    stepFlockTowers(s);
+    expect(e.markBonus).toBeGreaterThan(0);
+    const plain = village();
+    const lone = addBuilding(plain, 'flock', 13, 15, TOP('flock'));
+    const e2 = tough(plain, 'grunt', lone.col + 1.5, lone.row + 0.5);
+    stepFlockTowers(plain);
+    expect(e.markBonus).toBeCloseTo(e2.markBonus + CONFIG.merges.flock.markAdd / 100);
+    const before = e.hp;
+    zap(s, f);
+    expect(before - e.hp).toBeCloseTo(Z.damage * (1 + e.markBonus));
+  });
+
+  it('no zaps while silenced by John Pork or stunned; a plain F.L.O.C.K Tower never zaps', () => {
+    const { s, f, cx, cy } = setup();
+    tough(s, 'grunt', cx + 1, cy);
+    f.silencedT = 5;
+    for (let i = 0; i < 40; i++) stepFlockZaps(s, 0.05);
+    expect(events(s, 'flockZap')).toHaveLength(0);
+    const plain = village();
+    const lone = addBuilding(plain, 'flock', 13, 15, TOP('flock'));
+    fight(plain);
+    tough(plain, 'grunt', lone.col + 1, lone.row);
+    expect(zapStats(lone)).toBeNull();
+    for (let i = 0; i < 40; i++) stepFlockZaps(plain, 0.05);
+    expect(events(plain, 'flockZap')).toHaveLength(0);
+  });
+
+  it('Mastery: Fourth Bolt, Overcharge (more damage under half health), EMP Pulse (stuns, bosses slowed)', () => {
+    const { s, f, cx, cy } = setup(3);
+    const st = zapStats(f);
+    expect(st.targets).toBe(4);
+    expect(st.lowMult).toBe(1.5);
+    const hurt = tough(s, 'grunt', cx + 1, cy, { hp: 100, maxHp: 1e7 });
+    const car = tough(s, 'babycar', cx - 1, cy);
+    expect(zapTargets(s, f)).toHaveLength(2);
+    expect(empPulse(s, f)).toBe(2);
+    expect(hurt.held).toBeGreaterThan(0);
+    expect(car.held || 0).toBe(0);
+    expect(car.slow).toBe(Z.bossSlow);
   });
 });
 
@@ -604,13 +772,15 @@ describe('merged balance (v0.8: counts as two buildings)', () => {
     expect(CONFIG.merges.firework.name).toBe('Missile Silo');
     expect(CONFIG.merges.firework.ability).toBe('Sky Net');
     expect(MERGE_TYPES.map((t) => CONFIG.merges[t].abilityIcon).sort()).toEqual(
-      ['ui_ability_ballista_bolt', 'ui_ability_rolling_thunder', 'ui_ability_sky_net', 'ui_ability_triple_strike']);
+      ['ui_ability_ballista_bolt', 'ui_ability_rolling_thunder', 'ui_ability_shall_not_pass', 'ui_ability_sky_net', 'ui_ability_triple_strike', 'ui_ability_triple_zap']);
+    expect(CONFIG.merges.wizard).toMatchObject({ name: 'Gandolf the Grand', ability: 'You Shall Not Pass' });
   });
 
   it('health is twice a max-level copy and damage per second about twice (two buildings\' worth)', () => {
     for (const t of MERGE_TYPES) {
       const m = CONFIG.merges[t];
       expect(m.hpMult).toBe(2);
+      if (m.zap) continue; // the F.L.O.C.K Mothership: a support tower whose zaps are new (no damage to double)
       const dps = (m.triple ? m.triple.shells * m.triple.shellMult : m.damageMult) / (m.fireIntervalMult || 1);
       expect(dps).toBeGreaterThanOrEqual(1.99);
       expect(dps).toBeLessThanOrEqual(2.05);

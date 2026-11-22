@@ -18,7 +18,8 @@ import { levelStats, maxHp } from './buildings.js';
 import { abilityFx } from './abilities.js';
 import { footprintCenter, distanceToFootprint } from './grid.js';
 import { distance } from './iso.js';
-import { emit, isWaveActive, random } from './util.js';
+import { emit, isWaveActive, isWaveInProgress, random } from './util.js';
+import { isDark } from './clockLight.js';
 import { getNav } from './pathfinding.js';
 import { MAP } from '../mapTiles.js';
 import { damageEnemy, enemyIsAir, isBurrowedUnseen, applySlow, applyStun } from './combat.js';
@@ -130,6 +131,44 @@ export function roam(state, h, home, st, dt, altarId) {
   }
 }
 
+// ---------- night rest (v0.8.2, just for looks) ----------
+// At night, with no raid on or counting down, a hero with nothing to do walks home to its altar and lies down there
+// (h.resting: the view shows the sleeping pose, "z Z" and his snoring). No healing and no timer: it's only for looks.
+// When a raid starts (or it gets light) the hero gets up (a short wake-up) and carries on: guarding, fighting, roaming.
+const NIGHT_WAKE_SECONDS = 0.8; // the wake-up pose when a raid (or morning) gets a resting hero up
+const REST_WALK_MAX = 20;       // s: a hero that can't reach its altar by then is put there
+
+/** Bedtime for the heroes: dark, and no raid on or counting down. */
+export function bedtime(state) {
+  return !!state.clock && isDark(state.clock) && !isWaveInProgress(state);
+}
+
+/** Night rest: walk home to `home`, then lie down (h.resting). True while it's bedtime (the caller does nothing else). */
+export function restAtNight(state, h, home, st, dt, altarId) {
+  if (!bedtime(state)) { h.restWalkT = 0; return false; }
+  h.attacking = false; h.roamTo = null; h.roamPause = 0; h.targetId = null;
+  if (h.resting) { h.moving = false; return true; }
+  const d = distance(h.x, h.y, home.x, home.y);
+  h.restWalkT = (h.restWalkT || 0) + dt;
+  if (d > 0.05 && h.restWalkT < REST_WALK_MAX) {
+    heroStep(state, h, home.x, home.y, Math.min(st.speed * ROAM_SPEED * dt, d), altarId, st.speed);
+    h.moving = true;
+    return true;
+  }
+  h.x = home.x; h.y = home.y; h.moving = false; h.waypoint = null; h.overWall = false;
+  h.resting = true; h.restWalkT = 0;
+  return true;
+}
+
+/** A resting hero when it's no longer bedtime: up again, with the short wake-up pose. True if it woke this step. */
+export function wakeFromRest(state, h, event) {
+  if (!h.resting || bedtime(state)) return false;
+  h.resting = false;
+  h.status = 'waking'; h.wakeT = NIGHT_WAKE_SECONDS;
+  emit(state, event, { night: true });
+  return true;
+}
+
 /** The (first) standing-or-not altar in the village, or null. */
 export function getAltar(state) {
   return state.buildings.find((b) => b.type === 'altar') || null;
@@ -198,7 +237,7 @@ function putToSleep(state, h, seconds, knockedOut = false) {
   const c = altar ? footprintCenter(altar) : { x: h.x, y: h.y };
   h.x = c.x; h.y = c.y;
   h.targetId = null; h.attacking = false; h.boostT = 0; h.roamTo = null; h.waypoint = null; h.overWall = false; h.moving = false;
-  h.status = 'asleep';
+  h.status = 'asleep'; h.resting = false;
   h.knockedOut = knockedOut;
   h.sleepT = h.sleepTotal = Math.max(0.1, seconds);
 }
@@ -225,7 +264,11 @@ export function stepHero(state, dt) {
     h.hp += (st.maxHp - h.hp) * Math.min(1, dt / Math.max(dt, h.sleepT));
     h.sleepT = Math.max(0, h.sleepT - dt);
     altar.heroSleep = h.sleepT;
-    if (h.sleepT <= 0) { h.hp = st.maxHp; h.status = 'waking'; h.knockedOut = false; h.wakeT = H().wakeSeconds; altar.heroSleep = 0; emit(state, 'heroWaking', {}); }
+    if (h.sleepT <= 0) {
+      h.hp = st.maxHp; h.knockedOut = false; altar.heroSleep = 0;
+      if (bedtime(state)) { h.status = 'ready'; h.resting = true; } // the nap ends at night: he just sleeps on (night rest)
+      else { h.status = 'waking'; h.wakeT = H().wakeSeconds; emit(state, 'heroWaking', {}); }
+    }
     return;
   }
   if (h.status === 'down') {
@@ -246,6 +289,7 @@ export function stepHero(state, dt) {
     if (h.wakeT <= 0) { h.status = 'ready'; emit(state, 'heroReady', {}); }
     return;
   }
+  if (wakeFromRest(state, h, 'heroWaking')) return; // night rest over: a raid started, or it got light
   const boost = h.boostT > 0 ? H().feast : null;
   const step = st.speed * (1 + (boost ? boost.speedPct : 0) / 100) * dt;
   // Keep chasing the same enemy while it's valid; else the nearest one in his guard range.
@@ -262,7 +306,7 @@ export function stepHero(state, dt) {
     }
     h.targetId = target ? target.id : null;
   }
-  if (!target) { roam(state, h, home, st, dt, altar.id); return; }
+  if (!target) { if (!restAtNight(state, h, home, st, dt, altar.id)) roam(state, h, home, st, dt, altar.id); return; }
   h.roamTo = null; h.roamPause = 0;
   const d = distance(h.x, h.y, target.x, target.y);
   if (d > st.attackRange) {

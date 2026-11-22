@@ -2,6 +2,24 @@
 
 The version shows in the bottom-left corner of every screen (`package.json` `version` plus the commit). Details for everything below are in [README.md](README.md).
 
+## 0.8.2
+
+Gandolf Towers back to 6 and mergeable into Gandolf the Grand (You Shall Not Pass), F.L.O.C.K Towers mergeable into the F.L.O.C.K Mothership (Triple Zap), a new Encore Cloak icon, heroes sleeping at their altars at night, a steadier gold Mastery column, and boxed ability icons. No database change; saves load as they are.
+
+### New Features
+- **Gandolf the Grand** (`CONFIG.merges.wizard`, new src/logic/wizardWall.js, drawn by new src/objects/WallFx.js): two Level 10 Gandolf Towers merge (307,200 gold + 3,000 Burgers; x2 health and damage, +0.5 range; art `bld_wizard_merged`, `art.scale` 1.3). **You Shall Not Pass:** every 10 s (`wall.every`), with a ground enemy in range, a wall 3 tiles long stands for 3 s across the way the biggest ground crowd in range is walking (the crowd's average `vx`/`vy`; toward the tower if it's standing still), 1 tile ahead of it and at least 1.5 tiles from the tower. Ground troops within 0.45 tiles of it are held (`applyStun`, 0.2 s renewed every step, so a Quandale dash ends there), bosses slowed 50%, flyers and burrowed tunnelers pass. Mastery: Wider Wall (+1.5 tiles, +1 s), Searing Ward (held enemies burn for 30% of his shot damage per second), Double Cast (a second wall the same distance behind the crowd). Walls live in `state.barriers` (not saved, cleared at wave end); `stepWizardWalls` runs after the Sky Nets in simulate.js. GameScene's `wallRaised` shows "YOU SHALL NOT PASS!" over the tower with a thump, a small shake and one of Gandolf's voice lines.
+
+- **F.L.O.C.K Mothership** (`CONFIG.merges.flock`, new src/logic/flockZap.js): two Level 10 F.L.O.C.K Towers merge (150,000 gold + 3,000 Burgers; x2 health, +0.5 range, marks +5% via `markAdd` in flock.js; stand-in art: the Level 10 picture drawn 1.25x with the gold glow until `bld_flock_merged` exists). **Triple Zap:** every 1 s it zaps the 3 closest enemies within 5.5 tiles (its own zap range, shorter than its marking), ground and air, 60 damage each (a normal hit, so its mark and armor apply). No zaps while silenced by John Pork or stunned. Mastery: Fourth Bolt (4 targets), Overcharge (x1.5 on enemies under half health), EMP Pulse (every 12 s stuns everything in zap range 0.75 s; bosses slowed 50%). `stepFlockZaps` runs after the walls in simulate.js; GameScene's `flockZap` draws a jagged blue bolt to each target (gone in about 0.3 s) with `sfx_spell_lightning` at 30%, and `flockEmp` an "EMP!" ring. `fightStats` reports its zaps (the merge window shows "- -> 3 x 60"); its Stats tab shows its range / mark bonus with the merge and a zap bar, and merges may set their own `description` for the Info tab. Ability icon `ui_ability_triple_zap` (stand-in: three bolts).
+
+### Changes
+- **Heroes sleep at night** (just for looks; hero.js `bedtime` / `restAtNight` / `wakeFromRest`, used by both heroes): when it's dark (`isDark(state.clock)`) and no raid is on or counting down (`isWaveInProgress`), a hero with nothing to do walks home to its altar's center (roam speed; snapped there after 20 s if it can't reach) and lies down (`h.resting`, not saved): HeroView shows the sleeping pose, "z Z" and the Brisket King's snoring, and the Hero tab says "Sleeping (night)". No healing, no timer. A raid's countdown (or daylight) gets it up with a 0.8 s wake-up (`heroWaking` / `queenWaking` with `night: true`). A healing nap that ends at night goes straight into night rest.
+- **Encore Cloak icon:** the user's cloak picture as `art-source/ui/ui_encore_ready.png` (the key EncoreIcon.js already used; prepare-art rule width 192). It's loaded at boot, so the drawn teal music-note disc is now only a fallback; the icon over her is 32 px wide (was 28).
+- **RV Lab Mastery column** (AbilityWindow.js): the outline is steady (v0.8.1's pulse removed); every tier name and status line is in gold tones (`MASTERY_INK`), available tiers get a gold outline instead of green, and the hover tint is gold.
+- **Merged ability icons** (src/objects/MergeIcons.js `abilityIcon`): a glossy gold rounded box (`drawGlossy`) instead of a disc, with the art or the drawn symbol inside; bigger everywhere (building panel 40 -> 56 px, merge window 40 -> 60, How to Play 30 -> 40). New stand-in symbol for `ui_ability_shall_not_pass` (a staff and a wall).
+
+### Balance
+- **Gandolf Towers back to 6** (`limits.wizard` `[0,0,1,1,2,2,3,3,4,4,5,6,6,6,6]` as in v0.8.0; `limits.mortar` back to ending `5,5,5,5,6,6`): VH12 gives +1 Gandolf again instead of a Litman Mortar. A village that built a VH12 Mortar in v0.8.1 keeps it as an over-limit building (`overCap`).
+
 ## 0.8.1
 
 Fewer Gandolf Towers, bigger merged shots, a pulsing Mastery column, a new app icon, the new Litman Triple Mortar picture, and the Hatsune Queen's shot sound. No database change; saves load as they are.

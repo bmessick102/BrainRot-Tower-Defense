@@ -47,6 +47,7 @@ import { SpawnFog } from '../objects/SpawnFog.js';
 import { checkCast, checkCastSpot, spellStats } from '../logic/spells.js';
 import { checkMerge } from '../logic/merge.js';
 import { NetFx } from '../objects/NetFx.js';
+import { WallFx } from '../objects/WallFx.js';
 
 const PLANNING_FADE_MS = 600; // the ambience / village music hands over to the planning track this fast
 const ZOOM_STEP = 1.1;
@@ -117,6 +118,7 @@ export class GameScene extends Phaser.Scene {
     // Fuel Station spells: the aiming ring (while a hotbar spell waits for a spot on the map) and zones in play.
     this.spellFx = new SpellFx(this, gs);
     this.netFx = new NetFx(this); // Missile Silo's nets (skyNet.js)
+    this.wallFx = new WallFx(this); // Gandolf the Grand's walls (wizardWall.js)
     // The next wave's arrow + enemy counts at each entrance it attacks from (UIScene feeds the counts).
     this.waveMarkers = new WaveMarkers(this);
     // Fog over the back end of all four paths, where enemies come onto the map: always on, under those markers.
@@ -383,6 +385,7 @@ export class GameScene extends Phaser.Scene {
     this.updateSpellAim();
     this.updateMergePick(time);
     this.netFx.update(time);
+    this.wallFx.update(time);
     this.waveMarkers.update();
     this.spawnFog.update();
   }
@@ -1781,6 +1784,48 @@ export class GameScene extends Phaser.Scene {
       const top = v && v.sprite ? v.sprite.y - v.sprite.displayHeight : s.y - 40;
       tag(s.x, top - 10, d.boss ? 'SLOWED' : 'PINNED!', d.boss ? '#9fd8ff' : '#ffe2a0', 16);
       splashRing(this, s.x, s.y, 0.45, 0xf5e6c0, { duration: 320, depth: 2710 });
+    });
+    // F.L.O.C.K Mothership: Triple Zap. A jagged electric bolt from the tower's top to each enemy it zaps (a bright core over a
+    // blue glow, gone in a blink), a spark on each, and a soft crackle. EMP Pulse: a blue ring over its zap range.
+    on('flockZap', (d) => {
+      const v = this.views.buildings.get(d.sourceId);
+      if (!v) return;
+      const from = v.topCenter();
+      const g = this.add.graphics().setDepth(2705);
+      for (const hit of d.hits) {
+        const ev = this.views.enemies.get(hit.id);
+        const s = ev && ev.sprite ? { x: ev.sprite.x, y: ev.sprite.y - ev.sprite.displayHeight * 0.5 } : at(hit);
+        const pts = [from];
+        const n = 6;
+        for (let i = 1; i < n; i++) {
+          const t = i / n, j = (Math.random() - 0.5) * 26;
+          pts.push({ x: from.x + (s.x - from.x) * t + j, y: from.y + (s.y - from.y) * t + j * 0.5 });
+        }
+        pts.push(s);
+        for (const [w, c, al] of [[11, 0x2a7bff, 0.35], [6, 0x58c6ff, 0.85], [2.5, 0xffffff, 1]]) {
+          g.lineStyle(w, c, al).beginPath().moveTo(pts[0].x, pts[0].y);
+          for (const p of pts.slice(1)) g.lineTo(p.x, p.y);
+          g.strokePath();
+        }
+        g.fillStyle(0x58c6ff, 0.6).fillCircle(s.x, s.y, 9);
+        g.fillStyle(0xffffff, 1).fillCircle(s.x, s.y, 4.5);
+      }
+      this.tweens.add({ targets: g, alpha: 0, delay: 90, duration: 200, onComplete: () => g.destroy() });
+      playSfxCapped(this, SPELL_SFX.lightning, 1, { volume: 0.3 });
+    });
+    on('flockEmp', (d) => {
+      const s = at(d);
+      splashRing(this, s.x, s.y, d.radius, 0x6fc8ff, { duration: 520, depth: 2710 });
+      overBuilding(d.sourceId, 'EMP!', '#9fdcff');
+    });
+    // Gandolf the Grand: You Shall Not Pass! A staff slam (a thump and a small shake), his line over the tower, and the
+    // wall(s) rising (WallFx draws them).
+    on('wallRaised', (d) => {
+      overBuilding(d.sourceId, 'YOU SHALL NOT PASS!', '#cfeaff');
+      for (const w of d.walls) { const s = gridToScreen((w.x1 + w.x2) / 2, (w.y1 + w.y2) / 2); splashRing(this, s.x, s.y, 0.9, 0xbfe6ff, { duration: 380, depth: 2710 }); }
+      playSfxCapped(this, SFX.catapultImpact, 1);
+      playVoiceLine(this, SFX.wizardVoice);
+      this.cameras.main.shake(110, 0.003);
     });
     // Missile Silo: the net rocket goes up with a launch sound; the net bursts open with a crackle over the group.
     on('netFired', () => playSfx(this, SFX.fireworkFire));

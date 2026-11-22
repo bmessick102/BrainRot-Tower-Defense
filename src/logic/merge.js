@@ -120,6 +120,8 @@ export function mergeBuildings(state, keepId, otherId) {
 export function fightStats(b) {
   const lvl = levelStats(b.type, b.level);
   const m = mergedConfigOf(b);
+  // A F.L.O.C.K Mothership (flockZap.js) has no shots of its own: its zaps are its damage (`targets` at a time).
+  if (m && m.zap) return { hp: maxHp(b), damage: m.zap.damage, shots: m.zap.targets, interval: m.zap.every, range: towerRange(b), dps: (m.zap.damage * m.zap.targets) / m.zap.every };
   const shots = m && m.triple ? m.triple.shells : 1;
   const perShot = (lvl.damage || 0) * towerDamageMult(b) * (m ? m.fireIntervalMult || 1 : 1) * (m && m.triple ? m.triple.shellMult : 1);
   const interval = towerFireInterval(b);

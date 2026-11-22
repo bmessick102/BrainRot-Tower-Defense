@@ -94,6 +94,7 @@ export class GameState {
     this.pools = [];
     this.strikes = [];           // Arrow Storm / Meteor hits on their way down
     this.nets = [];              // Missile Silo nets in play (skyNet.js; not saved)
+    this.barriers = [];          // Gandolf the Grand's You Shall Not Pass walls (wizardWall.js; not saved)
     this.research = {};          // RV Lab research: { type: ['a', 'b', ...] }, the pick at each tier
     this.mastery = {};           // merged defenses' Mastery tiers per type ({ cannon: 2 }, merge.js), saved
     this.freeRespecs = {};       // types with a free path reset waiting (each merge leaves one, merge.js), saved

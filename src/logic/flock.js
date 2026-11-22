@@ -8,7 +8,7 @@
 // RV Lab abilities: Exposer (markAdd, markSlow, exposedChance / exposedMult on marked enemies) and Commander
 // (an aura on every other defense whose center is in range: auraFireRatePct, auraRangeAdd, auraDamagePct;
 // the strongest tower's value of each wins). The aura is kept on each defense as b._aura (not saved).
-import { levelStats, isDefense } from './buildings.js';
+import { levelStats, isDefense, mergedConfigOf } from './buildings.js';
 import { abilityFx, towerRange } from './abilities.js';
 import { footprintCenter } from './grid.js';
 import { distance } from './iso.js';
@@ -33,7 +33,8 @@ export function stepFlockTowers(state) {
   // A tower silenced by John Pork's call (b.silencedT, specialEnemies.js) marks, reveals and boosts nothing.
   const towers = state.buildings.filter((b) => b.type === 'flock' && !b.destroyed && !(b.silencedT > 0)).map((b) => {
     const fx = abilityFx(b);
-    return { b, fx, c: footprintCenter(b), range: towerRange(b), bonus: flockBonus(b.level) + (fx.markAdd || 0) / 100, seen: 0 };
+    // (A F.L.O.C.K Mothership, the merged tower, marks a little stronger: CONFIG.merges.flock.markAdd.)
+    return { b, fx, c: footprintCenter(b), range: towerRange(b), bonus: flockBonus(b.level) + ((fx.markAdd || 0) + (mergedConfigOf(b)?.markAdd || 0)) / 100, seen: 0 };
   });
   for (const e of state.enemies) {
     if (!e.alive) continue;

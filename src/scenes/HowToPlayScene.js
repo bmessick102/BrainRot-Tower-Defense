@@ -744,8 +744,8 @@ export class HowToPlayScene extends Phaser.Scene {
       let mx = RX;
       if (this.textures.exists(MERGE_GEAR)) { p.add(fitIcon(this.add.image(RX + 13, y + 14, MERGE_GEAR), 26)); mx += 32; }
       mx += drawTag(this, p, mx, y, `Merge 2 x Level ${top}: ${merge.name}`, 0xd9a21b, textStyle(14)) + 10;
-      p.add(abilityIcon(this, merge.abilityIcon, mx + 15, y + 14, 30));
-      mx += 36;
+      p.add(abilityIcon(this, merge.abilityIcon, mx + 20, y + 14, 40));
+      mx += 46;
       const line = this.add.text(mx, y + 14, `${merge.ability}: ${merge.abilityShort}`, bodyStyle(14, COLORS.ink, { fontStyle: 'bold' })).setOrigin(0, 0.5);
       fitWidth(line, RX + RW - mx);
       p.add(line);

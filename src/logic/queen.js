@@ -24,7 +24,7 @@ import { footprintCenter, distanceToFootprint } from './grid.js';
 import { distance } from './iso.js';
 import { emit, isWaveActive, random, nextId } from './util.js';
 import { damageEnemy, enemyIsAir, isBurrowedUnseen, applyVuln } from './combat.js';
-import { heroStep, roam, syncHeroMaxHp } from './hero.js';
+import { heroStep, roam, syncHeroMaxHp, bedtime, restAtNight, wakeFromRest } from './hero.js';
 
 export const QUEEN_TYPE = 'queenAltar';
 const Q = () => CONFIG.queenAltar.hero;
@@ -137,7 +137,11 @@ export function stepQueen(state, dt) {
     h.hp += (st.maxHp - h.hp) * Math.min(1, dt / Math.max(dt, h.sleepT));
     h.sleepT = Math.max(0, h.sleepT - dt);
     altar.heroSleep = h.sleepT;
-    if (h.sleepT <= 0) { h.hp = st.maxHp; altar.heroSleep = 0; wakeUp(state, h); }
+    if (h.sleepT <= 0) {
+      h.hp = st.maxHp; altar.heroSleep = 0;
+      if (bedtime(state)) { h.status = 'ready'; h.knockedOut = false; h.resting = true; } // the nap ends at night: she sleeps on
+      else wakeUp(state, h);
+    }
     return;
   }
   if (h.status === 'down') {
@@ -158,6 +162,7 @@ export function stepQueen(state, dt) {
     if (h.wakeT <= 0) { h.status = 'ready'; emit(state, 'queenReady', {}); }
     return;
   }
+  if (wakeFromRest(state, h, 'queenWaking')) return; // night rest over: a raid started, or it got light
   // Keep shooting the same enemy while it's valid; else the nearest one in her guard range.
   let target = h.targetId ? state.enemies.find((e) => e.id === h.targetId) : null;
   if (!target || !validFoe(target, home, st.guardRange)) {
@@ -172,7 +177,10 @@ export function stepQueen(state, dt) {
     }
     h.targetId = target ? target.id : null;
   }
-  if (!target) { roam(state, h, home, { ...st, guardRange: st.guardRange * ROAM_AREA }, dt, altar.id); return; }
+  if (!target) {
+    if (!restAtNight(state, h, home, st, dt, altar.id)) roam(state, h, home, { ...st, guardRange: st.guardRange * ROAM_AREA }, dt, altar.id);
+    return;
+  }
   h.roamTo = null; h.roamPause = 0;
   const step = st.speed * dt;
   const d = distance(h.x, h.y, target.x, target.y);
@@ -367,7 +375,7 @@ export function queenAfterWave(state) {
   const c = footprintCenter(altar);
   h.x = c.x; h.y = c.y;
   h.roamTo = null; h.waypoint = null; h.overWall = false; h.moving = false;
-  h.status = 'asleep'; h.knockedOut = false;
+  h.status = 'asleep'; h.knockedOut = false; h.resting = false;
   h.sleepT = h.sleepTotal = Math.max(0.1, lost * st.maxSleep);
   altar.heroSleep = h.sleepT;
   emit(state, 'queenSleeping', { seconds: h.sleepT });
