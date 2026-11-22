@@ -159,6 +159,7 @@ export function fireDefense(state, b, target, opts = {}) {
   const merge = mergedConfigOf(b);
   if (opts.fx) p.fx = opts.fx;
   if (merge) {
+    p.merged = true; // (drawn bigger: ProjectileView MERGED_SCALE)
     const mfx = masteryFxOf(b);
     if (merge.roll && !opts.kind && !enemyIsAir(target)) { p.roll = rollFor(merge.roll, fx, mfx); p.mega = true; }
     if (mfx.slowOnHit) p.fx = { ...p.fx, slowOnHit: Math.max(p.fx.slowOnHit || 0, mfx.slowOnHit), slowSeconds: Math.max(p.fx.slowSeconds || 0, mfx.slowSeconds || 1) };

@@ -1441,7 +1441,7 @@ export class GameScene extends Phaser.Scene {
     on('heroReady', () => { const s = heroAt(); if (s) floatText(this, s.x, s.y - 80, 'Ready!', '#ffd34a', 16); });
     // The Hatsune Queen: her bolts (the Locklair's arrow sound), Encore Cloak, knockouts and getting back up.
     const queenAt = () => { const h = this.gs.queen; return h ? gridToScreen(h.x, h.y) : null; };
-    on('queenShot', () => playSfxCapped(this, SFX.arrowFire, ENEMY_HIT_MAX));
+    on('queenShot', () => playSfx(this, FIRE_SFX.archer)); // the same shot sound as a Locklair Tower, never skipped
     on('queenBoltHit', (d) => {
       if (!d.crit && !d.head) return;
       const s = gridToScreen(d.x, d.y);

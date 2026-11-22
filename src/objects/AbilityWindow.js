@@ -116,7 +116,10 @@ function drawTree(scene, m, x, y, colW, gap, type, nodeState, selected, onSelect
       isSel: (t) => !!selected && !!selected.mastery && selected.tier === t, pick: (t) => ({ mastery: true, tier: t })
     });
   }
-  if (mastery) masteryAura(scene, m, nx(cols.length - 1), y, colW, COL_HEAD + 8 + ROW_STEP * (masteryTierCount(type) - 1) + NODE_H);
+  if (mastery) {
+    const ready = Array.from({ length: masteryTierCount(type) }, (_, k) => mastery.stateOf(k + 1)).some((st) => st.state === 'available' && !st.short);
+    masteryAura(scene, m, nx(cols.length - 1), y, colW, COL_HEAD + 8 + ROW_STEP * (masteryTierCount(type) - 1) + NODE_H, ready);
+  }
   // Tier bands and gutter labels: one row per tier makes "one pick per tier" easy to see.
   for (let t = 1; t <= MAX_TIER; t++) {
     const top = ny(t) - 4;
@@ -184,23 +187,16 @@ function drawTree(scene, m, x, y, colW, gap, type, nodeState, selected, onSelect
 }
 
 /**
- * The Mastery column's effects: a soft gold glow behind it that breathes, and gold sparkles twinkling around its
- * edge (x, y, w, h: the column). Every tween is killed with its object, so a refresh leaves nothing running.
+ * The Mastery column's gold glow (x, y, w, h: the column). It pulses while a tier is ready to research (`pulse`), so
+ * the player sees there's an upgrade waiting; otherwise it stays still. The tween is killed with the glow on refresh.
  */
-function masteryAura(scene, m, x, y, w, h) {
-  const tweenOn = (obj, cfg) => { scene.tweens.add({ targets: obj, ...cfg }); obj.once('destroy', () => scene.tweens.killTweensOf(obj)); };
+function masteryAura(scene, m, x, y, w, h, pulse) {
   const glow = m.add(scene.add.graphics());
-  for (let k = 3; k >= 1; k--) glow.fillStyle(GOLD, 0.07 * (4 - k)).fillRoundedRect(x - 4 * k, y - 4 * k, w + 8 * k, h + 8 * k, 12 + 4 * k);
-  glow.lineStyle(2, GOLD, 0.8).strokeRoundedRect(x - 5, y - 5, w + 10, h + 10, 15);
-  tweenOn(glow, { alpha: { from: 1, to: 0.45 }, duration: 1100, yoyo: true, repeat: -1, ease: 'Sine.easeInOut' });
-  const spots = 10;
-  for (let i = 0; i < spots; i++) {
-    // Spread around the column's outline: down the left and right edges, a couple on top and bottom.
-    const side = i % 2 ? x + w + 8 : x - 8;
-    const sy = y + (h * (Math.floor(i / 2) + 0.5)) / Math.ceil(spots / 2);
-    const sp = m.add(scene.add.text(side, sy, '✦', textStyle(14 + (i % 3) * 3, '#ffe27a')).setOrigin(0.5).setAlpha(0));
-    tweenOn(sp, { alpha: { from: 0, to: 1 }, scale: { from: 0.6, to: 1.15 }, angle: 45, duration: 700, delay: i * 230, hold: 150, yoyo: true, repeat: -1, repeatDelay: 900 + (i % 4) * 300, ease: 'Sine.easeInOut' });
-  }
+  for (let k = 3; k >= 1; k--) glow.fillStyle(GOLD, 0.13 * (4 - k)).fillRoundedRect(x - 4 * k, y - 4 * k, w + 8 * k, h + 8 * k, 12 + 4 * k);
+  glow.lineStyle(4, 0xffe066, 1).strokeRoundedRect(x - 5, y - 5, w + 10, h + 10, 15);
+  if (!pulse) { glow.setAlpha(0.35); return; }
+  scene.tweens.add({ targets: glow, alpha: { from: 1, to: 0.1 }, duration: 750, yoyo: true, repeat: -1, ease: 'Sine.easeInOut' });
+  glow.once('destroy', () => scene.tweens.killTweensOf(glow));
 }
 
 /**

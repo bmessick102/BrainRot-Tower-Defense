@@ -318,8 +318,8 @@ const Phaser_angle = (dx, dy) => (Math.atan2(dy, dx) * 180) / Math.PI;
 // ---------- Firework rocket ----------
 export const FIREWORK_COLORS = [0xff3b5c, 0xffd23f, 0x3df5a7, 0x4cc9ff, 0xb46bff, 0xffffff];
 
-/** A rocket's glow and crackling spark trail. Same interface as attachFireballFx. */
-export function attachRocketFx(scene, sprite, lightKey) {
+/** A rocket's glow and crackling spark trail. Same interface as attachFireballFx. `k`: size (a Missile Silo's bigger rockets). */
+export function attachRocketFx(scene, sprite, lightKey, k = 1) {
   if (sprite.preFX) {
     sprite.preFX.padding = 8;
     sprite.preFX.addGlow(0xffd23f, 4, 0, false, 0.1, 10);
@@ -328,7 +328,7 @@ export function attachRocketFx(scene, sprite, lightKey) {
   const trail = scene.add.particles(0, 0, lightKey, {
     speed: { min: 4, max: 22 },
     lifespan: { min: 220, max: 420 },
-    scale: { start: 0.08, end: 0 },
+    scale: { start: 0.08 * k, end: 0 },
     alpha: { start: 1, end: 0 },
     tint: [0xfff4c2, 0xffd23f, 0xff8a1f, 0xff3b5c],
     blendMode: 'ADD',
@@ -339,7 +339,7 @@ export function attachRocketFx(scene, sprite, lightKey) {
   trail.startFollow(sprite);
   return {
     update(x, y, depth, time) {
-      glow.setPosition(x, y).setScale(0.16 + 0.03 * Math.sin(time * 0.05)).setAlpha(0.9).setDepth(depth - 0.2);
+      glow.setPosition(x, y).setScale((0.16 + 0.03 * Math.sin(time * 0.05)) * k).setAlpha(0.9).setDepth(depth - 0.2);
       trail.setDepth(depth - 0.3);
     },
     destroy() {

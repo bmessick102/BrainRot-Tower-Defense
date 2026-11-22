@@ -149,6 +149,7 @@ v0.8.0 new enemies (Quandale Dingle, Grimace Golem):
 | `Merged Locklair Tower.png` | `art-source/buildings/bld_archer_merged.png` (v0.8.0, the Locklair Citadel) |
 | `Merged Mortar Image.png` | `art-source/buildings/bld_mortar_merged.png` (v0.8.0, the merged Mortar, three barrels) |
 | `Merged Litman Mortar V2.png` | `art-source/buildings/bld_mortar_merged.png` (v0.8.0, replaces the first merged Mortar picture) |
+| `Litman MultiMortar Image V2.png` | `art-source/buildings/bld_mortar_merged.png` (v0.8.1, replaces the v0.8.0 merged Mortar picture) |
 | `Merged Firework Launcher aimed left image 2.png` | `art-source/buildings/bld_firework_merged_left.png` (v0.8.0, merged Firework Launcher, aiming left) |
 | `Merged Firework Launcher aimed right Image.png` | `art-source/buildings/bld_firework_merged_right.png` (v0.8.0, aiming right) |
 | `merged cannon_sprites.zip` (and an identical `cannon_sprites.zip`) | `art-source/buildings/bld_cannon_merged_dl/_dr/_ul/_ur.png` (v0.8.0, the Mega Cannon, 4 facings) |

@@ -2,6 +2,22 @@
 
 The version shows in the bottom-left corner of every screen (`package.json` `version` plus the commit). Details for everything below are in [README.md](README.md).
 
+## 0.8.1
+
+Fewer Gandolf Towers, bigger merged shots, a pulsing Mastery column, a new app icon, the new Litman Triple Mortar picture, and the Hatsune Queen's shot sound. No database change; saves load as they are.
+
+### Changes
+- **Merged shots drawn bigger** (src/objects/ProjectileView.js): `MEGA_BALL_WIDTH` 26 -> 40 (a cannonball is 14); other merged shots use `MERGED_SCALE` (cannon 2.6, firework 1.8: the Missile Silo's rockets), flagged by `p.merged` set in combat.js `fireProjectile`. `attachRocketFx(scene, sprite, lightKey, k)` scales the rocket's glow and trail with them.
+- **RV Lab Mastery column** (AbilityWindow.js `masteryAura`): the sparkles are gone; the gold glow pulses (alpha 1 to 0.1, 750 ms yoyo) only while a Mastery tier is available and affordable, otherwise it stays still at 35%. The header text is white with the outline, like the path headers. (The 3 Mastery stars on a merged building's label chip stay.)
+- **New merged Mortar picture:** `art-source/buildings/bld_mortar_merged.png` is the user's "Litman MultiMortar Image V2" (same framing, so `art.scale` 1.24 is unchanged).
+- **App icon:** the start screen's background with the game logo centered, as plain files (no script): master `docs/branding/app_icon.png`; `public/apple-touch-icon.png` (180) and new `icon-maskable-512.png` are square (the OS rounds them); `favicon-32.png`, `favicon-192.png` and new `icon-512.png` have rounded app corners. `manifest.webmanifest` lists 192 / 512 (any) and 512 (maskable).
+
+### Balance
+- **Gandolf Towers capped at 4** (`CONFIG.limits.wizard` `[0,0,1,1,1,2,2,2,3,3,4,4,4,4,4]`, was up to 6): one at VH3, VH6, VH9 and VH11. VH12 gives +1 Litman Mortar in its place (`limits.mortar` now ends `5,5,6,6,7,7`). Defense totals per hall: VH10 39, VH11 44, VH12-15 46 / 49 / 53 / 55. Villages over the new cap keep their Gandolfs (`overCap`: they work but block building more).
+
+### Bug Fixes
+- **Hatsune Queen's shots were often silent:** `queenShot` played `SFX.arrowFire` through `playSfxCapped(..., ENEMY_HIT_MAX)`, which skipped it while 4 arrow sounds were playing (several Locklair Towers). It now plays `FIRE_SFX.archer` with `playSfx`, like a Locklair Tower's shot.
+
 ## 0.8.0
 
 A second hero (the Hatsune Queen), defense merging, two new enemies, Village Halls 12-15 (Bonus Slots removed), 2x wave speed, a per-village leaderboard, selling removed, and fixes. Saves load as they are (still save version 7; villages over the new caps keep their buildings). **Database:** run [supabase/migration-2026-11-22-v0.8.sql](supabase/migration-2026-11-22-v0.8.sql) (or all of schema.sql): it raises the server's Village Hall cap to 15 in `check_base()` / `keep_bests()` (without it, villages still save, but a Village Hall 12-15 village shows as 11 on the leaderboard and in player search) and adds the per-village leaderboard (`bases.best_wave_at`, kept by `check_base`; `get_village_leaderboard(lim)`). v0.7.2 never shipped; its changes are listed here.

@@ -12,7 +12,9 @@ const DISPLAY_WIDTH = {
   cannon: 14, archer: 34, mortar: 34, wizard: 34, firework: 28, catapult: 16, spear: 52, slinger: 18, bomb: 18, pellet: 8, boulder: 26, bomblet: 18,
   ksi: 11, ksiBounce: 9, vaca: 24, missile: 30
 };
-const MEGA_BALL_WIDTH = 26; // a Mega Cannon's cannonball (Rolling Thunder), about twice a cannonball
+const MEGA_BALL_WIDTH = 40; // a Mega Cannon's cannonball (Rolling Thunder), nearly three times a cannonball
+// Other shots from merged defenses are drawn this much bigger than their kind's width (the Missile Silo's rockets).
+const MERGED_SCALE = { cannon: 2.6, firework: 1.8 };
 const BOLT_WIDTH = 56;      // a Locklair Citadel's Ballista Bolt: a big arrow
 const ROLL_LIFT = 12;       // a rolling Mega Cannon ball settles to this height over the ground (px)
 const SHURIKEN_SPIN = 0.35; // radians per frame the Slinger's shuriken turns in flight
@@ -48,7 +50,7 @@ export class ProjectileView {
     this.kind = p.kind;
     this.image = scene.add.image(0, 0, PROJECTILE_KEYS[p.kind]).setDepth(2000);
     // Merged defenses' shots: the Mega Cannon's huge cannonball, the Locklair Citadel's ballista bolt.
-    const w = p.mega ? MEGA_BALL_WIDTH : p.bolt ? BOLT_WIDTH : DISPLAY_WIDTH[p.kind] || 12;
+    const w = p.mega ? MEGA_BALL_WIDTH : p.bolt ? BOLT_WIDTH : (DISPLAY_WIDTH[p.kind] || 12) * (p.merged ? MERGED_SCALE[p.kind] || 1 : 1);
     this.image.setScale(w / this.image.frame.width);
     if (p.bolt) this.image.setTint(0xffe2b0);
     this.last = null;
@@ -59,7 +61,7 @@ export class ProjectileView {
     // The KSI Tower's bottle: an icy glow and a frost trail (v0.6.3).
     this.fx = p.kind === 'wizard' ? attachFireballFx(scene, this.image, TEX.light)
       : p.kind === 'ksi' || p.kind === 'ksiBounce' ? attachFrostFx(scene, this.image, TEX.light)
-      : p.kind === 'firework' ? attachRocketFx(scene, this.image, TEX.light) : null;
+      : p.kind === 'firework' ? attachRocketFx(scene, this.image, TEX.light, p.merged ? MERGED_SCALE.firework : 1) : null;
     this.sync(p);
   }
 

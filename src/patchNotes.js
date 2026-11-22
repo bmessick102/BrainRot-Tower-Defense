@@ -19,8 +19,8 @@ const allEntries = (release) => release.sections.flatMap((s) => s.entries);
 
 export const PATCH_NOTES = {
   release: '0.8',
-  version: '0.8.0',
-  title: "What's New in v0.8",
+  version: '0.8.1',
+  title: "What's New in v0.8.1",
   sections: [
     {
       type: 'feature',
@@ -75,6 +75,18 @@ export const PATCH_NOTES = {
           text: 'The button on each leaderboard and Find Players row is now Profile. Visit their villages from inside the profile; Back returns you to their profile, then the list you came from.'
         },
         {
+          version: '0.8.1', icon: { texture: 'bld_cannon_merged_dl' }, title: 'Bigger shots for merged defenses',
+          text: 'The Mega Cannon fires a much bigger cannonball and the Missile Silo fires bigger rockets, so their shots stand out.'
+        },
+        {
+          version: '0.8.1', icon: { texture: 'ui_merge_gear' }, title: 'Mastery shows when it’s ready',
+          text: 'In the RV Lab, the gold Mastery column now pulses when you can research its next tier.'
+        },
+        {
+          version: '0.8.1', icon: { texture: 'title_logo' }, title: 'New app icon',
+          text: 'Add the game to your home screen and it gets a proper app icon: the game’s logo over the title screen. The browser tab shows it too.'
+        },
+        {
           version: '0.8.0', icon: { enemy: 'tank' }, title: 'Title screen',
           text: 'Tripi Tropi, the fish giant, is smaller on the title screen so he no longer towers over everyone.'
         },
@@ -85,11 +97,24 @@ export const PATCH_NOTES = {
       ]
     },
     {
+      type: 'balance',
+      entries: [
+        {
+          version: '0.8.1', icon: { building: 'wizard', level: 10 }, title: 'Fewer Gandolf Towers',
+          text: 'Gandolf Towers now top out at 4 instead of 6: one each at Village Halls 3, 6, 9 and 11. Village Hall 12 gives a Litman Mortar instead. Villages keep every Gandolf they already built.'
+        }
+      ]
+    },
+    {
       type: 'fix',
       entries: [
         {
           version: '0.8.0', icon: { building: 'townHall', level: 1 }, title: 'Village drawn as plain blocks',
           text: 'On a slow or patchy connection, pictures that failed to load stayed as plain blocks all game. The game now keeps trying, swaps buildings in when they arrive, and offers Retry and Reload if pictures still won’t load.'
+        },
+        {
+          version: '0.8.1', icon: { texture: 'hero_queen' }, title: 'Hatsune Queen’s shots were silent',
+          text: 'With several Locklair Towers firing, the Hatsune Queen’s crossbow shots often made no sound. Every shot now plays, like a Locklair Tower’s.'
         },
         {
           version: '0.8.0', icon: { hero: true }, title: 'Hero health bar not full',
