@@ -13,6 +13,7 @@ import { stepSkyNets } from './skyNet.js';
 import { stepWizardWalls } from './wizardWall.js';
 import { stepFlockZaps } from './flockZap.js';
 import { stepHarpoons } from './harpoon.js';
+import { stepShatters } from './shatter.js';
 import { stepFlockTowers } from './flock.js';
 import { stepSpecialEnemies } from './specialEnemies.js';
 import { stepTraps } from './traps.js';
@@ -57,6 +58,7 @@ export function simulate(state, dt) {
   if (!state.gameOver) stepPools(state, dt);
   if (!state.gameOver) stepStrikes(state, dt); // Arrow Storms / Meteors landing
   if (!state.gameOver) stepEnemyStatus(state, dt); // burning / poisoned enemies, vulnerability timers
+  if (!state.gameOver) stepShatters(state, dt); // KSI Frost Fortress (merged KSI Tower): Shatter bursts (shatter.js)
   if (!state.gameOver) stepAbilityBuildings(state, dt); // Self-Repair, Last Stand timers
   if (!state.gameOver) stepGnomeRepairs(state, dt, gnomes);
   removeDeadEnemies(state);

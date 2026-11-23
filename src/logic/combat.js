@@ -15,6 +15,7 @@ import { knockback, applySlow, applyStun } from './motion.js';
 import { addResearchPoints, killResearchPoints } from './researchPoints.js';
 import { fireBoulderAt, fireMissileAt, stepEnemyShot, dropGoo } from './specialEnemies.js';
 import { harpoonDue, throwHarpoons, hookEnemy } from './harpoon.js';
+import { shatterFor, markShatter, queueShatter } from './shatter.js';
 
 export { applySlow, applyStun };
 
@@ -164,6 +165,7 @@ export function fireDefense(state, b, target, opts = {}) {
     const mfx = masteryFxOf(b);
     if (merge.roll && !opts.kind && !enemyIsAir(target)) { p.roll = rollFor(merge.roll, fx, mfx); p.mega = true; }
     if (mfx.slowOnHit) p.fx = { ...p.fx, slowOnHit: Math.max(p.fx.slowOnHit || 0, mfx.slowOnHit), slowSeconds: Math.max(p.fx.slowSeconds || 0, mfx.slowSeconds || 1) };
+    if (merge.shatter && p.chill) p.shatter = shatterFor(b, p.chill); // KSI Frost Fortress: what it chills can shatter (shatter.js)
   }
   if (opts.bolt) p.bolt = opts.bolt;
   if (opts.volley) p.volley = opts.volley;
@@ -589,6 +591,7 @@ export function damageEnemy(state, e, amount, source = null) {
   if (e.hp <= 0) {
     e.hp = 0;
     e.alive = false;
+    queueShatter(state, e); // KSI Frost Fortress: chilled by it -> bursts into ice shards (shatter.js)
     const loot = nightLootMult(state) * (e.pack || 1); // restless nights pay more; a packed enemy pays for all it stands for
     const goldPerk = economyBountyMult(state, e); // Central Bank (Storage), Bounty Vault (Mine near it)
     addHype(state, e.pack || 1); // DJ Babyface's meter
@@ -825,6 +828,7 @@ function landSplash(state, p, x, y, primary) {
     for (const e of hit) {
       if (!e.alive) continue;
       chillEnemy(e, p.chill);
+      if (p.shatter) markShatter(e, p.shatter, p.chill.seconds); // KSI Frost Fortress: it shatters if it dies chilled
       if (fx.freezeChance && random(state) < fx.freezeChance) freezeEnemy(state, e, fx.freezeSeconds || 1, fx.frozenVuln || 0);
     }
     // Frost Patch / Permafrost: an icy patch where it burst.
@@ -840,7 +844,7 @@ function landSplash(state, p, x, y, primary) {
   if (fx.bounce && main) {
     const len = Math.hypot(travel.x, travel.y) || 1;
     const tx = x + (travel.x / len) * fx.bounceDist, ty = y + (travel.y / len) * fx.bounceDist;
-    fireBomblet(state, p, x, y, tx, ty, p.damage * fx.bounce, { bounced: true, splash: p.splashRadius, flightTime: 0.5, fx, kind: p.kind === 'ksi' ? 'ksiBounce' : 'bomblet', chill: p.chill });
+    fireBomblet(state, p, x, y, tx, ty, p.damage * fx.bounce, { bounced: true, splash: p.splashRadius, flightTime: 0.5, fx, kind: p.kind === 'ksi' ? 'ksiBounce' : 'bomblet', chill: p.chill, shatter: p.shatter });
   }
   // Mortar Fault Line: cracks in the ground running back toward the mortar.
   if (fx.crack && main) {
@@ -985,7 +989,7 @@ export function fireLine(state, x, y, dx, dy, o) {
 function fireBomblet(state, parent, x, y, tx, ty, damage, o = {}) {
   const f = parent.fx || {};
   state.projectiles.push({
-    id: nextId(state, 'p'), kind: o.kind || 'bomblet', owner: 'tower', sourceId: parent.sourceId || null, tower: parent.tower, fromBlast: true, chill: o.chill || null,
+    id: nextId(state, 'p'), kind: o.kind || 'bomblet', owner: 'tower', sourceId: parent.sourceId || null, tower: parent.tower, fromBlast: true, chill: o.chill || null, shatter: o.shatter || null,
     x, y, startX: x, startY: y, targetId: null, targetX: tx, targetY: ty,
     homing: false, elapsed: 0, flightTime: o.flightTime ?? BOMBLET.flightTime, damage, bounced: !!o.bounced,
     splashRadius: o.splash ?? BOMBLET.splash, hitsGround: parent.hitsGround, hitsAir: parent.hitsAir, groundMult: 1,

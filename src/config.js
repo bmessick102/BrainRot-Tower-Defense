@@ -816,6 +816,35 @@ export const CONFIG = {
         key: 'bld_spear_merged_dl', scale: 1.05, standInScale: 1.25, // v0.8.7: 1.25 -> 1.15; v0.8.10: 1.05, so its tile's outline shows
         facings: { dl: 'bld_spear_merged_dl', dr: 'bld_spear_merged_dr', ul: 'bld_spear_merged_ul', ur: 'bld_spear_merged_ur' }
       }
+    },
+    // KSI Frost Fortress (v0.8.11): bottles at 2x damage (2x DPS). Shatter (shatter.js): an enemy its bottles chilled
+    // that dies while still chilled (whatever kills it) bursts into ice shards: `radius` tiles around it, `mult` x one of
+    // its bottles' damage to every enemy there, ground and air. A shard kill on another enemy it chilled shatters that
+    // one too (a chain through a crowd), one step later. No slow, freeze, ice patch, blizzard, splash or bounce: its
+    // perks have those.
+    ksi: {
+      name: 'KSI Frost Fortress',
+      ability: 'Shatter',
+      abilityIcon: 'ui_ability_shatter',
+      abilityShort: 'Enemies it chilled burst into ice shards when they die.',
+      description: 'Two KSI Towers frozen into one fortress. Its bottles hit twice as hard, and anything it has chilled shatters into ice shards when it falls, hurting everything around it.',
+      abilityText: 'Every enemy its bottles chill shatters if it dies while still chilled, whatever finishes it: ice shards hit every enemy within 1.5 tiles (ground and air) for a full bottle\'s damage. A shard kill on another chilled enemy shatters that one too.',
+      cost: { gold: 120000, rp: 3000 },
+      hpMult: 2, damageMult: 2, fireIntervalMult: 1, rangeAdd: 0.5,
+      shatter: { radius: 1.5, mult: 1 },
+      mastery: {
+        costs: [1200, 2000, 3000], labLevel: [3, 4, 5],
+        tiers: [
+          { name: 'Bigger Burst', desc: 'Ice shards fly 0.5 tile further.', fx: { shatterRadiusAdd: 0.5 } },
+          { name: 'Sharp Shards', desc: 'Ice shards deal 150% of a bottle\'s damage.', fx: { shatterMult: 1.5 } },
+          { name: 'Splinter', desc: 'Ice shards chill everything they hit, so those enemies can shatter too.', fx: { shatterChill: 1 } }
+        ]
+      },
+      // Its icy base is drawn right at the bottom of the picture and is wide, so it stands further back on its plot than a
+      // Level 10 picture would (`ground`: its bottom 40% of the way from the plot's center to its front corner; BuildingView).
+      // Measured against the plot rim (GameScene drawPlots) on the trimmed picture: at 1.45 its base stays inside the
+      // 2x2 tile's outline (95% of the rim) while standing 20% taller and 16% wider than a Level 10 KSI Tower.
+      art: { key: 'bld_ksi_merged', scale: 1.45, standInScale: 1.25, ground: 0.4 }
     }
   },
   // Per Village Hall level (1-15). Every hall from 11 adds 12 walls. v0.8 (user, 2026-11-22; replaced v0.6.1's Bonus

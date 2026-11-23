@@ -511,6 +511,7 @@ export function checkWaveCleared(state) {
   state.strikes = [];
   state.nets = []; // Missile Silo nets (skyNet.js)
   state.barriers = []; // Gandolf the Grand's walls (wizardWall.js)
+  state.shatters = []; // KSI Frost Fortress's bursts waiting to go off (shatter.js)
   let ruins = repairAll(state);
   resetTraps(state); // every Mousetrap is set again for the next wave
   // Once per night: Last Stand; Spellsteal and Ready Rack start over.

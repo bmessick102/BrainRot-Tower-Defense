@@ -1,7 +1,7 @@
 // Ability icons of the merged defenses (CONFIG.merges[type].abilityIcon): a glossy gold box like the hero ability
 // slots on the hotbar (v0.8.2: it was a disc). The art is a texture (art-source/ui/<key>.png, e.g. ui_ability_sky_net)
 // drawn inside the box (the user's painted icons since v0.8.5); if one is missing, a simple symbol is drawn in code (a rolling ball, a bolt, three shells, a net,
-// a staff and a wall, a hook on a chain).
+// a staff and a wall, a hook on a chain, a cracking ice crystal).
 import { fitIcon, drawGlossy } from './uiDraw.js';
 
 const GOLD = 0xffc83a, GOLD_DARK = 0xb87d0a, INK = 0x3a2406;
@@ -56,6 +56,18 @@ function drawSymbol(g, key, r) {
     g.beginPath().arc(-r * 0.24, r * 0.3, r * 0.24, 0, Math.PI, false).strokePath();
     g.fillTriangle(-r * 0.56, r * 0.36, -r * 0.4, r * 0.36, -r * 0.48, r * 0.08); // the barb
     g.fillStyle(0xfff0c0, 1).fillCircle(0, -r * 0.14, r * 0.07);
+  } else if (key === 'ui_ability_shatter') {
+    // An ice crystal cracking apart: a diamond split by cracks, with shards flying off its sides.
+    const d = [[0, -0.58], [0.4, 0], [0, 0.58], [-0.4, 0]];
+    g.lineStyle(Math.max(2, r * 0.12), INK, 1).strokePoints(d.map(([x, y]) => ({ x: r * x, y: r * y })), true);
+    g.fillStyle(0xfff0c0, 1).fillTriangle(-r * 0.12, -r * 0.3, r * 0.12, -r * 0.3, 0, -r * 0.5);
+    g.lineStyle(Math.max(1.5, r * 0.08), INK, 1);
+    g.lineBetween(0, -r * 0.58, -r * 0.08, -r * 0.1).lineBetween(-r * 0.08, -r * 0.1, r * 0.1, r * 0.12).lineBetween(r * 0.1, r * 0.12, 0, r * 0.58);
+    g.lineBetween(-r * 0.08, -r * 0.1, -r * 0.3, r * 0.05);
+    g.fillStyle(INK, 1);
+    for (const [x, y, s2] of [[0.62, -0.32, 1], [0.7, 0.2, -1], [-0.64, -0.26, -1], [-0.68, 0.28, 1]]) {
+      g.fillTriangle(r * x, r * (y - 0.1), r * (x + 0.1 * s2), r * (y + 0.08), r * (x - 0.1 * s2), r * (y + 0.06));
+    }
   } else {
     // A net: a circle crossed by a few lines.
     g.strokeCircle(0, 0, r * 0.55);

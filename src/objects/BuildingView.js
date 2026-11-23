@@ -148,7 +148,7 @@ export function mergedSizeFactor(scene, b) {
 // Where a merged defense's shots leave its picture (v0.8.6), measured on each picture (each facing of the turning ones):
 // x = share of its width from the left edge, y = share of its height from the bottom. The Mega Cannon's barrel mouth,
 // the Locklair Citadel's archers, the middle of the Triple Mortar's three barrels, Gandolf the Grand's staff, the Missile
-// Silo's rocket nose and the Harpoon Ballista's bolt tip. Used by ProjectileView (shots), HarpoonFx (the chain) and
+// Silo's rocket nose, the Harpoon Ballista's bolt tip and the KSI Frost Fortress's bottle. Used by ProjectileView (shots), HarpoonFx (the chain) and
 // NetFx (the Sky Net rocket); see BuildingView.muzzlePoint.
 export const MERGED_MUZZLE = {
   bld_cannon_merged_dl: { x: 0.26, y: 0.65 }, bld_cannon_merged_dr: { x: 0.74, y: 0.65 },
@@ -158,7 +158,8 @@ export const MERGED_MUZZLE = {
   bld_wizard_merged: { x: 0.41, y: 0.95 },
   bld_firework_merged_left: { x: 0.18, y: 0.80 }, bld_firework_merged_right: { x: 0.82, y: 0.80 },
   bld_spear_merged_dl: { x: 0.16, y: 0.72 }, bld_spear_merged_dr: { x: 0.85, y: 0.72 },
-  bld_spear_merged_ul: { x: 0.10, y: 0.89 }, bld_spear_merged_ur: { x: 0.93, y: 0.92 }
+  bld_spear_merged_ul: { x: 0.10, y: 0.89 }, bld_spear_merged_ur: { x: 0.93, y: 0.92 },
+  bld_ksi_merged: { x: 0.68, y: 0.84 } // the KSI Frost Fortress's right-hand Prime bottle (v0.8.11; the left one is at 0.33, 0.84)
 };
 
 /** The gear that marks merged buildings (ui_merge_gear; nothing is drawn when its art is missing). */
@@ -177,7 +178,8 @@ const DEFAULT_SPRITE_SCALE = 0.75;
 // Mousetrap: a flat 1-tile trap, drawn a little wider than its tile.
 // Tower of Rah: a tall, slim tower, drawn narrower than its footprint (it starts small and grows a lot).
 // RV Lab: a long RV on its own paved pad; 0.77 of its 2x2 footprint (10% bigger than the earlier 0.7).
-// KSI Tower: a tall, slim tower like the Locklair's, a little narrower than the default.
+// KSI Tower: a tall, slim tower like the Locklair's, a little narrower than the default. (The merged KSI Frost Fortress
+// stands further back on its plot instead, CONFIG.merges.ksi.art.ground, so it fits the tile's outline at this size.)
 // Mortar: 0.585 (was 0.65, v0.8: 10% smaller at every level so the 25% bigger merged Triple Mortar stands out).
 const SPRITE_SCALE = { mortar: 0.585, cannon: 0.63, firework: 0.52, catapult: 0.66, spear: 0.66, ksi: 0.62, flock: 1.15, mousetrap: 1.1, ra: 0.54, rvlab: 0.77, dj: 0.77, altar: 0.66, queenAltar: 0.66, fuelStation: 0.8 };
 
@@ -359,6 +361,16 @@ export class BuildingView {
     if (mergeK !== 1) this.sprite.setScale(this.sprite.scaleX * mergeK, this.sprite.scaleY * mergeK);
     const merged = !!mergedConfigOf(b) && !b.destroyed;
     const standIn = merged && isMergedStandIn(this.scene, b);
+    // A merged picture with its own ground point (CONFIG.merges[type].art.ground, v0.8.11): its bottom stands that share of
+    // the way from the footprint's center to its front corner, not at the Level 10 picture's spot. A picture whose wide
+    // base is drawn at its very bottom (the KSI Frost Fortress's ice) would cover the tile's outline out there, where it
+    // narrows to the corner.
+    const ground = merged && !standIn ? mergedConfigOf(b).art && mergedConfigOf(b).art.ground : undefined;
+    if (typeof ground === 'number') {
+      const c = gridToScreen(b.col + b.size / 2, b.row + b.size / 2), fc = gridToScreen(b.col + b.size, b.row + b.size);
+      front = { x: c.x + (fc.x - c.x) * ground, y: c.y + (fc.y - c.y) * ground };
+      this.sprite.setPosition(front.x, front.y);
+    }
     if (b.destroyed && FLAT_RUBBLE[b.type] && key === buildingDestroyedKey(b.type)) {
       // A flat pile: centered on the footprint, nearly as wide as it (depth stays the building's).
       const c = gridToScreen(b.col + b.size / 2, b.row + b.size / 2);

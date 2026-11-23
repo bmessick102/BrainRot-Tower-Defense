@@ -19,8 +19,8 @@ const allEntries = (release) => release.sections.flatMap((s) => s.entries);
 
 export const PATCH_NOTES = {
   release: '0.8',
-  version: '0.8.10',
-  title: "What's New in v0.8.10",
+  version: '0.8.11',
+  title: "What's New in v0.8.11",
   sections: [
     {
       type: 'feature',
@@ -44,6 +44,10 @@ export const PATCH_NOTES = {
         {
           version: '0.8.3', icon: { texture: 'bld_spear_merged_dl' }, title: 'Spear Throwers can merge: the Harpoon Ballista',
           text: 'Two Level 10 Spear Throwers merge into the Harpoon Ballista, whose spears hit twice as hard. Reel In: every 3rd throw harpoons the toughest enemy in range and drags it 3 tiles back the way it came. Bosses are only slowed.'
+        },
+        {
+          version: '0.8.11', icon: { texture: 'bld_ksi_merged' }, title: 'KSI Towers can merge: the KSI Frost Fortress',
+          text: 'Two Level 10 KSI Towers merge into the KSI Frost Fortress, whose bottles hit twice as hard. Shatter: any enemy it has chilled bursts into ice shards when it dies, hurting every enemy around it, so a crowd can shatter in a chain.'
         },
         {
           version: '0.8.0', icon: { enemy: 'quandale' }, title: 'New enemy: Quandale Dingle (from Village Hall 7)',

@@ -78,6 +78,8 @@ const FADE_ALPHA = 0.35;
 const FADE_OVERLAP = 0.12;
 // Ground plots under buildings.
 const PLOT_COLOR = 0x6b4a2b, PLOT_ALPHA = 0.22, PLOT_RIM = 0xf0dcae, PLOT_RIM_ALPHA = 0.28;
+// KSI Frost Fortress: at most one "SHATTER!" tag this often (a chain can burst many enemies in a moment).
+const SHATTER_TAG_MS = 350;
 
 // A level-up that reaches a new ability tier: the unlock sound starts this long before the upgrade sound ends.
 const UNLOCK_OVERLAP_MS = 150;
@@ -1389,10 +1391,10 @@ export class GameScene extends Phaser.Scene {
         }
         return;
       }
-      if (d.source === 'pool' || d.source === 'burn' || d.source === 'ring' || d.source === 'poison' || d.source === 'bleed') {
+      if (d.source === 'pool' || d.source === 'burn' || d.source === 'ring' || d.source === 'poison' || d.source === 'bleed' || d.source === 'shatter') {
         // Damage over time: small numbers, no hit sound (they come every half second). Pink oil, orange fire,
-        // green poison, red bleeding.
-        const color = { pool: '#ff8fc8', poison: '#8be06b', bleed: '#ff6b6b' }[d.source] || '#ffa04a';
+        // green poison, red bleeding; KSI Frost Fortress ice shards in icy blue (their burst has its own sound).
+        const color = { pool: '#ff8fc8', poison: '#8be06b', bleed: '#ff6b6b', shatter: '#bfe9ff' }[d.source] || '#ffa04a';
         floatText(this, s.x + Phaser.Math.Between(-6, 6), s.y - 16, `${Math.round(d.amount)}`, color, 12);
         return;
       }
@@ -1805,6 +1807,36 @@ export class GameScene extends Phaser.Scene {
     on('flockZap', (d) => {
       this.zapFx.add(d, this.time.now);
       playSfxCapped(this, SPELL_SFX.lightning, 1, { volume: 0.3 });
+    });
+    // KSI Frost Fortress: Shatter. A chilled enemy bursts: an icy ring over the shards' reach, shards flying out, an ice
+    // crack, and "SHATTER!" (at most every SHATTER_TAG_MS, so a chain through a crowd isn't a wall of text).
+    on('enemyShattered', (d) => {
+      const s = at(d);
+      splashRing(this, s.x, s.y - 10, d.radius, 0xbfe9ff, { duration: 360, depth: 2710 });
+      const g = this.add.graphics().setDepth(2712);
+      const shards = [];
+      for (let i = 0; i < 9; i++) {
+        const a = (i / 9) * Math.PI * 2 + Math.random() * 0.5, len = 5 + Math.random() * 4;
+        shards.push({ a, len, spin: Math.random() * Math.PI });
+      }
+      const draw = (k) => { // k: 0 -> 1 as they fly out
+        g.clear();
+        const r = 6 + k * d.radius * 34, alpha = 1 - k;
+        for (const sh of shards) {
+          const x = s.x + Math.cos(sh.a) * r, y = s.y - 10 + Math.sin(sh.a) * r * 0.6, t = sh.spin + k * 4;
+          const p1 = { x: x + Math.cos(t) * sh.len, y: y + Math.sin(t) * sh.len }, p2 = { x: x + Math.cos(t + 2.4) * sh.len * 0.6, y: y + Math.sin(t + 2.4) * sh.len * 0.6 },
+            p3 = { x: x + Math.cos(t - 2.4) * sh.len * 0.6, y: y + Math.sin(t - 2.4) * sh.len * 0.6 };
+          g.fillStyle(0xe8f8ff, alpha).fillTriangle(p1.x, p1.y, p2.x, p2.y, p3.x, p3.y);
+          g.lineStyle(1, 0x58c6ff, alpha).strokeTriangle(p1.x, p1.y, p2.x, p2.y, p3.x, p3.y);
+        }
+      };
+      draw(0);
+      this.tweens.addCounter({ from: 0, to: 1, duration: 420, ease: 'Quad.easeOut', onUpdate: (tw) => draw(tw.getValue()), onComplete: () => g.destroy() });
+      if (!this.lastShatterTag || this.time.now - this.lastShatterTag > SHATTER_TAG_MS) {
+        this.lastShatterTag = this.time.now;
+        tag(s.x, s.y - 52, 'SHATTER!', '#bfe9ff', 16);
+      }
+      playSfxCapped(this, SPELL_SFX.freeze, 2, { volume: 0.4 });
     });
     on('flockEmp', (d) => {
       const s = at(d);

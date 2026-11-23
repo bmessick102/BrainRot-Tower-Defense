@@ -18,6 +18,7 @@ import { netSpots, netStats, fireNets, stepSkyNets } from '../src/logic/skyNet.j
 import { wallStats, wallLines, raiseWalls, stepWizardWalls, distToSegment } from '../src/logic/wizardWall.js';
 import { zapStats, zapTargets, zap, empPulse, stepFlockZaps } from '../src/logic/flockZap.js';
 import { harpoonStats, harpoonTargets, hookEnemy, stepHarpoons } from '../src/logic/harpoon.js';
+import { shatterStats, markShatter, stepShatters } from '../src/logic/shatter.js';
 import { stepFlockTowers } from '../src/logic/flock.js';
 import { facingToward, mergedFacingKey } from '../src/logic/merge.js';
 
@@ -39,8 +40,8 @@ const volley = (s, b, seconds = 3) => {
 const tough = (s, kind, x, y, extra = {}) => addEnemy(s, kind, x, y, { hp: 1e7, maxHp: 1e7, ...extra });
 
 describe('merging: rules', () => {
-  it('Cannon, Locklair Tower, Litman Mortar, Firework Launcher, Gandolf Tower, F.L.O.C.K Tower and Spear Thrower can merge, data-driven', () => {
-    expect(MERGE_TYPES).toEqual(['cannon', 'archer', 'mortar', 'firework', 'wizard', 'flock', 'spear']);
+  it('Cannon, Locklair Tower, Litman Mortar, Firework Launcher, Gandolf Tower, F.L.O.C.K Tower, Spear Thrower and KSI Tower can merge, data-driven', () => {
+    expect(MERGE_TYPES).toEqual(['cannon', 'archer', 'mortar', 'firework', 'wizard', 'flock', 'spear', 'ksi']);
     for (const t of MERGE_TYPES) {
       const m = CONFIG.merges[t];
       expect(m.mastery.tiers).toHaveLength(3);
@@ -497,8 +498,8 @@ describe('saves', () => {
     expect(bad((o) => { o.buildings.find((x) => x.type === 'archer').level = 9; o.buildings.find((x) => x.type === 'archer').merged = true; })).toBe('invalid');
     expect(bad((o) => { o.buildings.find((x) => x.type === 'rvlab').merged = true; })).toBe('invalid');
     expect(bad((o) => { o.mastery = { archer: 4 }; })).toBe('invalid');
-    expect(bad((o) => { o.mastery = { ksi: 1 }; })).toBe('invalid');
-    expect(bad((o) => { o.freeRespecs = ['ksi']; })).toBe('invalid');
+    expect(bad((o) => { o.mastery = { catapult: 1 }; })).toBe('invalid');
+    expect(bad((o) => { o.freeRespecs = ['catapult']; })).toBe('invalid');
     expect(bad((o) => { o.buildings.find((x) => x.type === 'archer').merged = true; })).toBe('ok');
   });
 });
@@ -664,6 +665,91 @@ describe('F.L.O.C.K Mothership: Triple Zap', () => {
     expect(hurt.held).toBeGreaterThan(0);
     expect(car.held || 0).toBe(0);
     expect(car.slow).toBe(Z.bossSlow);
+  });
+});
+
+describe('KSI Frost Fortress: Shatter', () => {
+  const S = CONFIG.merges.ksi.shatter;
+  const setup = (mastery = 0) => {
+    const s = village();
+    const [a, b] = pair(s, 'ksi');
+    mergeBuildings(s, a.id, b.id);
+    fight(s);
+    if (mastery) { s.mastery = { ksi: mastery }; syncMastery(s); }
+    return { s, t: a, cx: a.col + a.size / 2, cy: a.row + a.size / 2 };
+  };
+  const bottle = () => levelStats('ksi', 10).damage * CONFIG.merges.ksi.damageMult;
+  const burst = (s) => stepShatters(s, 0.01);
+
+  it('its bottles mark what they chill; one that dies still chilled bursts, hitting enemies within 1.5 tiles for a bottle', () => {
+    const { s, t, cx, cy } = setup();
+    const e = tough(s, 'grunt', cx + 4, cy);
+    volley(s, t, 1.5);
+    expect(e.chillT).toBeGreaterThan(0);
+    expect(e.shatterT).toBeGreaterThan(0);
+    expect(e.shatter).toMatchObject({ sourceId: t.id, radius: S.radius });
+    const near = tough(s, 'grunt', e.x + 1.2, e.y), flyer = tough(s, 'bomber', e.x, e.y - 1), far = tough(s, 'grunt', e.x + 2.5, e.y);
+    damageEnemy(s, e, 1e9); // killed by anything
+    expect(s.shatters).toHaveLength(1);
+    burst(s);
+    expect(events(s, 'enemyShattered')).toHaveLength(1);
+    expect(1e7 - near.hp).toBeCloseTo(bottle());
+    expect(1e7 - flyer.hp).toBeCloseTo(bottle()); // ground and air
+    expect(far.hp).toBe(1e7);
+    expect(s.shatters).toHaveLength(0);
+  });
+
+  it('no burst once the chill has run out, and a plain KSI Tower\'s chill never shatters', () => {
+    const { s, t, cx, cy } = setup();
+    const e = tough(s, 'grunt', cx + 4, cy);
+    volley(s, t, 1.5);
+    stepShatters(s, e.shatterT + 0.1);
+    damageEnemy(s, e, 1e9);
+    burst(s);
+    expect(events(s, 'enemyShattered')).toHaveLength(0);
+    const plain = fight(village());
+    const k = addBuilding(plain, 'ksi', 13, 15, TOP('ksi'));
+    const e2 = tough(plain, 'grunt', k.col + 5, k.row + 1);
+    volley(plain, k, 1.5);
+    expect(e2.chillT).toBeGreaterThan(0);
+    expect(e2.shatterT || 0).toBe(0);
+    expect(shatterStats(k)).toBeNull();
+  });
+
+  it('a shard kill on another chilled enemy shatters it too, one step later (a chain)', () => {
+    const { s, t } = setup();
+    const sh = { sourceId: t.id, radius: S.radius, damage: bottle(), chill: null };
+    const chain = [0, 1.2, 2.4, 3.6].map((dx) => addEnemy(s, 'grunt', 6 + dx, 6, { hp: 10, maxHp: 10 }));
+    chain.forEach((e) => markShatter(e, sh, 3));
+    damageEnemy(s, chain[0], 100);
+    for (let i = 0; i < 5; i++) burst(s);
+    expect(events(s, 'enemyShattered').map((ev) => ev.data.fromId)).toEqual(chain.map((e) => e.id));
+    expect(chain.every((e) => !e.alive)).toBe(true);
+  });
+
+  it('Mastery: Bigger Burst (+0.5 tile), Sharp Shards (150%), Splinter (shards chill and mark what they hit)', () => {
+    const { s, t } = setup(3);
+    const st = shatterStats(t);
+    expect(st.radius).toBe(S.radius + 0.5);
+    expect(st.damage).toBeCloseTo(bottle() * 1.5);
+    expect(st.chill).toBe(true);
+    const e = tough(s, 'grunt', t.col + 5, t.row + 1);
+    volley(s, t, 1.5);
+    const reach = tough(s, 'grunt', e.x + 1.9, e.y); // inside 2 tiles, outside 1.5
+    damageEnemy(s, e, 1e9);
+    burst(s);
+    expect(1e7 - reach.hp).toBeCloseTo(bottle() * 1.5);
+    expect(reach.chillT).toBeGreaterThan(0);  // Splinter
+    expect(reach.shatterT).toBeGreaterThan(0);
+  });
+
+  it('nothing Shatter-related is saved, and bursts waiting are cleared when the wave ends', () => {
+    const { s, t, cx, cy } = setup();
+    const e = tough(s, 'grunt', cx + 4, cy);
+    volley(s, t, 1.5);
+    damageEnemy(s, e, 1e9);
+    expect(s.shatters).toHaveLength(1);
+    expect(JSON.stringify(serializeGame(s))).not.toMatch(/shatter/i);
   });
 });
 
@@ -913,7 +999,7 @@ describe('merged balance (v0.8: counts as two buildings)', () => {
     expect(CONFIG.merges.firework.name).toBe('Missile Silo');
     expect(CONFIG.merges.firework.ability).toBe('Sky Net');
     expect(MERGE_TYPES.map((t) => CONFIG.merges[t].abilityIcon).sort()).toEqual(
-      ['ui_ability_ballista_bolt', 'ui_ability_reel_in', 'ui_ability_rolling_thunder', 'ui_ability_shall_not_pass', 'ui_ability_sky_net', 'ui_ability_triple_strike', 'ui_ability_triple_zap']);
+      ['ui_ability_ballista_bolt', 'ui_ability_reel_in', 'ui_ability_rolling_thunder', 'ui_ability_shall_not_pass', 'ui_ability_shatter', 'ui_ability_sky_net', 'ui_ability_triple_strike', 'ui_ability_triple_zap']);
     expect(CONFIG.merges.wizard).toMatchObject({ name: 'Gandolf the Grand', ability: 'You Shall Not Pass' });
   });
 

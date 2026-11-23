@@ -2,6 +2,16 @@
 
 The version shows in the bottom-left corner of every screen (`package.json` `version` plus the commit). Details for everything below are in [README.md](README.md).
 
+## 0.8.11
+
+KSI Towers merge into the KSI Frost Fortress (Shatter). Saves load as they are.
+
+### New Features
+- **KSI Frost Fortress** (`CONFIG.merges.ksi`, new src/logic/shatter.js): two Level 10 KSI Towers merge (120,000 gold + 3,000 Burgers; x2 health and damage, `fireIntervalMult` 1, +0.5 range; art `bld_ksi_merged`, the user's "Merged KSI Tower Image", `art.scale` 1.45 with `art.ground` 0.4 (see Changes); muzzle `MERGED_MUZZLE.bld_ksi_merged` = the right-hand Prime bottle, 0.68 / 0.84). **Shatter** (`shatter: { radius: 1.5, mult: 1 }`): its bottles carry `p.shatter` (combat.js `fireDefense`, `shatterFor`), and every enemy they chill is marked (`landSplash` -> `markShatter`: `e.shatter`, `e.shatterT` = the chill's seconds; Avalanche bounces carry it too). A marked enemy that dies before the mark runs out, whatever kills it, is queued by `damageEnemy` (`queueShatter` -> `state.shatters`) and bursts on the next `stepShatters` (simulate.js, after `stepEnemyStatus`): every enemy within `radius` (ground and air, not burrowed) takes `mult` x one of its bottles (`areaDamage`, source `shatter`). A shard kill on another marked enemy queues that one (a chain, one step per link). Mastery (1,200 / 2,000 / 3,000 Burgers, RV Lab 3 / 4 / 5): Bigger Burst (`shatterRadiusAdd: 0.5`), Sharp Shards (`shatterMult: 1.5`), Splinter (`shatterChill`: shards chill with the tower's own chill and mark what they hit). No slow, freeze, ice patch, blizzard, splash or bounce added (its perks have those). `state.shatters` and the marks aren't saved (cleared at wave end; GameState `shatters`). GameScene's `enemyShattered`: an icy ring over the burst's reach, nine ice shards flying out, "SHATTER!" (at most every `SHATTER_TAG_MS` 350 ms) and `sfx_spell_freeze` (capped, 40%); shard damage shows as small icy-blue numbers. Ability icon `ui_ability_shatter`: the user's painted shattering-ice icon (`art-source/ui/ui_ability_shatter.png`, prepare-art 191 x 192 webp); MergeIcons.js also has a drawn stand-in (a cracking ice crystal) for when it's missing. Checked in a running game (a pack of grunts: 4 bursts, all 6 down; each shard hit = 382, a merged Level 10 bottle).
+
+### Changes
+- **Merged pictures can stand further back on their plot** (`CONFIG.merges[type].art.ground`, BuildingView `sync`): the picture's bottom goes that share of the way from the footprint's center to its front corner instead of at the Level 10 picture's spot (`min(1, k)`). Used by the KSI Frost Fortress (0.4): its wide icy base is drawn at the very bottom of the picture, and at the Level 10 spot (0.61) it covered the tile's outline even when smaller than a Level 10 KSI Tower. Measured on the trimmed picture against the plot rim (GameScene `drawPlots`, inset 0.08 tile, lower half): at `art.scale` 1.45 it uses 95% of the rim and stands 20% taller and 16% wider than Level 10 (114 x 169 vs 98 x 141 px at zoom 1). The normal KSI Tower keeps its size (`SPRITE_SCALE.ksi` 0.62).
+
 ## 0.8.10
 
 A smaller Harpoon Ballista. Saves load as they are.

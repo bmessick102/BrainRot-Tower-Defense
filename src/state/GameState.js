@@ -95,6 +95,7 @@ export class GameState {
     this.strikes = [];           // Arrow Storm / Meteor hits on their way down
     this.nets = [];              // Missile Silo nets in play (skyNet.js; not saved)
     this.barriers = [];          // Gandolf the Grand's You Shall Not Pass walls (wizardWall.js; not saved)
+    this.shatters = [];          // KSI Frost Fortress's Shatter bursts waiting to go off (shatter.js; not saved)
     this.research = {};          // RV Lab research: { type: ['a', 'b', ...] }, the pick at each tier
     this.mastery = {};           // merged defenses' Mastery tiers per type ({ cannon: 2 }, merge.js), saved
     this.labGuideStep = 0;       // RV Lab guide (labGuide.js): 0 = not started
