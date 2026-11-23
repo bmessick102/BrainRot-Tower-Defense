@@ -12,8 +12,8 @@
 //   room: the marker is just as tall and the map edge is right there.
 // - bottom: underneath is the outward side (toward the map's bottom edge), away from the grass, so the chips
 //   never get near it; the disc sits a little further up the path to leave the chips room below it.
-// - right / upperLeft: underneath is beside the path, outside the grass, in narrow columns.
-// - topLeft / topRight / bottomLeft: the paths off the diamond's edges, with room for rows of 6.
+// - left / right: underneath is beside the path, outside the grass, in narrow columns.
+// - cave / stairsLeft / stairsRight / stoneBridge: the paths off the field's sides, with room for rows of 6.
 import { MAP } from '../mapTiles.js';
 import { gridToScreen } from './iso.js';
 
@@ -26,7 +26,7 @@ export const MARKER = { disc: 40, chipW: 62, chipH: 40, gap: 6, rowGap: 4 };
  * row: its strip of map is the shortest, and the HUD's top row sits over it whenever the camera is up there,
  * so a second row would leave the marker no room to slide out from under the HUD.
  */
-export const PER_ROW = { top: 12, topRight: 6, topLeft: 6, bottom: 6, bottomLeft: 6, upperLeft: 3, right: 3 };
+export const PER_ROW = { top: 12, cave: 6, stairsLeft: 6, bottom: 6, stoneBridge: 6, stairsRight: 6, left: 3, right: 3 };
 /** World px kept between a marker and the nearest grass tile. */
 export const GRASS_MARGIN = 10;
 

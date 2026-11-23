@@ -103,15 +103,19 @@ describe('wave markers (world-space wave preview)', () => {
       const { entrance, edge } = pathEnds(path);
       expect(pathAngle(path)).toBeCloseTo(arrowAngle(edge, entrance), 6);
     }
-    // Top and bottom come straight down / up into their corners, the right waterfall corner straight across.
+    // The four wooden bridges: straight down / up / across into the field's points.
     expect(Math.sin(pathAngle('top'))).toBeGreaterThan(0.9);     // down
     expect(Math.sin(pathAngle('bottom'))).toBeLessThan(-0.9);  // up
+    expect(Math.cos(pathAngle('left'))).toBeGreaterThan(0.9);   // right
     expect(Math.cos(pathAngle('right'))).toBeLessThan(-0.9);   // left
-    expect(Math.cos(pathAngle('topRight'))).toBeLessThan(-0.3); // down and to the left
-    expect(Math.sin(pathAngle('topRight'))).toBeGreaterThan(0.3);
-    expect(Math.cos(pathAngle('bottomLeft'))).toBeGreaterThan(0.3); // over the bridge: up and to the right
-    expect(Math.sin(pathAngle('bottomLeft'))).toBeLessThan(-0.3);
-    for (const p of ['topLeft', 'upperLeft']) { expect(Math.cos(pathAngle(p))).toBeGreaterThan(0.3); expect(Math.sin(pathAngle(p))).toBeGreaterThan(0.3); } // down and to the right
+    expect(Math.cos(pathAngle('cave'))).toBeLessThan(-0.3);     // out of the cave: down and to the left
+    expect(Math.sin(pathAngle('cave'))).toBeGreaterThan(0.3);
+    expect(Math.cos(pathAngle('stoneBridge'))).toBeGreaterThan(0.3); // over the stone bridge: up and to the right
+    expect(Math.sin(pathAngle('stoneBridge'))).toBeLessThan(-0.3);
+    expect(Math.cos(pathAngle('stairsLeft'))).toBeGreaterThan(0.3); // down the forest stairs: down and to the right
+    expect(Math.sin(pathAngle('stairsLeft'))).toBeGreaterThan(0.3);
+    expect(Math.cos(pathAngle('stairsRight'))).toBeLessThan(-0.3);  // up the mountain stairs: up and to the left
+    expect(Math.sin(pathAngle('stairsRight'))).toBeLessThan(-0.3);
   });
 
   it('slides in along the path (never onto the grass) to get out from under the HUD', () => {

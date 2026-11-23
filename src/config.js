@@ -18,10 +18,10 @@ export const CONFIG = {
     // Everything destroyed in a night is rebuilt for free when the wave is beaten. During a wave a destroyed
     // building (not a wall) can be rebuilt early for this share of its current level's cost.
     rebuildCostShare: 0.3,
-    // The most entrances (MAP paths, 7 on the 40 x 40 map since v0.9.1) a wave can come in from, per Village Hall level
-    // (VH1 first; past the end, the last). Each wave picks a random number from 1 up to it (waves.js planPaths), the same
-    // enemies spread across them; wave 1 always comes from the top. Every entrance is in play from Village Hall 13.
-    entrancesByHall: [1, 2, 2, 3, 3, 4, 4, 5, 5, 6, 6, 6, 7, 7, 7],
+    // The most entrances (MAP paths, 8 on the v0.9.2 map) a wave can come in from, per Village Hall level (VH1 first;
+    // past the end, the last). Each wave picks a random number from 1 up to it (waves.js planPaths), the same enemies
+    // spread across them; wave 1 always comes from the top. Every entrance is in play from Village Hall 13.
+    entrancesByHall: [1, 2, 2, 3, 3, 4, 4, 5, 5, 6, 6, 7, 8, 8, 8],
     // Rebuilding is always paid in gold. A level bought with Burgers (RV Lab, Fuel Station, Brisket King) counts
     // as this much gold per Burger, so its rebuild price grows with the level like every other building's.
     burgerGoldValue: 15,
@@ -108,7 +108,7 @@ export const CONFIG = {
   },
   // Day/night clock in seconds: a cycle of its own (about 8 minutes), separate from the waves.
   dayNight: { daySeconds: 240, duskSeconds: 30, nightSeconds: 180, dawnSeconds: 30 },
-  camera: { startZoom: 0.75, minZoom: 0.35, maxZoom: 2.0, dragThresholdPx: 6 }, // 0.35: the whole 40 x 40 map and every entrance fit (GameScene.minZoom keeps the screen filled)
+  camera: { startZoom: 0.75, minZoom: 0.33, maxZoom: 2.0, dragThresholdPx: 6 }, // 0.33: the whole map and every entrance fit (GameScene.minZoom keeps the screen filled: 0.34 at 1280 x 720)
   townHall: {
     name: "Village Hall",
     // Every game starts with the hall in ruins (level 0): nothing can be built, no gnomes live there,

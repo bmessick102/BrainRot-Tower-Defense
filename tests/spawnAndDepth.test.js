@@ -26,8 +26,8 @@ describe('edge spawning', () => {
     expect(Math.hypot(g.x - sx, g.y - sy)).toBeLessThan(1.2);
   });
 
-  it('ground troops on a winding path walk every bend in order (the gate path, the bridge)', () => {
-    for (const path of ['topRight', 'bottomLeft']) {
+  it('ground troops on a winding path walk every bend in order (out of the cave, over the stone bridge)', () => {
+    for (const path of ['cave', 'stoneBridge']) {
       const s = makeStateWithTownHall();
       const g = spawnEnemy(s, 'grunt', path);
       const want = [...MAP.spawnRoutes[path], MAP.spawnPoints[path]];
@@ -43,7 +43,7 @@ describe('edge spawning', () => {
     }
   });
 
-  it('there are 7 entrances, every one with a spawn, a route and an entrance on the grass', () => {
+  it('there are 8 entrances, every one with a spawn, a route and an entrance on the grass', () => {
     expect(Object.keys(MAP.spawnPoints).sort()).toEqual([...PATHS].sort());
     for (const path of PATHS) {
       const [sx, sy] = MAP.spawnPoints[path];

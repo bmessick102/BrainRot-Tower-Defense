@@ -113,7 +113,7 @@ export class GameScene extends Phaser.Scene {
     // The map image is drawn at MAP.imageWidth x MAP.imageHeight world pixels (see mapTiles.js).
     this.add.image(0, 0, TEX.map).setOrigin(0, 0).setDisplaySize(MAP.imageWidth, MAP.imageHeight).setDepth(-10000);
     this.dayNight = new DayNight(this); // night map crossfade + ambient tint for world sprites
-    // Press G: the 40 x 40 debug grid over the map. Dev builds only: in the game G is the Encore key (AbilityHotbar).
+    // Press G: the debug grid over the map. Dev builds only: in the game G is the Encore key (AbilityHotbar).
     this.gridOverlay = import.meta.env && import.meta.env.DEV ? new GridOverlay(this) : null;
     this.villagers = new Villagers(this, gs); // decorative gnomes: wander by day, inside at night
     this.airHum = new AirHum(this); // plane drone while Bombers fly

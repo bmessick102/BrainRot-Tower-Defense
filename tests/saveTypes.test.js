@@ -17,10 +17,10 @@ describe('saves know every building type', () => {
 
   it('a village with one of every building type saves and loads', () => {
     const s = makeStateWithTownHall({}, 1);
-    let col = 3, row = 6;
+    let col = 8, row = 8; // a band of the playable grass above the hall (19-21)
     for (const type of BUILDING_TYPES) {
       if (type === 'townHall') continue;
-      if (col > 24) { col = 3; row += 3; }
+      if (col > 40) { col = 8; row += 3; }
       const b = createBuilding(s, type, col, row, 1, null, 'x');
       s.buildings.push(b);
       col += footprintDims(type, 'x').w + 1;

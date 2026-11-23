@@ -90,10 +90,10 @@ describe('waves.js', () => {
     expect(c.spawnPaths).toBe(5);
   });
 
-  it('most entrances by Village Hall: 1, 2, 2, 3, 3, 4, 4, 5, 5, 6, 6, 6, then all 7 from Village Hall 13', () => {
-    expect(PATHS).toHaveLength(7);
-    expect(PATHS).not.toContain('left'); // the left waterfall corner was dropped (v0.9.1)
-    expect(Array.from({ length: 15 }, (_, i) => waveComposition(i + 1).spawnPaths)).toEqual([1, 2, 2, 3, 3, 4, 4, 5, 5, 6, 6, 6, 7, 7, 7]);
+  it('most entrances by Village Hall: 1, 2, 2, 3, 3, 4, 4, 5, 5, 6, 6, 7, then all 8 from Village Hall 13', () => {
+    expect(PATHS).toHaveLength(8);
+    expect(PATHS).toEqual(['top', 'cave', 'right', 'stairsRight', 'bottom', 'stoneBridge', 'left', 'stairsLeft']); // v0.9.2 map
+    expect(Array.from({ length: 15 }, (_, i) => waveComposition(i + 1).spawnPaths)).toEqual([1, 2, 2, 3, 3, 4, 4, 5, 5, 6, 6, 7, 8, 8, 8]);
   });
 
   it('each Village Hall base wave is tougher than the one before (total enemy HP x hpMultiplier)', () => {
@@ -107,7 +107,7 @@ describe('waves.js', () => {
   });
 
   it('every entrance is in play from Village Hall 13, and never more than there are', () => {
-    expect(waveComposition(12).spawnPaths).toBe(6);
+    expect(waveComposition(12).spawnPaths).toBe(7);
     expect(waveComposition(13).spawnPaths).toBe(PATHS.length);
     expect(waveComposition(30).spawnPaths).toBe(PATHS.length);
     expect(PATHS).not.toContain('lake');

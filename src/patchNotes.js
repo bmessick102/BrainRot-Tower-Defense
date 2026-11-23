@@ -19,8 +19,8 @@ const allEntries = (release) => release.sections.flatMap((s) => s.entries);
 
 export const PATCH_NOTES = {
   release: '0.9',
-  version: '0.9.1',
-  title: "What's New in v0.9.1",
+  version: '0.9.2',
+  title: "What's New in v0.9.2",
   sections: [
     {
       type: 'feature',
@@ -43,6 +43,10 @@ export const PATCH_NOTES = {
       type: 'change',
       entries: [
         {
+          version: '0.9.2', icon: { texture: 'map_background' }, title: 'A new map: forest and mountains',
+          text: 'A new painted battlefield between a forest and snowy mountains, with more room to build: tiles cover the grass right up to its edge. Enemies come over five bridges, out of a cave and down two stairways: 8 ways in, all 8 from Village Hall 13.'
+        },
+        {
           version: '0.9.1', icon: { enemy: 'grunt' }, title: 'Raids from 7 entrances',
           text: 'Enemies no longer come across the left waterfall: the path by the stone pillar right beside it already brings them in there. All 7 entrances are in play from Village Hall 13.'
         },
@@ -59,6 +63,10 @@ export const PATCH_NOTES = {
     {
       type: 'fix',
       entries: [
+        {
+          version: '0.9.2', icon: { hero: true }, title: 'A player\u2019s card kept reopening',
+          text: 'After visiting a village from the leaderboard, going back to the title screen from the game reopened that player\u2019s card every time. It only reopens right after a visit now.'
+        },
         {
           version: '0.9.0', icon: { texture: 'bld_flock_merged' }, title: 'The F.L.O.C.K Mothership was tiny',
           text: 'It was drawn smaller than the F.L.O.C.K Towers it was merged from. It now stands clearly bigger than a top-level F.L.O.C.K Tower.'

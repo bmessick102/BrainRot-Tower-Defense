@@ -99,7 +99,9 @@ const TARGETS = [
   // Animated title / loading screen (art-source/title, see src/objects/TitleBackdrop.js). PreloadScene loads these
   // before anything else, so they're sized close to how big they show on the 1280x720 screen to keep that first load small.
   { match: /^title_bg$/, width: 1280, trim: false, needsAlpha: false },
-  // The village map, one picture per time of day (art-source/map; drawn at MAP.imageWidth x imageHeight).
+  // The village map, one picture per time of day (art-source/map/<key>.webp, the full-size 6680 x 3768 tiled paintings;
+  // drawn at MAP.imageWidth x imageHeight). Shipped 2672 wide: many phones can't use a texture over 4096 px, and the four
+  // maps stay in graphics memory together for the day / night crossfade (at full size that's ~400 MB).
   { match: /^game_map_grid(_[a-z]+)?$/, width: 2672, trim: false, needsAlpha: false },    // the painted landscape with no characters
   { match: /^title_logo$/, width: 560, trim: true, needsAlpha: true },
   { match: /^title_(wizard|archer)$/, width: 420, fit: 'box', trim: true, needsAlpha: true },
@@ -281,13 +283,22 @@ function walk(dir) {
     .flatMap((e) => (e.isDirectory() ? walk(path.join(dir, e.name)) : [path.join(dir, e.name)]));
 }
 
-const sources = walk(SRC).filter((f) => f.toLowerCase().endsWith('.png'));
+// PNG sources everywhere; the village maps (art-source/map) are full-size WebP (v0.9.2: the user's 6680 x 3768 paintings with
+// the tiles drawn on, too big to keep as PNG), decoded with sharp.
+const isMapWebp = (f) => f.toLowerCase().endsWith('.webp') && path.basename(path.dirname(f)) === 'map';
+const sources = walk(SRC).filter((f) => f.toLowerCase().endsWith('.png') || isMapWebp(f));
+const keyOf = (f) => path.basename(f).replace(/\.(png|webp)$/i, '');
+async function decodeSource(file) {
+  if (!isMapWebp(file)) return decodePng(fs.readFileSync(file));
+  const { data, info } = await sharp(file).ensureAlpha().raw().toBuffer({ resolveWithObject: true });
+  return { width: info.width, height: info.height, data, hasAlpha: false };
+}
 
 // Shared crop boxes for 'group' targets: the union of every matching picture's visible box.
 // Pictures must share one canvas size; otherwise each is trimmed on its own.
 const groupBoxes = new Map();
 for (const t of TARGETS.filter((x) => x.trim === 'group')) {
-  const imgs = sources.filter((f) => t.match.test(path.basename(f, '.png'))).map((f) => decodePng(fs.readFileSync(f)));
+  const imgs = sources.filter((f) => !isMapWebp(f) && t.match.test(keyOf(f))).map((f) => decodePng(fs.readFileSync(f)));
   if (!imgs.length) continue;
   if (imgs.some((im) => im.width !== imgs[0].width || im.height !== imgs[0].height)) {
     console.warn(`  WARN   ${t.match}: pictures differ in canvas size, trimming each on its own`);
@@ -320,14 +331,14 @@ const wallMeta = {};
 
 let made = 0, skipped = 0;
 for (const file of sources) {
-  const key = path.basename(file, '.png');
+  const key = keyOf(file);
   const category = path.basename(path.dirname(file));
   const target = TARGETS.find((t) => t.match.test(key));
   if (!target) { console.log(`  skip   ${key} (not used in game)`); continue; }
   const outFile = path.join(OUT_IMAGES, category, `${key}.webp`);
   const oldPng = path.join(OUT_IMAGES, category, `${key}.png`);
   let img;
-  try { img = decodePng(fs.readFileSync(file)); } catch (e) { console.warn(`  ERROR  ${key}: ${e.message}`); skipped++; continue; }
+  try { img = await decodeSource(file); } catch (e) { console.warn(`  ERROR  ${key}: ${e.message}`); skipped++; continue; }
   if (target.needsAlpha && !img.hasAlpha) {
     console.warn(`  WARN   ${key}: no transparency, left out (re-export as a transparent PNG)`);
     for (const f of [outFile, oldPng]) if (fs.existsSync(f)) fs.rmSync(f);

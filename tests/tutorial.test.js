@@ -103,7 +103,7 @@ describe('tutorial.js', () => {
       ['townHall', ...MAP.townHallAnchor, 0], // skippers start with the ruined hall too
       ...STARTER_BASE.map((s) => [s.type, s.col, s.row, 1])
     ]);
-    expect(STARTER_BASE.map((s) => [s.col, s.row])).toEqual([[15, 19], [23, 19], [19, 15]]); // 4 tiles left, right and up from the Village Hall (19, 19)
+    expect(STARTER_BASE.map((s) => [s.col, s.row])).toEqual([[21, 25], [29, 25], [25, 21]]); // 4 tiles left, right and up from the Village Hall (25, 25)
     // every starter building sits on grass without overlapping
     state.buildings.forEach((b) => {
       const others = state.buildings.filter((o) => o !== b);

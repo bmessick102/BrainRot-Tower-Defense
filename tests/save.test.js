@@ -4,6 +4,7 @@ import {
   loadSettings, saveSettings, SAVE_KEYS, SAVE_VERSION
 } from '../src/logic/save.js';
 import { makeStateWithTownHall, addBuilding } from './helpers.js';
+import { isRectOnGrass } from '../src/logic/grid.js';
 
 function memoryStorage() {
   const m = new Map();
@@ -120,29 +121,49 @@ describe('save.js', () => {
     expect(mutate((o) => { o.buildings[1].level = 6; })).toBe(false);
     expect(mutate((o) => { o.buildings[1].level = 0; })).toBe(false);
     expect(mutate((o) => { o.buildings[1].col = 19; o.buildings[1].row = 19; })).toBe(false); // overlaps the town hall
-    expect(mutate((o) => { o.buildings[1].col = 39; o.buildings[1].row = 39; })).toBe(false); // hangs off the grid
+    expect(mutate((o) => { o.buildings[1].col = 51; o.buildings[1].row = 51; })).toBe(false); // hangs off the grid
+    expect(mutate((o) => { o.buildings[1].col = 0; o.buildings[1].row = 0; })).toBe(false);   // a corner: over the scenery, not grass
     expect(mutate((o) => { o.buildings.shift(); })).toBe(false);              // no town hall
   });
 
-  it('a saved wave plan from an entrance the map no longer has (the left waterfall) is planned again; the save still loads', () => {
+  it('a saved wave plan from an entrance the map no longer has (e.g. v0.9.0\'s gate path) is planned again; the save still loads', () => {
     const base = serializeGame(sampleState());
-    const parsed = parseSave(JSON.stringify({ ...base, wavePlan: { number: 3, paths: ['top', 'left'] } }));
+    const parsed = parseSave(JSON.stringify({ ...base, wavePlan: { number: 3, paths: ['top', 'topRight'] } }));
     expect(parsed.status).toBe('ok');
     expect(parsed.data.wavePlan).toBeNull();
     expect(parseSave(JSON.stringify({ ...base, wavePlan: { number: 3, paths: ['top', 'bottom'] } })).data.wavePlan).toEqual({ number: 3, paths: ['top', 'bottom'] });
   });
 
-  it('old 32 x 31 saves (no grid field) are shifted onto the 40 x 40 grid, keeping the layout', () => {
+  it('old 32 x 31 saves (no grid field) and 40 x 40 saves are shifted onto the 52 x 52 grid, keeping the layout', () => {
     const base = serializeGame(sampleState());
-    const old = JSON.parse(JSON.stringify(base));
+    expect(base.grid).toBe(52);
+    const shifted = (fn) => { const o = JSON.parse(JSON.stringify(base)); o.buildings.forEach(fn); return o; };
+    // The same layout on the 32 x 31 grid (its hall anchor 17, 15; now 25, 25) ...
+    const old = shifted((b) => { b.col -= 8; b.row -= 10; });
     delete old.grid;
-    old.buildings.forEach((b) => { b.col -= 2; b.row -= 4; }); // what the same layout looked like on the old grid
     const parsed = parseSave(JSON.stringify(old));
     expect(parsed.status).toBe('ok');
-    expect(parsed.data.grid).toBe(40);
+    expect(parsed.data.grid).toBe(52);
     expect(parsed.data.buildings).toEqual(base.buildings);
-    // A save that already says 40 is left alone.
+    // ... and on v0.9.0-0.9.1's 40 x 40 grid (6 tiles in from each side).
+    const old40 = { ...shifted((b) => { b.col -= 6; b.row -= 6; }), grid: 40 };
+    expect(parseSave(JSON.stringify(old40)).data.buildings).toEqual(base.buildings);
+    // A save that already says 52 is left alone.
     expect(parseSave(JSON.stringify(base)).data.buildings).toEqual(base.buildings);
+  });
+
+  it('a migrated building that lands off the playable grass moves to the nearest free grass spot', () => {
+    const base = serializeGame(sampleState());
+    const old40 = JSON.parse(JSON.stringify(base));
+    old40.grid = 40;
+    old40.buildings.forEach((b) => { b.col -= 6; b.row -= 6; });
+    old40.buildings.push({ id: 'b99', type: 'wall', level: 1, col: 0, row: 0, orient: 'x' }); // the old grid's top corner: off the grass now
+    const parsed = parseSave(JSON.stringify(old40));
+    expect(parsed.status).toBe('ok');
+    const moved = parsed.data.buildings.find((b) => b.id === 'b99');
+    expect(isRectOnGrass(moved.col, moved.row, 1, 1)).toBe(true);
+    expect(Math.hypot(moved.col - 6, moved.row - 6)).toBeLessThan(6); // nearby, not across the map
+    expect(parsed.data.buildings.slice(0, 4)).toEqual(base.buildings); // the rest stay put
   });
 
   it('missing save is "none"; unavailable storage never throws', () => {

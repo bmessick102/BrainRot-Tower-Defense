@@ -46,13 +46,13 @@ describe('iso.js', () => {
   });
 
   it('is the same grid for every map image: corners are measured once, in source pixels', () => {
-    expect(MAP.cols).toBe(40);
-    expect(MAP.rows).toBe(40);
+    expect(MAP.cols).toBe(52);
+    expect(MAP.rows).toBe(52);
     const ratio = TILE_SOURCE.width / TILE_SOURCE.height;
-    expect(ratio).toBeGreaterThan(1.9);
-    expect(ratio).toBeLessThan(2.1); // close to 2:1
-    expect(TILE_SOURCE.width).toBeCloseTo((GRID_CORNERS.right.x - GRID_CORNERS.left.x) / 40, 9);
-    expect(TILE_SOURCE.height).toBeCloseTo((GRID_CORNERS.bottom.y - GRID_CORNERS.top.y) / 40, 9);
+    expect(ratio).toBeGreaterThan(1.75);
+    expect(ratio).toBeLessThan(2.1); // near 2:1 (v0.9.2: 1.82, set by the four bridges)
+    expect(TILE_SOURCE.width).toBeCloseTo((GRID_CORNERS.right.x - GRID_CORNERS.left.x) / GRID_SIZE, 9);
+    expect(TILE_SOURCE.height).toBeCloseTo((GRID_CORNERS.bottom.y - GRID_CORNERS.top.y) / GRID_SIZE, 9);
   });
 
   it('round trips arbitrary points (not just tile centres) both ways', () => {
@@ -68,9 +68,10 @@ describe('iso.js', () => {
     const e = rangeEllipse(1);
     expect(e.rx).toBeCloseTo(TILE_WORLD.width / Math.SQRT2, 6);
     expect(e.ry).toBeCloseTo(TILE_WORLD.height / Math.SQRT2, 6);
-    // Given a spot on the grid it follows the local tile size (the diamond is a little flatter at the top).
+    // Given a spot on the grid it follows the local tile size (the same everywhere on a symmetric diamond, v0.9.2).
     const near = rangeEllipse(1, 20, 5), far = rangeEllipse(1, 20, 35);
     expect(near.rx).toBeGreaterThan(0);
-    expect(near.ry).not.toBeCloseTo(far.ry, 1);
+    expect(near.ry).toBeCloseTo(e.ry, 1);
+    expect(far.ry).toBeCloseTo(e.ry, 1);
   });
 });

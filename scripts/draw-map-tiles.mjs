@@ -1,30 +1,21 @@
-// Draws the game's 40 x 40 tiles onto the village maps (v0.9.0). The painted grass's checker doesn't follow a regular
-// grid, so buildings (which snap to the game's grid) never lined up with it. This replaces the grass inside the diamond
-// with a light / dark checker on the game's exact grid (src/gridConfig.js GRID_CORNERS, the same bilinear fit as
-// src/logic/iso.js). Then `npm run prepare-art` makes the game's webp copies.
+// Draws the game's tiles onto the village maps (v0.9.0; v0.9.2: the 52 x 52 grid and its playable tiles). Buildings snap to
+// the game's grid, so the picture's tiles must be exactly the grid's (src/gridConfig.js GRID_CORNERS, the same bilinear
+// fit as src/logic/iso.js). Then `npm run prepare-art` makes the game's webp copies.
 //
-// Everything new takes its colour from the painting itself, so nothing looks pasted on:
-// - The grass colour at every spot is the painting's own grass there, smoothed (a normalized blur of its grass pixels,
-//   ~1 tile wide: its light and colour, without its painted checker). The tiles are that colour a little lighter and
-//   darker (the map's own checker contrast); "plain grass" is that colour as it is.
-// - The field's border: rounded corners, the tiles fading into plain grass over the outer tile along a wavy line, and
-//   around each path's mouth a rounded fade. The painted dirt itself is never redrawn.
-// - The new grass blends into the painting just OUTSIDE the field, where its grass is smooth (inside, its old checker
-//   would show through).
-// - Whatever is painted over the grass near the edge (bushes, stones, pillars, dirt) stays, with its exact outline: a
-//   soft per-pixel "not grass" score, only near solid shapes (so stray specks of shadow are painted over).
-// - Around each path's mouth the grass wears into the painted dirt (and its shadow) along a wavy, soft line a little
-//   inside the field, so the dirt doesn't end in the old grass edge's straight line. Grey stone (pillars) is left alone.
-//   What counts as dirt or shadow is read from the day painting for every map, so all four stay the same shape.
-// Only the picture changes: every tile can still be built on.
+// - The tiles go on exactly the playable tiles (src/mapGrass.js: whole tiles lying on the painted grass oval): crisp and
+//   equal right out to the playable shape's stepped edge, no fades, none touching the scenery (the user's call), so
+//   nothing painted is ever covered. Everywhere else the painting is untouched.
+// - Their colour is the painting's own grass at that spot, smoothed (a normalized blur of its grass pixels, ~1 tile wide:
+//   its light and colour), 10% lighter / darker for the light and dark tiles (TILE_CONTRAST, the same on all four maps).
+// The tiles are baked into the pictures; the game only shows the images.
 //
-// Usage: node scripts/draw-map-tiles.mjs <painted original, 6688 x 3764> <out .png|.webp> [outWidth] [day original]
-//   Pass the day original for dawn, dusk and night (see above; the day map uses itself).
-//   The originals are the user's "Day Map 2.webp", "Dawn Map 2.webp", "Dusk Map 2.webp", "night map 2.webp".
-//   Full-size results: art-source/map/full-size/<key>.webp; the game's sources: art-source/map/<key>.png at 3344 wide.
+// Usage: node scripts/draw-map-tiles.mjs <painted original, 6680 x 3768> <out .webp> [outWidth]
+//   The originals (v0.9.2) are the user's day_ / Dawn_ / Dusk_ / night_ .webp paintings (6680 x 3768) in
+//   unused-assets/root/upscaled_1795465442.zip. Results: art-source/map/game_map_grid[_dawn|_dusk|_night].webp at full size.
 import sharp from 'sharp';
-import { GRID_CORNERS as G, GRID_SIZE as N, SOURCE_IMAGE, PATHS } from '../src/gridConfig.js';
-const [IN, OUT, OUT_W, DAY] = [process.argv[2], process.argv[3], +(process.argv[4] || 0), process.argv[5]];
+import { GRID_CORNERS as G, GRID_SIZE as N, SOURCE_IMAGE } from '../src/gridConfig.js';
+import { GRASS_TILES } from '../src/mapGrass.js';
+const [IN, OUT, OUT_W] = [process.argv[2], process.argv[3], +(process.argv[4] || 0)];
 const AX = G.top.x, AY = G.top.y, BX = G.right.x - AX, BY = G.right.y - AY, CX = G.left.x - AX, CY = G.left.y - AY;
 const DX = G.bottom.x - G.right.x - G.left.x + AX, DY = G.bottom.y - G.right.y - G.left.y + AY;
 const cross = (ax, ay, bx, by) => ax * by - ay * bx;
@@ -53,28 +44,12 @@ const rgb2hsv = (r, g, b) => { const mx = Math.max(r, g, b), mn = Math.min(r, g,
 const smooth = (a, b, v) => { const t = Math.min(1, Math.max(0, (v - a) / (b - a))); return t * t * (3 - 2 * t); };
 const fieldEdge = (x, y) => Math.min(x, y, N - x, N - y); // tiles inside the field (negative outside)
 
-// The border's shape.
-const CORNER_R = 3;          // rounded corners, tiles
-const FADE = [0.1, 1.0];     // the tiles fade into plain grass over this band in from the (rounded) edge, tiles
-const OUTSIDE_BLEND = 0.7;   // the new grass blends into the painting over this much just outside the field, tiles
-const EDGE_KEEP = 1.6;       // within this many tiles of the edge, what's painted over the grass stays
-// Each path's mouth (its entrance, on the field's edge) and how far round it the tiles fade, tiles. The waterfall
-// corners (left, right) have no path.
-const MOUTH_R = { top: 2.2, topRight: 1.6, bottom: 2.2, bottomLeft: 1.6, topLeft: 1.4, upperLeft: 1.4 };
-const onEdge = (v) => (v <= 0.6 ? 0 : v >= N - 0.6 ? N : v);
-const WEAR = [-0.35, 0.55]; // the dirt wears away from this far from the field's edge (+ wobble; negative: outside), over this many tiles
-// The paths whose painted dirt runs onto the grass (the bridge is planks; the pillar path's dirt stops at its sign).
-const WEARS = new Set(['top', 'topRight', 'bottom', 'topLeft']);
-const MOUTHS = Object.entries(MOUTH_R).map(([name, r]) => ({ mx: onEdge(PATHS[name].entrance[0]), my: onEdge(PATHS[name].entrance[1]), r, wears: WEARS.has(name) }));
-// Signed distance (tiles) inside the field with its corners rounded.
-const roundedEdge = (x, y) => {
-  const dx = Math.max(CORNER_R - Math.min(x, N - x), 0), dy = Math.max(CORNER_R - Math.min(y, N - y), 0);
-  return dx > 0 && dy > 0 ? CORNER_R - Math.hypot(dx, dy) : fieldEdge(x, y);
-};
+// The playable tiles (src/mapGrass.js): whole tiles on the painted grass. The tiles are drawn on exactly these.
+const playable = (gx, gy) => { const c = Math.floor(gx), r = Math.floor(gy); return c >= 0 && r >= 0 && c < N && r < N && GRASS_TILES[r][c] === '1'; };
+
 
 await (async () => {
   const { data: src, info } = await sharp(IN).removeAlpha().raw().toBuffer({ resolveWithObject: true });
-  const ref = DAY ? await sharp(DAY).removeAlpha().raw().toBuffer() : src; // the day painting: what's dirt or shadow
   const W = info.width, H = info.height;
   if (W !== SOURCE_IMAGE.width || H !== SOURCE_IMAGE.height) throw new Error(`expected ${SOURCE_IMAGE.width} x ${SOURCE_IMAGE.height}, got ${W} x ${H}`);
   const g = [0, 0];
@@ -96,7 +71,13 @@ await (async () => {
     const [h, s, v] = rgb2hsv(src[i], src[i + 1], src[i + 2]); hs.push(h); ss.push(s); vs.push(v);
   }
   for (let c = 0; c < 3; c++) { light[c] /= nl; dark[c] /= nd; }
-  const contrast = [0, 1, 2].map((c) => (light[c] - dark[c]) / Math.max(1, light[c] + dark[c])); // tiles: +-this
+  const measured = [0, 1, 2].map((c) => (light[c] - dark[c]) / Math.max(1, light[c] + dark[c]));
+  // The tiles: that grass TILE_CONTRAST lighter and darker on every channel, the same on all four maps (v0.9.2: the
+  // paintings' grass has no checker of its own, and measuring its texture would make the tiles stronger at one time of
+  // day than another).
+  const TILE_CONTRAST = 0.1;
+  const contrast = [TILE_CONTRAST, TILE_CONTRAST, TILE_CONTRAST];
+  console.log('tile contrast', TILE_CONTRAST, '(the painting measured', measured.map((v) => v.toFixed(3)).join(' / ') + ')');
   const pct = (a, p) => { const b = [...a].sort((x, y) => x - y); return b[Math.floor(p * (b.length - 1))]; };
   const H0 = pct(hs, 0.02), H1 = pct(hs, 0.98), S0 = pct(ss, 0.02), V0 = pct(vs, 0.02), V1 = pct(vs, 0.995);
   console.log('light', light.map(Math.round), 'dark', dark.map(Math.round), 'hue', H0.toFixed(0), H1.toFixed(0), 'sat>=', S0.toFixed(2), 'val', V0.toFixed(2), V1.toFixed(2));
@@ -136,62 +117,29 @@ await (async () => {
     if (wt > 0) for (let c = 0; c < 3; c++) out[c] /= wt; else for (let c = 0; c < 3; c++) out[c] = mid[c];
   };
 
-  // 3. What stays painted over the grass near the edge: solid not-grass shapes (half size: blur + threshold drops
-  //    specks), grown a little; inside that zone each pixel keeps as much of the painting as it isn't grass.
-  const HW = W >> 1, HH = H >> 1;
-  const raw = new Float32Array(HW * HH);
-  for (let y = 0; y < HH; y++) for (let x = 0; x < HW; x++) {
-    const X = x * 2 + 1, Y = y * 2 + 1;
-    toGrid(X, Y, g);
-    const e = fieldEdge(g[0], g[1]);
-    if (e >= EDGE_KEEP) continue;
-    raw[y * HW + x] = e < -OUTSIDE_BLEND - 0.3 ? 1 : grassScore((Y * W + X) * 3) < 0.5 ? 1 : 0;
-  }
-  let solid = boxBlur(raw, 4, HW, HH, 1);
-  for (let k = 0; k < solid.length; k++) solid[k] = solid[k] > 0.55 ? 1 : 0;
-  const zone = boxBlur(solid, 4, HW, HH, 1);
-  const keepAt = (x, y, i) => { const z = zone[Math.min(HH - 1, y >> 1) * HW + Math.min(HW - 1, x >> 1)]; return z > 0.01 ? Math.min(1, z * 4) * (1 - grassScore(i)) : 0; };
-
-  // 4. Draw: in the field and just outside it. Tiles: 2 x 2 samples per pixel for smooth edges.
+  // 3. Draw the tiles on the playable tiles only (v0.9.2: the user's call: whole tiles, no fade, none touching the scenery;
+  //    every playable tile lies wholly on grass, so nothing painted is ever covered). 2 x 2 samples per pixel smooth the
+  //    tiles' outer edges.
   const out = Buffer.from(src);
   const SUB = [[0.25, 0.25], [0.75, 0.25], [0.25, 0.75], [0.75, 0.75]];
   const col3 = [0, 0, 0];
-  for (let y = 480; y < 3120; y++) for (let x = 700; x < 5860; x++) {
-    toGrid(x + 0.5, y + 0.5, g);
-    const cx = g[0], cy = g[1], e = fieldEdge(cx, cy);
-    if (e < -OUTSIDE_BLEND) continue;
-    const i = (y * W + x) * 3;
-    let m = e >= 0 ? 1 : 1 - smooth(0, OUTSIDE_BLEND, -e); // blend into the painting just outside the field
-    if (e < EDGE_KEEP) m *= 1 - keepAt(x, y, i);        // what's painted over the edge stays
-    // the tiles' share of light under this pixel
-    let lightCov = 0;
-    for (const [ox, oy] of SUB) { toGrid(x + ox, y + oy, g); if (((Math.floor(g[0]) + Math.floor(g[1])) & 1) === 0) lightCov++; }
-    const t = lightCov / 4;
-    // how much tile shows: the rounded, wavy border and the path mouths
-    const wob = (vnoise(cx * 0.8 + 3, cy * 0.8 + 11) - 0.5) * 0.7 + (vnoise(cx * 2.1 + 5, cy * 2.1 + 1) - 0.5) * 0.35;
-    let tileA = smooth(FADE[0], FADE[1], roundedEdge(cx, cy) + wob * 0.6);
-    let mouth = 0; // how much this pixel is in a path's mouth
-    for (const M of MOUTHS) {
-      const dm = Math.hypot(cx - M.mx, cy - M.my) + wob * 0.8;
-      if (dm < M.r * 1.4) tileA *= smooth(M.r * 0.7, M.r * 1.4, dm);
-      if (M.wears) mouth = Math.max(mouth, 1 - smooth(M.r * 1.2, M.r * 1.8, dm));
+  const [x0, x1] = [Math.floor(G.left.x) - 4, Math.ceil(G.right.x) + 4], [y0, y1] = [Math.floor(G.top.y) - 4, Math.ceil(G.bottom.y) + 4];
+  for (let y = Math.max(0, y0); y < Math.min(H, y1); y++) for (let x = Math.max(0, x0); x < Math.min(W, x1); x++) {
+    let cov = 0, lightCov = 0, tc = 0, tr = 0;
+    for (const [ox, oy] of SUB) {
+      toGrid(x + ox, y + oy, g);
+      if (!playable(g[0], g[1])) continue;
+      cov++; tc = Math.floor(g[0]); tr = Math.floor(g[1]);
+      if (((Math.floor(g[0]) + Math.floor(g[1])) & 1) === 0) lightCov++;
     }
-    if (mouth > 0 && m < 1 && e > -0.75) {
-      // in a mouth: the grass wears into the painted dirt / shadow (not grey stone) past a wavy line along the edge
-      const [hue, sat] = rgb2hsv(ref[i], ref[i + 1], ref[i + 2]);
-      const earthy = 1 - smooth(130, 150, hue); // dirt (orange) and grass shadow (green), not crystals (blue) or glow
-      const wear = smooth(WEAR[0] + wob * 0.7, WEAR[0] + WEAR[1] + wob * 0.7, e) * smooth(0.25, 0.4, sat) * earthy * mouth;
-      if (wear > 0) m = m + (1 - m) * wear;
-    }
-    if (m <= 0.002) continue;
+    if (!cov) continue;
+    const i = (y * W + x) * 3, m = cov / 4, t = lightCov / cov;
     grassAt(x, y, col3);
     const grain = 1 + (vnoise(x / 26, y / 26) - 0.5) * 0.08 + (vnoise(x / 7, y / 7) - 0.5) * 0.045 + (hash(x, y) - 0.5) * 0.02;
-    const tileJit = 1 + (hash(Math.floor(cx) + 101, Math.floor(cy) + 37) - 0.5) * 0.05 * tileA; // each tile a touch different
+    const tileJit = 1 + (hash(tc + 101, tr + 37) - 0.5) * 0.05; // each tile a touch different
     for (let c = 0; c < 3; c++) {
-      const plain = col3[c] * grain;
-      const tile = plain * (1 + contrast[c] * (2 * t - 1)) * tileJit;
-      const base = plain + (tile - plain) * tileA;
-      out[i + c] = Math.max(0, Math.min(255, Math.round(src[i + c] * (1 - m) + base * m)));
+      const tile = col3[c] * grain * (1 + contrast[c] * (2 * t - 1)) * tileJit;
+      out[i + c] = Math.max(0, Math.min(255, Math.round(src[i + c] * (1 - m) + tile * m)));
     }
   }
   let img = sharp(out, { raw: { width: W, height: H, channels: 3 } });

@@ -13,8 +13,8 @@ import { emit, random, round2 } from './util.js';
 import { isRestless, nightLootMult } from './enrage.js';
 import { countedBuildings, starsFor, starBonus } from './waveStars.js';
 
-// The ways in (the 40 x 40 map's seven entrances, clockwise from the top; never the lake): gridConfig.js PATHS.
-export const PATHS = ['top', 'topRight', 'right', 'bottom', 'bottomLeft', 'upperLeft', 'topLeft'];
+// The ways in (the map's eight entrances, clockwise from the top): gridConfig.js PATHS.
+export const PATHS = ['top', 'cave', 'right', 'stairsRight', 'bottom', 'stoneBridge', 'left', 'stairsLeft'];
 
 /** The most entrances a wave can use at Village Hall `th` (rules.entrancesByHall; past its end, the last). */
 export function entrancesForHall(th) {

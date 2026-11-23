@@ -1,48 +1,54 @@
-// THE grid numbers: every measurement the 40 x 40 isometric base-building grid depends on lives in this one file
+// THE grid numbers: every measurement the 52 x 52 isometric base-building grid depends on lives in this one file
 // (corners, grid size, world scale, building footprints, path entrances, per-map tile tints). Other files import
 // from here (mapTiles.js builds MAP from it; logic/iso.js turns it into the grid <-> world transform).
 //
 // ---------------------------------------------------------------------------------------------------------------
 // How the grid fits the art
 // ---------------------------------------------------------------------------------------------------------------
-// The four village maps (day, dawn, dusk, night) are the same painting at 6688 x 3764 px with the same geometry:
-// one grid fits all of them (checked: the four pictures line up within ~2 px at full size).
-//
-// The playable grass "diamond" is not a symmetric rhombus: the painted quadrilateral is skewed (the top corner sits
-// 121 px right of the bottom corner, the left / right corners sit ~140 px above the middle of top and bottom, and the
-// top edges are shallower than the bottom ones). A uniform isometric grid could not meet all four corners, so the
-// 40 x 40 grid is mapped onto the four measured corners with a bilinear transform: tile (0,0) is the top corner,
-// (39,0) the right corner tile, (0,39) the left corner tile and (39,39) the bottom tile, every grid line is a straight
-// line, and the lines meet the painted edges and corners exactly. Bilinear (rather than perspective) because the
-// painted checker pattern has the same period everywhere (measured at five places), i.e. the art has no perspective
-// foreshortening: bilinear spaces the tiles evenly along each painted edge and keeps tile width within +-3%.
-// (See logic/iso.js.)
+// The four village maps (day, dawn, dusk, night; v0.9.2: the user's new forest-and-mountains paintings, 6680 x 3768 px)
+// share one geometry, so one grid fits all of them. Their grass is a rounded oval with a wooden bridge at each of its
+// four points. A 40 x 40 diamond's corners meet those four bridges (the user's pick; 4550 x 2505 px, a 1.82 : 1 shape,
+// tiles a little taller than 2 : 1), and the grid carries on GRID_EXTEND tiles past it on every side, so the whole
+// tiles that fit on the oval's rounded sides are grid tiles too. Only the tiles lying wholly on the painted grass are
+// playable (src/mapGrass.js): the grid's own corners lie over the scenery. The grid is mapped onto its four corners with
+// a bilinear transform: tile (0,0) is the top corner, (51,0) the right corner tile, (0,51) the left and (51,51) the
+// bottom, every grid line straight. The corners here are symmetric, so it's an even isometric grid. (See logic/iso.js.)
 
 /** Size of the source paintings (and so of the coordinates below), in image pixels. */
-export const SOURCE_IMAGE = { width: 6688, height: 3764 };
+export const SOURCE_IMAGE = { width: 6680, height: 3768 };
 
-/** Tiles along each side of the grid. */
-export const GRID_SIZE = 40;
+/** Tiles along each side of the grid: the measured 40 x 40 diamond between the bridges and GRID_EXTEND more on every side
+ * (v0.9.2), so the whole tiles that fit on the grass oval's rounded sides are on the grid too (src/mapGrass.js says which
+ * tiles are playable). */
+export const BRIDGE_DIAMOND_SIZE = 40;
+export const GRID_EXTEND = 6;
+export const GRID_SIZE = BRIDGE_DIAMOND_SIZE + 2 * GRID_EXTEND;
 
 /**
- * The four corners of the playable grass diamond, in SOURCE IMAGE PIXELS (6688 x 3764).
- * Measured from the real day painting, not guessed: the lime grass was separated from the foliage by colour
- * (HSV), each of the four edges was fitted with a robust line (RANSAC, outliers = bushes / stones covering the
- * border) and neighbouring edges were intersected. Where a bush covers the true corner, the corner is the
- * intersection of the two fitted edge lines. Checked on all four maps with the debug grid (press G in the game).
+ * The four corners of the playable grass diamond, in SOURCE IMAGE PIXELS (6680 x 3768): where the grass meets each wooden
+ * bridge (read on the day painting at full size; the bridges sit symmetrically round the field's middle, x 3327 / y 1837).
  */
-export const GRID_CORNERS = {
-  top: { x: 3397, y: 624 },
-  right: { x: 5687, y: 1706 },
-  bottom: { x: 3276, y: 2984 },
-  left: { x: 861, y: 1626 }
+export const BRIDGE_CORNERS = {
+  top: { x: 3327, y: 585 },
+  right: { x: 5615, y: 1837 },
+  bottom: { x: 3327, y: 3090 },
+  left: { x: 1065, y: 1837 }
 };
 
+/** The 52 x 52 grid's corners: the bridge diamond carried GRID_EXTEND tiles further out on every side (same tiles). */
+const extend = (C, n, k) => {
+  const at = (u, v) => ({ // bilinear, in tiles of the n x n diamond
+    x: C.top.x + (C.right.x - C.top.x) * u / n + (C.left.x - C.top.x) * v / n + (C.bottom.x - C.right.x - C.left.x + C.top.x) * u * v / (n * n),
+    y: C.top.y + (C.right.y - C.top.y) * u / n + (C.left.y - C.top.y) * v / n + (C.bottom.y - C.right.y - C.left.y + C.top.y) * u * v / (n * n)
+  });
+  return { top: at(-k, -k), right: at(n + k, -k), bottom: at(n + k, n + k), left: at(-k, n + k) };
+};
+export const GRID_CORNERS = extend(BRIDGE_CORNERS, BRIDGE_DIAMOND_SIZE, GRID_EXTEND);
+
 /**
- * Tile size in source image pixels, derived from the corners:
+ * Tile size in source image pixels, derived from the corners (the same for the bridge diamond and the extended grid):
  *   width  = (right.x - left.x) / GRID_SIZE      height = (bottom.y - top.y) / GRID_SIZE
- * (120.65 x 59.0, a ratio of 2.045 : 1). This is the nominal (average) tile; with the four-corner fit the real tile is
- * within +-3% of that wide everywhere and 52 to 66 px tall (flatter at the top, as the painted diamond is).
+ * (113.75 x 62.6, a ratio of 1.82 : 1).
  */
 export const TILE_SOURCE = {
   width: (GRID_CORNERS.right.x - GRID_CORNERS.left.x) / GRID_SIZE,
@@ -51,15 +57,15 @@ export const TILE_SOURCE = {
 
 /**
  * World pixels per source image pixel. The map picture, the grid and the camera all share one world space: the
- * picture is drawn at SOURCE_IMAGE x WORLD_SCALE world pixels from (0, 0). 0.5305 makes the nominal tile 64 px wide
- * (64 x 31.3), the size every building / wall / enemy sprite in the game was drawn for.
+ * picture is drawn at SOURCE_IMAGE x WORLD_SCALE world pixels from (0, 0). 64 / 113.75 makes the nominal tile 64 px wide
+ * (64 x 35.2), the width every building / wall / enemy sprite in the game was drawn for.
  */
-export const WORLD_SCALE = 0.5305;
+export const WORLD_SCALE = 64 / 113.75;
 
 /** The map picture in world pixels. */
 export const WORLD_SIZE = { width: SOURCE_IMAGE.width * WORLD_SCALE, height: SOURCE_IMAGE.height * WORLD_SCALE };
 
-/** The nominal tile in world pixels (64 x 31.3). */
+/** The nominal tile in world pixels (64 x 35.2). */
 export const TILE_WORLD = { width: TILE_SOURCE.width * WORLD_SCALE, height: TILE_SOURCE.height * WORLD_SCALE };
 
 /** The corners in world pixels (what logic/iso.js fits the grid to). */
@@ -76,33 +82,34 @@ export const MAP_TEXTURE_WIDTH = 2672;
 // ---------------------------------------------------------------------------------------------------------------
 // Town hall, paths, spawn points (grid coordinates: x = column, y = row, floats; (0,0) is the top corner)
 // ---------------------------------------------------------------------------------------------------------------
-/** Top-left tile of the 3 x 3 Village Hall (centered on the grid). */
-export const TOWN_HALL_ANCHOR = [19, 19];
+/** Top-left tile of the 3 x 3 Village Hall (centered on the grid; v0.9.2: 52 x 52, was (19, 19) on 40 x 40). */
+export const TOWN_HALL_ANCHOR = [25, 25];
 
 /**
- * The seven ways enemies come in (never the lake on the bottom-right edge; the left waterfall corner was dropped in
- * v0.9.1, the pillar path beside it already brings enemies in there), clockwise from the top:
- *   top         the dirt path into the top corner
- *   topRight    the winding path past the gate on the top-right edge
- *   right       the right corner, across the waterfall's stream (no path: out of the forest)
- *   bottom      the dirt path into the bottom corner
- *   bottomLeft  over the bridge on the bottom-left edge
- *   upperLeft   the path by the stone pillar near the left corner (top-left edge)
- *   topLeft     the path between the rocks halfway along the top-left edge
- * `entrance`: where it meets the grass (0.6 tile onto it). `edge`: where its enemies appear, in the spawn fog, about
- * 13 tiles of walking back along the painted dirt (the old map's paths were 10-14; the dirt runs on into the trees
- * further out, but from the picture's edge some would be ~38 tiles). `via`: the bends in between, from the edge
- * toward the grass, so ground troops follow the dirt (and cross the bridge) before they pathfind. All measured by
- * eye on the day painting (1600 px preview, converted with logic/iso.js screenToGrid).
+ * The eight ways enemies come in (v0.9.2 map), clockwise from the top:
+ *   top          over the wooden bridge at the field's top point
+ *   cave         out of the cave in the mountains (top right), down its fenced path
+ *   right        over the wooden bridge at the right point
+ *   stairsRight  up the stairs of the mountain path (bottom right)
+ *   bottom       over the wooden bridge at the bottom point
+ *   stoneBridge  over the stone arch bridge (bottom left)
+ *   left         over the wooden bridge at the left point
+ *   stairsLeft   down the forest stairs (top left)
+ * `entrance`: the middle of the first playable tile the path reaches (v0.9.2: tiles touching a bridge aren't playable). `edge`: where its enemies appear, in the spawn fog: the picture's
+ * edge behind the wooden bridges, the cave's mouth, the far end of the stone bridge, the stairs (12-16 tiles of walking,
+ * like the old maps). `via`: the bends in between, from the edge toward the grid, so ground troops follow the paths and
+ * cross the bridges before they pathfind. Read by eye on the day painting (1600 px preview, converted with
+ * logic/iso.js screenToGrid).
  */
 export const PATHS = {
-  top: { entrance: [0.6, 0.6], edge: [-9.3, -7.9], via: [[-5.3, -4.3]] },
-  topRight: { entrance: [28.3, 0.6], edge: [27.5, -12.1], via: [[26.9, -9.3], [26.9, -5.1], [28.3, -1.5]] },
-  right: { entrance: [39.4, 0.6], edge: [47.9, -8.1], via: [[44.1, -3.8], [41.7, -1.2]] },
-  bottom: { entrance: [39.4, 39.4], edge: [48.9, 48.3], via: [[45.1, 44.5]] },
-  bottomLeft: { entrance: [21.2, 39.4], edge: [21.6, 52.4], via: [[21.7, 49.7], [21.5, 45.2], [21.2, 40.7]] },
-  upperLeft: { entrance: [0.6, 34.2], edge: [-11.8, 30.4], via: [[-8.2, 31.7], [-4.2, 32.6]] },
-  topLeft: { entrance: [0.6, 15], edge: [-11, 9.5], via: [[-9.3, 10.8], [-7.1, 12], [-4.7, 12.6], [0.1, 15]] }
+  top: { entrance: [7.5, 7.5], edge: [-1.3, -2.1], via: [[1.7, 1.6], [4.1, 4.1], [6.6, 6.6]] },
+  cave: { entrance: [28.5, 2.5], edge: [26.6, -9.5], via: [[27.4, -5.8], [28.2, -1.6], [28.5, 1.6]] },
+  right: { entrance: [44.5, 7.5], edge: [54, -1.7], via: [[50.6, 1.4], [47.5, 4.5], [45.4, 6.6]] },
+  stairsRight: { entrance: [48.5, 29.5], edge: [59.3, 31.4], via: [[56.3, 29.3], [53.4, 29], [51.2, 29]] },
+  bottom: { entrance: [44.5, 44.5], edge: [56.1, 55.3], via: [[52.1, 51.8], [47.9, 47.8], [45.4, 45.4]] },
+  stoneBridge: { entrance: [28.5, 47.5], edge: [25.8, 58.7], via: [[27.2, 53.5], [28.6, 49]] },
+  left: { entrance: [7.5, 44.5], edge: [-1.8, 54.1], via: [[1, 51], [4.3, 47.7], [6.6, 45.4]] },
+  stairsLeft: { entrance: [1.5, 29.5], edge: [-8.3, 27], via: [[-3.8, 28.4], [-0.4, 29]] }
 };
 
 // ---------------------------------------------------------------------------------------------------------------
@@ -131,11 +138,15 @@ const mixRgb = (a, b, t) => {
 const tint = (light, dark) => ({ light, dark, line: mixRgb(light, 0xffffff, 0.6), edge: mixRgb(light, 0xffffff, 0.88), tileAlpha: 0.42, lineAlpha: 0.75 });
 
 export const GRID_TINTS = {
-  day: tint(0xa4cb02, 0x779f01),
-  dawn: tint(0xb9c40e, 0x7d9b10),
-  dusk: tint(0x9ea702, 0x6b7e03),
-  night: tint(0x378656, 0x134b3a)
+  // v0.9.2 maps: each map's light / dark tile colour, sampled from the tiled pictures (the middle of the field)
+  day: tint(0x6ba801, 0x578901),
+  dawn: tint(0x9dbb1a, 0x809915),
+  dusk: tint(0x6a8d01, 0x577301),
+  night: tint(0x1e744a, 0x195f3c)
 };
 
-/** The grid before the 40 x 40 rework: 32 x 31 tiles with the hall at (17, 15). Old saves are shifted from this. */
+/** The grid before v0.9.0's 40 x 40 rework: 32 x 31 tiles with the hall at (17, 15). Old saves are shifted from this. */
 export const LEGACY_GRID = { townHallAnchor: [17, 15] };
+
+/** v0.9.0-0.9.1 saves (`grid: 40`, the 40 x 40 grid with the hall at (19, 19)): every building moves GRID_EXTEND tiles. */
+export const GRID_40 = { size: 40, shift: GRID_EXTEND };

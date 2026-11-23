@@ -80,7 +80,7 @@ describe('KSI Tower', () => {
 describe('Select Row (edit mode)', () => {
   const village = () => {
     const s = makeStateWithTownHall({}, 3);
-    const [hc, hr] = [2, 2];
+    const [hc, hr] = [10, 10];
     const walls = [];
     for (let i = 0; i < 5; i++) walls.push(addBuilding(s, 'wall', hc + i, hr));
     addBuilding(s, 'wall', hc + 2, hr + 1); // a wall below the middle one (a column of 2 there)

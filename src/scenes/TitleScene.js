@@ -54,9 +54,13 @@ export class TitleScene extends Phaser.Scene {
     this.offline = !!(data && data.offline) || !session.configured; // no server set up: always offline
     this.justLoggedIn = !!(data && data.justLoggedIn);
     this.reopenPlayer = (data && data.reopenPlayer) || null; // back from visiting a village: that player's card again
-    this.reopenFrom = (data && data.reopenFrom) || null;
-    this.reopenBase = (data && data.reopenBase) || null;   // ...on the village they visited (marked on the card)     // ...over the window it was opened from ('leaderboard' / 'search')
+    this.reopenFrom = (data && data.reopenFrom) || null;     // ...over the window it was opened from ('leaderboard' / 'search')
+    this.reopenBase = (data && data.reopenBase) || null;     // ...on the village they visited (marked on the card)
     this.notice = (data && data.notice) || '';
+    // These are one-time requests. Phaser keeps a scene's last start data when it's started again without any (Quit to
+    // Title, How to Play's Back, Game Over), so left in place they replayed: after a visit, every later trip back to the
+    // title screen reopened that player's card (v0.9.2 fix). `offline` is a mode and stays.
+    if (data) for (const k of ['justLoggedIn', 'reopenPlayer', 'reopenFrom', 'reopenBase', 'notice']) delete data[k];
   }
 
   create() {

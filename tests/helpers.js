@@ -1,7 +1,6 @@
 // Test helpers: a tiny game state without Phaser.
 import { createIdleWave } from '../src/logic/waves.js';
 import { createBuilding } from '../src/logic/buildings.js';
-import { MAP } from '../src/mapTiles.js';
 
 /** Deterministic RNG (mulberry32). */
 export function seededRng(seed = 1) {
@@ -36,10 +35,17 @@ export function makeState(overrides = {}) {
   };
 }
 
-/** State with a town hall at the map's anchor. */
+/**
+ * Where the mechanics tests' town hall stands (cols / rows 19-21). It's a fixed spot rather than the map's anchor (25, 25
+ * since v0.9.2's 52 x 52 grid), so the fights the tests set up around it keep their numbers. Pathfinding ignores the
+ * grass, and every spot used here is inside the grid.
+ */
+export const TEST_TOWN_HALL = [19, 19];
+
+/** State with a town hall at TEST_TOWN_HALL. */
 export function makeStateWithTownHall(overrides = {}, level = 1) {
   const state = makeState(overrides);
-  const [c, r] = MAP.townHallAnchor;
+  const [c, r] = TEST_TOWN_HALL;
   state.buildings.push(createBuilding(state, 'townHall', c, r, level));
   return state;
 }

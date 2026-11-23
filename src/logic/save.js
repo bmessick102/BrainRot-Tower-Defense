@@ -6,7 +6,7 @@ import { BUILDING_TYPES, HERO_TYPES, WALL_ORIENTS, footprintDims, buildingSize, 
 import { isRectOnGrass, footprintsOverlap } from './grid.js';
 import { MAP } from '../mapTiles.js';
 import { validDecorSeed } from './decor.js';
-import { GRID_SIZE, LEGACY_GRID } from '../gridConfig.js';
+import { GRID_SIZE, LEGACY_GRID, GRID_40 } from '../gridConfig.js';
 import { serializeResearch, validResearch, deserializeResearch, hasAbilities, convertOldResearch, convertMixedResearch, picksFor } from './abilities.js';
 import { validLabGuide } from './labGuide.js';
 import { validHype } from './dj.js';
@@ -46,7 +46,7 @@ export function serializeGame(state, now = new Date()) {
   const clock = state.clock || { phase: 'day', t: 0 };
   return {
     version: SAVE_VERSION,
-    grid: GRID_SIZE, // the 40 x 40 grid (saves without it come from the older 32 x 31 map: see migrateGrid)
+    grid: GRID_SIZE, // the grid it was saved on (52 since v0.9.2; 40 in v0.9.0-0.9.1; none: the 32 x 31 map; see migrateGrid)
     savedAt: now.toISOString(),
     gold: Math.floor(state.gold),
     townHallLevel: th ? th.level : 1,
@@ -185,16 +185,47 @@ export function migrateV6(obj) {
 }
 
 /**
- * Saves from before the 40 x 40 map have no `grid` field: their buildings sit on the old 32 x 31 grid (Village Hall at
- * (17, 15)). Every building moves by the same shift, so the old Village Hall lands on the new one's anchor and the
- * layout keeps its exact shape; the old grid fits well inside the new one, so nothing can end up off the map.
+ * Older grids. Saves from before v0.9.0 have no `grid` field: their buildings sit on the old 32 x 31 grid (Village Hall
+ * at (17, 15)), and every building moves by the same shift, so the old hall lands on the new one's anchor (25, 25).
+ * v0.9.0-0.9.1 saves say `grid: 40`: that grid is the middle of today's 52 x 52 one, so everything moves GRID_EXTEND (6)
+ * tiles down and right. Either way the layout keeps its exact shape; a building that then isn't on the playable grass
+ * (the old grids' corners lie over today's scenery) moves to the nearest free grass spot (onGrass).
  */
 export function migrateGrid(obj) {
   if (!obj || !Array.isArray(obj.buildings)) return obj;
-  const dc = MAP.townHallAnchor[0] - LEGACY_GRID.townHallAnchor[0];
-  const dr = MAP.townHallAnchor[1] - LEGACY_GRID.townHallAnchor[1];
-  const buildings = obj.buildings.map((b) => (b && Number.isInteger(b.col) && Number.isInteger(b.row) ? { ...b, col: b.col + dc, row: b.row + dr } : b));
-  return { ...obj, grid: GRID_SIZE, buildings };
+  const from40 = obj.grid === GRID_40.size;
+  const dc = from40 ? GRID_40.shift : MAP.townHallAnchor[0] - LEGACY_GRID.townHallAnchor[0];
+  const dr = from40 ? GRID_40.shift : MAP.townHallAnchor[1] - LEGACY_GRID.townHallAnchor[1];
+  const moved = obj.buildings.map((b) => (b && Number.isInteger(b.col) && Number.isInteger(b.row) ? { ...b, col: b.col + dc, row: b.row + dr } : b));
+  return { ...obj, grid: GRID_SIZE, buildings: onGrass(moved) };
+}
+
+/**
+ * v0.9.2: the playable grass isn't the whole grid (tiles touching a bridge aren't playable), so a building a migrated save
+ * left on a tile that isn't grass moves to the nearest free spot that is (walls and buildings alike); everything else
+ * stays put. Malformed entries are left for validateSave to judge.
+ */
+function onGrass(buildings) {
+  const ok = (b) => b && typeof b.type === 'string' && BUILDING_TYPES.includes(b.type) && Number.isInteger(b.col) && Number.isInteger(b.row);
+  const dims = (b) => footprintDims(b.type, b.orient || 'x');
+  const placed = buildings.filter((b) => ok(b) && isRectOnGrass(b.col, b.row, dims(b).w, dims(b).h));
+  const fits = (b, c, r) => {
+    const { w, h } = dims(b);
+    if (!isRectOnGrass(c, r, w, h)) return false;
+    return placed.every((o) => !footprintsOverlap({ col: c, row: r, w, h }, { col: o.col, row: o.row, ...dims(o) }));
+  };
+  return buildings.map((b) => {
+    if (!ok(b) || placed.includes(b)) return b;
+    for (let d = 1; d < GRID_SIZE; d++) {
+      for (let dr = -d; dr <= d; dr++) for (let dc = -d; dc <= d; dc++) {
+        if (Math.max(Math.abs(dc), Math.abs(dr)) !== d || !fits(b, b.col + dc, b.row + dr)) continue;
+        const nb = { ...b, col: b.col + dc, row: b.row + dr };
+        placed.push(nb);
+        return nb;
+      }
+    }
+    return b;
+  });
 }
 
 /** True only for a well-formed version 7 save whose buildings all sit on grass without overlapping. */
@@ -315,7 +346,7 @@ export function parseSave(text) {
   if (obj && typeof obj === 'object' && obj.version === 4) obj = migrateV4(obj);
   if (obj && typeof obj === 'object' && obj.version === 5) obj = migrateV5(obj);
   if (obj && typeof obj === 'object' && obj.version === 6) obj = migrateV6(obj);
-  if (obj && typeof obj === 'object' && obj.grid === undefined) obj = migrateGrid(obj);
+  if (obj && typeof obj === 'object' && (obj.grid === undefined || obj.grid === GRID_40.size)) obj = migrateGrid(obj);
   // A planned wave from an entrance the map no longer has (v0.9.1 dropped the left waterfall): plan it again on load.
   if (obj && typeof obj === 'object' && obj.wavePlan && Array.isArray(obj.wavePlan.paths) && !obj.wavePlan.paths.every((x) => PATHS.includes(x))) obj = { ...obj, wavePlan: null };
   if (!validateSave(obj)) return { status: 'invalid', data: null };

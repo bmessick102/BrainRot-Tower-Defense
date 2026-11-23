@@ -1,5 +1,5 @@
 // Grid <-> world conversion and distances. Positions in logic are tile units (floats): x = column, y = row,
-// (0, 0) is the top corner of the 40 x 40 grid, (40, 0) the right corner, (0, 40) the left, (40, 40) the bottom.
+// (0, 0) is the top corner of the 52 x 52 grid, (52, 0) the right corner, (0, 52) the left, (52, 52) the bottom.
 //
 // The world is the map picture's own pixel space (see gridConfig.js): the picture, the grid and the camera all
 // share it. The grid is fitted to the four measured corners of the painted grass with a bilinear map, because the
