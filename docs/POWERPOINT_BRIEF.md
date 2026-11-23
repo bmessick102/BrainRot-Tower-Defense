@@ -2,7 +2,7 @@
 
 You are being asked to create a PowerPoint presentation (.pptx) about a video game that a small student team built. Everything you need to know is in this document. **Use only the facts written here (and in README.md, which is the source of truth). Do not invent features, numbers, quotes, release dates, or team members.** If something you want to say isn't in this document, leave it out.
 
-*This brief describes version 0.9.1.* The deck built from it is `docs/presentation/Italian_Brainrot_TD_v0.9.1.pptx` (the v0.8.8 deck is in git history) (the old v0.5 deck, `Italian_Brainrot_TD_v0.5.0.pptx`, is kept for reference).
+*This brief describes version 0.9.2.* The deck built from it is `docs/presentation/Italian_Brainrot_TD_v0.9.2.pptx` (older decks are in git history) (the old v0.5 deck, `Italian_Brainrot_TD_v0.5.0.pptx`, is kept for reference).
 
 ---
 
@@ -13,7 +13,7 @@ You are being asked to create a PowerPoint presentation (.pptx) about a video ga
 - **Speaker notes on every slide:** 2 to 3 simple sentences to say out loud.
 - **Words per slide:** at most about 15 (headline plus one line), except the enemy and building grids (a name plus 3-6 words each). Plain language a 12-year-old gets. No code terms, config keys or file names on slides; words players see in the game are fine (Burgers, Village Hall, Mastery).
 - **Every enemy appears** (24 in all), on the slide for the Village Hall where players meet it (section 4).
-- **File size:** compress pictures; aim under about 40 MB (the v0.9.1 deck is about 23 MB).
+- **File size:** compress pictures; aim under about 40 MB (the v0.9.2 deck is about 23 MB).
 
 If anything below is unclear, make a sensible choice and say what you chose in one sentence at the end.
 
@@ -25,7 +25,7 @@ If anything below is unclear, make a sensible choice and say what you chose in o
 
 - **Play it:** https://bmessick102.github.io/BrainRot-Tower-Defense/
 - **Code:** https://github.com/bmessick102/BrainRot-Tower-Defense
-- **Current version:** 0.9.1
+- **Current version:** 0.9.2
 - It is an unofficial fan game, not endorsed by Supercell (the game's Credits carry Supercell's Fan Content Policy notice).
 
 ## 3. The team
@@ -47,11 +47,11 @@ If anything below is unclear, make a sensible choice and say what you chose in o
 
 Follow this order. Every content slide has a **stage marker** at the top right: a gold-rimmed pill ("VILLAGE HALL 3") with a row of 15 dots, filled up to that hall, so the progression is obvious. "Cards" are rounded dark panels with a cut-out picture on a soft glow: **red rim = enemy, green = your building, purple = new feature, orange = hero, gold = merged**.
 
-**1. Title.** The game logo over the title-screen art; tagline **"Memes are coming for your village."**; small line "Created by Brady Messick · Free in your browser · v0.9.1". Cut-outs: Tung Tung Tung Sahur, the Sneaker Shark, the crocodile bomber.
+**1. Title.** The game logo over the title-screen art; tagline **"Memes are coming for your village."**; small line "Created by Brady Messick · Free in your browser · v0.9.2". Cut-outs: Tung Tung Tung Sahur, the Sneaker Shark, the crocodile bomber.
 
 **2. The idea in one breath.** "Build a village. Survive the brainrot." / "Endless waves. Free in your browser." Three icon rows: Build and upgrade · Beat endless meme waves · Play free, even on phones. Screenshot of a village by day.
 
-**3. "A bigger battlefield."** (marker: THE MAP, no dots; v0.9) Two framed screenshots: the whole new 40 x 40 map with a red marker at each of its 7 entrances ("THE NEW 40 x 40 MAP"), and troops crossing the bridge ("OVER THE BRIDGE"). Chips: "40 x 40 tiles of room to build" · "7 ways in, never the lake" · "All 7 open by Village Hall 13".
+**3. "A new battlefield."** (marker: THE MAP, no dots; v0.9.2) Two framed screenshots: the whole new forest-and-mountains map with a red marker at each of its 8 entrances ("FOREST AND MOUNTAINS"), and troops coming out of the cave ("OUT OF THE CAVE"). Chips: "Room to build up to the edge" · "8 ways in: bridges, cave, stairs" · "All 8 open by Village Hall 13". Every village screenshot in the deck (slides 2, 3, 4, 13, 22) is on this map.
 
 **4. "Grass grows. Buildings clear it."** (v0.9.1) "Just for looks: nothing ever gets in your way." A close-up of a Cannon on cleared grass among grass tufts. Rows: grass tuft "Grass tufts dot the field" · Cannon "Build on one and it vanishes" · Village Hall "Solid ground under buildings".
 
