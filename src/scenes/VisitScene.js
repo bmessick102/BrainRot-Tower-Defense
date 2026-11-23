@@ -64,7 +64,15 @@ export class VisitScene extends Phaser.Scene {
   /** The message in the middle of the screen (the HUD draws it; it reads statusMsg when it starts, being launched later). */
   setStatus(text) {
     this.statusMsg = text || '';
-    if (this.hud && this.hud.setStatus) this.hud.setStatus(this.statusMsg);
+    if (this.hudReady()) this.hud.setStatus(this.statusMsg);
+  }
+
+  /**
+   * Is the HUD running? It's launched in create() but only starts on the next frame, and its scene object keeps the
+   * last visit's (destroyed) texts until then: talking to it before that threw and left the screen stuck.
+   */
+  hudReady() {
+    return !!(this.hud && this.hud.sys && this.hud.sys.isActive() && this.hud.statusText);
   }
 
   /** Loading or drawing the village failed: say so, log it, and make sure there is a Back button. */
@@ -97,7 +105,7 @@ Tap Back to return.`, textStyle(24)).setOrigin(0.5).setAlign('center').setScroll
       if (!this.sys.isActive()) return;
       this.build(deserializeGame(parsed.data)); // (validated save -> buildings with their footprints, perks...)
       this.setStatus('');
-      if (this.hud && this.hud.showVillage) this.hud.showVillage(base);
+      if (this.hudReady()) this.hud.showVillage(base); // (else the HUD shows it when it starts)
     } catch (e) {
       if (this.sys.isActive()) this.fail(e);
     }
@@ -181,7 +189,7 @@ Tap Back to return.`, textStyle(24)).setOrigin(0.5).setAlign('center').setScroll
       }
       if (this.pinch) return;
       // A press on the HUD (Back, the switcher, the building card) is the HUD's, not the map's.
-      if (this.hud && this.hud.covers && this.hud.covers(p.x, p.y)) { this.press = null; return; }
+      if (this.hudReady() && this.hud.covers(p.x, p.y)) { this.press = null; return; }
       this.press = { x: p.x, y: p.y, sx: this.cameras.main.scrollX, sy: this.cameras.main.scrollY, moved: false };
     });
     this.input.on('pointermove', (p) => {
@@ -225,7 +233,7 @@ Tap Back to return.`, textStyle(24)).setOrigin(0.5).setAlign('center').setScroll
   select(b) {
     this.selectedId = b ? b.id : null;
     if (b) { const v = this.views.get(b.id); if (v && v.pop) v.pop(); }
-    if (this.hud && this.hud.showBuilding) this.hud.showBuilding(b);
+    if (this.hudReady()) this.hud.showBuilding(b);
   }
 
   /** Another of the owner's villages. */

@@ -448,22 +448,21 @@ export function openResearchWindow(scene, gs, { onClose = null, startType = null
     drawDetails(scene, m, panelX, gy, PANEL_W, treeH, detail);
     }
 
-    // Paid respec, under the tree: clears this type's path (its picks are not refunded) so it can take another. After a
-    // merge the type has one free reset (the button says so).
+    // Paid respec, under the tree: clears this type's path (its picks are not refunded) so it can take another. Always
+    // its normal price (v0.8.3: merging no longer gives a free reset).
     const count = labTierCount(gs, type);
     const locked = lockedPath(gs, type);
     if (count > 0) {
       const rc = checkRespec(gs, type), ry = gy + treeH + 8 + RESPEC_H / 2;
       m.add(scene.add.text(gx, ry, `${buildingName(type)}s are locked to Path ${locked.toUpperCase()} · ${pathName(type, locked)}${rc.ok ? '' : ` (${rc.reason})`}`, bodyStyle(14, COLORS.inkDim, { fontStyle: 'bold' })).setOrigin(0, 0.5));
-      const rb = new Button(scene, panelX + PANEL_W - 150, ry, 300, 42, rc.free ? 'Free Reset' : `Reset path · ${rpText(rc.cost)}`, () => {
+      const rb = new Button(scene, panelX + PANEL_W - 150, ry, 300, 42, `Reset path · ${rpText(rc.cost)}`, () => {
         confirmDialog(scene, {
           title: 'Reset path?',
-          lines: [rc.free ? `Reset the ${buildingName(type)} path for free?` : `Reset the ${buildingName(type)} path for ${rpText(rc.cost)}?`,
-            rc.free ? 'Your free reset from merging. Mastery stays.' : `Its ${count} researched tier${count > 1 ? 's' : ''} are lost (no refund) and you pick a path again.`],
+          lines: [`Reset the ${buildingName(type)} path for ${rpText(rc.cost)}?`,
+            `Its ${count} researched tier${count > 1 ? 's' : ''} are lost (no refund) and you pick a path again.`],
           confirmLabel: 'Reset', onConfirm: () => { if (gs.respecPath(type).ok) { selected = null; refresh(); } }
         });
-      }, { color: rc.free ? 0xd9a21b : 0x8e5bd6, fontSize: 18, radius: 12 });
-      rb.setLabel(rc.free ? 'Free Reset' : `Reset path · ${rpText(rc.cost)}`, rc.free ? 'From merging' : '');
+      }, { color: 0x8e5bd6, fontSize: 18, radius: 12 });
       rb.setEnabled(rc.ok);
       m.add(rb);
     }

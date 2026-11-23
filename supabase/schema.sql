@@ -28,6 +28,9 @@ create table if not exists public.profiles (
   constraint profiles_username_format check (username ~ '^[A-Za-z0-9_]{3,16}$')
 );
 create unique index if not exists profiles_username_lower on public.profiles (lower(username));
+-- "Let others view my villages" (v0.7, Settings). Added here, before the functions that read it (a fresh database
+-- failed on get_village_leaderboard otherwise).
+alter table public.profiles add column if not exists public_bases boolean not null default true;
 
 create table if not exists public.bases (
   id uuid primary key default gen_random_uuid(),
@@ -89,7 +92,8 @@ create trigger on_auth_user_created after insert on auth.users
 -- Is a username free? (asked before signing up, so the player gets a clear message)
 create or replace function public.username_available(name text)
 returns boolean language sql security definer set search_path = '' stable as $$
-  select not exists (select 1 from public.profiles where lower(username) = lower(name));
+  select coalesce(name ~ '^[A-Za-z0-9_]{3,16}$', false)
+     and not exists (select 1 from public.profiles where lower(username) = lower(name));
 $$;
 
 -- ---------------------------------------------------------------- villages: at most 5 per player
@@ -227,66 +231,116 @@ language sql security definer set search_path = '' stable as $$
   select * from ranked where rank <= least(greatest(lim, 1), 100) or is_me order by rank;
 $$;
 
--- One row per village (v0.8): the top `lim` villages by best wave (bases.best_wave is capped by check_base, so it is
--- verified; earlier best_wave_at wins ties), plus the caller's own best village if it is lower. A village's name is
--- shown only if its owner lets others view their villages. See migration-2026-11-22-v0.8.sql.
-create or replace function public.get_village_leaderboard(lim int default 10)
-returns table (rank bigint, username text, village_name text, best_wave int, town_hall int, is_me boolean)
-language sql security definer set search_path = '' stable as $$
+-- One row per village (v0.8): villages by best wave (bases.best_wave is capped by check_base, so it is verified; earlier
+-- best_wave_at wins ties). Paged (v0.8.3): `pos` is each village's place in that order (1, 2, 3...; `rank` is the
+-- shown rank, shared by ties); it returns the villages at pos off + 1 .. off + lim (lim at most 100, off at most
+-- 10,000), plus the caller's own best village wherever it is. A village's name is shown only if its owner lets others
+-- view their villages. 40 calls a minute per player (rate_limit_hit). The old one-argument version is dropped (an
+-- older game still works: `off` defaults to 0).
+drop function if exists public.get_village_leaderboard(int);
+create or replace function public.get_village_leaderboard(lim int default 10, off int default 0)
+returns table (rank bigint, pos bigint, username text, village_name text, best_wave int, town_hall int, is_me boolean)
+language plpgsql security definer set search_path = '' as $$
+#variable_conflict use_column
+declare
+  l int := least(greatest(coalesce(lim, 10), 1), 100);
+  o int := least(greatest(coalesce(off, 0), 0), 10000);
+begin
+  if auth.uid() is null then return; end if;
+  perform public.rate_limit_hit('leaderboard', 40, 60);
+  return query
   with ranked as (
     select rank() over (order by b.best_wave desc, b.best_wave_at asc nulls last) as rank,
+           row_number() over (order by b.best_wave desc, b.best_wave_at asc nulls last, b.id) as pos,
            row_number() over (partition by b.user_id order by b.best_wave desc, b.best_wave_at asc nulls last, b.id) as own_order,
            p.username,
            case when p.public_bases or b.user_id = auth.uid() then b.name end as village_name,
            b.best_wave, b.town_hall, (b.user_id = auth.uid()) as is_me
     from public.bases b
     join public.profiles p on p.id = b.user_id
-    where b.best_wave > 0 and auth.uid() is not null
+    where b.best_wave > 0
   )
-  select rank, username, village_name, best_wave, town_hall, is_me
-  from ranked
-  where rank <= least(greatest(lim, 1), 100) or (is_me and own_order = 1)
-  order by rank, username, village_name;
-$$;
+  select r.rank, r.pos, r.username, r.village_name, r.best_wave, r.town_hall, r.is_me
+  from ranked r
+  where (r.pos > o and r.pos <= o + l) or (r.is_me and r.own_order = 1)
+  order by r.pos;
+end $$;
 
 -- ---------------------------------------------------------------- other players (v0.7)
 -- Search, player cards and visiting villages (read only); see migration-2026-11-21-player-profiles.sql.
-alter table public.profiles add column if not exists public_bases boolean not null default true;
-
 create or replace function public.set_public_bases(on_ boolean)
 returns void language sql security definer set search_path = '' as $$
   update public.profiles set public_bases = coalesce(on_, true) where id = auth.uid();
 $$;
 
+-- Spam guard (v0.8.3, migration-2026-11-22-spam-guard.sql): a per-player call counter for the player functions below.
+create table if not exists public.rate_limits (
+  user_id uuid not null references auth.users (id) on delete cascade,
+  action text not null,
+  window_start timestamptz not null default now(),
+  calls int not null default 0,
+  primary key (user_id, action)
+);
+alter table public.rate_limits enable row level security; -- no policies: only the security definer functions below
+revoke all on public.rate_limits from public, anon, authenticated;
+
+create or replace function public.rate_limit_hit(act text, max_calls int, per_secs int)
+returns void language plpgsql security definer set search_path = '' as $$
+declare
+  n int;
+begin
+  if auth.uid() is null then return; end if;
+  insert into public.rate_limits as r (user_id, action, window_start, calls) values (auth.uid(), act, now(), 1)
+  on conflict (user_id, action) do update set
+    calls = case when r.window_start < now() - make_interval(secs => per_secs) then 1 else r.calls + 1 end,
+    window_start = case when r.window_start < now() - make_interval(secs => per_secs) then now() else r.window_start end
+  returning r.calls into n;
+  if n > max_calls then
+    raise exception 'Too many requests. Wait a moment and try again.' using errcode = 'P0001';
+  end if;
+end $$;
+
+-- Paged (v0.8.3): `lim` rows (at most 50) after skipping `off` (at most 10,000); the game asks for a page plus one row
+-- to know if there's a next page. The old six-argument version is dropped (an older game still works: `off` defaults to 0).
+drop function if exists public.search_players(text, int, int, int, text, int);
 create or replace function public.search_players(q text default '', min_wave int default 0, max_wave int default null,
-  hall int default null, sort text default 'wave', lim int default 30)
+  hall int default null, sort text default 'wave', lim int default 30, off int default 0)
 returns table (username text, best_wave int, best_town_hall int, achievements int, is_me boolean)
-language sql security definer set search_path = '' stable as $$
+language plpgsql security definer set search_path = '' as $$
+#variable_conflict use_column
+declare
+  qq text := left(coalesce(q, ''), 16);
+begin
+  if auth.uid() is null then return; end if;
+  perform public.rate_limit_hit('search', 20, 60);
+  return query
   with found as (
     select p.username, coalesce(s.best_wave, 0) as best_wave, coalesce(s.best_town_hall, 0) as best_town_hall,
            (select count(*)::int from public.achievements a where a.user_id = p.id) as achievements,
            (p.id = auth.uid()) as is_me
     from public.profiles p
     left join public.player_stats s on s.user_id = p.id
-    where auth.uid() is not null
-      and (coalesce(q, '') = '' or p.username ilike '%' || replace(replace(replace(q, '\', '\\'), '%', '\%'), '_', '\_') || '%')
+    where qq = '' or p.username ilike '%' || replace(replace(replace(qq, '\', '\\'), '%', '\%'), '_', '\_') || '%'
   )
-  select * from found
-  where best_wave >= coalesce(min_wave, 0)
-    and (max_wave is null or best_wave <= max_wave)
-    and (hall is null or best_town_hall = hall)
-  order by case sort when 'hall' then best_town_hall when 'achievements' then achievements else best_wave end desc,
-           best_wave desc, username
-  limit least(greatest(coalesce(lim, 30), 1), 50);
-$$;
+  select f.username, f.best_wave, f.best_town_hall, f.achievements, f.is_me from found f
+  where f.best_wave >= coalesce(min_wave, 0)
+    and (max_wave is null or f.best_wave <= max_wave)
+    and (hall is null or f.best_town_hall = hall)
+  order by case sort when 'hall' then f.best_town_hall when 'achievements' then f.achievements else f.best_wave end desc,
+           f.best_wave desc, f.username
+  limit least(greatest(coalesce(lim, 30), 1), 50)
+  offset least(greatest(coalesce(off, 0), 0), 10000);
+end $$;
 
 create or replace function public.get_player_profile(name text)
-returns jsonb language plpgsql security definer set search_path = '' stable as $$
+returns jsonb language plpgsql security definer set search_path = '' as $$
 declare
   uid uuid;
   result jsonb;
 begin
   if auth.uid() is null then return null; end if;
+  perform public.rate_limit_hit('profile', 40, 60);
+  if name is null or char_length(name) > 16 then return null; end if;
   select id into uid from public.profiles where lower(username) = lower(name);
   if uid is null then return null; end if;
   select jsonb_build_object(
@@ -313,19 +367,27 @@ begin
 end $$;
 
 create or replace function public.get_player_base(base uuid)
-returns jsonb language sql security definer set search_path = '' stable as $$
+returns jsonb language plpgsql security definer set search_path = '' as $$
+declare
+  result jsonb;
+begin
+  if auth.uid() is null then return null; end if;
+  perform public.rate_limit_hit('village', 40, 60);
   select jsonb_build_object('id', b.id, 'name', b.name, 'username', p.username, 'town_hall', b.town_hall,
                             'best_wave', b.best_wave, 'save', b.save)
+  into result
   from public.bases b
   join public.profiles p on p.id = b.user_id
-  where auth.uid() is not null and b.id = base and b.save is not null
+  where b.id = base and b.save is not null
     and (p.public_bases or b.user_id = auth.uid());
-$$;
+  return result;
+end $$;
 
 revoke execute on function public.set_public_bases(boolean) from public, anon;
 grant execute on function public.set_public_bases(boolean) to authenticated;
-revoke execute on function public.search_players(text, int, int, int, text, int) from public, anon;
-grant execute on function public.search_players(text, int, int, int, text, int) to authenticated;
+revoke execute on function public.rate_limit_hit(text, int, int) from public, anon, authenticated;
+revoke execute on function public.search_players(text, int, int, int, text, int, int) from public, anon;
+grant execute on function public.search_players(text, int, int, int, text, int, int) to authenticated;
 revoke execute on function public.get_player_profile(text) from public, anon;
 grant execute on function public.get_player_profile(text) to authenticated;
 revoke execute on function public.get_player_base(uuid) from public, anon;
@@ -374,8 +436,8 @@ grant select, insert, update on public.achievements to authenticated;
 
 revoke execute on function public.get_leaderboard(int) from public, anon;
 grant execute on function public.get_leaderboard(int) to authenticated;
-revoke execute on function public.get_village_leaderboard(int) from public, anon;
-grant execute on function public.get_village_leaderboard(int) to authenticated;
+revoke execute on function public.get_village_leaderboard(int, int) from public, anon;
+grant execute on function public.get_village_leaderboard(int, int) to authenticated;
 revoke execute on function public.username_available(text) from public;
 grant execute on function public.username_available(text) to anon, authenticated;
 revoke execute on function public.handle_new_user() from public, anon, authenticated;

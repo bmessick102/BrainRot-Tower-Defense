@@ -21,10 +21,16 @@ export class VisitHudScene extends Phaser.Scene {
 
   init(data) {
     this.visit = data.visit;
+    this.statusText = null;
+    this.card = null;
   }
 
   create() {
     const { width } = this.scale;
+    // The scene object lives on between visits: once stopped (Back, or switching villages), forget its texts and card.
+    // They're destroyed with the scene, and the next VisitScene talks to this object before it is created again
+    // (setting text on a destroyed one threw in VisitScene.create: a stuck screen on the second visit).
+    this.events.once('shutdown', () => { this.statusText = null; this.card = null; });
     this.add.existing(new Button(this, 74, 40, 120, 48, 'Back', () => this.visit.leave(), { color: COLORS.buttonDanger, fontSize: 20 }));
     this.titleG = this.add.graphics();
     this.title = this.add.text(width / 2, 30, `${this.visit.username}'s village`, textStyle(22)).setOrigin(0.5);
@@ -33,6 +39,7 @@ export class VisitHudScene extends Phaser.Scene {
     this.card = null;
     this.drawSwitcher();
     this.drawTitle();
+    if (this.visit.gs && this.visit.base) this.showVillage(this.visit.base); // the village came in before this started
     this.add.text(width / 2, this.scale.height - 16, 'Visiting: look around, tap a building to see it. Nothing here can be changed.', bodyStyle(14, COLORS.text)).setOrigin(0.5, 1).setAlpha(0.85);
   }
 

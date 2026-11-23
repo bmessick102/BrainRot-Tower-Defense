@@ -229,21 +229,10 @@ export function respecCost(state, type) {
   return Math.max(1, Math.round(sum * (CONFIG.rules.respecShare ?? 0.5)));
 }
 
-/** A free path reset waiting for this type (merging two defenses gives one; merge.js). */
-export function hasFreeRespec(state, type) {
-  return !!(state.freeRespecs && state.freeRespecs[type]);
-}
-
-/** Can the type's path be reset now? { ok, reason, cost, free }. The old picks are not refunded. */
+/** Can the type's path be reset now? { ok, reason, cost }. The old picks are not refunded. Always paid (v0.8.3). */
 export function checkRespec(state, type) {
   if (!labTierCount(state, type)) return { ok: false, reason: 'Nothing to reset', cost: 0 };
-  const free = hasFreeRespec(state, type); // a merge's free reset (used up by respecPath)
-  const cost = free ? 0 : respecCost(state, type);
-  if (free) {
-    if (!labLevel(state)) return { ok: false, reason: 'Build an RV Lab', cost, free };
-    if (isWaveActive(state)) return { ok: false, reason: 'Not during a wave', cost, free };
-    return { ok: true, reason: '', cost, free };
-  }
+  const cost = respecCost(state, type);
   if (!labLevel(state)) return { ok: false, reason: 'Build an RV Lab', cost };
   if (isWaveActive(state)) return { ok: false, reason: 'Not during a wave', cost };
   if (researchPoints(state) < cost) return { ok: false, reason: needRpReason(cost, researchPoints(state)), cost };

@@ -1,7 +1,7 @@
 // Ability icons of the merged defenses (CONFIG.merges[type].abilityIcon): a glossy gold box like the hero ability
 // slots on the hotbar (v0.8.2: it was a disc). The art is a texture (art-source/ui/<key>.png, e.g. ui_ability_sky_net)
 // drawn inside the box; until it exists, a simple symbol is drawn in code (a rolling ball, a bolt, three shells, a net,
-// a staff and a wall).
+// a staff and a wall, a hook on a chain).
 import { fitIcon, drawGlossy } from './uiDraw.js';
 
 const GOLD = 0xffc83a, GOLD_DARK = 0xb87d0a, INK = 0x3a2406;
@@ -46,6 +46,16 @@ function drawSymbol(g, key, r) {
     g.lineStyle(Math.max(2, r * 0.16), INK, 1).lineBetween(-r * 0.05, r * 0.7, r * 0.12, -r * 0.62);
     g.fillStyle(0xfff0c0, 1).fillCircle(r * 0.14, -r * 0.68, r * 0.16);
     g.lineStyle(Math.max(1.5, r * 0.07), INK, 1).strokeCircle(r * 0.14, -r * 0.68, r * 0.16);
+  } else if (key === 'ui_ability_reel_in') {
+    // A hook hanging from a chain: three links down from the top, then the hook's shank and its curve with a barb.
+    g.lineStyle(Math.max(1.5, r * 0.1), INK, 1);
+    g.strokeEllipse(0, -r * 0.68, r * 0.2, r * 0.3);
+    g.lineBetween(0, -r * 0.52, 0, -r * 0.36);
+    g.strokeEllipse(0, -r * 0.3, r * 0.2, r * 0.3);
+    g.lineStyle(Math.max(2, r * 0.15), INK, 1).lineBetween(0, -r * 0.14, 0, r * 0.3);
+    g.beginPath().arc(-r * 0.24, r * 0.3, r * 0.24, 0, Math.PI, false).strokePath();
+    g.fillTriangle(-r * 0.56, r * 0.36, -r * 0.4, r * 0.36, -r * 0.48, r * 0.08); // the barb
+    g.fillStyle(0xfff0c0, 1).fillCircle(0, -r * 0.14, r * 0.07);
   } else {
     // A net: a circle crossed by a few lines.
     g.strokeCircle(0, 0, r * 0.55);

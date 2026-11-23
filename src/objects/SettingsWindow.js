@@ -7,7 +7,7 @@ import { drawWindow } from './uiDraw.js';
 import { COLORS, bodyStyle, textStyle } from '../theme.js';
 import { getMusicLevel, getSfxLevel, setMusicLevel, setSfxLevel } from '../audio.js';
 import { saveSettings } from '../logic/save.js';
-import { CREDITS_TEAM, CREDITS_NOTES } from '../credits.js';
+import { CREDITS_SECTIONS, CREDITS_DISCLAIMER } from '../credits.js';
 
 const W = 560, H = 490, HEADER = 60, DEPTH = 1000;
 
@@ -141,24 +141,68 @@ export class SettingsWindow {
     }
   }
 
+  /**
+   * The credits (src/credits.js): the game's name, then each section under a small heading (people as two columns,
+   * name | what they did, sharing one split so all sections line up), then the fan-content notice in small print.
+   * Laid out at full size first; if it would run past the window's bottom, the gaps and then the text shrink a step at
+   * a time until it fits.
+   */
   buildCredits() {
-    const s = this.scene, cx = s.scale.width / 2;
-    let y = this.py + 146;
-    this.add(s.add.text(cx, y, 'Italian Brainrot Tower Defense', bodyStyle(22, COLORS.inkAccent)).setOrigin(0.5, 0));
-    y += 44;
-    // Names right-aligned and roles left-aligned at a split point that centers the widest pair.
-    const names = CREDITS_TEAM.map((p) => s.add.text(0, y, p.name, bodyStyle(18)).setOrigin(1, 0));
-    const roles = CREDITS_TEAM.map((p) => s.add.text(0, y, p.role, bodyStyle(18, COLORS.inkDim)));
-    const nameW = Math.max(...names.map((t) => t.width)), roleW = Math.max(...roles.map((t) => t.width));
-    const split = cx - (nameW + 24 + roleW) / 2 + nameW + 12;
-    names.forEach((t, i) => { t.setPosition(split - 12, y + i * 32); roles[i].setPosition(split + 12, y + i * 32); });
-    this.add(names, roles);
-    y += CREDITS_TEAM.length * 32;
-    y += 14;
-    for (const line of CREDITS_NOTES) {
-      this.add(s.add.text(cx, y, line, bodyStyle(15, COLORS.inkDim, { align: 'center', wordWrap: { width: W - 60 } })).setOrigin(0.5, 0));
-      y += 24;
+    const fits = [
+      { f: 1, g: 1 }, { f: 1, g: 0.7 }, { f: 0.95, g: 0.55 }, { f: 0.9, g: 0.45 }, { f: 0.84, g: 0.35 }, { f: 0.78, g: 0.25 }
+    ];
+    const limit = this.py + H - 16;
+    for (let i = 0; i < fits.length; i++) {
+      const { objs, bottom } = this.layoutCredits(fits[i]);
+      if (bottom <= limit || i === fits.length - 1) { this.add(objs); return; }
+      objs.forEach((o) => o.destroy());
     }
+  }
+
+  /** One try at the credits layout: f scales the text, g the gaps. Returns the objects and their bottom edge. */
+  layoutCredits({ f, g }) {
+    const s = this.scene, cx = s.scale.width / 2, objs = [];
+    const size = (n) => Math.max(11, Math.round(n * f)), gap = (n) => Math.round(n * g);
+    const text = (x, y, str, style) => { const t = s.add.text(x, y, str, style); objs.push(t); return t; };
+    let y = this.py + 126;
+    const title = text(cx, y, 'Italian Brainrot Tower Defense', bodyStyle(size(21), COLORS.inkAccent)).setOrigin(0.5, 0);
+    y += title.height + gap(8);
+
+    // One name | role split for every section, centered on the widest name and the widest role.
+    const rowSize = size(17), people = CREDITS_SECTIONS.flatMap((sec) => sec.people || []);
+    const measure = (str) => { const t = s.add.text(0, 0, str, bodyStyle(rowSize)); const w = t.width; t.destroy(); return w; };
+    const roleLines = (p) => [].concat(p.role); // a role is one line or a list of lines
+    const nameW = Math.max(0, ...people.map((p) => measure(p.name)));
+    const roleW = Math.max(0, ...people.flatMap(roleLines).map((r) => measure(r)));
+    const split = Math.round(cx - (nameW + 24 + roleW) / 2 + nameW + 12);
+
+    const rules = s.add.graphics();
+    objs.push(rules);
+    rules.fillStyle(0x7a6a55, 0.3); // COLORS.inkDim, faint
+    CREDITS_SECTIONS.forEach((sec, i) => {
+      if (i > 0) y += gap(9);
+      // Heading: small accent text between two faint rules.
+      const head = text(cx, y, sec.title, bodyStyle(size(15), COLORS.inkAccent)).setOrigin(0.5, 0);
+      const ry = Math.round(y + head.height / 2), half = Math.round(head.width / 2) + 12, reach = 110;
+      rules.fillRect(cx - half - reach, ry, reach, 2).fillRect(cx + half, ry, reach, 2);
+      y += head.height + gap(2);
+      for (const p of sec.people || []) {
+        text(split - 12, y, p.name, bodyStyle(rowSize)).setOrigin(1, 0);
+        roleLines(p).forEach((r, k) => {
+          if (k > 0) y += rowSize + 2; // a role's next line sits closer than the next person
+          text(split + 12, y, r, bodyStyle(rowSize, COLORS.inkDim));
+        });
+        y += rowSize + 4 + gap(3);
+      }
+      for (const line of sec.lines || []) {
+        const t = text(cx, y, line, bodyStyle(size(15), COLORS.inkDim, { align: 'center', wordWrap: { width: W - 60 } })).setOrigin(0.5, 0);
+        y += t.height + gap(2);
+      }
+    });
+
+    y += gap(10) + 4;
+    const fine = text(cx, y, CREDITS_DISCLAIMER, bodyStyle(size(12), COLORS.inkDim, { align: 'center', wordWrap: { width: W - 56 } })).setOrigin(0.5, 0);
+    return { objs, bottom: y + fine.height };
   }
 
   deleteSave() {

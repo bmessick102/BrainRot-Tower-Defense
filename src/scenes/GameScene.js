@@ -48,6 +48,7 @@ import { checkCast, checkCastSpot, spellStats } from '../logic/spells.js';
 import { checkMerge } from '../logic/merge.js';
 import { NetFx } from '../objects/NetFx.js';
 import { WallFx } from '../objects/WallFx.js';
+import { HarpoonFx } from '../objects/HarpoonFx.js';
 
 const PLANNING_FADE_MS = 600; // the ambience / village music hands over to the planning track this fast
 const ZOOM_STEP = 1.1;
@@ -119,6 +120,7 @@ export class GameScene extends Phaser.Scene {
     this.spellFx = new SpellFx(this, gs);
     this.netFx = new NetFx(this); // Missile Silo's nets (skyNet.js)
     this.wallFx = new WallFx(this); // Gandolf the Grand's walls (wizardWall.js)
+    this.harpoonFx = new HarpoonFx(this); // Harpoon Ballista's Reel In chains (harpoon.js)
     // The next wave's arrow + enemy counts at each entrance it attacks from (UIScene feeds the counts).
     this.waveMarkers = new WaveMarkers(this);
     // Fog over the back end of all four paths, where enemies come onto the map: always on, under those markers.
@@ -386,6 +388,7 @@ export class GameScene extends Phaser.Scene {
     this.updateMergePick(time);
     this.netFx.update(time);
     this.wallFx.update(time);
+    this.harpoonFx.update(time);
     this.waveMarkers.update();
     this.spawnFog.update();
   }
@@ -587,6 +590,14 @@ export class GameScene extends Phaser.Scene {
   /** Show a building's "Lv" badge and tier pips? Only when it's hovered or selected, or in edit mode. */
   showLabels(id) {
     return this.editMode || id === this.hoverId || id === this.selectedId;
+  }
+
+  /**
+   * Show the perk pips (and a merged building's Mastery stars) on that label? Not in edit mode (v0.8.3), where every
+   * building is labelled: there the chip is just the level badge (and the merge gear), so the village stays readable.
+   */
+  showPips() {
+    return !this.editMode;
   }
 
   /**
@@ -1826,6 +1837,14 @@ export class GameScene extends Phaser.Scene {
       playSfxCapped(this, SFX.catapultImpact, 1);
       playVoiceLine(this, SFX.wizardVoice);
       this.cameras.main.shake(110, 0.003);
+    });
+    // Harpoon Ballista: Reel In. The harpoon bites with a heavy thunk and "REELED IN!" over the enemy (a boss: "SLOWED");
+    // HarpoonFx draws the chain from the tower while it's dragged.
+    on('harpoonHit', (d) => {
+      const s = at(d), v = this.views.enemies.get(d.targetId);
+      const top = v && v.sprite ? v.sprite.y - v.sprite.displayHeight : s.y - 40;
+      tag(s.x, top - 10, d.boss ? 'SLOWED' : 'REELED IN!', d.boss ? '#9fd8ff' : '#ffe2a0', 16);
+      playSfxCapped(this, SFX.catapultImpact, 1, { volume: 0.6 });
     });
     // Missile Silo: the net rocket goes up with a launch sound; the net bursts open with a crackle over the group.
     on('netFired', () => playSfx(this, SFX.fireworkFire));

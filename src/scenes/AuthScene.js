@@ -12,6 +12,7 @@ import Phaser from 'phaser';
 import { session } from '../net/account.js';
 import { USERNAME_RE, EMAIL_RE, PASSWORD_MIN, passwordProblem, isNetworkError } from '../net/session.js';
 import { TURNSTILE_SITE_KEY } from '../backendConfig.js';
+import { authGuard } from '../net/spamGuard.js';
 import { Button } from '../objects/Button.js';
 import { addFullscreenButton } from '../objects/FullscreenButton.js';
 import { addTextField } from '../objects/TextField.js';
@@ -30,6 +31,11 @@ const LABEL_W = 150;
 const LAST_EMAIL = 'ibtd.lastEmail';
 const CAPTCHA_ROW = 18;     // extra window height when the human check sits beside the button
 const OFFLINE_ROW = 66;     // room under the window for Retry / Play Offline
+
+// Spam guard (src/net/spamGuard.js): a growing wait after repeated failed log ins / sign ups, and at most one
+// "send it again" email per RESEND_GAP_MS.
+const guard = authGuard;
+const waitMessage = (secs) => `Too many tries. Wait ${secs} s, then try again.`;
 
 /** Loads Cloudflare Turnstile once (only when a site key is set). */
 let turnstileLoading = null;
@@ -282,10 +288,13 @@ export class AuthScene extends Phaser.Scene {
   async resend() {
     const email = this.fields && this.fields.email.value.trim();
     if (!email || this.busy) return;
+    const gap = guard.resendLeft();
+    if (gap > 0) { this.showMessage(`Email just sent. You can ask again in ${gap} s.`); this.canResend = true; this.setResend(true); return; }
     if (this.captchaOn && !this.captchaToken) { this.showMessage('Tick the \u201cI\u2019m human\u201d box first, then click here again.'); this.canResend = true; this.setResend(true); return; }
     this.busy = true;
     try {
       await session.backend.resendConfirmation(email, this.captchaToken);
+      guard.resent();
       this.showMessage(`Sent! Check ${email} for the link (and your spam folder).`, true);
     } catch (e) {
       this.showMessage(e.message || String(e));
@@ -297,6 +306,8 @@ export class AuthScene extends Phaser.Scene {
 
   async submit() {
     if (this.busy || !this.fields) return;
+    const wait = guard.cooldownLeft();
+    if (wait > 0) return this.showMessage(waitMessage(wait));
     const f = this.fields;
     const email = f.email.value.trim();
     const password = f.password.value;
@@ -312,6 +323,7 @@ export class AuthScene extends Phaser.Scene {
       try {
         if (!await session.backend.usernameAvailable(username)) throw new Error('That username is taken. Try another.');
         const r = await session.signUp(email, password, username, { captchaToken: this.captchaToken });
+        guard.succeeded();
         this.rememberEmail(email);
         if (r.needsConfirm) {
           this.setBusy(false);
@@ -325,6 +337,7 @@ export class AuthScene extends Phaser.Scene {
         this.setBusy(false);
         this.resetCaptcha();
         if (this.serverUnreachable(e)) return;
+        guard.failed();
         this.showMessage(e.message || String(e));
       }
       return;
@@ -335,12 +348,14 @@ export class AuthScene extends Phaser.Scene {
     this.setBusy(true, 'Logging in…');
     try {
       await session.signIn(email, password, { captchaToken: this.captchaToken });
+      guard.succeeded();
       this.rememberEmail(email);
       this.scene.start('TitleScene', { justLoggedIn: true });
     } catch (e) {
       this.setBusy(false);
       this.resetCaptcha();
       if (this.serverUnreachable(e)) return;
+      guard.failed();
       this.showMessage(e.message || String(e));
     }
   }

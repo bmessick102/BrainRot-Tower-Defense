@@ -17,6 +17,7 @@ import { makeStateWithTownHall, addBuilding, addEnemy } from './helpers.js';
 import { netSpots, netStats, fireNets, stepSkyNets } from '../src/logic/skyNet.js';
 import { wallStats, wallLines, raiseWalls, stepWizardWalls, distToSegment } from '../src/logic/wizardWall.js';
 import { zapStats, zapTargets, zap, empPulse, stepFlockZaps } from '../src/logic/flockZap.js';
+import { harpoonStats, harpoonTargets, hookEnemy, stepHarpoons } from '../src/logic/harpoon.js';
 import { stepFlockTowers } from '../src/logic/flock.js';
 import { facingToward, mergedFacingKey } from '../src/logic/merge.js';
 
@@ -38,8 +39,8 @@ const volley = (s, b, seconds = 3) => {
 const tough = (s, kind, x, y, extra = {}) => addEnemy(s, kind, x, y, { hp: 1e7, maxHp: 1e7, ...extra });
 
 describe('merging: rules', () => {
-  it('Cannon, Locklair Tower, Litman Mortar, Firework Launcher, Gandolf Tower and F.L.O.C.K Tower can merge, data-driven', () => {
-    expect(MERGE_TYPES).toEqual(['cannon', 'archer', 'mortar', 'firework', 'wizard', 'flock']);
+  it('Cannon, Locklair Tower, Litman Mortar, Firework Launcher, Gandolf Tower, F.L.O.C.K Tower and Spear Thrower can merge, data-driven', () => {
+    expect(MERGE_TYPES).toEqual(['cannon', 'archer', 'mortar', 'firework', 'wizard', 'flock', 'spear']);
     for (const t of MERGE_TYPES) {
       const m = CONFIG.merges[t];
       expect(m.mastery.tiers).toHaveLength(3);
@@ -116,17 +117,11 @@ describe('merging: rules', () => {
     expect(mergeCandidates(s, c).map((x) => x.id)).not.toContain(a.id);
   });
 
-  it('keeps every perk (perks are per type), gives one free respec, refunds the other copy\'s level Burgers past the cap', () => {
+  it('keeps every perk (perks are per type), refunds the other copy\'s level Burgers past the cap', () => {
     const s = village({ research: { cannon: ['a', 'a', 'a'] } });
     const [a, b] = pair(s, 'cannon');
-    expect(checkRespec(s, 'cannon').cost).toBeGreaterThan(0);
     mergeBuildings(s, a.id, b.id);
     expect(a.picks).toEqual(['a', 'a', 'a']);
-    expect(checkRespec(s, 'cannon')).toMatchObject({ ok: true, cost: 0, free: true });
-    // A merge doesn't stack free respecs.
-    const [c, d] = pair(s, 'cannon');
-    mergeBuildings(s, c.id, d.id);
-    expect(s.freeRespecs.cannon).toBe(1);
     // A type whose levels cost Burgers (none of the three today): the removed copy's Burgers come back, past the cap.
     CONFIG.merges.altar = { ...CONFIG.merges.cannon, name: 'Test Altar' };
     try {
@@ -140,17 +135,21 @@ describe('merging: rules', () => {
     } finally { delete CONFIG.merges.altar; }
   });
 
-  it('the free respec is used up by a path reset (GameState), and costs nothing', () => {
+  it('gives no free path reset (v0.8.3): a reset after merging costs its normal price', () => {
     const gs = new GameState({ storage: null });
     Object.assign(gs, village({ research: { cannon: ['a', 'a'] } }), { emit: GameState.prototype.emit, listeners: new Map() });
+    const price = checkRespec(gs, 'cannon').cost;
+    expect(price).toBeGreaterThan(0);
     const [a, b] = pair(gs, 'cannon');
     expect(gs.mergeBuilding(a.id, b.id).ok).toBe(true);
+    expect(gs.freeRespecs).toBeUndefined();
+    const check = checkRespec(gs, 'cannon');
+    expect(check).toMatchObject({ ok: true, cost: price });
+    expect(check.free).toBeUndefined();
     const rp = gs.researchPoints;
-    expect(gs.respecPath('cannon')).toMatchObject({ ok: true, cost: 0 });
-    expect(gs.researchPoints).toBe(rp);
-    expect(gs.freeRespecs.cannon).toBeUndefined();
-    gs.research.cannon = ['b'];
-    expect(checkRespec(gs, 'cannon').cost).toBeGreaterThan(0); // paid again
+    expect(gs.respecPath('cannon')).toMatchObject({ ok: true, cost: price });
+    expect(gs.researchPoints).toBe(rp - price);
+    expect(gs.research.cannon).toBeUndefined();
   });
 
 });
@@ -449,7 +448,7 @@ describe('saves', () => {
     return s;
   };
 
-  it('merged buildings, Mastery and free respecs round-trip', () => {
+  it('merged buildings and Mastery round-trip (no free respecs saved)', () => {
     const s = placed();
     const [a, b] = s.buildings.filter((x) => x.type === 'archer');
     mergeBuildings(s, a.id, b.id);
@@ -458,7 +457,7 @@ describe('saves', () => {
     const saved = serializeGame(s);
     expect(saved.buildings.find((x) => x.id === a.id).merged).toBe(true);
     expect(saved.mastery).toEqual({ archer: 2 });
-    expect(saved.freeRespecs).toEqual(['archer']);
+    expect(saved).not.toHaveProperty('freeRespecs');
     const parsed = parseSave(JSON.stringify(saved));
     expect(parsed.status).toBe('ok');
     const data = deserializeGame(parsed.data);
@@ -467,8 +466,24 @@ describe('saves', () => {
     expect(m.hp).toBe(maxHp(m));
     expect(m.hp).toBe(Math.round(levelStats('archer', 10).hp * CONFIG.merges.archer.hpMult));
     expect(data.mastery).toEqual({ archer: 2 });
-    expect(data.freeRespecs).toEqual({ archer: 1 });
+    expect(data).not.toHaveProperty('freeRespecs');
     expect(serializeGame({ ...s, ...data }).buildings).toEqual(saved.buildings);
+  });
+
+  it('a v0.8.0-0.8.2 save with a waiting free reset (freeRespecs) still loads; the free reset is dropped', () => {
+    const s = placed();
+    const [a, b] = s.buildings.filter((x) => x.type === 'archer');
+    mergeBuildings(s, a.id, b.id);
+    const old = { ...serializeGame(s), freeRespecs: ['archer'] };
+    const parsed = parseSave(JSON.stringify(old));
+    expect(parsed.status).toBe('ok');
+    expect(deserializeGame(parsed.data)).not.toHaveProperty('freeRespecs');
+    const gs = new GameState({ storage: null });
+    gs.loadFromSave(parsed.data);
+    expect(gs.buildings.find((x) => x.id === a.id).merged).toBe(true);
+    expect(gs.freeRespecs).toBeUndefined();
+    expect(checkRespec(gs, 'archer').cost).toBeGreaterThan(0); // the normal price
+    expect(serializeGame(gs)).not.toHaveProperty('freeRespecs');
   });
 
   it('older saves load unchanged; bad merge data is rejected', () => {
@@ -482,8 +497,8 @@ describe('saves', () => {
     expect(bad((o) => { o.buildings.find((x) => x.type === 'archer').level = 9; o.buildings.find((x) => x.type === 'archer').merged = true; })).toBe('invalid');
     expect(bad((o) => { o.buildings.find((x) => x.type === 'rvlab').merged = true; })).toBe('invalid');
     expect(bad((o) => { o.mastery = { archer: 4 }; })).toBe('invalid');
-    expect(bad((o) => { o.mastery = { spear: 1 }; })).toBe('invalid');
-    expect(bad((o) => { o.freeRespecs = ['spear']; })).toBe('invalid');
+    expect(bad((o) => { o.mastery = { ksi: 1 }; })).toBe('invalid');
+    expect(bad((o) => { o.freeRespecs = ['ksi']; })).toBe('invalid');
     expect(bad((o) => { o.buildings.find((x) => x.type === 'archer').merged = true; })).toBe('ok');
   });
 });
@@ -652,6 +667,132 @@ describe('F.L.O.C.K Mothership: Triple Zap', () => {
   });
 });
 
+describe('Harpoon Ballista: Reel In', () => {
+  const H = CONFIG.merges.spear.harpoon;
+  const setup = (mastery = 0) => {
+    const s = village();
+    const [a, b] = pair(s, 'spear');
+    mergeBuildings(s, a.id, b.id);
+    fight(s);
+    if (mastery) { s.mastery = { spear: mastery }; syncMastery(s); }
+    return { s, t: a, cx: a.col + a.size / 2, cy: a.row + a.size / 2 };
+  };
+  const hook = (s, t, e, hit = 0) => hookEnemy(s, { ...harpoonStats(t), sourceId: t.id }, e, hit);
+  const reel = (s, seconds = 1) => { for (let i = 0; i < seconds / 0.05; i++) stepHarpoons(s, 0.05); };
+
+  it('every 3rd throw harpoons the toughest enemy in range (not its usual, closest target) for a merged spear\'s damage', () => {
+    const { s, t, cx, cy } = setup();
+    const near = tough(s, 'grunt', cx + 2.5, cy, { hp: 1e5, maxHp: 1e5 });
+    const big = tough(s, 'grunt', cx, cy - 4);
+    expect(harpoonTargets(s, t)).toEqual([big]);
+    for (let i = 0; i < H.every - 1; i++) volley(s, t, 1);
+    expect(events(s, 'harpoonHit')).toHaveLength(0);
+    expect(big.hp).toBe(1e7);
+    volley(s, t, 1);
+    const hits = events(s, 'harpoonHit');
+    expect(hits).toHaveLength(1);
+    expect(hits[0].data).toMatchObject({ sourceId: t.id, targetId: big.id, boss: false });
+    expect(1e7 - big.hp).toBeCloseTo(levelStats('spear', 10).damage * CONFIG.merges.spear.damageMult);
+    expect(big.reelT).toBeGreaterThan(0);
+    expect(near.reelT || 0).toBe(0);
+  });
+
+  it('a ground enemy is dragged back about 3 tiles, the opposite way it was walking, and held meanwhile', () => {
+    const { s, t } = setup();
+    const e = tough(s, 'grunt', 7.5, 6.5, { vx: 1, vy: 0 });
+    expect(hook(s, t, e)).toBe(true);
+    expect(e.held).toBeCloseTo(H.pullSeconds);
+    reel(s, 1);
+    expect(e.x).toBeCloseTo(7.5 - H.pull, 1);
+    expect(e.y).toBeCloseTo(6.5);
+    expect(e.reelT).toBe(0);
+    // Standing still: away from the tower.
+    const c = { x: t.col + t.size / 2, y: t.row + t.size / 2 };
+    const still = tough(s, 'grunt', c.x - 4, c.y);
+    hook(s, t, still);
+    reel(s, 1);
+    expect(still.x).toBeCloseTo(c.x - 4 - H.pull, 1);
+  });
+
+  it('walls stop the drag', () => {
+    const { s, t } = setup();
+    addBuilding(s, 'wall', 4, 6, 1);
+    const e = tough(s, 'grunt', 6.5, 6.5, { vx: 1, vy: 0 });
+    hook(s, t, e);
+    reel(s, 1);
+    expect(e.x).toBeGreaterThanOrEqual(5);
+    expect(e.x).toBeLessThan(5.2);
+    expect(e.reelT).toBe(0);
+  });
+
+  it('a flyer is dragged too (over walls)', () => {
+    const { s, t } = setup();
+    addBuilding(s, 'wall', 6, 7, 1);
+    const e = tough(s, 'bomber', 6.5, 5.5, { vx: 0, vy: -2 });
+    hook(s, t, e);
+    reel(s, 1);
+    expect(e.x).toBeCloseTo(6.5);
+    expect(e.y).toBeCloseTo(5.5 + H.pull, 1);
+  });
+
+  it('bosses are only slowed, never dragged', () => {
+    const { s, t } = setup();
+    const car = tough(s, 'babycar', 6.5, 6.5, { vx: 1, vy: 0 });
+    expect(hook(s, t, car)).toBe(false);
+    reel(s, 1);
+    expect([car.x, car.y]).toEqual([6.5, 6.5]);
+    expect(car.held || 0).toBe(0);
+    expect(car.slow).toBe(H.bossSlow);
+    expect(car.slowTimer).toBe(H.bossSlowSeconds);
+    expect(events(s, 'harpoonHit')[0].data.boss).toBe(true);
+  });
+
+  it('a harpoon ends a dashing Quandale Dingle\'s dash with no impact', () => {
+    const { s, t } = setup();
+    for (const b of s.buildings) b.hp = 1e9;
+    const store = addBuilding(s, 'storage', 4, 4, 1); store.hp = 1e6;
+    const q = tough(s, 'quandale', 5, 9, { targetId: store.id });
+    for (let i = 0; i < 4 && !events(s, 'enemyDash').length; i++) stepEnemies(s, 0.05);
+    expect(q.dashT).toBeGreaterThan(0);
+    hook(s, t, q);
+    expect(q.dashT).toBe(0);
+    for (let i = 0; i < 8; i++) { stepEnemies(s, 0.05); stepHarpoons(s, 0.05); }
+    expect(events(s, 'dashImpact')).toHaveLength(0);
+    expect(store.hp).toBe(1e6);
+  });
+
+  it('Mastery: Longer Chain (+2 tiles), Dragnet (25% of the hit to enemies it\'s dragged through, once each), Double Hook', () => {
+    const { s, t, cx, cy } = setup(3);
+    const st = harpoonStats(t);
+    expect(st).toMatchObject({ pull: H.pull + 2, dragShare: 0.25, hooks: 2 });
+    // Longer Chain + Dragnet: dragged 5 tiles, through an enemy on the way.
+    const e = tough(s, 'grunt', 9.5, 6.5, { vx: 1, vy: 0 });
+    const inWay = tough(s, 'grunt', 7.5, 6.6);
+    hook(s, t, e, 1000);
+    reel(s, 1.5);
+    expect(e.x).toBeCloseTo(9.5 - st.pull, 1);
+    expect(1e7 - inWay.hp).toBeCloseTo(250);
+    // Double Hook: the two toughest enemies in range are harpooned at once.
+    s.enemies = [];
+    const weak = tough(s, 'grunt', cx + 2.5, cy, { hp: 1e5, maxHp: 1e5 });
+    const a = tough(s, 'grunt', cx, cy - 4), b = tough(s, 'grunt', cx - 4, cy, { hp: 5e6, maxHp: 5e6 });
+    s.events.length = 0;
+    t.harpoonCount = H.every - 1;
+    volley(s, t, 1);
+    expect(events(s, 'harpoonHit').map((h) => h.data.targetId).sort()).toEqual([a.id, b.id].sort());
+    expect(weak.reelT || 0).toBe(0);
+  });
+
+  it('nothing harpoon-related is saved', () => {
+    const { s, t, cx, cy } = setup();
+    const e = tough(s, 'grunt', cx + 3, cy, { vx: 1, vy: 0 });
+    t.harpoonCount = 2;
+    hook(s, t, e, 500);
+    const json = JSON.stringify(serializeGame(s));
+    expect(json).not.toMatch(/reel|harpoon/i);
+  });
+});
+
 describe('Missile Silo: Sky Net', () => {
   const N = CONFIG.merges.firework.net;
   const setup = (research = {}, mastery = 0) => {
@@ -772,7 +913,7 @@ describe('merged balance (v0.8: counts as two buildings)', () => {
     expect(CONFIG.merges.firework.name).toBe('Missile Silo');
     expect(CONFIG.merges.firework.ability).toBe('Sky Net');
     expect(MERGE_TYPES.map((t) => CONFIG.merges[t].abilityIcon).sort()).toEqual(
-      ['ui_ability_ballista_bolt', 'ui_ability_rolling_thunder', 'ui_ability_shall_not_pass', 'ui_ability_sky_net', 'ui_ability_triple_strike', 'ui_ability_triple_zap']);
+      ['ui_ability_ballista_bolt', 'ui_ability_reel_in', 'ui_ability_rolling_thunder', 'ui_ability_shall_not_pass', 'ui_ability_sky_net', 'ui_ability_triple_strike', 'ui_ability_triple_zap']);
     expect(CONFIG.merges.wizard).toMatchObject({ name: 'Gandolf the Grand', ability: 'You Shall Not Pass' });
   });
 

@@ -2,6 +2,7 @@
 // Every method returns plain camelCase objects and throws an Error with a player-friendly message.
 import { createClient } from '@supabase/supabase-js';
 import { networkError, conflictError } from './errors.js';
+import { boardPage, isMissingFunction } from './paging.js';
 
 const BASE_COLUMNS = 'id, name, save, checkpoint, town_hall, wave, best_wave, created_at, updated_at';
 
@@ -233,16 +234,48 @@ export class SupabaseBackend {
         bestWave: r.best_wave, bestTownHall: r.town_hall, isMe: !!r.is_me
       }));
     }
-    if (error.code !== 'PGRST202' && !/could not find the function/i.test(error.message || '')) throw friendlyError(error);
+    if (!isMissingFunction(error)) throw friendlyError(error);
     return check(await this.db.rpc('get_leaderboard', { lim: limit })).map((r) => ({
       rank: Number(r.rank), username: r.username, villageName: null, bestWave: r.best_wave, bestTownHall: r.best_town_hall, isMe: !!r.is_me
     }));
   }
 
+  /**
+   * One leaderboard page (v0.8.3, paging.js): { rows, mine, hasMore } for the villages at places offset + 1 ..
+   * offset + limit (each row also has `pos`, its place). Before supabase/migration-2026-11-22-spam-guard.sql is run, it
+   * reads the old top list (at most 100 places) and cuts the page from it.
+   */
+  async leaderboardPage(offset = 0, limit = 10) {
+    const { data, error } = await this.db.rpc('get_village_leaderboard', { lim: limit + 1, off: offset });
+    if (!error) {
+      const rows = (data || []).map((r) => ({
+        rank: Number(r.rank), pos: Number(r.pos), username: r.username, villageName: r.village_name || null,
+        bestWave: r.best_wave, bestTownHall: r.town_hall, isMe: !!r.is_me
+      }));
+      return boardPage(rows, offset, limit);
+    }
+    if (!isMissingFunction(error)) throw friendlyError(error);
+    // The old top list: places in order, then your own row (if it's lower) at its rank.
+    const n = Math.min(100, offset + limit + 1);
+    const old = await this.leaderboard(n);
+    const top = old.filter((r) => !(r.isMe && r.rank > n));
+    const rows = [...top.map((r, i) => ({ ...r, pos: i + 1 })), ...old.filter((r) => r.isMe && r.rank > n).map((r) => ({ ...r, pos: r.rank }))];
+    return boardPage(rows, offset, limit);
+  }
+
   // ---------- other players (v0.7; supabase/migration-2026-11-21-player-profiles.sql) ----------
-  /** Players matching the search: [{ username, bestWave, bestTownHall, achievements, isMe }]. */
-  async searchPlayers({ query = '', minWave = 0, maxWave = null, townHall = null, sort = 'wave', limit = 30 } = {}) {
-    const rows = check(await this.db.rpc('search_players', { q: query || '', min_wave: minWave || 0, max_wave: maxWave, hall: townHall, sort, lim: limit }));
+  /**
+   * Players matching the search: [{ username, bestWave, bestTownHall, achievements, isMe }], `limit` of them after
+   * skipping `offset` (v0.8.3 paging). Before the paging migration, the old call (no `off`) and a cut.
+   */
+  async searchPlayers({ query = '', minWave = 0, maxWave = null, townHall = null, sort = 'wave', limit = 30, offset = 0 } = {}) {
+    const args = { q: query || '', min_wave: minWave || 0, max_wave: maxWave, hall: townHall, sort, lim: limit };
+    let { data, error } = await this.db.rpc('search_players', { ...args, off: offset });
+    if (error && isMissingFunction(error)) {
+      ({ data, error } = await this.db.rpc('search_players', { ...args, lim: Math.min(50, offset + limit) }));
+      if (!error) data = (data || []).slice(offset, offset + limit);
+    }
+    const rows = check({ data, error });
     return (rows || []).map((r) => ({ username: r.username, bestWave: r.best_wave, bestTownHall: r.best_town_hall, achievements: r.achievements, isMe: !!r.is_me }));
   }
 

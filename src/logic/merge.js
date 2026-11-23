@@ -8,7 +8,8 @@
 // Perks: RV Lab perks belong to the building TYPE (research[type], abilities.js), so both copies already have the same
 // tiers and the merged building keeps them all; nothing per building is lost. Burgers spent on the removed copy's own
 // levels (a level with costCurrency 'rp'; none for the Cannon, Locklair Tower or Mortar) are refunded, allowed past the
-// Burger cap. Every merge leaves one free path reset for the type (state.freeRespecs[type]; they don't pile up).
+// Burger cap. Merging gives no free path reset (v0.8.3; before that each merge left one, state.freeRespecs): a reset
+// always costs its normal price.
 // Mastery: a 3-tier track per mergeable type (state.mastery[type] = tiers researched), researched in the RV Lab with
 // Burgers, gated by RV Lab level; it only changes the merged ability and isn't part of the one-path lock. Every merged
 // building of the type has it (b.mastery, kept in step by syncMastery, read by masteryFxOf in buildings.js).
@@ -84,8 +85,8 @@ export function burgersSpentOnLevels(b) {
 
 /**
  * Merge `otherId` into `keepId` (checkMerge must pass; this re-checks). Pays gold and Burgers, removes the other copy (no
- * rubble), makes the kept one merged at full health with its type's Mastery, refunds the other's level Burgers past the cap
- * and leaves a free path reset for the type. Emits 'buildingsMerged'. Returns { ok, reason, refund, removedId }.
+ * rubble), makes the kept one merged at full health with its type's Mastery and refunds the other's level Burgers past the
+ * cap. No free path reset (v0.8.3). Emits 'buildingsMerged'. Returns { ok, reason, refund, removedId }.
  */
 export function mergeBuildings(state, keepId, otherId) {
   const keep = state.buildings.find((b) => b.id === keepId);
@@ -102,8 +103,6 @@ export function mergeBuildings(state, keepId, otherId) {
   keep.hp = maxHp(keep);
   keep.cooldown = 0;
   keep.targetId = null;
-  if (!state.freeRespecs) state.freeRespecs = {};
-  state.freeRespecs[keep.type] = 1;
   if (state._nav) state._nav = null; // a building left the map: routes are worked out again
   emit(state, 'researchPointsChanged', { researchPoints: state.researchPoints, added: refund - check.cost.rp });
   const gone = footprintCenter(other); // where the other copy stood (the view puffs it away)
@@ -212,20 +211,12 @@ export function validMastery(obj) {
   return Object.entries(obj).every(([type, v]) => isMergeable(type) && Number.isInteger(v) && v >= 0 && v <= masteryTierCount(type));
 }
 
-/** Free path resets as saved: the mergeable types that have one waiting (left out when none). */
-export function serializeFreeRespecs(state) {
-  return MERGE_TYPES.filter((t) => state.freeRespecs && state.freeRespecs[t]);
-}
-
-/** A saved free-reset list: missing, or an array of mergeable types. */
+/**
+ * A saved free-reset list (saves from v0.8.0-0.8.2, when merging gave a free path reset): missing, or an array of
+ * mergeable types. Still validated so a broken save stays invalid, then ignored on load (v0.8.3: no free resets).
+ */
 export function validFreeRespecs(v) {
   return v === undefined || (Array.isArray(v) && v.every((t) => typeof t === 'string' && isMergeable(t)));
-}
-
-export function deserializeFreeRespecs(v) {
-  const out = {};
-  for (const t of v || []) out[t] = 1;
-  return out;
 }
 
 // ---------- merged pictures that turn (CONFIG.merges[type].art.facings) ----------

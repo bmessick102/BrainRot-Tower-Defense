@@ -156,14 +156,14 @@ const DEFAULT_SPRITE_SCALE = 0.75;
 // Cannon: 0.63 because its 5 tiers share one crop box (the biggest tier fills it), which keeps the
 // Level 3-4 art the size it was at 0.58 while Level 1 is a touch smaller and Level 9-10 bigger.
 // Catapult: 0.66 for the same reason (its Level 1 art fills 94% of the shared box).
-// F.L.O.C.K Tower: 1.28 of its single tile, so it stands a bit wider than the tile (about 85% of the
-// size it had on a 2x2 footprint).
+// F.L.O.C.K Tower: 1.15 of its single tile, so it stands a bit wider than the tile (v0.8.3: 10% smaller than the
+// earlier 1.28). The merged Mothership is drawn art.scale times this, so it shrank by the same 10%.
 // Mousetrap: a flat 1-tile trap, drawn a little wider than its tile.
 // Tower of Rah: a tall, slim tower, drawn narrower than its footprint (it starts small and grows a lot).
 // RV Lab: a long RV on its own paved pad; 0.77 of its 2x2 footprint (10% bigger than the earlier 0.7).
 // KSI Tower: a tall, slim tower like the Locklair's, a little narrower than the default.
 // Mortar: 0.585 (was 0.65, v0.8: 10% smaller at every level so the 25% bigger merged Triple Mortar stands out).
-const SPRITE_SCALE = { mortar: 0.585, cannon: 0.63, firework: 0.52, catapult: 0.66, spear: 0.66, ksi: 0.62, flock: 1.28, mousetrap: 1.1, ra: 0.54, rvlab: 0.77, dj: 0.77, altar: 0.66, queenAltar: 0.66, fuelStation: 0.8 };
+const SPRITE_SCALE = { mortar: 0.585, cannon: 0.63, firework: 0.52, catapult: 0.66, spear: 0.66, ksi: 0.62, flock: 1.15, mousetrap: 1.1, ra: 0.54, rvlab: 0.77, dj: 0.77, altar: 0.66, queenAltar: 0.66, fuelStation: 0.8 };
 
 // Buildings grow as they level up: this share of their normal size at Level 1, up to LEVEL_SIZE.max at
 // their top level (Level 10, or the type's own top level). They only grow on upgrades that keep the same
@@ -364,8 +364,10 @@ export class BuildingView {
     const labels = this.scene.showLabels ? this.scene.showLabels(b.id) : true;
     const damaged = !b.destroyed && b.hp < max;
     const picks = b.destroyed ? [] : picksOf(b);
-    // Every building with a perk tree shows its 5-slot perk bar (empty until perks are researched).
-    const hasPips = !b.destroyed && hasAbilities(b.type);
+    // Every building with a perk tree shows its 5-slot perk bar (empty until perks are researched), except where the
+    // scene hides it (GameScene.showPips: not in edit mode). Then pipsW is 0 and the chip is sized as the badge alone.
+    const pipsOn = this.scene.showPips ? this.scene.showPips(b.id) : true;
+    const hasPips = !b.destroyed && pipsOn && hasAbilities(b.type);
     // A merged defense adds its Mastery stars (one per tier, gold once researched) to the perk bar.
     const mTiers = merged && hasPips ? masteryTierCount(b.type) : 0;
     const mHave = mTiers && this.scene.gs ? masteryLevel(this.scene.gs, b.type) : 0;

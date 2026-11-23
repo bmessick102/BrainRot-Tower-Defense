@@ -97,7 +97,6 @@ export class GameState {
     this.barriers = [];          // Gandolf the Grand's You Shall Not Pass walls (wizardWall.js; not saved)
     this.research = {};          // RV Lab research: { type: ['a', 'b', ...] }, the pick at each tier
     this.mastery = {};           // merged defenses' Mastery tiers per type ({ cannon: 2 }, merge.js), saved
-    this.freeRespecs = {};       // types with a free path reset waiting (each merge leaves one, merge.js), saved
     this.labGuideStep = 0;       // RV Lab guide (labGuide.js): 0 = not started
     this.hero = null;            // the Brisket King (hero.js; rebuilt from his altar, not saved)
     this.queen = null;           // the Hatsune Queen (queen.js; rebuilt from her altar, not saved)
@@ -145,7 +144,6 @@ export class GameState {
     this.wallLevel = data.wallLevel; // (its walls are already brought to it)
     this.research = data.research;
     this.mastery = data.mastery || {};
-    this.freeRespecs = data.freeRespecs || {};
     this.labGuideStep = data.labGuideStep;
     this.tipsSeen = data.tipsSeen;
     this.wavePlan = data.wavePlan || null;
@@ -364,8 +362,7 @@ export class GameState {
   respecPath(type) {
     const check = checkRespec(this, type);
     if (!check.ok) return check;
-    if (check.free) delete this.freeRespecs[type]; // a merge's free reset, used up
-    else spendResearchPoints(this, check.cost);
+    spendResearchPoints(this, check.cost);
     delete this.research[type];
     const ids = syncAbilityPicks(this);
     this.emit('abilityRespecced', { type });

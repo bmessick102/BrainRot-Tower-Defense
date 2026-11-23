@@ -125,6 +125,7 @@ export const SFX = {
   waveCountdown: 'sfx_wave_countdown', // Start Wave pressed: the countdown begins
   waveClear: 'sfx_wave_clear',
   achievement: 'sfx_achievement',   // an achievement unlocks (optional: the wave-clear fanfare plays without it)
+  achievementClaim: 'sfx_achievement_claim', // the Claim button on an achievement's reward (Achievements window)
   gameOver: 'sfx_game_over',
   // v0.6
   ksiImpact: 'sfx_ksi_impact',            // a KSI Tower bottle bursts

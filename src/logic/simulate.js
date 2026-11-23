@@ -12,6 +12,7 @@ import { stepDefenses, stepProjectiles, stepPools } from './combat.js';
 import { stepSkyNets } from './skyNet.js';
 import { stepWizardWalls } from './wizardWall.js';
 import { stepFlockZaps } from './flockZap.js';
+import { stepHarpoons } from './harpoon.js';
 import { stepFlockTowers } from './flock.js';
 import { stepSpecialEnemies } from './specialEnemies.js';
 import { stepTraps } from './traps.js';
@@ -50,6 +51,7 @@ export function simulate(state, dt) {
   if (!state.gameOver) stepSkyNets(state, dt); // Missile Silo (merged Firework Launcher): its nets (skyNet.js)
   if (!state.gameOver) stepWizardWalls(state, dt); // Gandolf the Grand (merged Gandolf Tower): You Shall Not Pass walls (wizardWall.js)
   if (!state.gameOver) stepFlockZaps(state, dt); // F.L.O.C.K Mothership (merged F.L.O.C.K Tower): Triple Zap (flockZap.js)
+  if (!state.gameOver) stepHarpoons(state, dt); // Harpoon Ballista (merged Spear Thrower): Reel In drags (harpoon.js)
   if (!state.gameOver) stepBeams(state, dt); // Tower of Rah beams
   if (!state.gameOver) stepProjectiles(state, dt);
   if (!state.gameOver) stepPools(state, dt);

@@ -14,6 +14,7 @@ import { addHype } from './dj.js';
 import { knockback, applySlow, applyStun } from './motion.js';
 import { addResearchPoints, killResearchPoints } from './researchPoints.js';
 import { fireBoulderAt, fireMissileAt, stepEnemyShot, dropGoo } from './specialEnemies.js';
+import { harpoonDue, throwHarpoons, hookEnemy } from './harpoon.js';
 
 export { applySlow, applyStun };
 
@@ -251,13 +252,15 @@ function fireSpear(state, b, target, damage, cfg, pcfg, opts) {
   if (dist < 1e-6) { dx = 1; dy = 0; }
   const fx = abilityFx(b); // Spear Thrower perks: more enemies pierced, a longer line, less falloff
   const air = enemyIsAir(target); // the line pierces the first target's layer only (ground or air)
-  return fireLine(state, c.x, c.y, dx, dy, {
+  const p = fireLine(state, c.x, c.y, dx, dy, {
     kind: opts.kind || b.type, sourceId: b.id, tower: b.type, speed,
     travel: dist + cfg.pierce.length + (fx.spearLengthAdd || 0), pierce: cfg.pierce.max + (fx.spearPierceAdd || 0),
     falloff: Math.max(0, cfg.pierce.falloff + (fx.spearFalloffAdd || 0)),
     hitRadius: 0.55, damage, hitsGround: !air && !!cfg.hitsGround, hitsAir: air && !!cfg.hitsAir, fx,
     source: opts.source || 'spear'
   });
+  if (opts.harpoon) p.harpoon = opts.harpoon; // Harpoon Ballista's Reel In: hooks its target when it hits it (harpoon.js)
+  return p;
 }
 
 /** A KSI Tower bottle's chill: its level's slow and the type's duration, with the Blizzard / Fully Frozen perks. */
@@ -348,6 +351,9 @@ function shoot(state, b, target) {
       return;
     }
   }
+  // Harpoon Ballista's Reel In (harpoon.js): every Nth throw is a harpoon at the toughest enemy in range (Double Hook:
+  // the two toughest), which drags it back when it hits.
+  if (merge && merge.harpoon && harpoonDue(b)) { throwHarpoons(state, b, mult, extra); return; }
   // Locklair Headshot: every Nth arrow goes to the toughest enemy for a big multiplier.
   if (every(fx.headshotEvery)) {
     const t = toughestTarget(state, b) || target;
@@ -1055,6 +1061,7 @@ function stepLineProjectile(state, p, dt) {
     if (!e.alive) onTowerKill(state, p, e);
     else hitEffects(state, p, e, { x: p.dirX, y: p.dirY });
     if (p.bolt && e.alive) pinEnemy(state, e, p.bolt); // a Skewer bolt pins the enemy behind too
+    if (p.harpoon && e.alive && e.id === p.harpoon.targetId) hookEnemy(state, p.harpoon, e, p.damage * mult); // Reel In
     if (state.gameOver) return;
   }
   if (p.travelLeft <= 1e-6 || p.pierceLeft <= 0) p.done = true;

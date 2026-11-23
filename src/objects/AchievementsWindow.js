@@ -178,7 +178,7 @@ export class AchievementsWindow {
     addGold(gs, a.reward);
     gs.emit('goldChanged', { gold: gs.gold, capacity: gs.capacity });
     gs.save();
-    playSfx(this.scene, SFX.coinCollect);
+    playSfx(this.scene, this.scene.cache.audio.exists(SFX.achievementClaim) ? SFX.achievementClaim : SFX.coinCollect);
     this.message = '';
     this.render();
   }

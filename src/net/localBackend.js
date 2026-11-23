@@ -4,6 +4,7 @@
 // Not secure (anyone with the browser can read it) and never used in the built game.
 
 import { conflictError } from './errors.js';
+import { boardPage } from './paging.js';
 
 const DB_KEY = 'ibtd.dev.db';
 const SESSION_KEY = 'ibtd.dev.session';
@@ -208,9 +209,17 @@ export class LocalBackend {
     return rows.filter((r) => r.rank <= limit || (r.isMe && r.first)).map(({ first, ...r }) => r); // eslint-disable-line no-unused-vars
   }
 
+  /** One leaderboard page, like SupabaseBackend.leaderboardPage: { rows, mine, hasMore } (rows carry `pos`). */
+  async leaderboardPage(offset = 0, limit = 10) {
+    const all = await this.leaderboard(Infinity); // every village, in board order (rank here is the place)
+    const n = offset + limit + 1;
+    const rows = all.map((r) => ({ ...r, pos: r.rank })).filter((r) => (r.pos > offset && r.pos <= n) || r.isMe);
+    return boardPage(rows, offset, limit);
+  }
+
   // ---------- other players (v0.7): search, player cards, visiting villages ----------
   /** Players matching the search: [{ username, bestWave, bestTownHall, achievements, isMe }] (like search_players). */
-  async searchPlayers({ query = '', minWave = 0, maxWave = null, townHall = null, sort = 'wave', limit = 30 } = {}) {
+  async searchPlayers({ query = '', minWave = 0, maxWave = null, townHall = null, sort = 'wave', limit = 30, offset = 0 } = {}) {
     await wait();
     const d = this.db();
     this.me(d);
@@ -222,7 +231,8 @@ export class LocalBackend {
       && (maxWave == null || r.bestWave <= maxWave) && (townHall == null || r.bestTownHall === townHall));
     const key = sort === 'hall' ? 'bestTownHall' : sort === 'achievements' ? 'achievements' : 'bestWave';
     rows.sort((a, b) => b[key] - a[key] || b.bestWave - a.bestWave || a.username.localeCompare(b.username));
-    return rows.slice(0, Math.max(1, Math.min(50, limit)));
+    const skip = Math.max(0, Math.min(10000, offset || 0));
+    return rows.slice(skip, skip + Math.max(1, Math.min(50, limit)));
   }
 
   /** A player's card, or null: stats, rank, achievements, and their villages (best first) unless they hide them. */

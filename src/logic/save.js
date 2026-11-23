@@ -12,7 +12,7 @@ import { serializeTips, validTips, deserializeTips } from './tips.js';
 import { validResearchPoints } from './researchPoints.js';
 import { serializeSpells, validSpells, deserializeSpells, validFuelGuide } from './spells.js';
 import { PATHS } from './waves.js';
-import { isMergeable, serializeMastery, validMastery, serializeFreeRespecs, validFreeRespecs, deserializeFreeRespecs } from './merge.js';
+import { isMergeable, serializeMastery, validMastery, validFreeRespecs } from './merge.js';
 
 // Version 2 adds the day/night clock and nightsAtMaxTownHall (waves come at night).
 // Version 1 saves (waves on Town Hall upgrade) still load: see migrateV1.
@@ -63,7 +63,6 @@ export function serializeGame(state, now = new Date()) {
     wallLevel: wallLevel(state), // every wall's level (walls upgrade all at once); missing in older saves
     debuted: [...(state.debuted || [])], // enemies whose debut wave this village has had (waves.js); missing in older saves
     mastery: serializeMastery(state),           // merged defenses' Mastery tiers per type ({ cannon: 2 }, merge.js); missing in older saves
-    freeRespecs: serializeFreeRespecs(state),   // types with a free path reset from a merge (['cannon']); missing in older saves
     buildings: state.buildings.map((b) => {
       const out = { id: b.id, type: b.type, level: b.level, col: b.col, row: b.row };
       if (b.type === 'mine') out.stock = Math.round((b.stock || 0) * 100) / 100;
@@ -201,6 +200,8 @@ export function validateSave(obj) {
   if (!validResearchPoints(obj.researchPoints)) return false;
   if (!validSpells(obj.spells)) return false;
   if (!validFuelGuide(obj.fuelGuide)) return false;
+  // freeRespecs: v0.8.0-0.8.2 saves list the types with a merge's free path reset. Still checked as before, so no save
+  // changes validity, but ignored on load (v0.8.3 removed free resets; an unused one is dropped).
   if (!validMastery(obj.mastery) || !validFreeRespecs(obj.freeRespecs)) return false;
   if (obj.wallLevel !== undefined && (!isInt(obj.wallLevel) || obj.wallLevel < 1 || obj.wallLevel > Math.min(maxLevel('wall'), Math.max(1, obj.townHallLevel)))) return false;
 
@@ -269,7 +270,6 @@ export function deserializeGame(obj) {
     tutorialDone: obj.tutorialDone,
     research,
     mastery,
-    freeRespecs: deserializeFreeRespecs(validFreeRespecs(obj.freeRespecs) ? obj.freeRespecs : []),
     labGuideStep: obj.labGuide || 0,
     tipsSeen: deserializeTips(obj.tips),
     wavePlan: obj.wavePlan && validWavePlan(obj.wavePlan) ? { number: obj.wavePlan.number, paths: [...new Set(obj.wavePlan.paths)] } : null,

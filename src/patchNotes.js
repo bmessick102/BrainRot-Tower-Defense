@@ -19,8 +19,8 @@ const allEntries = (release) => release.sections.flatMap((s) => s.entries);
 
 export const PATCH_NOTES = {
   release: '0.8',
-  version: '0.8.2',
-  title: "What's New in v0.8.2",
+  version: '0.8.3',
+  title: "What's New in v0.8.3",
   sections: [
     {
       type: 'feature',
@@ -38,8 +38,12 @@ export const PATCH_NOTES = {
           text: 'Two Level 10 Gandolf Towers merge into Gandolf the Grand. You Shall Not Pass: every 10 s he raises a magic wall in front of a group of ground enemies, holding them in place for his fireballs. Flyers go over it.'
         },
         {
-          version: '0.8.2', icon: { building: 'flock', level: 10 }, title: 'F.L.O.C.K Towers can merge: the Mothership',
+          version: '0.8.2', icon: { texture: 'bld_flock_merged' }, title: 'F.L.O.C.K Towers can merge: the Mothership',
           text: 'Two Level 10 F.L.O.C.K Towers merge into the F.L.O.C.K Mothership, which finally fights back. Triple Zap: every second it zaps the 3 closest enemies at once, ground or air, and still marks everything in range.'
+        },
+        {
+          version: '0.8.3', icon: { building: 'spear', level: 10 }, title: 'Spear Throwers can merge: the Harpoon Ballista',
+          text: 'Two Level 10 Spear Throwers merge into the Harpoon Ballista, whose spears hit twice as hard. Reel In: every 3rd throw harpoons the toughest enemy in range and drags it 3 tiles back the way it came. Bosses are only slowed.'
         },
         {
           version: '0.8.0', icon: { enemy: 'quandale' }, title: 'New enemy: Quandale Dingle (from Village Hall 7)',
@@ -83,8 +87,48 @@ export const PATCH_NOTES = {
           text: 'The button on each leaderboard and Find Players row is now Profile. Visit their villages from inside the profile; Back returns you to their profile, then the list you came from.'
         },
         {
+          version: '0.8.3', icon: { building: 'rvlab' }, title: 'No free path reset after merging',
+          text: 'Merging two defenses no longer gives a free path reset in the RV Lab. Resetting a path always costs its normal Burger price. An unused free reset from an earlier merge is gone.'
+        },
+        {
           version: '0.8.2', icon: { hero: true }, title: 'Heroes sleep at night',
           text: 'At night, when no raid is on, the Brisket King and the Hatsune Queen walk home and sleep on their altars. Start a raid and they wake up to defend.'
+        },
+        {
+          version: '0.8.3', icon: { texture: 'bld_flock_merged' }, title: 'New F.L.O.C.K Mothership picture',
+          text: 'The F.L.O.C.K Mothership has its own picture now, instead of a bigger, glowing Level 10 F.L.O.C.K Tower.'
+        },
+        {
+          version: '0.8.3', icon: { texture: 'ui_achievement' }, title: 'New achievement sounds',
+          text: 'Earning an achievement plays a new sound, and pressing Claim on an achievement in your Profile has its own sound too.'
+        },
+        {
+          version: '0.8.3', icon: { texture: 'ui_medal_1' }, title: 'Pages on the leaderboard and Find Players',
+          text: 'The leaderboard now goes past the top 10: use the arrows beside its title to page through every village, 10 at a time. Find Players loads 8 players a page, so both open faster.'
+        },
+        {
+          version: '0.8.3', icon: { texture: 'ui_league_champion' }, title: 'Spam protection',
+          text: 'Find Players searches are spaced a second apart, and after a few wrong passwords in a row you wait a few seconds before trying again. Searching or opening profiles very fast for a minute pauses them briefly.'
+        },
+        {
+          version: '0.8.3', icon: { texture: 'ui_edit_layout_button' }, title: 'Cleaner edit mode',
+          text: 'In edit mode, buildings show only their level badge: the perk diamonds and Mastery stars are hidden so you can see your layout. They come back when you leave edit mode.'
+        },
+        {
+          version: '0.8.3', icon: { texture: 'bld_wizard_merged' }, title: 'Gandolf the Grand a little smaller',
+          text: 'Gandolf the Grand is drawn a little smaller, so he fits in better next to your other buildings.'
+        },
+        {
+          version: '0.8.3', icon: { texture: 'bld_firework_merged_left' }, title: 'Missile Silo a little bigger',
+          text: 'The Missile Silo, the merged Firework Launcher, is drawn a little bigger so it stands out more.'
+        },
+        {
+          version: '0.8.3', icon: { building: 'flock', level: 10 }, title: 'F.L.O.C.K Towers a little smaller',
+          text: 'Every F.L.O.C.K Tower is drawn a little smaller, and the F.L.O.C.K Mothership shrank by the same amount.'
+        },
+        {
+          version: '0.8.3', icon: { texture: 'ui_settings_button' }, title: 'Credits: audio and assets',
+          text: 'The Credits tab in Settings now has sections, with fuller team credits and who made the sound effects and images.'
         },
         {
           version: '0.8.2', icon: { texture: 'ui_encore_ready' }, title: 'New Encore Cloak icon',
@@ -136,6 +180,14 @@ export const PATCH_NOTES = {
     {
       type: 'fix',
       entries: [
+        {
+          version: '0.8.3', icon: { texture: 'ui_league_champion' }, title: 'Stuck when visiting a village again',
+          text: 'After visiting a village and pressing Back, pressing Visit or Visit Best Village again (or switching to another of the player’s villages) left the screen stuck. Visiting now works every time.'
+        },
+        {
+          version: '0.8.3', icon: { texture: 'ui_league_champion' }, title: 'Find Players buttons past the edge',
+          text: 'The Achievements sort button in Find Players ran past the right edge of the window. The sort buttons now fit inside it.'
+        },
         {
           version: '0.8.0', icon: { building: 'townHall', level: 1 }, title: 'Village drawn as plain blocks',
           text: 'On a slow or patchy connection, pictures that failed to load stayed as plain blocks all game. The game now keeps trying, swaps buildings in when they arrive, and offers Retry and Reload if pictures still won’t load.'

@@ -4,14 +4,17 @@
 // you're not in the top list. The footer shows your league and what the next one takes. v0.7: click a row for that
 // player's card (PlayerCardWindow); so does its green Profile button (v0.8.0; visiting their villages is on the card). Medals are graded
 // (gold biggest, bronze smallest) and ranks 4+ sit on a dark rank badge so the numbers stand out.
+// v0.8.3: paged, LEADERBOARD_PAGE villages at a time (the server sends one page: paging.js); the arrows beside the
+// subtitle step through the pages, and your own best village shows under the list when it isn't on the page.
 import { Modal } from './Modal.js';
 import { Button } from './Button.js';
 import { COLORS, bodyStyle, textStyle } from '../theme.js';
 import { leagueFor, nextLeague, leagueBadgeSize } from '../logic/leagues.js';
 import { fitIcon, fitWidth } from './uiDraw.js';
 import { profileButton, VISIT_W } from './PlayerCardWindow.js';
+import { LEADERBOARD_PAGE } from '../net/paging.js';
 
-const W = 640, H = 640, TOP = 40, TOP_N = 10, ROW_H = 38, ROW_GAP = 2;
+const W = 640, H = 640, TOP = 40, TOP_N = LEADERBOARD_PAGE, ROW_H = 38, ROW_GAP = 2;
 const MEDALS = [0xffc83a, 0xc9d1da, 0xd08a4a];
 // Medal sizes by rank: gold is a touch bigger than silver, and bronze a touch smaller, so the podium reads in order.
 const MEDAL_SIZE = [36, 34, 32];
@@ -23,21 +26,38 @@ export class LeaderboardWindow {
     this.scene = scene;
     this.session = session;
     this.onOpenPlayer = onOpenPlayer;
+    this.page = 0;
+    this.loading = false;
+    this.sent = false;     // your newest best wave goes up once, before the first page
+    this.lastPage = null;  // the page on screen (kept while the next one loads)
     this.modal = new Modal(scene, { width: W, height: H, title: 'Leaderboard', y: TOP, onClose });
     this.load();
   }
 
-  async load() {
+  /** Load page `page` (0 = the top). Presses while a page is loading are ignored. */
+  async load(page = this.page) {
     // Offline, nothing is sent: your waves reach the board when you log in again.
     if (this.session.offline) { this.show('You’re playing offline.\nThe leaderboard needs a connection: your progress is sent when you log in again.'); return; }
-    this.show('Loading…');
+    if (this.loading || page < 0) return;
+    this.loading = true;
+    if (!this.lastPage) this.show('Loading…');
+    let emptyPage = false;
     try {
-      await this.session.sendOutbox(); // your newest best wave first
-      const rows = await this.session.backend.leaderboard(TOP_N);
-      this.render(rows);
+      if (!this.sent) { await this.session.sendOutbox(); this.sent = true; } // your newest best wave first
+      const res = await this.session.backend.leaderboardPage(page * TOP_N, TOP_N);
+      if (page > 0 && !res.rows.length) emptyPage = true; // the board got shorter since: step back
+      else {
+        this.page = page;
+        this.lastPage = res;
+        this.render(res);
+      }
     } catch (e) {
+      this.lastPage = null;
       this.show(e.message || 'Couldn’t load the leaderboard.', true);
+    } finally {
+      this.loading = false;
     }
+    if (emptyPage) this.load(page - 1);
   }
 
   /** A status message in the middle (with Retry for errors). */
@@ -49,11 +69,18 @@ export class LeaderboardWindow {
     if (error) m.add(new Button(s, m.cx, m.y + H / 2 + 50, 200, 52, 'Retry', () => this.load(), { color: COLORS.buttonBlue, fontSize: 21 }));
   }
 
-  render(rows) {
+  render({ rows: top, mine, hasMore }) {
     const m = this.modal, s = this.scene;
     if (!m.frame) return;
     m.clear();
-    m.add(s.add.text(m.cx, m.y + 84, 'Furthest wave survived, by village', bodyStyle(18, COLORS.inkDim)).setOrigin(0.5));
+    const first = this.page * TOP_N + 1;
+    const range = top.length ? `  ·  places ${first}-${first + top.length - 1}` : '';
+    fitWidth(m.add(s.add.text(m.cx, m.y + 84, `Furthest wave survived, by village${range}`, bodyStyle(18, COLORS.inkDim)).setOrigin(0.5)), W - 150);
+    // Page arrows either side of the subtitle (greyed out at either end).
+    const prevBtn = m.add(new Button(s, m.x + 46, m.y + 84, 44, 36, '', () => this.load(this.page - 1), { color: COLORS.buttonBlue, icon: 'left', radius: 9 }));
+    const nextBtn = m.add(new Button(s, m.x + W - 46, m.y + 84, 44, 36, '', () => this.load(this.page + 1), { color: COLORS.buttonBlue, icon: 'right', radius: 9 }));
+    prevBtn.setEnabled(this.page > 0);
+    nextBtn.setEnabled(!!hasMore);
     const left = m.x + 28, w = W - 56;
     const cols = { rank: left + 34, badge: left + 82, name: left + 110, hall: left + w - 220, wave: left + w - 110 };
     const hy = m.y + 116;
@@ -62,10 +89,8 @@ export class LeaderboardWindow {
     m.add(s.add.text(cols.hall, hy, 'Village Hall', bodyStyle(14, COLORS.inkDim)).setOrigin(0.5));
     m.add(s.add.text(cols.wave, hy, 'Wave', bodyStyle(14, COLORS.inkDim)).setOrigin(0.5));
 
-    const top = rows.filter((r) => r.rank <= TOP_N);
-    const mine = rows.find((r) => r.isMe && r.rank > TOP_N); // your best village, when none of yours is in the top list
     let y = m.y + 136;
-    if (!top.length) {
+    if (!top.length && this.page === 0) {
       m.add(s.add.text(m.cx, y + 160, 'Nobody is on the board yet.\nSurvive a wave to be the first!', bodyStyle(20, COLORS.inkDim, { align: 'center', lineSpacing: 8 })).setOrigin(0.5));
     }
     for (const r of top) { this.row(r, left, y, w, cols); y += ROW_H + ROW_GAP; }

@@ -741,7 +741,7 @@ export const CONFIG = {
           { name: 'Double Net', desc: 'Fires two nets, at the two biggest groups.', fx: { nets: 2 } }
         ]
       },
-      art: { key: 'bld_firework_merged_left', facings: { left: 'bld_firework_merged_left', right: 'bld_firework_merged_right' }, scale: 1.22, standInScale: 1.15 }
+      art: { key: 'bld_firework_merged_left', facings: { left: 'bld_firework_merged_left', right: 'bld_firework_merged_right' }, scale: 1.32, standInScale: 1.15 }
     },
     // Gandolf the Grand (v0.8.2): 2x damage (his normal splash fireballs, 2x DPS). You Shall Not Pass (wizardWall.js): every
     // `every` s, when a ground enemy is in range, a glowing wall `length` tiles long for `seconds`, `ahead` tiles in front of
@@ -764,7 +764,7 @@ export const CONFIG = {
           { name: 'Double Cast', desc: 'A second wall rises behind the crowd, trapping it between the two.', fx: { walls: 2 } }
         ]
       },
-      art: { key: 'bld_wizard_merged', scale: 1.3, standInScale: 1.15 }
+      art: { key: 'bld_wizard_merged', scale: 1.2, standInScale: 1.15 }
     },
     // F.L.O.C.K Mothership (v0.8.2): the support tower that fights back, like a tesla coil. It keeps marking (markAdd: +5% on
     // its marks; +0.5 mark range) and Triple Zap (flockZap.js): every `every` s it zaps the `targets` closest enemies within
@@ -788,6 +788,30 @@ export const CONFIG = {
         ]
       },
       art: { key: 'bld_flock_merged', scale: 1.25, standInScale: 1.25 }
+    },
+    // Harpoon Ballista (v0.8.3): spears at 2x damage (2x DPS). Reel In (harpoon.js): every `every`th throw is a harpoon at
+    // the toughest enemy in range (most current health, ground or air) that drags it `pull` tiles back the way it came
+    // over pullSeconds (away from the tower if it's standing still); ground enemies stop at walls and buildings. Bosses
+    // are only slowed (bossSlow for bossSlowSeconds). No pierce, bleed, vulnerability, slow or stun: its perks have those.
+    spear: {
+      name: 'Harpoon Ballista',
+      ability: 'Reel In',
+      abilityIcon: 'ui_ability_reel_in',
+      abilityShort: 'Every 3rd throw harpoons the toughest enemy and drags it 3 tiles back.',
+      description: 'Two Spear Throwers bolted into one giant ballista. Its spears hit twice as hard, and every few throws it harpoons the toughest enemy in range and hauls it back.',
+      abilityText: 'Every 3rd throw is a harpoon aimed at the toughest enemy in range (ground or air): it drags it 3 tiles back the way it came, and walls stop the drag. Bosses are only slowed.',
+      cost: { gold: 280000, rp: 3000 },
+      hpMult: 2, damageMult: 2, fireIntervalMult: 1, rangeAdd: 0.5,
+      harpoon: { every: 3, pull: 3, pullSeconds: 0.4, bossSlow: 0.5, bossSlowSeconds: 2, dragRadius: 0.6 },
+      mastery: {
+        costs: [1200, 2000, 3000], labLevel: [3, 4, 5],
+        tiers: [
+          { name: 'Longer Chain', desc: 'The harpoon drags enemies 2 tiles further.', fx: { harpoonPullAdd: 2 } },
+          { name: 'Dragnet', desc: 'Enemies the harpooned one is dragged through take 25% of the harpoon\'s hit.', fx: { harpoonDrag: 0.25 } },
+          { name: 'Double Hook', desc: 'Harpoons the two toughest enemies in range at once.', fx: { harpoonHooks: 2 } }
+        ]
+      },
+      art: { key: 'bld_spear_merged', scale: 1.25, standInScale: 1.25 }
     }
   },
   // Per Village Hall level (1-15). Every hall from 11 adds 12 walls. v0.8 (user, 2026-11-22; replaced v0.6.1's Bonus
