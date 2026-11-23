@@ -2,6 +2,13 @@
 
 The version shows in the bottom-left corner of every screen (`package.json` `version` plus the commit). Details for everything below are in [README.md](README.md).
 
+## 0.9.4
+
+A sound for brewing spells. No save or database changes.
+
+### Changes
+- **Spell brewed sound** (`SFX.spellBrewed`, art-source/audio/sfx_spell_brewed.mp3, the user's new sound): GameScene plays it on `spellBrewed` (spells.js `brewSpell`), so every brew at the Fuel Station has it, the free guided first brew included.
+
 ## 0.9.3
 
 Sharp rendering (the canvas at the screen's real resolution, full-detail map pieces when zoomed in on a desktop), tiles that blend into the grass, and every Mastery path shown in the RV Lab. No save or database changes.

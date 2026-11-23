@@ -1723,6 +1723,7 @@ export class GameScene extends Phaser.Scene {
       if (key) playSfxCapped(this, key, ENEMY_HIT_MAX);
     });
     on('enemyJump', () => playSfxCapped(this, SFX.sharkJump, ENEMY_HIT_MAX));
+    on('spellBrewed', () => playSfx(this, SFX.spellBrewed)); // the Fuel Station brews a spell
     // An invisible Mr. Least gives himself away: a quick white puff where it pops into view.
     // A F.L.O.C.K Tower spots the first enemy to enter its (empty) range: its alert sound.
     on('flockSpotted', () => playSfxCapped(this, SFX.flockSpotted, 2));

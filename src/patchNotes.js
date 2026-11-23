@@ -19,8 +19,8 @@ const allEntries = (release) => release.sections.flatMap((s) => s.entries);
 
 export const PATCH_NOTES = {
   release: '0.9',
-  version: '0.9.3',
-  title: "What's New in v0.9.3",
+  version: '0.9.4',
+  title: "What's New in v0.9.4",
   sections: [
     {
       type: 'feature',
@@ -45,6 +45,10 @@ export const PATCH_NOTES = {
         {
           version: '0.9.3', icon: { building: 'rvlab', level: 5 }, title: 'Every Mastery path in the RV Lab',
           text: 'Every building that can merge now shows its Mastery path in the RV Lab, greyed out until you have a merged one, so you can see what is coming. Merge two to unlock it.'
+        },
+        {
+          version: '0.9.4', icon: { building: 'fuelStation', level: 1 }, title: 'A sound for brewing spells',
+          text: 'Brewing a spell at the Fuel Station now plays its own sound.'
         },
         {
           version: '0.9.3', icon: { building: 'cannon', level: 1 }, title: 'A sound for placing buildings',

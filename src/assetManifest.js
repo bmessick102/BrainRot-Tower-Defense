@@ -391,6 +391,7 @@ export const AUDIO_FILES = [
   { key: 'sfx_spear_fire1', path: 'assets/audio/sfx_spear_fire1.mp3' },
   { key: 'sfx_spear_fire2', path: 'assets/audio/sfx_spear_fire2.mp3' },
   { key: 'sfx_spear_hit', path: 'assets/audio/sfx_spear_hit.mp3' },
+  { key: 'sfx_spell_brewed', path: 'assets/audio/sfx_spell_brewed.mp3' },
   { key: 'sfx_spell_freeze', path: 'assets/audio/sfx_spell_freeze.mp3' },
   { key: 'sfx_spell_heal', path: 'assets/audio/sfx_spell_heal.mp3' },
   { key: 'sfx_spell_heat', path: 'assets/audio/sfx_spell_heat.mp3' },
