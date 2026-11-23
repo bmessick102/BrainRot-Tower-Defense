@@ -114,7 +114,7 @@ export class ProfileWindow {
     y += 164;
     const half = (inner - 16) / 2;
     card(s, m, left, y, half, 112, 'Leaderboard rank');
-    const rankText = this.rank === 'loading' ? 'Loading…' : this.rank === 'error' ? 'Offline' : this.rank ? `#${this.rank}` : 'Unranked';
+    const rankText = this.rank === 'loading' ? 'Loading…' : this.rank === 'error' ? (this.session.offline ? 'Offline' : 'Unavailable') : this.rank ? `#${this.rank}` : 'Unranked'; // (online but the server didn't answer: not "Offline")
     m.add(s.add.text(left + 16, y + 40, rankText, textStyle(this.rank > 0 ? 34 : 22, this.rank > 0 ? COLORS.textGold : COLORS.textDim)));
     if (!this.rank && this.rank !== 'loading' && this.rank !== 'error') m.add(s.add.text(left + 16, y + 74, 'Survive a wave to rank', bodyStyle(13, COLORS.inkDim)));
     m.add(new Button(s, left + half - 82, y + 70, 140, 46, 'Leaderboard', () => this.openLeaderboard(), { color: COLORS.buttonBlue, fontSize: 17, radius: 10 }));

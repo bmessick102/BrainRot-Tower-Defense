@@ -19,8 +19,8 @@ const allEntries = (release) => release.sections.flatMap((s) => s.entries);
 
 export const PATCH_NOTES = {
   release: '0.8',
-  version: '0.8.3',
-  title: "What's New in v0.8.3",
+  version: '0.8.4',
+  title: "What's New in v0.8.4",
   sections: [
     {
       type: 'feature',
@@ -75,6 +75,10 @@ export const PATCH_NOTES = {
           text: 'Bonus Slots are gone. Village Hall 11 now gives one more Tower of Rah, Gandolf, Diddypult, KSI Tower and Cannon. Villages keep every building they built with Bonus Slots: they all keep working, you just can’t build another of that kind until you’re under the limit.'
         },
         {
+          version: '0.8.4', icon: { texture: 'ui_settings_button' }, title: 'A way out when something breaks',
+          text: 'If the game ever freezes because of an error, a “Something went wrong” window now appears with Keep Playing and Reload, instead of a stuck screen. Server problems show a plain message with Retry.'
+        },
+        {
           version: '0.8.0', icon: { building: 'cannon', level: 10 }, title: 'No more selling',
           text: 'Every Village Hall allows a set number of each building, so selling is gone: rearrange your village by moving buildings in edit mode instead. Nothing was taken from your village.'
         },
@@ -97,6 +101,10 @@ export const PATCH_NOTES = {
         {
           version: '0.8.3', icon: { texture: 'bld_flock_merged' }, title: 'New F.L.O.C.K Mothership picture',
           text: 'The F.L.O.C.K Mothership has its own picture now, instead of a bigger, glowing Level 10 F.L.O.C.K Tower.'
+        },
+        {
+          version: '0.8.4', icon: { building: 'cannon', level: 10 }, title: 'Mega Cannon a little smaller',
+          text: 'The merged Cannon is drawn a little smaller, so it doesn’t crowd the buildings around it.'
         },
         {
           version: '0.8.3', icon: { texture: 'ui_achievement' }, title: 'New achievement sounds',
@@ -180,6 +188,10 @@ export const PATCH_NOTES = {
     {
       type: 'fix',
       entries: [
+        {
+          version: '0.8.4', icon: { texture: 'ui_medal_1' }, title: 'Leaderboard showed a server error',
+          text: 'After the last server update the leaderboard could show a database error instead of the list. It loads again, and if the server is ever behind it shows the per-player board instead of an error.'
+        },
         {
           version: '0.8.3', icon: { texture: 'ui_league_champion' }, title: 'Stuck when visiting a village again',
           text: 'After visiting a village and pressing Back, pressing Visit or Visit Best Village again (or switching to another of the player’s villages) left the screen stuck. Visiting now works every time.'

@@ -1,4 +1,4 @@
--- Migration (2026-11-22, v0.8). Safe to run more than once. This one file has everything v0.8 needs on the server.
+-- Migration (2026-11-22, v0.8). Covered by migration-2026-11-23-leaderboard-fix.sql: run that one instead. Safe to run more than once. This one file has everything v0.8 needs on the server.
 -- Run it in Supabase: Dashboard -> SQL Editor -> New query -> paste -> Run. (Running the whole schema.sql
 -- again does the same thing.)
 --
@@ -90,27 +90,12 @@ begin
   return new;
 end $$;
 
-create or replace function public.get_village_leaderboard(lim int default 10)
-returns table (rank bigint, username text, village_name text, best_wave int, town_hall int, is_me boolean)
-language sql security definer set search_path = '' stable as $$
-  with ranked as (
-    select rank() over (order by b.best_wave desc, b.best_wave_at asc nulls last) as rank,
-           row_number() over (partition by b.user_id order by b.best_wave desc, b.best_wave_at asc nulls last, b.id) as own_order,
-           p.username,
-           case when p.public_bases or b.user_id = auth.uid() then b.name end as village_name,
-           b.best_wave, b.town_hall, (b.user_id = auth.uid()) as is_me
-    from public.bases b
-    join public.profiles p on p.id = b.user_id
-    where b.best_wave > 0 and auth.uid() is not null
-  )
-  select rank, username, village_name, best_wave, town_hall, is_me
-  from ranked
-  where rank <= least(greatest(lim, 1), 100) or (is_me and own_order = 1)
-  order by rank, username, village_name;
-$$;
+-- The village leaderboard itself is now paged and lives in migration-2026-11-22-spam-guard.sql and
+-- migration-2026-11-23-leaderboard-fix.sql (get_village_leaderboard(lim, off)). This file no longer creates the old
+-- one-argument version: next to the paged one it made leaderboard calls ambiguous. Until one of those runs, the game
+-- uses the old one-row-per-player get_leaderboard.
+drop function if exists public.get_village_leaderboard(int);
 
-revoke execute on function public.get_village_leaderboard(int) from public, anon;
-grant execute on function public.get_village_leaderboard(int) to authenticated;
 revoke execute on function public.check_base() from public, anon, authenticated;
 revoke execute on function public.keep_bests() from public, anon, authenticated;
 

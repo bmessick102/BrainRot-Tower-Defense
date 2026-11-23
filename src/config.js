@@ -668,7 +668,7 @@ export const CONFIG = {
       },
       // Four facings like the Cannon's own (turned toward its target; down-left is the plain picture for windows).
       art: {
-        key: 'bld_cannon_merged_dl', scale: 1.15, standInScale: 1.15,
+        key: 'bld_cannon_merged_dl', scale: 1.08, standInScale: 1.08, // v0.8.3: 1.15 -> 1.08 (a little smaller)
         facings: { dl: 'bld_cannon_merged_dl', dr: 'bld_cannon_merged_dr', ul: 'bld_cannon_merged_ul', ur: 'bld_cannon_merged_ur' }
       }
     },

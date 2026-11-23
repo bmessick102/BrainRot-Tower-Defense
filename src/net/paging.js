@@ -22,3 +22,14 @@ export function boardPage(rows, offset, limit) {
 export function isMissingFunction(error) {
   return !!error && (error.code === 'PGRST202' || /could not find the function/i.test(error.message || ''));
 }
+
+/**
+ * Is the server's database behind the game (a migration missing or only half run)? A missing function, or one that
+ * reads a column, table or function that isn't there (Postgres 42703 / 42P01 / 42883), e.g. v0.8.3's
+ * "column b.best_wave_at does not exist". The leaderboard then falls back to an older call instead of failing.
+ */
+export function isServerSetupError(error) {
+  if (!error) return false;
+  return isMissingFunction(error) || ['42703', '42P01', '42883'].includes(error.code)
+    || /(column|relation|function) .* does not exist/i.test(error.message || '');
+}

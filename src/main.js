@@ -17,6 +17,7 @@ import { VisitHudScene } from './scenes/VisitHudScene.js';
 import { setGameStorage, getStorage } from './state/GameState.js';
 import { session } from './net/account.js';
 import { showLockOverlay } from './objects/LockOverlay.js';
+import { installCrashGuard } from './objects/CrashOverlay.js';
 import { installPhaserPerf } from './phaserPerf.js';
 import { isLowQuality, qualityMode, setQualityMode, setAutoLow, LowFpsWatch } from './quality.js';
 import { loadGraphicsSetting } from './logic/save.js';
@@ -80,6 +81,10 @@ if (typeof window !== 'undefined' && window.matchMedia) {
 // A village this tab had open was opened in another tab (or saved newer elsewhere): this tab stopped saving
 // it, so it says so over everything and pauses (src/objects/LockOverlay.js).
 session.subscribe(() => { if (session.lock) showLockOverlay(session.lock, game); });
+
+// Graceful fail: an error that stops the game loop (a frozen screen) brings up "Something went wrong" with Keep Playing
+// and Reload (src/objects/CrashOverlay.js). Errors that don't stop it are only logged.
+installCrashGuard(game);
 
 // Dev server only: lets automated checks and the browser console inspect the running game.
 if (import.meta.env.DEV) { window.__IBTD__ = game; window.__IBTD_SESSION__ = session; }

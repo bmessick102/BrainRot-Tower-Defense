@@ -2,6 +2,18 @@
 
 The version shows in the bottom-left corner of every screen (`package.json` `version` plus the commit). Details for everything below are in [README.md](README.md).
 
+## 0.8.4
+
+The leaderboard works again on databases that skipped the v0.8 migration, a "Something went wrong" window instead of a frozen screen, friendly server errors, and a slightly smaller Mega Cannon. **Database:** run `supabase/migration-2026-11-23-leaderboard-fix.sql` (the game falls back to the per-player leaderboard until then). Saves load as they are.
+
+### Changes
+- **Crash window** (new src/objects/CrashOverlay.js, installed in main.js): an error inside a frame stops Phaser's loop (RequestAnimationFrame never schedules the next step), which froze the screen. `installCrashGuard` listens for window `error`, waits `CRASH_CHECK_MS` (1.5 s; longer while the tab is hidden) and, if `game.loop.frame` hasn't moved, shows a DOM window in the game's style (slate header, stone body, red message): Keep Playing (`loop.sleep()` + `loop.wake()`: the loop restarts, the broken frame is skipped) and Reload. Errors that don't stop the loop are only logged. `crashMessage` never shows stack traces or code words.
+- **Friendly server errors** (supabaseBackend.js `friendlyError`): "column / relation / function ... does not exist" reads "This isn’t available on the server yet. Try again later."; any other database error with a Postgres SQLSTATE or PostgREST code (except P0001, which our functions raise with player-facing text) reads "Something went wrong on the server. Try again in a moment." (details to the console). The Profile window's rank says "Unavailable" when online but the server didn't answer (was "Offline").
+- **Mega Cannon smaller:** `CONFIG.merges.cannon.art.scale` (and `standInScale`) 1.15 -> 1.08.
+
+### Bug Fixes
+- **Leaderboard: "column b.best_wave_at does not exist"**: the paged `get_village_leaderboard` (0.8.3, migration-2026-11-22-spam-guard.sql) reads `bases.best_wave_at`, added by migration-2026-11-22-v0.8.sql; a database that never ran that one got a leaderboard that failed with the raw SQL error. New `supabase/migration-2026-11-23-leaderboard-fix.sql` has everything the v0.8 migration does (the `best_wave_at` column filled in from `updated_at`, its index, the other check_base columns if missing, check_base / keep_bests with Village Hall caps of 15 and their triggers) plus `rate_limits` / `rate_limit_hit` and the paged leaderboard, so it works whichever ran before; safe to re-run. migration-2026-11-22-v0.8.sql no longer creates the old one-argument `get_village_leaderboard` (it drops it): next to the paged one it made calls ambiguous. In the game, `isServerSetupError` (paging.js: PGRST202, 42703, 42P01, 42883) sends the leaderboard to the per-player `get_leaderboard` instead of failing. Checked in PGlite from the v0.7.1 schema: reproduced, fixed, saves and Village Hall 15 go through, any order of the three migrations, and a fresh project.
+
 ## 0.8.3
 
 Spear Throwers mergeable into the Harpoon Ballista (Reel In), the F.L.O.C.K Mothership's own picture, new achievement sounds, a fix for visits getting stuck, no more free path reset after merging, a cleaner edit mode, audio and asset credits, a smaller Gandolf the Grand and smaller F.L.O.C.K Towers, spam guards on log in and player search, and pages on the leaderboard and Find Players. **Database:** run `supabase/migration-2026-11-22-spam-guard.sql` (the game works without it, with only its own guards). Saves load as they are (an unused free reset in an older save is dropped).

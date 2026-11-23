@@ -2,7 +2,7 @@
 // Every method returns plain camelCase objects and throws an Error with a player-friendly message.
 import { createClient } from '@supabase/supabase-js';
 import { networkError, conflictError } from './errors.js';
-import { boardPage, isMissingFunction } from './paging.js';
+import { boardPage, isMissingFunction, isServerSetupError } from './paging.js';
 
 const BASE_COLUMNS = 'id, name, save, checkpoint, town_hall, wave, best_wave, created_at, updated_at';
 
@@ -41,12 +41,21 @@ export function friendlyError(error) {
     [/email not confirmed/i, 'Confirm your email first (check your inbox), then log in.'],
     [/unable to validate email|invalid format|email address .* is invalid/i, 'That email address doesn’t look right.'],
     [/base limit/i, 'You already have the most villages allowed.'],
-    // A server function the game calls isn't installed yet (a migration hasn't been run on the database).
-    [/schema cache|could not find the function|PGRST202/i, 'This isn’t available on the server yet. Try again later.'],
+    // A server function the game calls isn't installed yet, or reads something that isn't (a migration hasn't been
+    // run, or only half of one: "column b.best_wave_at does not exist").
+    [/schema cache|could not find the function|PGRST202|(column|relation|function) .* does not exist/i, 'This isn’t available on the server yet. Try again later.'],
     [/rate limit|too many requests/i, 'Too many tries. Wait a minute and try again.'],
     [/jwt|not authenticated|session/i, 'Your login expired. Log in again.']
   ];
   for (const [re, text] of rules) if (re.test(msg)) return new Error(text);
+  // Any other database error (a Postgres SQLSTATE or a PostgREST code): its text is for developers (SQL, constraint
+  // names), so players get a plain line instead; the details go to the console. P0001 is ours (raise exception in the
+  // database functions), written for players.
+  const code = String((error && error.code) || '');
+  if ((/^PGRST/.test(code) || /^[0-9A-Z]{5}$/.test(code)) && code !== 'P0001') {
+    console.warn('Server error', code, msg);
+    return new Error('Something went wrong on the server. Try again in a moment.');
+  }
   return new Error(msg || 'Something went wrong.');
 }
 
@@ -234,7 +243,7 @@ export class SupabaseBackend {
         bestWave: r.best_wave, bestTownHall: r.town_hall, isMe: !!r.is_me
       }));
     }
-    if (!isMissingFunction(error)) throw friendlyError(error);
+    if (!isServerSetupError(error)) throw friendlyError(error);
     return check(await this.db.rpc('get_leaderboard', { lim: limit })).map((r) => ({
       rank: Number(r.rank), username: r.username, villageName: null, bestWave: r.best_wave, bestTownHall: r.best_town_hall, isMe: !!r.is_me
     }));
@@ -254,8 +263,9 @@ export class SupabaseBackend {
       }));
       return boardPage(rows, offset, limit);
     }
-    if (!isMissingFunction(error)) throw friendlyError(error);
-    // The old top list: places in order, then your own row (if it's lower) at its rank.
+    if (!isServerSetupError(error)) throw friendlyError(error);
+    // The old top list: places in order, then your own row (if it's lower) at its rank. (A server whose new leaderboard
+    // is missing or broken, e.g. a migration not fully run, ends up on the per-player get_leaderboard this way.)
     const n = Math.min(100, offset + limit + 1);
     const old = await this.leaderboard(n);
     const top = old.filter((r) => !(r.isMe && r.rank > n));
