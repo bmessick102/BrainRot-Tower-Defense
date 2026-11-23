@@ -5,6 +5,7 @@ import { Button } from './Button.js';
 import { drawWindow, fitWidth } from './uiDraw.js';
 import { addTextField } from './TextField.js';
 import { COLORS, bodyStyle, textStyle } from '../theme.js';
+import { VIEW } from '../renderScale.js';
 
 const open = []; // every open Modal, oldest first
 
@@ -30,7 +31,7 @@ export class Modal {
     this.header = header;
     this.depth = depth + open.length * 10; // stacked dialogs sit above the window that opened them
     this.onClose = onClose;
-    const { width: sw, height: sh } = scene.scale;
+    const { width: sw, height: sh } = VIEW;
     this.x = Math.round(sw / 2 - width / 2);
     this.y = y === null ? Math.round(sh / 2 - height / 2) : y;
     this.cx = sw / 2;
@@ -61,7 +62,7 @@ export class Modal {
    */
   resize(height) {
     if (!this.frame || height === this.h) return this;
-    const sh = this.scene.scale.height;
+    const sh = VIEW.height;
     const dy = Math.round(sh / 2 - height / 2) - this.y;
     this.h = height;
     this.y += dy;

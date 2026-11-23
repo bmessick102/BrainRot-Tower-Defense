@@ -13,6 +13,7 @@ import { MARKER, markerLayout, markerRange, anchorAt, pickAlongPath, pathEnds, p
 import { drawAngledArrow, fitWidth, fitIcon } from './uiDraw.js';
 import { enemyKey, TEX } from '../assetKeys.js';
 import { COLORS, textStyle } from '../theme.js';
+import { renderScale } from '../renderScale.js';
 
 const DEPTH = 5500; // over buildings, enemies, labels (5000); under floating damage text (6000)
 // The wave's "!" warning (while a wave is coming / running): a badge on the disc's top-right, so it sits in the
@@ -174,11 +175,12 @@ export class WaveMarkers {
   update() {
     if (!this.items.length) return;
     const s = this.scene;
-    const want = Math.round((1 / s.cameras.main.zoom) * 20) / 20;
+    const r = renderScale(); // (zoom per view pixel, and HUD rects in view pixels: renderScale.js)
+    const want = Math.round((r / s.cameras.main.zoom) * 20) / 20;
     const ui = s.scene.isActive('UIScene') ? s.scene.get('UIScene') : null;
     const hud = ui && ui.hudRects ? Object.values(ui.hudRects()) : [];
-    const z = s.cameras.main.zoom;
-    const toScreen = (r) => { const p = s.worldToScreen(r.x, r.y); return { x: p.x, y: p.y, w: r.w * z, h: r.h * z }; };
+    const z = s.cameras.main.zoom / r;
+    const toScreen = (q) => { const p = s.worldToScreen(q.x, q.y); return { x: p.x / r, y: p.y / r, w: q.w * z, h: q.h * z }; };
     for (const it of this.items) {
       let range = it.places.get(want);
       if (!range) { range = markerRange(it.path, it.layout, want); it.places.set(want, range); }

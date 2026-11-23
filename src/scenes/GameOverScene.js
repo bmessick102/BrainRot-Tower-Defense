@@ -6,6 +6,7 @@ import { Button } from '../objects/Button.js';
 import { TEX } from '../assetKeys.js';
 import { drawWindow, drawRibbon } from '../objects/uiDraw.js';
 import { COLORS, bodyStyle, textStyle } from '../theme.js';
+import { VIEW } from '../renderScale.js';
 
 export class GameOverScene extends Phaser.Scene {
   constructor() {
@@ -17,7 +18,7 @@ export class GameOverScene extends Phaser.Scene {
   }
 
   create() {
-    const { width, height } = this.scale;
+    const { width, height } = VIEW;
     const bg = this.add.image(width / 2, height / 2, TEX.titleBackground);
     bg.setScale(Math.max(width / bg.frame.width, height / bg.frame.height)).setTint(0x664444);
     this.add.rectangle(0, 0, width, height, 0x200000, 0.55).setOrigin(0);

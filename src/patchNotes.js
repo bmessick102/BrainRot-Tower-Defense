@@ -19,8 +19,8 @@ const allEntries = (release) => release.sections.flatMap((s) => s.entries);
 
 export const PATCH_NOTES = {
   release: '0.9',
-  version: '0.9.2',
-  title: "What's New in v0.9.2",
+  version: '0.9.3',
+  title: "What's New in v0.9.3",
   sections: [
     {
       type: 'feature',
@@ -42,6 +42,22 @@ export const PATCH_NOTES = {
     {
       type: 'change',
       entries: [
+        {
+          version: '0.9.3', icon: { building: 'rvlab', level: 5 }, title: 'Every Mastery path in the RV Lab',
+          text: 'Every building that can merge now shows its Mastery path in the RV Lab, greyed out until you have a merged one, so you can see what is coming. Merge two to unlock it.'
+        },
+        {
+          version: '0.9.3', icon: { building: 'cannon', level: 1 }, title: 'A sound for placing buildings',
+          text: 'Buildings now land with their own sound when you place one you bought, move one, or set one down in edit mode. Walls keep their usual sound.'
+        },
+        {
+          version: '0.9.3', icon: { texture: 'map_background' }, title: 'Tiles blend into the grass',
+          text: 'The tiles no longer stop in a hard staircase at the edge of the field: they fade softly into the painted grass, and never over bushes, rocks or bridges.'
+        },
+        {
+          version: '0.9.3', icon: { texture: 'map_background' }, title: 'A sharp picture on big screens',
+          text: 'The game now draws at your screen\u2019s full resolution, so text, buildings and the map stay crisp on large and high-resolution screens. Zoom in on a computer and the map loads its full detail. Low graphics keeps the old, lighter picture.'
+        },
         {
           version: '0.9.2', icon: { texture: 'map_background' }, title: 'A new map: forest and mountains',
           text: 'A new painted battlefield between a forest and snowy mountains, with more room to build: tiles cover the grass right up to its edge. Enemies come over five bridges, out of a cave and down two stairways: 8 ways in, all 8 from Village Hall 13.'

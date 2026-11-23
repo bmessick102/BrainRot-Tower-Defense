@@ -70,6 +70,7 @@ export const FILE_KEY_ALIASES = {
 export const SFX = {
   uiClick: 'sfx_ui_click',
   place: 'sfx_place',
+  buildingPlaced: 'sfx_building_placed', // a building (not a wall) set down: bought, moved, or placed in edit mode (v0.9.3)
   upgrade: 'sfx_upgrade',
   beatDrop: 'sfx_beat_drop',             // DJ Babyface drops the beat
   abilityUnlocked: 'sfx_ability_unlocked', // a building gets a new ability tier (RV Lab research, or a level-up)

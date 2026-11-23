@@ -2,9 +2,10 @@
 // the game's grid, so the picture's tiles must be exactly the grid's (src/gridConfig.js GRID_CORNERS, the same bilinear
 // fit as src/logic/iso.js). Then `npm run prepare-art` makes the game's webp copies.
 //
-// - The tiles go on exactly the playable tiles (src/mapGrass.js: whole tiles lying on the painted grass oval): crisp and
-//   equal right out to the playable shape's stepped edge, no fades, none touching the scenery (the user's call), so
-//   nothing painted is ever covered. Everywhere else the painting is untouched.
+// - The tiles are solid on every playable tile (src/mapGrass.js: whole tiles lying on the painted grass oval), equal right
+//   out to the playable shape's edge (the user's call). v0.9.3: beyond it they fade out over BLEND tiles into the
+//   painting's grass, rounding the stepped edge off, and only where the painting is grass, so bushes, rocks and bridges
+//   are never covered. Everywhere else the painting is untouched.
 // - Their colour is the painting's own grass at that spot, smoothed (a normalized blur of its grass pixels, ~1 tile wide:
 //   its light and colour), 10% lighter / darker for the light and dark tiles (TILE_CONTRAST, the same on all four maps).
 // The tiles are baked into the pictures; the game only shows the images.
@@ -117,23 +118,60 @@ await (async () => {
     if (wt > 0) for (let c = 0; c < 3; c++) out[c] /= wt; else for (let c = 0; c < 3; c++) out[c] = mid[c];
   };
 
-  // 3. Draw the tiles on the playable tiles only (v0.9.2: the user's call: whole tiles, no fade, none touching the scenery;
-  //    every playable tile lies wholly on grass, so nothing painted is ever covered). 2 x 2 samples per pixel smooth the
-  //    tiles' outer edges.
+  // 3. Where the painting is grass, 0..1, smoothed (1/4 size, a little blurred): the tiles' blend never covers scenery.
+  const Q = 4, QW = Math.ceil(W / Q), QH = Math.ceil(H / Q), gq = new Float32Array(QW * QH);
+  for (let qy = 0; qy < QH; qy++) for (let qx = 0; qx < QW; qx++) {
+    const x = Math.min(W - 1, qx * Q + 1), y = Math.min(H - 1, qy * Q + 1);
+    toGrid(x, y, g); if (fieldEdge(g[0], g[1]) < -2) continue;
+    gq[qy * QW + qx] = grassScore((y * W + x) * 3);
+  }
+  const gqb = boxBlur(gq, 2, QW, QH, 2);
+  const grassyAt = (x, y) => { const qx = Math.min(QW - 1, (x / Q) | 0), qy = Math.min(QH - 1, (y / Q) | 0); return gqb[qy * QW + qx]; };
+
+  // 4. How far a point is from the playable tiles, in tiles (0 on them): the distance to the nearest playable square
+  //    within BLEND + 1 tiles, so the blend rounds the tiles' stepped edge off.
+  const BLEND = 1.1; // tiles: how far the tiles fade out into the painting's grass
+  const near = new Uint8Array(N * N);
+  for (let r = 0; r < N; r++) for (let c = 0; c < N; c++) if (GRASS_TILES[r][c] === '1')
+    for (let dr = -2; dr <= 2; dr++) for (let dc = -2; dc <= 2; dc++) { const rr = r + dr, cc = c + dc; if (rr >= 0 && cc >= 0 && rr < N && cc < N) near[rr * N + cc] = 1; }
+  const distOut = (gx, gy) => {
+    const c0 = Math.floor(gx), r0 = Math.floor(gy);
+    if (c0 < 0 || r0 < 0 || c0 >= N || r0 >= N || !near[r0 * N + c0]) return 99;
+    if (GRASS_TILES[r0][c0] === '1') return 0;
+    let best = 99;
+    for (let r = r0 - 2; r <= r0 + 2; r++) for (let c = c0 - 2; c <= c0 + 2; c++) {
+      if (r < 0 || c < 0 || r >= N || c >= N || GRASS_TILES[r][c] !== '1') continue;
+      const dx = Math.max(c - gx, 0, gx - (c + 1)), dy = Math.max(r - gy, 0, gy - (r + 1));
+      best = Math.min(best, Math.hypot(dx, dy));
+    }
+    return best;
+  };
+
+  // 5. Draw the tiles: solid on every playable tile (the user's call: whole, equal tiles), then fading out over BLEND
+  //    tiles into the painting's grass round them, with a gentle wobble so the edge looks natural rather than ruled,
+  //    and only where the painting is grass (bushes, rocks, bridges stay as painted). 2 x 2 samples per pixel smooth
+  //    the checker's lines.
   const out = Buffer.from(src);
   const SUB = [[0.25, 0.25], [0.75, 0.25], [0.25, 0.75], [0.75, 0.75]];
   const col3 = [0, 0, 0];
   const [x0, x1] = [Math.floor(G.left.x) - 4, Math.ceil(G.right.x) + 4], [y0, y1] = [Math.floor(G.top.y) - 4, Math.ceil(G.bottom.y) + 4];
   for (let y = Math.max(0, y0); y < Math.min(H, y1); y++) for (let x = Math.max(0, x0); x < Math.min(W, x1); x++) {
-    let cov = 0, lightCov = 0, tc = 0, tr = 0;
+    toGrid(x + 0.5, y + 0.5, g);
+    const d = distOut(g[0], g[1]);
+    if (d >= BLEND + 0.3) continue;
+    let m = 1;
+    if (d > 0) {
+      const wob = (vnoise(g[0] * 1.7, g[1] * 1.7) - 0.5) * 0.5 + (vnoise(g[0] * 5.3 + 9, g[1] * 5.3) - 0.5) * 0.18;
+      m = (1 - smooth(0, BLEND, d + wob)) * smooth(0.3, 0.75, grassyAt(x, y));
+      if (m <= 0.004) continue;
+    }
+    let lightCov = 0, tc = 0, tr = 0;
     for (const [ox, oy] of SUB) {
       toGrid(x + ox, y + oy, g);
-      if (!playable(g[0], g[1])) continue;
-      cov++; tc = Math.floor(g[0]); tr = Math.floor(g[1]);
-      if (((Math.floor(g[0]) + Math.floor(g[1])) & 1) === 0) lightCov++;
+      tc = Math.floor(g[0]); tr = Math.floor(g[1]);
+      if (((tc + tr) & 1) === 0) lightCov++;
     }
-    if (!cov) continue;
-    const i = (y * W + x) * 3, m = cov / 4, t = lightCov / cov;
+    const i = (y * W + x) * 3, t = lightCov / 4;
     grassAt(x, y, col3);
     const grain = 1 + (vnoise(x / 26, y / 26) - 0.5) * 0.08 + (vnoise(x / 7, y / 7) - 0.5) * 0.045 + (hash(x, y) - 0.5) * 0.02;
     const tileJit = 1 + (hash(tc + 101, tr + 37) - 0.5) * 0.05; // each tile a touch different

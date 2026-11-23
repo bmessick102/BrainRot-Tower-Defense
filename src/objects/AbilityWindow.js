@@ -22,7 +22,7 @@ import { formatGold } from '../logic/economy.js';
 import { isWaveActive } from '../logic/util.js';
 import { labGuideHint } from '../logic/labGuide.js';
 import { TEX } from '../assetKeys.js';
-import { isMergeable, hasMergedOf, masteryLevel, masteryTier, masteryTierCount, checkMastery } from '../logic/merge.js';
+import { isMergeable, hasMergedOf, masteryLevel, masteryTier, masteryTierCount, checkMastery, needsMergeReason } from '../logic/merge.js';
 import { mergeConfig } from '../logic/buildings.js';
 import { MERGE_GEAR } from './BuildingView.js';
 
@@ -34,11 +34,13 @@ const TOP = 112;                                      // grid / panel top, below
 const INFO_Y = 84;                                    // the info line / tabs / balance row: clear of the title bar (ends at 60)
 const GRID_H = COL_HEAD + 8 + ROW_STEP * (MAX_TIER - 1) + NODE_H;
 const RESPEC_H = 46;                                  // the "Reset path" row under the tree
-// Merged defenses' Mastery (merge.js): a gold 4th column ("★ Mastery", 3 tiers) next to the three paths, only for a type with
-// a merged building. The window is always as wide as the 4-column layout needs; with 3 columns they are just wider.
+// Merged defenses' Mastery (merge.js): a gold 4th column ("★ Mastery", 3 tiers) next to the three paths, for every type that can
+// merge (v0.9.3); greyed out, with no glow, until the village has a merged one. The window is always as wide as the
+// 4-column layout needs; a type that can't merge spreads its 3 columns wider.
 const GOLD = 0xffc83a, GOLD_INK = '#8a5a00';
 // The Mastery column's text: tier names, their status line, and not-yet tiers (all gold tones).
 const MASTERY_INK = { name: '#6b4500', line: '#a06a00', dim: '#c9a862' };
+const MASTERY_GREY = 0xb3aa9a; // the column before the type has a merged building
 const WIN_H = TOP + GRID_H + RESPEC_H + 24;
 const INK = { a: '#b8640a', b: '#2a6fb0', c: '#2f8a2f' }; // path colors that read on the light body
 // Events that can change what the windows show.
@@ -113,12 +115,13 @@ function drawTree(scene, m, x, y, colW, gap, type, nodeState, selected, onSelect
   }));
   if (mastery) {
     cols.push({
-      color: GOLD, ink: GOLD_INK, tiers: masteryTierCount(type), head: '★ Mastery', gold: true,
+      color: mastery.locked ? MASTERY_GREY : GOLD, ink: mastery.locked ? '#8c8170' : GOLD_INK, tiers: masteryTierCount(type),
+      head: '★ Mastery', gold: !mastery.locked,
       state: (t) => mastery.stateOf(t), title: (t) => masteryTier(type, t).name,
       isSel: (t) => !!selected && !!selected.mastery && selected.tier === t, pick: (t) => ({ mastery: true, tier: t })
     });
   }
-  if (mastery) masteryAura(scene, m, nx(cols.length - 1), y, colW, COL_HEAD + 8 + ROW_STEP * (masteryTierCount(type) - 1) + NODE_H);
+  if (mastery && !mastery.locked) masteryAura(scene, m, nx(cols.length - 1), y, colW, COL_HEAD + 8 + ROW_STEP * (masteryTierCount(type) - 1) + NODE_H);
   // Tier bands and gutter labels: one row per tier makes "one pick per tier" easy to see.
   for (let t = 1; t <= MAX_TIER; t++) {
     const top = ny(t) - 4;
@@ -299,10 +302,11 @@ export function openResearchWindow(scene, gs, { onClose = null, startType = null
     return `${owned ? 'On' : 'Applies to'} every ${buildingName(type)}${n ? ` (${n} now)` : ''}, whatever its level.`;
   };
 
-  /** Does this type show its Mastery row? (A mergeable type with a merged building in the village.) */
-  const masteryShown = (t) => isMergeable(t) && hasMergedOf(gs, t);
+  /** Does this type show its Mastery column? (Every mergeable type; greyed out until it has a merged building.) */
+  const masteryShown = (t) => isMergeable(t);
+  const masteryOpen = (t) => isMergeable(t) && hasMergedOf(gs, t);
   // A merged building's Mastery button opens on the Mastery column (its next tier), when the type has one.
-  if (focusMastery && type && masteryShown(type)) selected = { mastery: true, tier: Math.min(masteryTierCount(type), masteryLevel(gs, type) + 1) };
+  if (focusMastery && type && masteryOpen(type)) selected = { mastery: true, tier: Math.min(masteryTierCount(type), masteryLevel(gs, type) + 1) };
   const refresh = () => {
     if (!m.frame) return;
     m.clear();
@@ -364,7 +368,7 @@ export function openResearchWindow(scene, gs, { onClose = null, startType = null
       const pic = m.add(scene.add.image(tileX + tileW / 2, top + inner / 2, buildingTextureKey(scene, t, 1)));
       fitIcon(pic, tileW - 4, inner - 6);
       // A type with a merged building: the gear on its picture's corner.
-      if (masteryShown(t) && scene.textures.exists(MERGE_GEAR)) m.add(fitIcon(scene.add.image(tileX + tileW - 4, top + 7, MERGE_GEAR), Math.min(18, inner / 2)));
+      if (masteryOpen(t) && scene.textures.exists(MERGE_GEAR)) m.add(fitIcon(scene.add.image(tileX + tileW - 4, top + 7, MERGE_GEAR), Math.min(18, inner / 2)));
       // Name over the tier bars, as one block centered in the row.
       const ready = canResearchFor(gs, t);
       const nx = tileX + tileW + 7, barH = Math.max(4, Math.min(6, Math.round(inner / 7)));
@@ -395,9 +399,11 @@ export function openResearchWindow(scene, gs, { onClose = null, startType = null
     const gx = lx + LIST_W + 14, gy = ly;
     const panelX = gx + GRID_W + 16;
     let mState = null;
+    const masteryLocked = mastery && !masteryOpen(type);
     if (mastery) {
       const have = masteryLevel(gs, type);
       mState = (t) => {
+        if (masteryLocked) return { state: 'future', line: t === 1 ? 'Merge to unlock' : `After Mastery ${t - 1}` };
         if (t <= have) return { state: 'owned', line: '✔ Mastered' };
         if (t > have + 1) return { state: 'future', line: `After Mastery ${t - 1}` };
         const info = masteryTier(type, t);
@@ -419,13 +425,18 @@ export function openResearchWindow(scene, gs, { onClose = null, startType = null
           ],
           button: null
         };
-        if (s.state === 'owned') { detail.note = '✔ Mastered'; detail.noteGood = true; }
+        if (masteryLocked) {
+          detail.color = MASTERY_GREY; detail.ink = '#8c8170';
+          detail.applies = `Opens once you have a ${M.name}. Not part of the path lock.`;
+          detail.checks = [[false, `A ${M.name} (merge two)`], ...detail.checks.filter(([, label]) => !/^Mastery \d first$/.test(label))];
+          detail.note = needsMergeReason(type);
+        } else if (s.state === 'owned') { detail.note = '✔ Mastered'; detail.noteGood = true; }
         else if (s.state === 'future') detail.note = `Research Mastery ${have + 1} first`;
         else detail.button = { label: `Research · ${rpText(info.cost)}`, ok: mc.ok, sub: mc.reason, onClick: () => { if (gs.researchMastery(type).ok) { selected = { mastery: true, tier: Math.min(masteryTierCount(type), t + 1) }; refresh(); } } };
         drawDetails(scene, m, panelX, gy, PANEL_W, treeH, detail);
       }
     }
-    drawTree(scene, m, gx, gy, COL_W, GAP, type, st, selected, (sel) => { selected = sel; refresh(); }, labPicks(gs, type), mState ? { stateOf: mState } : null);
+    drawTree(scene, m, gx, gy, COL_W, GAP, type, st, selected, (sel) => { selected = sel; refresh(); }, labPicks(gs, type), mState ? { stateOf: mState, locked: masteryLocked } : null);
 
     if (!selected.mastery) {
     const { path, tier } = selected;

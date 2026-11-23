@@ -21,6 +21,7 @@ import { MUSIC } from '../assetKeys.js';
 import { showTitleBackdrop } from './TitleBackdropScene.js';
 import { playMusic } from '../audio.js';
 import { COLORS, bodyStyle, textStyle } from '../theme.js';
+import { VIEW } from '../renderScale.js';
 
 const W = 520;
 const TOP = 290;            // window top: just under the logo in the title art
@@ -74,7 +75,7 @@ export class AuthScene extends Phaser.Scene {
   }
 
   create() {
-    const { width, height } = this.scale;
+    const { width, height } = VIEW;
     showTitleBackdrop(this); // the animated title picture, drawn under this scene
     this.add.rectangle(0, 0, width, height, 0x000000, 0.25).setOrigin(0);
     playMusic(this, MUSIC.title);
@@ -102,7 +103,7 @@ export class AuthScene extends Phaser.Scene {
 
   /** A small dark caption pill centered at y. Returns its objects. */
   pill(text, y = 470) {
-    const t = this.add.text(this.scale.width / 2, y, text, textStyle(22)).setOrigin(0.5).setDepth(2);
+    const t = this.add.text(VIEW.width / 2, y, text, textStyle(22)).setOrigin(0.5).setDepth(2);
     const g = this.add.graphics().setDepth(1);
     drawHudPill(g, t.x - t.width / 2 - 22, y - 20, t.width + 44, 40);
     return [t, g];
@@ -150,7 +151,7 @@ export class AuthScene extends Phaser.Scene {
 
   // ---------- no server ----------
   showOffline() {
-    const cx = this.scale.width / 2, h = 300;
+    const cx = VIEW.width / 2, h = 300;
     drawWindow(this.add.graphics(), cx - W / 2, TOP, W, h, { header: HEADER });
     this.add.text(cx, TOP + 4 + HEADER / 2, 'Online Play', textStyle(30)).setOrigin(0.5);
     this.add.text(cx, TOP + 120, 'Accounts, achievements and the leaderboard\nneed the game’s server, which isn’t set up yet.',
@@ -162,13 +163,13 @@ export class AuthScene extends Phaser.Scene {
   // ---------- log in / sign up ----------
   showForm() {
     this.clearUi();
-    const cx = this.scale.width / 2;
+    const cx = VIEW.width / 2;
     const signup = this.tab === 'signup';
     const rows = signup ? 4 : 2;
     const msgY = ROW0 + (rows - 1) * ROW_GAP + 40;
     const h = msgY + 96 + (this.captchaOn ? CAPTCHA_ROW : 0);
     const below = this.unreachable ? OFFLINE_ROW : 0; // Retry / Play Offline under the window
-    const top = Math.min(TOP, this.scale.height - 12 - h - below);
+    const top = Math.min(TOP, VIEW.height - 12 - h - below);
     const px = cx - W / 2;
 
     const g = this.keep(this.add.graphics());
@@ -223,7 +224,7 @@ export class AuthScene extends Phaser.Scene {
     if (this.unreachable) this.showOfflineRow(cx, top + h + OFFLINE_ROW / 2 + 2);
 
     if (session.backend.kind === 'local') {
-      const t = this.keep(this.add.text(16, this.scale.height - 28, 'Dev mode: accounts are kept in this browser only (local backend, no Supabase)', textStyle(15, COLORS.textGold)).setOrigin(0, 1));
+      const t = this.keep(this.add.text(16, VIEW.height - 28, 'Dev mode: accounts are kept in this browser only (local backend, no Supabase)', textStyle(15, COLORS.textGold)).setOrigin(0, 1));
       void t;
     }
     this.time.delayedCall(60, () => {

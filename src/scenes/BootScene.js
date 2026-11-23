@@ -13,6 +13,7 @@ import { COLORS, FONT, textStyle, shade } from '../theme.js';
 import { pickTip } from '../loadingTips.js';
 import { LOADED_EVENT, LOADED_FLAG } from './TitleBackdropScene.js';
 import { requestImages, markBrokenImages, picturesUnsupported } from '../assetLoader.js';
+import { VIEW } from '../renderScale.js';
 
 const BASE = import.meta.env.BASE_URL;
 
@@ -88,7 +89,7 @@ export class BootScene extends Phaser.Scene {
    * tip also sit at the top depth here.
    */
   buildLoadingScreen() {
-    const { width, height } = this.scale;
+    const { width, height } = VIEW;
     const items = [];
     // Darken the bottom so the bar and tip read clearly over the art.
     const shadeG = this.add.graphics();
@@ -136,7 +137,7 @@ export class BootScene extends Phaser.Scene {
     if (missing.length && this.bootRound < 3 && !picturesUnsupported()) {
       this.bootRound++;
       console.warn(`${missing.length} core pictures failed, retrying (round ${this.bootRound})`);
-      if (!this.retryText) this.retryText = this.add.text(this.scale.width / 2, this.scale.height - 40, 'Some pictures are slow to load, trying again…', textStyle(20)).setOrigin(0.5).setDepth(LOADING_UI_DEPTH + 5);
+      if (!this.retryText) this.retryText = this.add.text(VIEW.width / 2, VIEW.height - 40, 'Some pictures are slow to load, trying again…', textStyle(20)).setOrigin(0.5).setDepth(LOADING_UI_DEPTH + 5);
       this.time.delayedCall(1500 + 1500 * this.bootRound, () => {
         for (const f of missing) this.load.image(FILE_KEY_ALIASES[f.key] || f.key, `${BASE}${f.path}?r=${this.bootRound}`);
         this.load.once('complete', () => this.create());

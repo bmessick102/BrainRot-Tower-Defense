@@ -20,7 +20,8 @@ export const CREDITS_SECTIONS = [
     people: [
       { name: 'Supercell', role: 'Sound effects' },
       { name: 'Pixabay', role: 'Sound effects (pixabay.com)' }
-    ]
+    ],
+    lines: ["Menu Music: 'Bomboclat Wallahi' by TR3N TEN (Produced by Tren Tenovic)."]
   },
   {
     title: 'Assets',

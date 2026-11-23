@@ -3,6 +3,7 @@
 import Phaser from 'phaser';
 import { versionLabel } from '../version.js';
 import { COLORS, textStyle } from '../theme.js';
+import { VIEW } from '../renderScale.js';
 
 export class VersionScene extends Phaser.Scene {
   constructor() {
@@ -10,6 +11,6 @@ export class VersionScene extends Phaser.Scene {
   }
 
   create() {
-    this.add.text(8, this.scale.height - 4, versionLabel(), textStyle(12, COLORS.textDim)).setOrigin(0, 1).setAlpha(0.8);
+    this.add.text(8, VIEW.height - 4, versionLabel(), textStyle(12, COLORS.textDim)).setOrigin(0, 1).setAlpha(0.8);
   }
 }

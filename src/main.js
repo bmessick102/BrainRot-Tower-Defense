@@ -19,10 +19,11 @@ import { session } from './net/account.js';
 import { showLockOverlay } from './objects/LockOverlay.js';
 import { installCrashGuard } from './objects/CrashOverlay.js';
 import { installPhaserPerf } from './phaserPerf.js';
-import { isLowQuality, qualityMode, setQualityMode, setAutoLow, LowFpsWatch } from './quality.js';
+import { isLowQuality, qualityMode, setQualityMode, setAutoLow, LowFpsWatch, onQualityChange } from './quality.js';
 import { loadGraphicsSetting } from './logic/save.js';
 import { webpSupported, showWebpMessage, installAssetNotice } from './assetNotice.js';
 import { setPicturesUnsupported } from './assetLoader.js';
+import { VIEW_W, VIEW_H, pickRenderScale, windowMetrics, initRenderScale, applyRenderScale, installViewCameras, installSharpText, renderScale } from './renderScale.js';
 
 // Cheaper Graphics arcs (rounded buttons, circles), and fewer particles in low graphics quality: phaserPerf.js.
 installPhaserPerf(Phaser, isLowQuality);
@@ -32,14 +33,21 @@ installPhaserPerf(Phaser, isLowQuality);
 setGameStorage(session.storage);
 setQualityMode(loadGraphicsSetting(getStorage())); // Settings > Graphics (quality.js)
 
-export const GAME_WIDTH = 1280;
-export const GAME_HEIGHT = 720;
+export const GAME_WIDTH = VIEW_W;   // the view every screen is laid out in
+export const GAME_HEIGHT = VIEW_H;
+
+// Sharp rendering (renderScale.js): the canvas is the view times the screen's real pixel density (capped), and every
+// scene's camera zooms by that, so nothing is a stretched 1280 x 720 picture on a big or high-DPI screen.
+const wantScale = () => pickRenderScale({ ...windowMetrics(), low: isLowQuality() });
+initRenderScale(wantScale());
+installViewCameras(Phaser);
+installSharpText(Phaser);
 
 const game = new Phaser.Game({
   type: Phaser.AUTO,
   parent: 'game',
-  width: GAME_WIDTH,
-  height: GAME_HEIGHT,
+  width: Math.round(GAME_WIDTH * renderScale()),
+  height: Math.round(GAME_HEIGHT * renderScale()),
   backgroundColor: '#10140f',
   banner: false,
   scale: { mode: Phaser.Scale.FIT, autoCenter: Phaser.Scale.CENTER_BOTH },
@@ -55,6 +63,12 @@ const game = new Phaser.Game({
 // (Safari before 14, iOS 13 and older: every picture would fail), a message to update instead of a village of grey blocks.
 installAssetNotice();
 webpSupported().then((ok) => { if (!ok) { setPicturesUnsupported(); showWebpMessage(() => {}); } });
+
+// The window resized (or moved to another screen), or the graphics quality changed: redraw at the scale that fits.
+let rescaleTimer = null;
+const rescale = () => { clearTimeout(rescaleTimer); rescaleTimer = setTimeout(() => applyRenderScale(game, wantScale()), 250); };
+if (typeof window !== 'undefined') window.addEventListener('resize', rescale);
+onQualityChange(rescale);
 
 // Graphics 'auto': a game that keeps running under 30 fps (not while loading) switches to low quality.
 const fpsWatch = new LowFpsWatch();

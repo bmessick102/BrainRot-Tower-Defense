@@ -8,6 +8,7 @@ import { COLORS, bodyStyle, textStyle } from '../theme.js';
 import { getMusicLevel, getSfxLevel, setMusicLevel, setSfxLevel } from '../audio.js';
 import { saveSettings } from '../logic/save.js';
 import { CREDITS_SECTIONS, CREDITS_DISCLAIMER } from '../credits.js';
+import { VIEW } from '../renderScale.js';
 
 const W = 560, H = 490, HEADER = 60, DEPTH = 1000;
 
@@ -35,7 +36,7 @@ export class SettingsWindow {
     this.confirming = false;
     this.notice = '';
 
-    const { width, height } = scene.scale;
+    const { width, height } = VIEW;
     this.px = Math.round(width / 2 - W / 2);
     this.py = Math.round(height / 2 - H / 2);
     const shade = scene.add.rectangle(0, 0, width, height, 0x000000, 0.6).setOrigin(0).setInteractive();
@@ -77,7 +78,7 @@ export class SettingsWindow {
   }
 
   buildSettings() {
-    const s = this.scene, cx = s.scale.width / 2;
+    const s = this.scene, cx = VIEW.width / 2;
     const save = () => saveSettings(this.storage, { music: getMusicLevel(), sfx: getSfxLevel() });
     const x = this.px + 200, sw = 250;
     this.add(addVolumeSlider(s, { x, y: this.py + 176, width: sw, label: 'Music', get: getMusicLevel, set: (v) => { setMusicLevel(v); save(); }, depth: DEPTH + 1 }));
@@ -161,7 +162,7 @@ export class SettingsWindow {
 
   /** One try at the credits layout: f scales the text, g the gaps. Returns the objects and their bottom edge. */
   layoutCredits({ f, g }) {
-    const s = this.scene, cx = s.scale.width / 2, objs = [];
+    const s = this.scene, cx = VIEW.width / 2, objs = [];
     const size = (n) => Math.max(11, Math.round(n * f)), gap = (n) => Math.round(n * g);
     const text = (x, y, str, style) => { const t = s.add.text(x, y, str, style); objs.push(t); return t; };
     let y = this.py + 126;

@@ -18,6 +18,8 @@ import { Button } from '../objects/Button.js';
 import { COLORS, textStyle } from '../theme.js';
 import { villageImageKeys } from '../assetPlan.js';
 import { session } from '../net/account.js';
+import { zoomLimit, dragThreshold } from '../renderScale.js';
+import { MapDetail } from '../objects/MapDetail.js';
 
 const ZOOM_STEP = 1.15;
 // At most this long for the village's building pictures before it is drawn anyway (the views pick the pictures up as
@@ -57,7 +59,11 @@ export class VisitScene extends Phaser.Scene {
     this.scene.launch('VisitHudScene', { visit: this });
     this.hud = this.scene.get('VisitHudScene');
     // The map shows at once (the village is drawn on it when it arrives), so the screen is never just a dark void.
-    try { this.add.image(0, 0, TEX.map).setOrigin(0, 0).setDisplaySize(MAP.imageWidth, MAP.imageHeight).setDepth(-10000); this.setupCamera(true); } catch (e) { console.error('VisitScene: map', e); }
+    try {
+      const map = this.add.image(0, 0, TEX.map).setOrigin(0, 0).setDisplaySize(MAP.imageWidth, MAP.imageHeight).setDepth(-10000);
+      this.mapDetail = new MapDetail(this, [{ key: 'game_map_grid', image: map, depth: -9999.5 }]); // full-size pieces when zoomed in (desktop)
+      this.setupCamera(true);
+    } catch (e) { console.error('VisitScene: map', e); }
     this.setStatus('Loading village…');
     this.loadVillage();
   }
@@ -133,6 +139,7 @@ Tap Back to return.`, textStyle(24)).setOrigin(0.5).setAlign('center').setScroll
   showLabels(id) { return id === this.selectedId; }
 
   update(time) {
+    if (this.mapDetail) this.mapDetail.update(time);
     if (!this.gs) return;
     for (const b of this.gs.buildings) {
       const v = this.views.get(b.id);
@@ -145,12 +152,12 @@ Tap Back to return.`, textStyle(24)).setOrigin(0.5).setAlign('center').setScroll
   // ---------- camera (the same rules as GameScene's) ----------
   minZoom() {
     const cam = this.cameras.main;
-    return Math.max(CONFIG.camera.minZoom, cam.width / MAP.imageWidth, cam.height / MAP.imageHeight);
+    return Math.max(zoomLimit(CONFIG.camera.minZoom), cam.width / MAP.imageWidth, cam.height / MAP.imageHeight);
   }
 
   setupCamera(early = false) {
     const cam = this.cameras.main;
-    cam.setZoom(Math.max(CONFIG.camera.startZoom, this.minZoom()));
+    cam.setZoom(Math.max(zoomLimit(CONFIG.camera.startZoom), this.minZoom()));
     const th = this.gs && this.gs.townHall;
     const c = th ? footprintCenter(th) : { x: MAP.cols / 2, y: MAP.rows / 2 };
     const s = gridToScreen(c.x, c.y);
@@ -173,7 +180,7 @@ Tap Back to return.`, textStyle(24)).setOrigin(0.5).setAlign('center').setScroll
 
   zoomKeeping(w, px, py, zoom) {
     const cam = this.cameras.main;
-    zoom = clamp(zoom, this.minZoom(), CONFIG.camera.maxZoom);
+    zoom = clamp(zoom, this.minZoom(), zoomLimit(CONFIG.camera.maxZoom));
     cam.setZoom(zoom);
     cam.scrollX = w.x - cam.width / 2 - (px - cam.width / 2) / zoom;
     cam.scrollY = w.y - cam.height / 2 - (py - cam.height / 2) / zoom;
@@ -207,7 +214,7 @@ Tap Back to return.`, textStyle(24)).setOrigin(0.5).setAlign('center').setScroll
       }
       if (!this.press || !p.isDown) return;
       const dx = p.x - this.press.x, dy = p.y - this.press.y;
-      if (!this.press.moved && Math.hypot(dx, dy) < CONFIG.camera.dragThresholdPx) return;
+      if (!this.press.moved && Math.hypot(dx, dy) < dragThreshold(CONFIG.camera.dragThresholdPx)) return;
       this.press.moved = true;
       const cam = this.cameras.main;
       cam.scrollX = this.press.sx - dx / cam.zoom;

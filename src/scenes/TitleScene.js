@@ -32,6 +32,7 @@ import { showTitleBackdrop } from './TitleBackdropScene.js';
 import { takeTakeover } from '../objects/LockOverlay.js';
 import { requestImages } from '../assetLoader.js';
 import { villageImageKeys } from '../assetPlan.js';
+import { VIEW } from '../renderScale.js';
 
 // Opening a village waits at most this long for its building pictures (they stream in: src/assetPlan.js); after
 // that it opens anyway, with lower-level pictures standing in until the rest arrive.
@@ -64,7 +65,7 @@ export class TitleScene extends Phaser.Scene {
   }
 
   create() {
-    const { width, height } = this.scale;
+    const { width, height } = VIEW;
     // Online play needs a login; offline play (no server set up) uses the browser's own save.
     if (!this.offline && !session.loggedIn) {
       this.scene.start('AuthScene');
@@ -209,7 +210,7 @@ export class TitleScene extends Phaser.Scene {
   async logOut() {
     if (this.windowOpen || this.loggingOut) return;
     this.loggingOut = true;
-    const t = this.add.text(this.scale.width / 2, 540, 'Logging out…', textStyle(22)).setOrigin(0.5).setDepth(50);
+    const t = this.add.text(VIEW.width / 2, 540, 'Logging out…', textStyle(22)).setOrigin(0.5).setDepth(50);
     await session.signOut();
     if (t.active) this.scene.start('AuthScene');
   }
@@ -295,7 +296,7 @@ export class TitleScene extends Phaser.Scene {
     if (this.opening) return;
     this.opening = true;
     this.windowOpen = true;
-    const t = this.add.text(this.scale.width / 2, 540, 'Opening…', textStyle(22)).setOrigin(0.5).setDepth(50);
+    const t = this.add.text(VIEW.width / 2, 540, 'Opening…', textStyle(22)).setOrigin(0.5).setDepth(50);
     const ok = await session.openBase(b.id);
     if (!this.sys.isActive()) return;
     const nb = session.activeBase;
@@ -430,7 +431,7 @@ export class TitleScene extends Phaser.Scene {
     done.then(() => { ready = true; });
     await Promise.resolve(); // (already loaded: no label at all)
     if (ready) return;
-    const t = label || this.add.text(this.scale.width / 2, 540, '', textStyle(22)).setOrigin(0.5).setDepth(50);
+    const t = label || this.add.text(VIEW.width / 2, 540, '', textStyle(22)).setOrigin(0.5).setDepth(50);
     t.setText('Loading village…');
     await Promise.race([done, new Promise((r) => setTimeout(r, VILLAGE_ART_WAIT_MS))]);
     if (!label && t.active) t.destroy();
@@ -443,7 +444,7 @@ export class TitleScene extends Phaser.Scene {
 
   confirmNewGame() {
     if (this.dialog) return;
-    const { width, height } = this.scale;
+    const { width, height } = VIEW;
     const shade = this.add.rectangle(0, 0, width, height, 0x000000, 0.6).setOrigin(0).setInteractive();
     const g = this.add.graphics();
     const pw = 520, ph = 230, px = width / 2 - pw / 2, py = height / 2 - ph / 2, header = 56;

@@ -163,9 +163,13 @@ export function hasMergedOf(state, type) {
   return state.buildings.some((b) => b.type === type && b.merged);
 }
 
+/** The message for a Mastery that waits for a merge: "Needs a Mega Cannon: merge two at Level 10". */
+export const needsMergeReason = (type) => `Needs a ${mergeConfig(type).name}: merge two at Level ${maxLevel(type)}`;
+
 /**
- * Can the RV Lab research this type's next Mastery tier (or `tier`)? { ok, reason, cost, tier }. Needs the previous
- * tier, its RV Lab level, Burgers, and no wave. A type without a merged building can still research it (it waits for one).
+ * Can the RV Lab research this type's next Mastery tier (or `tier`)? { ok, reason, cost, tier }. Needs a merged
+ * building of the type (v0.9.3: the RV Lab shows the column greyed out until then), the previous tier, its RV Lab
+ * level, Burgers, and no wave.
  */
 export function checkMastery(state, type, tier = masteryLevel(state, type) + 1) {
   const m = mergeConfig(type);
@@ -175,6 +179,7 @@ export function checkMastery(state, type, tier = masteryLevel(state, type) + 1) 
   if (tier <= have) return { ok: false, reason: 'Already researched', cost: null, tier };
   const t = masteryTier(type, tier);
   if (tier > have + 1) return { ok: false, reason: `Research Mastery ${have + 1} first`, cost: t.cost, tier };
+  if (!hasMergedOf(state, type)) return { ok: false, reason: needsMergeReason(type), cost: t.cost, tier };
   const lab = labLevel(state);
   if (!lab) {
     const ruin = state.buildings.some((b) => b.type === 'rvlab');

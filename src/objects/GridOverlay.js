@@ -7,6 +7,7 @@ import { GRID_SIZE, GRID_TINTS, GRID_DEBUG_KEY } from '../gridConfig.js';
 import { isGrass } from '../logic/grid.js';
 import { skyBlend } from '../logic/clockLight.js';
 import { lerpColor } from './DayNight.js';
+import { renderScale } from '../renderScale.js';
 
 const DEPTH = -8500;     // over the map and its dirt plots, under buildings, enemies and lights
 const LINE_SCREEN_PX = 1.4; // grid line width on screen, whatever the zoom
@@ -48,7 +49,7 @@ export class GridOverlay {
     const key = `${colors.light}|${colors.line}|${Math.round(Math.log(zoom) * 20)}`;
     if (key === this.drawnKey) return;
     this.drawnKey = key;
-    this.draw(colors, LINE_SCREEN_PX / zoom);
+    this.draw(colors, (LINE_SCREEN_PX * renderScale()) / zoom);
   }
 
   draw(c, lineW) {

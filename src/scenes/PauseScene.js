@@ -13,6 +13,7 @@ import { stopMusic, getMusicLevel, getSfxLevel, setMusicLevel, setSfxLevel } fro
 import { drawWindow } from '../objects/uiDraw.js';
 import { COLORS, textStyle } from '../theme.js';
 import { session } from '../net/account.js';
+import { VIEW } from '../renderScale.js';
 
 const BANNER_MS = 2500;
 
@@ -22,7 +23,7 @@ export class PauseScene extends Phaser.Scene {
   }
 
   create() {
-    const { width, height } = this.scale;
+    const { width, height } = VIEW;
     this.gs = this.registry.get('gameState');
     this.add.rectangle(0, 0, width, height, 0x000000, 0.55).setOrigin(0).setInteractive();
     const pw = 440, ph = 540, px = width / 2 - pw / 2, py = height / 2 - ph / 2, header = 64;

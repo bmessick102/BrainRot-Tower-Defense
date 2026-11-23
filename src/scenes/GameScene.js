@@ -52,6 +52,8 @@ import { NetFx } from '../objects/NetFx.js';
 import { WallFx } from '../objects/WallFx.js';
 import { HarpoonFx } from '../objects/HarpoonFx.js';
 import { ZapFx } from '../objects/ZapFx.js';
+import { zoomLimit, dragThreshold, renderScale, toView } from '../renderScale.js';
+import { MapDetail } from '../objects/MapDetail.js';
 
 const PLANNING_FADE_MS = 600; // the ambience / village music hands over to the planning track this fast
 const ZOOM_STEP = 1.1;
@@ -111,8 +113,15 @@ export class GameScene extends Phaser.Scene {
     requestImages(reachableImageKeys(gs.townHallLevel));
 
     // The map image is drawn at MAP.imageWidth x MAP.imageHeight world pixels (see mapTiles.js).
-    this.add.image(0, 0, TEX.map).setOrigin(0, 0).setDisplaySize(MAP.imageWidth, MAP.imageHeight).setDepth(-10000);
+    const dayMap = this.add.image(0, 0, TEX.map).setOrigin(0, 0).setDisplaySize(MAP.imageWidth, MAP.imageHeight).setDepth(-10000);
     this.dayNight = new DayNight(this); // night map crossfade + ambient tint for world sprites
+    // Full-size map pieces when zoomed in on a desktop (MapDetail.js), each just above its picture.
+    this.mapDetail = new MapDetail(this, [
+      { key: 'game_map_grid', image: dayMap, depth: -9999.5 },
+      { key: 'game_map_grid_dawn', image: this.dayNight.dawnMap, depth: -9998.5 },
+      { key: 'game_map_grid_dusk', image: this.dayNight.duskMap, depth: -9997.5 },
+      { key: 'game_map_grid_night', image: this.dayNight.nightMap, depth: -9996.5 }
+    ]);
     // Press G: the debug grid over the map. Dev builds only: in the game G is the Encore key (AbilityHotbar).
     this.gridOverlay = import.meta.env && import.meta.env.DEV ? new GridOverlay(this) : null;
     this.villagers = new Villagers(this, gs); // decorative gnomes: wander by day, inside at night
@@ -370,6 +379,7 @@ export class GameScene extends Phaser.Scene {
       for (let i = stepsPerFrame(this.gs); i > 0; i--) this.gs.update(step);
     }
     this.dayNight.update(this.gs.clock);
+    this.mapDetail.update(time);
     if (this.gridOverlay) this.gridOverlay.update(this.gs.clock);
     this.grassTufts.setTint(this.ambientTint ?? 0xffffff);
     // Day / night ambience: follows how dark it is, and steps aside for the attack music during a wave.
@@ -635,7 +645,7 @@ export class GameScene extends Phaser.Scene {
   setupCamera() {
     const cam = this.cameras.main;
     this.mapSize = { w: MAP.imageWidth, h: MAP.imageHeight };
-    cam.setZoom(Math.max(CONFIG.camera.startZoom, this.minZoom()));
+    cam.setZoom(Math.max(zoomLimit(CONFIG.camera.startZoom), this.minZoom()));
     const th = this.gs.townHall;
     const c = footprintCenter(th);
     const s = gridToScreen(c.x, c.y);
@@ -649,7 +659,7 @@ export class GameScene extends Phaser.Scene {
    */
   minZoom() {
     const cam = this.cameras.main;
-    return Math.max(CONFIG.camera.minZoom, cam.width / this.mapSize.w, cam.height / this.mapSize.h);
+    return Math.max(zoomLimit(CONFIG.camera.minZoom), cam.width / this.mapSize.w, cam.height / this.mapSize.h);
   }
 
   /** Keep the whole view inside the map so its edge is never visible. */
@@ -691,7 +701,7 @@ export class GameScene extends Phaser.Scene {
   /** Set the zoom (clamped) and scroll so the world point `w` sits at screen point (px, py). */
   zoomKeeping(w, px, py, zoom) {
     const cam = this.cameras.main;
-    zoom = clamp(zoom, this.minZoom(), CONFIG.camera.maxZoom);
+    zoom = clamp(zoom, this.minZoom(), zoomLimit(CONFIG.camera.maxZoom));
     cam.setZoom(zoom);
     cam.scrollX = w.x - cam.width / 2 - (px - cam.width / 2) / zoom;
     cam.scrollY = w.y - cam.height / 2 - (py - cam.height / 2) / zoom;
@@ -805,7 +815,7 @@ export class GameScene extends Phaser.Scene {
       if (this.placement && !this.touchMode) this.updateGhost(p.x, p.y);
       const pr = this.press;
       if (!pr || !p.isDown) return;
-      if (!pr.dragging && Phaser.Math.Distance.Between(p.x, p.y, pr.x, pr.y) >= CONFIG.camera.dragThresholdPx) pr.dragging = true;
+      if (!pr.dragging && Phaser.Math.Distance.Between(p.x, p.y, pr.x, pr.y) >= dragThreshold(CONFIG.camera.dragThresholdPx)) pr.dragging = true;
       if (pr.dragging && pr.ghost && this.placement) {
         this.updateGhost(p.x - pr.ghost.dx, p.y - pr.ghost.dy);
       } else if (pr.dragging) {
@@ -1305,6 +1315,11 @@ export class GameScene extends Phaser.Scene {
     this.swapPreview = null;
   }
 
+  /** The sound for setting a building down: the building-placed sound, except for walls (they keep `wallSound`). */
+  placeSound(type, wallSound) {
+    return type !== 'wall' && this.cache.audio.exists(SFX.buildingPlaced) ? SFX.buildingPlaced : wallSound;
+  }
+
   confirmPlacement() {
     const pl = this.placement;
     if (!pl) return;
@@ -1319,7 +1334,7 @@ export class GameScene extends Phaser.Scene {
     if (pl.mode === 'move' && this.layout) {
       // Edit mode: drop it into the draft layout (the village changes on Save).
       if (!placeInDraft(this.gs, this.layout, pl.id, pl.col, pl.row, pl.orient).ok) { playSfx(this, SFX.invalid); return; }
-      playSfx(this, SFX.place);
+      playSfx(this, this.placeSound(pl.type, SFX.place));
       this.endPlacement();
       this.layoutUpdated();
       // Walls out of the hotbar: keep laying the same stack in a row until it runs out (Esc to stop).
@@ -1334,8 +1349,8 @@ export class GameScene extends Phaser.Scene {
       ? this.gs.placeNew(pl.type, pl.col, pl.row, pl.orient)
       : this.gs.moveBuilding(pl.id, pl.col, pl.row, pl.orient);
     if (!r.ok) { playSfx(this, SFX.invalid); return; }
-    // A new building bought from the shop lands with the upgrade sound; moving one keeps the place sound.
-    playSfx(this, pl.mode === 'buy' ? SFX.upgrade : SFX.place);
+    // A building lands with the building-placed sound, bought or moved; walls keep theirs (upgrade when bought).
+    playSfx(this, this.placeSound(pl.type, pl.mode === 'buy' ? SFX.upgrade : SFX.place));
     this.endPlacement();
     this.syncViews(this.time.now);
     // Walls: keep laying segments in a row while you can afford them (Esc to stop).
@@ -2097,12 +2112,13 @@ export class GameScene extends Phaser.Scene {
     const top = v.topCenter();
     const bottom = this.worldToScreen(v.sprite.x, v.sprite.y);
     const t = this.worldToScreen(top.x, top.y);
-    return { x: t.x, y: t.y, bottom: bottom.y, width: v.sprite.displayWidth * this.cameras.main.zoom };
+    const r = renderScale(); // (the HUD works in view pixels: renderScale.js)
+    return { x: t.x / r, y: t.y / r, bottom: bottom.y / r, width: (v.sprite.displayWidth * this.cameras.main.zoom) / r };
   }
 
   spawnMarkerScreen() {
     const p = this.waveMarkers.alertWorld();
-    return p ? this.worldToScreen(p.x, p.y) : null;
+    return p ? toView(this.worldToScreen(p.x, p.y)) : null; // (in view pixels, for the HUD)
   }
 }
 

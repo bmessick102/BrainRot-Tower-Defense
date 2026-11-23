@@ -37,6 +37,7 @@ import { showTitleBackdrop } from './TitleBackdropScene.js';
 import { MERGE_TYPES } from '../logic/merge.js';
 import { MERGE_GEAR } from '../objects/BuildingView.js';
 import { abilityIcon } from '../objects/MergeIcons.js';
+import { VIEW } from '../renderScale.js';
 
 // "Cannons, Locklair Towers, Litman Mortars or Firework Launchers": the types that can merge (CONFIG.merges).
 const plural = (t) => `${CONFIG.defenses[t].name.replace(/^The /, '')}s`; // (The Diddypult: "Diddypults")
@@ -289,7 +290,7 @@ export class HowToPlayScene extends Phaser.Scene {
   }
 
   create() {
-    const { width, height } = this.scale;
+    const { width, height } = VIEW;
     // Higher-level building pictures stream in (src/assetPlan.js): when the one this page shows arrives (the Max
     // level picture, the Upgrades tab's Cannon), draw the page again with it.
     this.wantedArt = null;

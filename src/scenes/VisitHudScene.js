@@ -13,6 +13,7 @@ import { formatGold } from '../logic/economy.js';
 import { fpW, fpH } from '../logic/grid.js';
 import { picksOf, hasAbilities } from '../logic/abilities.js';
 import { ABILITIES, PATH_COLORS } from '../abilityConfig.js';
+import { VIEW } from '../renderScale.js';
 
 export class VisitHudScene extends Phaser.Scene {
   constructor() {
@@ -26,7 +27,7 @@ export class VisitHudScene extends Phaser.Scene {
   }
 
   create() {
-    const { width } = this.scale;
+    const { width } = VIEW;
     // The scene object lives on between visits: once stopped (Back, or switching villages), forget its texts and card.
     // They're destroyed with the scene, and the next VisitScene talks to this object before it is created again
     // (setting text on a destroyed one threw in VisitScene.create: a stuck screen on the second visit).
@@ -35,12 +36,12 @@ export class VisitHudScene extends Phaser.Scene {
     this.titleG = this.add.graphics();
     this.title = this.add.text(width / 2, 30, `${this.visit.username}'s village`, textStyle(22)).setOrigin(0.5);
     this.sub = this.add.text(width / 2, 56, '', bodyStyle(15, COLORS.text)).setOrigin(0.5);
-    this.statusText = this.add.text(width / 2, this.scale.height / 2, this.visit.statusMsg || '', textStyle(24)).setOrigin(0.5).setAlign('center');
+    this.statusText = this.add.text(width / 2, VIEW.height / 2, this.visit.statusMsg || '', textStyle(24)).setOrigin(0.5).setAlign('center');
     this.card = null;
     this.drawSwitcher();
     this.drawTitle();
     if (this.visit.gs && this.visit.base) this.showVillage(this.visit.base); // the village came in before this started
-    this.add.text(width / 2, this.scale.height - 16, 'Visiting: look around, tap a building to see it. Nothing here can be changed.', bodyStyle(14, COLORS.text)).setOrigin(0.5, 1).setAlpha(0.85);
+    this.add.text(width / 2, VIEW.height - 16, 'Visiting: look around, tap a building to see it. Nothing here can be changed.', bodyStyle(14, COLORS.text)).setOrigin(0.5, 1).setAlpha(0.85);
   }
 
   /** Is the screen point on the HUD (the top bar or the building card)? Then the map ignores it. */
@@ -53,7 +54,7 @@ export class VisitHudScene extends Phaser.Scene {
   setStatus(text) { if (this.statusText) this.statusText.setText(text || ''); }
 
   drawTitle() {
-    const w = Math.max(this.title.width, this.sub.width) + 48, x = this.scale.width / 2 - w / 2;
+    const w = Math.max(this.title.width, this.sub.width) + 48, x = VIEW.width / 2 - w / 2;
     this.titleG.clear();
     drawHudPill(this.titleG, x, 8, w, 64);
   }
@@ -69,7 +70,7 @@ export class VisitHudScene extends Phaser.Scene {
   drawSwitcher() {
     const bases = this.visit.bases || [];
     if (bases.length < 2) return;
-    const { width } = this.scale;
+    const { width } = VIEW;
     const i = Math.max(0, bases.findIndex((b) => b.id === this.visit.baseId));
     const go = (d) => this.visit.switchTo(bases[(i + d + bases.length) % bases.length].id);
     const x = width - 150;
@@ -163,7 +164,7 @@ export class VisitHudScene extends Phaser.Scene {
     y += 6;
     drawWindow(bg, 0, 0, W, y, { header: HEADER });
     blocker.setSize(W, y);
-    c.setPosition(16, this.scale.height - 34 - y);
+    c.setPosition(16, VIEW.height - 34 - y);
     c.cardW = W; c.cardH = y;
     this.card = c;
   }

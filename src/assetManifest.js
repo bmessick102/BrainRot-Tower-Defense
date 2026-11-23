@@ -348,6 +348,7 @@ export const AUDIO_FILES = [
   { key: 'sfx_breaker_blast', path: 'assets/audio/sfx_breaker_blast.ogg' },
   { key: 'sfx_breaker_deployed', path: 'assets/audio/sfx_breaker_deployed.mp3' },
   { key: 'sfx_building_destroyed', path: 'assets/audio/sfx_building_destroyed.mp3' },
+  { key: 'sfx_building_placed', path: 'assets/audio/sfx_building_placed.mp3' },
   { key: 'sfx_building_select', path: 'assets/audio/sfx_building_select.mp3' },
   { key: 'sfx_cannon_fire', path: 'assets/audio/sfx_cannon_fire.mp3' },
   { key: 'sfx_catapult_fire', path: 'assets/audio/sfx_catapult_fire.mp3' },

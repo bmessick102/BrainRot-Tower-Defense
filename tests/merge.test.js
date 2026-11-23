@@ -431,6 +431,10 @@ describe('Mastery research', () => {
   it('tiers in order, Burgers each, gated by RV Lab level, not part of the path lock', () => {
     const s = village({ research: { cannon: ['b'] } });
     const lab = s.buildings.find((b) => b.type === 'rvlab');
+    // No merged Cannon yet: the RV Lab shows the column greyed out and nothing can be researched.
+    expect(checkMastery(s, 'cannon')).toMatchObject({ ok: false, reason: `Needs a ${CONFIG.merges.cannon.name}: merge two at Level 10`, tier: 1 });
+    const [ca, cb] = pair(s, 'cannon');
+    mergeBuildings(s, ca.id, cb.id);
     lab.level = 2;
     expect(checkMastery(s, 'cannon')).toMatchObject({ ok: false, reason: 'Needs RV Lab level 3', tier: 1 });
     lab.level = 5;
