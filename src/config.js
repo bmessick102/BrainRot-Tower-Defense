@@ -811,7 +811,11 @@ export const CONFIG = {
           { name: 'Double Hook', desc: 'Harpoons the two toughest enemies in range at once.', fx: { harpoonHooks: 2 } }
         ]
       },
-      art: { key: 'bld_spear_merged', scale: 1.25, standInScale: 1.25 }
+      // Four facings like the Spear Thrower's own (turned toward its target; down-left is the plain picture for windows).
+      art: {
+        key: 'bld_spear_merged_dl', scale: 1.25, standInScale: 1.25,
+        facings: { dl: 'bld_spear_merged_dl', dr: 'bld_spear_merged_dr', ul: 'bld_spear_merged_ul', ur: 'bld_spear_merged_ur' }
+      }
     }
   },
   // Per Village Hall level (1-15). Every hall from 11 adds 12 walls. v0.8 (user, 2026-11-22; replaced v0.6.1's Bonus

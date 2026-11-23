@@ -2,7 +2,7 @@
 
 You are being asked to create a PowerPoint presentation (.pptx) about a video game that a small student team built. Everything you need to know is in this document. **Use only the facts written here (and in README.md, which is the source of truth). Do not invent features, numbers, quotes, release dates, or team members.** If something you want to say isn't in this document, leave it out.
 
-*This brief describes version 0.8.3.* The deck built from it is `docs/presentation/Italian_Brainrot_TD_v0.8.3.pptx` (the old v0.5 deck, `Italian_Brainrot_TD_v0.5.0.pptx`, is kept for reference).
+*This brief describes version 0.8.6.* The deck built from it is `docs/presentation/Italian_Brainrot_TD_v0.8.6.pptx` (the old v0.5 deck, `Italian_Brainrot_TD_v0.5.0.pptx`, is kept for reference).
 
 ---
 
@@ -13,7 +13,7 @@ You are being asked to create a PowerPoint presentation (.pptx) about a video ga
 - **Speaker notes on every slide:** 2 to 3 simple sentences to say out loud.
 - **Words per slide:** at most about 15 (headline plus one line), except the enemy and building grids (a name plus 3-6 words each). Plain language a 12-year-old gets. No code terms, config keys or file names on slides; words players see in the game are fine (Burgers, Village Hall, Mastery).
 - **Every enemy appears** (24 in all), on the slide for the Village Hall where players meet it (section 4).
-- **File size:** compress pictures; aim under about 40 MB (the v0.8.3 deck is about 14 MB).
+- **File size:** compress pictures; aim under about 40 MB (the v0.8.6 deck is about 16 MB).
 
 If anything below is unclear, make a sensible choice and say what you chose in one sentence at the end.
 
@@ -25,21 +25,21 @@ If anything below is unclear, make a sensible choice and say what you chose in o
 
 - **Play it:** https://bmessick102.github.io/BrainRot-Tower-Defense/
 - **Code:** https://github.com/bmessick102/BrainRot-Tower-Defense
-- **Current version:** 0.8.3
+- **Current version:** 0.8.6
 - It is an unofficial fan game, not endorsed by Supercell (the game's Credits carry Supercell's Fan Content Policy notice).
 
 ## 3. The team
 
 | Person | Role |
 | --- | --- |
-| Brady Messick | Code; owns the working prototype |
+| Brady Messick | Creator: the game concept, the design and every part of the game (code, art, sound, UI, testing) |
 | Robert | Code |
 | Cole Martin | Game art, sound effects, UI/UX |
 | Nathan DiCarlo | Testing, Kanban board |
 
 (These are the README's roles. The in-game Credits, `src/credits.js`, word some roles differently and also credit Supercell and Pixabay for sound effects and ChatGPT for AI-generated images, so **don't claim all art and sound was made by the team**.)
 
-**How we built it:** JavaScript, the **Phaser 3** game engine, **Vite**, and **Supabase** for logins, saves and the leaderboard; hosted on GitHub Pages. The code was written with an **AI coding assistant** under the team's direction. The game rules are plain functions with automated tests, and the tests run on every push before the game is published.
+**How we built it:** JavaScript, the **Phaser 3** game engine, **Vite**, and **Supabase** for logins, saves and the leaderboard; hosted on GitHub Pages. The code was written with an **AI coding assistant** under Brady's direction. The game rules are plain functions with automated tests, and the tests run on every push before the game is published.
 
 ---
 
@@ -47,7 +47,7 @@ If anything below is unclear, make a sensible choice and say what you chose in o
 
 Follow this order. Every content slide has a **stage marker** at the top right: a gold-rimmed pill ("VILLAGE HALL 3") with a row of 15 dots, filled up to that hall, so the progression is obvious. "Cards" are rounded dark panels with a cut-out picture on a soft glow: **red rim = enemy, green = your building, purple = new feature, orange = hero, gold = merged**.
 
-**1. Title.** The game logo over the title-screen art; tagline **"Memes are coming for your village."**; small line "A free tower defense game in your browser · v0.8.3". Cut-outs: Tung Tung Tung Sahur, the Sneaker Shark, the crocodile bomber.
+**1. Title.** The game logo over the title-screen art; tagline **"Memes are coming for your village."**; small line "Created by Brady Messick · Free in your browser · v0.8.6". Cut-outs: Tung Tung Tung Sahur, the Sneaker Shark, the crocodile bomber.
 
 **2. The idea in one breath.** "Build a village. Survive the brainrot." / "Endless waves. Free in your browser." Three icon rows: Build and upgrade · Beat endless meme waves · Play free, even on phones. Screenshot of a village by day.
 
@@ -65,7 +65,7 @@ Follow this order. Every content slide has a **stage marker** at the top right: 
 
 **9. Village Hall 4: "A king joins the fight."** The Brisket King guards his altar; Brisket Feast (once per wave) heals him, powers him up and slams nearby enemies. His levels cost Burgers. Enemies: **Tripi Tropi Tropi Tripa**, **John Pork**.
 
-**10. Village Hall 5: "Drop the beat. Freeze the field."** DJ Babyface (Drop the Beat: nearby defenses fire faster), KSI Tower (ice bottles slow enemies). Enemies: **Skibidi Toilet**, **Bri Bri Bicus Dicus**.
+**10. Village Hall 5: "Drop the beat. Freeze the field."** DJ Babyface (Drop the Beat: nearby defenses fire faster), KSI Tower (ice bottles slow enemies). Enemies: **Skibidi Toilet**, **Bri Bri Bicus Dicus** (with the armor shield, `ui_armor_shield`, under his card text).
 
 **11. "When night falls, memes get restless."** (marker: NIGHTFALL) The day/night cycle runs on its own (about 8 minutes). Restless nights: enemies hit harder and move faster, but pay +25% gold and Burgers. With no raid on, heroes walk home and sleep at their altar. Day and night screenshots side by side. (Day and night isn't tied to a Village Hall; it sits here in the story.)
 
@@ -81,7 +81,7 @@ Follow this order. Every content slide has a **stage marker** at the top right: 
 
 **17. Village Halls 11-15: "Five more Village Halls."** **Grimace Golem** (VH11, the last enemy). What each hall adds: 11: Tower of Rah, Gandolf, Diddypult, KSI, Cannon, Mine, Storage, House · 12: Tower of Rah, Gandolf · 13: Diddypult, KSI, Locklair, Storage · 14: Cannon, Mortar, Spear Thrower, F.L.O.C.K · 15: Tower of Rah, Firework, Mine, Storage, House · every hall +12 walls.
 
-**18. Merging: "Two maxed towers. One giant."** Two Level 10 copies merge (it still counts as two). The seven merged buildings and abilities: Mega Cannon (Rolling Thunder), Locklair Citadel (Ballista Bolt), Litman Triple Mortar (Triple Strike), Missile Silo (Sky Net), Gandolf the Grand (You Shall Not Pass), F.L.O.C.K Mothership (Triple Zap), Harpoon Ballista (Reel In). Eighth tile: the merge window screenshot. The Harpoon Ballista has no picture yet: show the Level 10 Spear Thrower with a gold glow, as the game does.
+**18. Merging: "Two maxed towers. One giant."** Two Level 10 copies merge (it still counts as two). The seven merged buildings and abilities: Mega Cannon (Rolling Thunder), Locklair Citadel (Ballista Bolt), Litman Triple Mortar (Triple Strike), Missile Silo (Sky Net), Gandolf the Grand (You Shall Not Pass), F.L.O.C.K Mothership (Triple Zap), Harpoon Ballista (Reel In). Eighth tile: the merge window screenshot. Each card has its ability icon (`ui_ability_*`) in a small gold box in its top-left corner, and the Harpoon Ballista shows its own picture (`bld_spear_merged_dl`).
 
 **19. "Then go for gold."** The gold Mastery column in the RV Lab: 3 Mastery tiers per merged tower, paid in Burgers; the gear badge marks a merged building.
 
@@ -89,9 +89,9 @@ Follow this order. Every content slide has a **stage marker** at the top right: 
 
 **21. "Climb the leagues. Visit any village."** Accounts and cloud saves (up to 5 villages), 26 achievements, the six leagues with their waves (Bronze 5, Silver 20, Gold 40, Crystal 70, Champion 110, WarLord 160), the leaderboard (one row per village), player profiles and visiting. Leaderboard and visit screenshots.
 
-**22. "Polished down to the title screen."** Animated title screen, What's New, How to Play, the home-screen app icon; a band of cut-outs with "Game art and sound effects by teammate Cole Martin".
+**22. "Polished down to the title screen."** Animated title screen, What's New, How to Play, the home-screen app icon; a band of cut-outs with "Game art and sound effects by Brady Messick and teammate Cole Martin, who also shaped the game UI".
 
-**23. "Made by a small team."** The four team cards (initials, name, role) and a "How we built it" band (section 3).
+**23. "Created by Brady Messick."** The four team cards (initials, name, role; Brady's says "Game creator: the concept, the design and every part of the game.") and a "How we built it" band (section 3).
 
 **24. Closer.** App icon; **"Play free in your browser."**; the link; "Desktop, phones and tablets. No install."; small "Unofficial fan game. Not endorsed by Supercell."
 

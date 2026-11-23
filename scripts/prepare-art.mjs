@@ -50,6 +50,8 @@ const TARGETS = [
   // Merged defenses (v0.8, CONFIG.merges[type].art.key): one picture each (bld_archer_merged, bld_mortar_merged), drawn
   // like the max-level picture. A merged Cannon may come in the 4 facings (_dl/_dr/_ul/_ur, one shared box) or as one.
   { match: /^bld_cannon_merged(_(dl|dr|ul|ur))?$/, width: 384, trim: 'group', needsAlpha: true },
+  // The Harpoon Ballista (v0.8.5): 4 facings like the Spear Thrower's, one shared box of their own.
+  { match: /^bld_spear_merged_(dl|dr|ul|ur)$/, width: 384, trim: 'group', needsAlpha: true },
   { match: /^bld_[A-Za-z]+_merged$/, width: 384, trim: true, needsAlpha: true },
   // The merged Firework Launcher aims left or right: both pictures share one box (same scale, the base doesn't jump).
   { match: /^bld_firework_merged_(left|right)$/, width: 384, trim: 'group', needsAlpha: true },

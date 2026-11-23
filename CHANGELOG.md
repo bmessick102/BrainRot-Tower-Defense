@@ -2,6 +2,14 @@
 
 The version shows in the bottom-left corner of every screen (`package.json` `version` plus the commit). Details for everything below are in [README.md](README.md).
 
+## 0.8.6
+
+The Harpoon Ballista's own picture, and an updated presentation. Saves load as they are.
+
+### Changes
+- **Harpoon Ballista art:** the user's four facing pictures (`Spear_Thrower_Merged.zip`, now in unused-assets/root/) are `art-source/buildings/bld_spear_merged_dl/_dr/_ul/_ur.png` (new prepare-art rule `bld_spear_merged_(dl|dr|ul|ur)`: one shared 384 px box, 384 x 512 webp). `CONFIG.merges.spear.art` is now `{ key: 'bld_spear_merged_dl', facings: { dl, dr, ul, ur }, scale: 1.25 }`, so BuildingView turns it toward its target and looks around when idle like the Mega Cannon, and the gold-glow stand-in (the Level 10 Spear Thrower drawn 1.25x) is gone. The What's New entry "Spear Throwers can merge" (0.8.3) now shows it (`icon: { texture: 'bld_spear_merged_dl' }`, was the Level 10 picture). Windows (merge window, Info, How to Play) show the down-left picture. The old `bld_spear_merged` key was never drawn (no file), so nothing else changes.
+- **Presentation:** `docs/presentation/Italian_Brainrot_TD_v0.8.6.pptx` replaces the v0.8.3 deck: the Harpoon Ballista's new picture and all seven painted ability icons (in gold boxes) on the merging slide, the new gear badge on the Mastery slide, the armor shield on Bri Bri Bicus Dicus's card, and Brady Messick credited as the game's creator (title slide, "Created by Brady Messick." team slide: the game concept, the design and every part of the game; art credit shared with Cole Martin; speaker notes to match). docs/POWERPOINT_BRIEF.md matches.
+
 ## 0.8.5
 
 Player cards, the leaderboard and Find Players all show the same, per-village numbers; a tesla-style Triple Zap; painted merged ability icons, a new merge gear and an armor shield. **Database:** run `supabase/migration-2026-11-23-village-ranks.sql` (after the 0.8.4 leaderboard fix). Saves load as they are.

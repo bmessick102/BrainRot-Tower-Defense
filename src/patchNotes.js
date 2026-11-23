@@ -19,8 +19,8 @@ const allEntries = (release) => release.sections.flatMap((s) => s.entries);
 
 export const PATCH_NOTES = {
   release: '0.8',
-  version: '0.8.5',
-  title: "What's New in v0.8.5",
+  version: '0.8.6',
+  title: "What's New in v0.8.6",
   sections: [
     {
       type: 'feature',
@@ -42,7 +42,7 @@ export const PATCH_NOTES = {
           text: 'Two Level 10 F.L.O.C.K Towers merge into the F.L.O.C.K Mothership, which finally fights back. Triple Zap: every second it zaps the 3 closest enemies at once, ground or air, and still marks everything in range.'
         },
         {
-          version: '0.8.3', icon: { building: 'spear', level: 10 }, title: 'Spear Throwers can merge: the Harpoon Ballista',
+          version: '0.8.3', icon: { texture: 'bld_spear_merged_dl' }, title: 'Spear Throwers can merge: the Harpoon Ballista',
           text: 'Two Level 10 Spear Throwers merge into the Harpoon Ballista, whose spears hit twice as hard. Reel In: every 3rd throw harpoons the toughest enemy in range and drags it 3 tiles back the way it came. Bosses are only slowed.'
         },
         {
@@ -73,6 +73,10 @@ export const PATCH_NOTES = {
         {
           version: '0.8.0', icon: { building: 'townHall', level: 11 }, title: 'Village Hall 11: new defenses instead of Bonus Slots',
           text: 'Bonus Slots are gone. Village Hall 11 now gives one more Tower of Rah, Gandolf, Diddypult, KSI Tower and Cannon. Villages keep every building they built with Bonus Slots: they all keep working, you just can’t build another of that kind until you’re under the limit.'
+        },
+        {
+          version: '0.8.6', icon: { texture: 'bld_spear_merged_dl' }, title: 'The Harpoon Ballista gets its own picture',
+          text: 'The Harpoon Ballista is no longer a glowing Spear Thrower: it has its own giant ballista tower, which turns to face the enemy it’s shooting.'
         },
         {
           version: '0.8.5', icon: { texture: 'bld_flock_merged' }, title: 'Triple Zap looks like a tesla coil',
