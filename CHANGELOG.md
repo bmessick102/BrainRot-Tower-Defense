@@ -2,6 +2,13 @@
 
 The version shows in the bottom-left corner of every screen (`package.json` `version` plus the commit). Details for everything below are in [README.md](README.md).
 
+## 0.8.10
+
+A smaller Harpoon Ballista. Saves load as they are.
+
+### Changes
+- **Harpoon Ballista smaller:** `CONFIG.merges.spear.art.scale` 1.15 -> 1.05, so its base sits inside its 2x2 tile and the plot's rim (GameScene `drawPlots`) shows around it on every side (at 1.15 the front corner and edges were covered).
+
 ## 0.8.9
 
 4x wave speed. Saves and settings load as they are.
