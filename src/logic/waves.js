@@ -13,8 +13,8 @@ import { emit, random, round2 } from './util.js';
 import { isRestless, nightLootMult } from './enrage.js';
 import { countedBuildings, starsFor, starBonus } from './waveStars.js';
 
-// The ways in (the 40 x 40 map's eight entrances, clockwise from the top; never the lake): gridConfig.js PATHS.
-export const PATHS = ['top', 'topRight', 'right', 'bottom', 'bottomLeft', 'left', 'upperLeft', 'topLeft'];
+// The ways in (the 40 x 40 map's seven entrances, clockwise from the top; never the lake): gridConfig.js PATHS.
+export const PATHS = ['top', 'topRight', 'right', 'bottom', 'bottomLeft', 'upperLeft', 'topLeft'];
 
 /** The most entrances a wave can use at Village Hall `th` (rules.entrancesByHall; past its end, the last). */
 export function entrancesForHall(th) {
@@ -512,6 +512,7 @@ export function checkWaveCleared(state) {
   state.nets = []; // Missile Silo nets (skyNet.js)
   state.barriers = []; // Gandolf the Grand's walls (wizardWall.js)
   state.shatters = []; // KSI Frost Fortress's bursts waiting to go off (shatter.js)
+  state.jugs = [];     // Diddy Trebuchet's oil jugs still in the air (barrelBurst.js)
   let ruins = repairAll(state);
   resetTraps(state); // every Mousetrap is set again for the next wave
   // Once per night: Last Stand; Spellsteal and Ready Rack start over.

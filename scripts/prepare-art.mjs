@@ -68,6 +68,8 @@ const TARGETS = [
   // out), so it's exported wider to keep the same detail; the game sizes both to the same height.
   { match: /^villager_gnome_work$/, width: 200, trim: true, needsAlpha: true },
   { match: /^villager_/, width: 128, trim: true, needsAlpha: true },
+  // Ground decoration (art-source/decor): the grass tuft scattered over the field (v0.9.1, src/objects/Ground.js).
+  { match: /^deco_/, width: 128, trim: true, needsAlpha: true },
   { match: /^proj_(slinger|bomb)$/, width: 48, trim: true, needsAlpha: true },
   { match: /^proj_cannon$/, width: 48, trim: true, needsAlpha: true },
   { match: /^proj_mortar$/, width: 64, trim: true, needsAlpha: true },

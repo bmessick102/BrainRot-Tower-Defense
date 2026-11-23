@@ -94,7 +94,8 @@ export const SFX = {
   wizardVoice: ['sfx_wizard_voice_1', 'sfx_wizard_voice_2'],
   bombExplode: 'sfx_bomber_bomb_impact', // a Bomber's bomb lands (7.6 s tail; capped at a few at once)
   bomberFlying: 'sfx_bomber_flying',     // plane drone while any Bomber is in the air (one shared loop; see AirHum)
-  enemyHitSmall: 'sfx_enemy_small_hit',  // a Grunt, Sneaker Shark or Mr. Least strikes a building or wall
+  enemyHitSmall: 'sfx_building_select',  // a Grunt, Sneaker Shark or Mr. Least strikes a building or wall (the same sound as
+                                         // clicking a building: its own copy, sfx_enemy_small_hit, was byte-for-byte that file; v0.9.1)
   enemyHitBig: 'sfx_enemy_big_hit',      // a Tank strikes a building or wall
   sharkJump: 'sfx_shark_jump',           // a Sneaker Shark leaps onto a wall
   enemyEliminated: 'sfx_enemy_eliminated', // any enemy dies (capped at a few at once)

@@ -19,8 +19,8 @@ const allEntries = (release) => release.sections.flatMap((s) => s.entries);
 
 export const PATCH_NOTES = {
   release: '0.9',
-  version: '0.9.0',
-  title: "What's New in v0.9",
+  version: '0.9.1',
+  title: "What's New in v0.9.1",
   sections: [
     {
       type: 'feature',
@@ -32,6 +32,27 @@ export const PATCH_NOTES = {
         {
           version: '0.9.0', icon: { enemy: 'grunt' }, title: 'Raids from 8 entrances',
           text: 'Enemies can come down every path, past the gate, over the bridge and across the waterfalls: everywhere but the lake. Bigger Village Halls open more at once (all 8 from Village Hall 13). Fog and markers show where the next wave comes from.'
+        },
+        {
+          version: '0.9.1', icon: { texture: 'bld_catapult_merged' }, title: 'Diddypults can merge: the Diddy Trebuchet',
+          text: 'Two Level 5 Diddypults merge into the Diddy Trebuchet, which hurls a giant barrel that hits twice as hard. Barrel Burst: the barrel bursts into oil jugs that splash all around it, each leaving its own slick pool.'
+        }
+      ]
+    },
+    {
+      type: 'change',
+      entries: [
+        {
+          version: '0.9.1', icon: { enemy: 'grunt' }, title: 'Raids from 7 entrances',
+          text: 'Enemies no longer come across the left waterfall: the path by the stone pillar right beside it already brings them in there. All 7 entrances are in play from Village Hall 13.'
+        },
+        {
+          version: '0.9.1', icon: { texture: 'deco_grass' }, title: 'Grass tufts and solid ground',
+          text: 'Grass tufts now grow across your field, just for looks: build or move something onto one and it\u2019s gone. Every building and wall also stands on a solid patch of grass instead of the checker, in your village and when you visit others.'
+        },
+        {
+          version: '0.9.1', icon: { texture: 'bld_flock_merged' }, title: 'F.L.O.C.K Mothership stands on its tile',
+          text: 'It now stands centered on its tile, its base reaching the tile\u2019s edge instead of covering it. F.L.O.C.K Towers are drawn a little smaller at every level, so the Mothership stands clearly above a Level 10 one.'
         }
       ]
     },

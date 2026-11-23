@@ -80,13 +80,13 @@ export const MAP_TEXTURE_WIDTH = 2672;
 export const TOWN_HALL_ANCHOR = [19, 19];
 
 /**
- * The eight ways enemies come in (never the lake on the bottom-right edge), clockwise from the top:
+ * The seven ways enemies come in (never the lake on the bottom-right edge; the left waterfall corner was dropped in
+ * v0.9.1, the pillar path beside it already brings enemies in there), clockwise from the top:
  *   top         the dirt path into the top corner
  *   topRight    the winding path past the gate on the top-right edge
  *   right       the right corner, across the waterfall's stream (no path: out of the forest)
  *   bottom      the dirt path into the bottom corner
  *   bottomLeft  over the bridge on the bottom-left edge
- *   left        the left corner, across the stream (no path: out of the forest)
  *   upperLeft   the path by the stone pillar near the left corner (top-left edge)
  *   topLeft     the path between the rocks halfway along the top-left edge
  * `entrance`: where it meets the grass (0.6 tile onto it). `edge`: where its enemies appear, in the spawn fog, about
@@ -101,7 +101,6 @@ export const PATHS = {
   right: { entrance: [39.4, 0.6], edge: [47.9, -8.1], via: [[44.1, -3.8], [41.7, -1.2]] },
   bottom: { entrance: [39.4, 39.4], edge: [48.9, 48.3], via: [[45.1, 44.5]] },
   bottomLeft: { entrance: [21.2, 39.4], edge: [21.6, 52.4], via: [[21.7, 49.7], [21.5, 45.2], [21.2, 40.7]] },
-  left: { entrance: [0.6, 39.4], edge: [-4.8, 47.7], via: [[-2.3, 44.2], [-0.8, 41.6]] },
   upperLeft: { entrance: [0.6, 34.2], edge: [-11.8, 30.4], via: [[-8.2, 31.7], [-4.2, 32.6]] },
   topLeft: { entrance: [0.6, 15], edge: [-11, 9.5], via: [[-9.3, 10.8], [-7.1, 12], [-4.7, 12.6], [0.1, 15]] }
 };

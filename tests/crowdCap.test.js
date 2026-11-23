@@ -34,7 +34,7 @@ describe('crowd cap', () => {
     triggerWave(s);
     expect(s.wave.pack).toBe(comp.pack);
     const pack = s.wave.pack;
-    const g = spawnEnemy(s, 'grunt', 'left', s.wave.hpMultiplier, pack);
+    const g = spawnEnemy(s, 'grunt', 'right', s.wave.hpMultiplier, pack);
     expect(g.pack).toBe(pack);
     expect(g.maxHp).toBe(Math.round(CONFIG.enemies.grunt.hp * s.wave.hpMultiplier * pack));
     // Its hits land `pack` times harder.
@@ -52,10 +52,10 @@ describe('crowd cap', () => {
 
   it('bosses are never packed; troops dropped by a packed balloon are', () => {
     const s = makeStateWithTownHall({ tutorialDone: true, tutorialStep: 10 }, 10);
-    const car = spawnEnemy(s, 'babycar', 'left', 2, 5);
+    const car = spawnEnemy(s, 'babycar', 'right', 2, 5);
     expect(car.pack).toBeUndefined();
     expect(car.maxHp).toBe(CONFIG.enemies.babycar.hp * 2);
-    const b = spawnEnemy(s, 'balloon', 'left', 1, 4);
+    const b = spawnEnemy(s, 'balloon', 'right', 1, 4);
     const [n] = dropTroopsAt(s, b, 'neegy', 1, 10, 10);
     expect(n.pack).toBe(4);
     expect(n.maxHp).toBe(CONFIG.enemies.neegy.hp * 4);
@@ -75,8 +75,8 @@ describe('crowd cap', () => {
 
   it('area damage hits a packed enemy several times over (it stands for a crowd); single hits do not', () => {
     const s = makeStateWithTownHall({ tutorialDone: true, tutorialStep: 10 }, 10);
-    const packed = spawnEnemy(s, 'tank', 'left', 1, 4);
-    const lone = spawnEnemy(s, 'tank', 'left', 1, 1);
+    const packed = spawnEnemy(s, 'tank', 'right', 1, 4);
+    const lone = spawnEnemy(s, 'tank', 'right', 1, 1);
     const mult = 4 ** CONFIG.rules.crowdCap.areaExponent;
     expect(areaPack(packed)).toBeCloseTo(mult, 6);
     expect(areaPack(lone)).toBe(1);
@@ -96,11 +96,11 @@ describe('crowd cap', () => {
 
   it("an enemy's level is how many times a basic one's health it has (packed ones included)", () => {
     const s = makeStateWithTownHall({ tutorialDone: true, tutorialStep: 10 }, 10);
-    expect(enemyLevel(spawnEnemy(s, 'grunt', 'left', 1, 1))).toBe(1);
-    expect(enemyLevel(spawnEnemy(s, 'grunt', 'left', 1.3, 1))).toBe(1);
-    expect(enemyLevel(spawnEnemy(s, 'tank', 'left', 3.09, 1))).toBe(3);
-    expect(enemyLevel(spawnEnemy(s, 'grunt', 'left', 15.66, 4.55))).toBe(71);
-    const hurt = spawnEnemy(s, 'tank', 'left', 4, 1);
+    expect(enemyLevel(spawnEnemy(s, 'grunt', 'right', 1, 1))).toBe(1);
+    expect(enemyLevel(spawnEnemy(s, 'grunt', 'right', 1.3, 1))).toBe(1);
+    expect(enemyLevel(spawnEnemy(s, 'tank', 'right', 3.09, 1))).toBe(3);
+    expect(enemyLevel(spawnEnemy(s, 'grunt', 'right', 15.66, 4.55))).toBe(71);
+    const hurt = spawnEnemy(s, 'tank', 'right', 4, 1);
     damageEnemy(s, hurt, 500);
     expect(enemyLevel(hurt)).toBe(4); // damage doesn't change it
   });

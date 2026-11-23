@@ -56,6 +56,16 @@ function drawSymbol(g, key, r) {
     g.beginPath().arc(-r * 0.24, r * 0.3, r * 0.24, 0, Math.PI, false).strokePath();
     g.fillTriangle(-r * 0.56, r * 0.36, -r * 0.4, r * 0.36, -r * 0.48, r * 0.08); // the barb
     g.fillStyle(0xfff0c0, 1).fillCircle(0, -r * 0.14, r * 0.07);
+  } else if (key === 'ui_ability_barrel_burst') {
+    // A barrel bursting: a barrel's outline with two hoops, and four drops (oil jugs) flying out of it.
+    g.lineStyle(Math.max(2, r * 0.12), INK, 1);
+    g.strokeRoundedRect(-r * 0.3, -r * 0.36, r * 0.6, r * 0.72, r * 0.16);
+    g.lineBetween(-r * 0.3, -r * 0.14, r * 0.3, -r * 0.14).lineBetween(-r * 0.3, r * 0.14, r * 0.3, r * 0.14);
+    g.fillStyle(INK, 1);
+    for (const [x, y] of [[-0.62, -0.5], [0.62, -0.5], [-0.62, 0.5], [0.62, 0.5]]) {
+      g.fillCircle(r * x, r * y + r * 0.04, r * 0.09);
+      g.fillTriangle(r * (x - 0.08), r * y, r * (x + 0.08), r * y, r * x, r * (y - 0.16));
+    }
   } else if (key === 'ui_ability_shatter') {
     // An ice crystal cracking apart: a diamond split by cracks, with shards flying off its sides.
     const d = [[0, -0.58], [0.4, 0], [0, 0.58], [-0.4, 0]];

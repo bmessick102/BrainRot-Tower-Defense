@@ -53,7 +53,7 @@ describe('very high waves', () => {
     const s = stateAtWave(1000);
     triggerWave(s, 0);
     for (const k of ENEMY_KINDS) {
-      const e = spawnEnemy(s, k, 'left', s.wave.hpMultiplier, s.wave.pack);
+      const e = spawnEnemy(s, k, 'right', s.wave.hpMultiplier, s.wave.pack);
       expect(Number.isFinite(e.hp) && e.hp > 0).toBe(true);
       expect(e.maxHp).toBeLessThan(Number.MAX_SAFE_INTEGER / 1e6);
     }

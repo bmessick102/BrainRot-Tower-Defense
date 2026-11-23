@@ -18,8 +18,20 @@ Older versions of the title picture (`ui_title_background_v1`-`v5`) are in `docs
 
 ## root/ (on disk only, git-ignored)
 
-Raw files that were dropped into the project root to be installed. Each one is byte-for-byte the same as a
-file the game already uses, so they're only originals with their first names:
+Raw files that were dropped into the project root to be installed.
+
+**v0.9.1 cleanup:** every drop that was byte-for-byte the same as an installed file was deleted (118 files, 147 MB),
+as were this session's root drops (`Merged Diddypult building image v2.png` -> `art-source/buildings/bld_catapult_merged.png`,
+`ui_ability_barrel_burst.png` -> `art-source/ui/ui_ability_barrel_burst.png`, `Merged KSI Tower Image.png` ->
+`art-source/buildings/bld_ksi_merged.png`, `Building destroyed Sound.mp3` -> `art-source/audio/sfx_building_destroyed.mp3`).
+The tables below stay as the record of each drop's first name. What's still on disk here is only what isn't a copy:
+`Gear Icon Image.png`, `Merged Mortar Image.png`, `Merged Litman Mortar V2.png` (pre-crop originals),
+`Merge Building Sound.mov` (the video the merge sound came from), `sfx_ability_unlocked_v1.mp3` (the old perk sound),
+the three art zips (`merged cannon_sprites.zip`, `Spear_Thrower.zip`, `Spear_Thrower_Merged.zip`), and
+`iBTD_40x40_grid.zip` (v0.9.0: another agent's 40 x 40 grid fit, its gridded map exports and screenshots; superseded by
+the maps with the tiles drawn on, `art-source/map/`).
+
+The drops as they were:
 
 | Dropped file | Installed as |
 | --- | --- |

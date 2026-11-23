@@ -29,7 +29,7 @@ describe('Skibidi Toilet (burrower)', () => {
 
   it('starts underground and tunnels straight in from the map edge (no dirt-path march)', () => {
     const s = makeStateWithTownHall({}, 6);
-    const e = spawnEnemy(s, 'toilet', 'left', 1);
+    const e = spawnEnemy(s, 'toilet', 'right', 1);
     expect(e.underground).toBe(true);
     expect(e.entry || null).toBe(null);
   });

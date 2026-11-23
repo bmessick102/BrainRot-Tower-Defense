@@ -151,6 +151,7 @@ export function mergedSizeFactor(scene, b) {
 // Silo's rocket nose, the Harpoon Ballista's bolt tip and the KSI Frost Fortress's bottle. Used by ProjectileView (shots), HarpoonFx (the chain) and
 // NetFx (the Sky Net rocket); see BuildingView.muzzlePoint.
 export const MERGED_MUZZLE = {
+  bld_catapult_merged: { x: 0.31, y: 0.8 }, // the Diddy Trebuchet's barrel, upper left in its arm
   bld_cannon_merged_dl: { x: 0.26, y: 0.65 }, bld_cannon_merged_dr: { x: 0.74, y: 0.65 },
   bld_cannon_merged_ul: { x: 0.14, y: 0.80 }, bld_cannon_merged_ur: { x: 0.86, y: 0.80 },
   bld_archer_merged: { x: 0.47, y: 0.88 },
@@ -181,7 +182,7 @@ const DEFAULT_SPRITE_SCALE = 0.75;
 // KSI Tower: a tall, slim tower like the Locklair's, a little narrower than the default. (The merged KSI Frost Fortress
 // stands further back on its plot instead, CONFIG.merges.ksi.art.ground, so it fits the tile's outline at this size.)
 // Mortar: 0.585 (was 0.65, v0.8: 10% smaller at every level so the 25% bigger merged Triple Mortar stands out).
-const SPRITE_SCALE = { mortar: 0.585, cannon: 0.63, firework: 0.52, catapult: 0.66, spear: 0.66, ksi: 0.62, flock: 1.15, mousetrap: 1.1, ra: 0.54, rvlab: 0.77, dj: 0.77, altar: 0.66, queenAltar: 0.66, fuelStation: 0.8 };
+const SPRITE_SCALE = { mortar: 0.585, cannon: 0.63, firework: 0.52, catapult: 0.66, spear: 0.66, ksi: 0.62, flock: 0.9, mousetrap: 1.1, ra: 0.54, rvlab: 0.77, dj: 0.77, altar: 0.66, queenAltar: 0.66, fuelStation: 0.8 };
 
 // Buildings grow as they level up: this share of their normal size at Level 1, up to LEVEL_SIZE.max at
 // their top level (Level 10, or the type's own top level). They only grow on upgrades that keep the same

@@ -16,6 +16,26 @@ const MEGA_BALL_WIDTH = 40; // a Mega Cannon's cannonball (Rolling Thunder), nea
 // Other shots from merged defenses are drawn this much bigger than their kind's width (the Missile Silo's rockets).
 const MERGED_SCALE = { cannon: 2.6, firework: 1.8 };
 const BOLT_WIDTH = 56;      // a Locklair Citadel's Ballista Bolt: a big arrow
+const BARREL_WIDTH = 34;    // a Diddy Trebuchet's giant barrel (Barrel Burst), about twice an oil jug
+const BARREL_SPIN = 0.07;   // radians per frame: it tumbles slowly through its lob
+export const BARREL_TEX = 'proj_barrel';
+
+/** The giant barrel's picture (drawn once, in code): wooden staves, two iron hoops, a dark lid. */
+export function ensureBarrelTexture(scene) {
+  if (scene.textures.exists(BARREL_TEX)) return BARREL_TEX;
+  const W = 56, H = 64, g = scene.make.graphics({ x: 0, y: 0 }, false);
+  g.fillStyle(0x7a4a22, 1).fillRoundedRect(2, 4, W - 4, H - 8, 16);           // the body
+  g.fillStyle(0xa8682f, 1).fillRoundedRect(8, 6, W - 16, H - 12, 14);         // lit middle
+  g.lineStyle(2, 0x5a3416, 0.9);
+  for (const x of [17, 28, 39]) g.lineBetween(x, 8, x, H - 8);               // staves
+  g.fillStyle(0x3d3d46, 1).fillRect(2, 15, W - 4, 6).fillRect(2, H - 21, W - 4, 6); // hoops
+  g.fillStyle(0x9a9aa8, 1).fillRect(4, 16, W - 8, 2).fillRect(4, H - 20, W - 8, 2);
+  g.fillStyle(0x4a2a10, 1).fillEllipse(W / 2, 6, W - 14, 9);                  // the lid
+  g.lineStyle(2, 0x2a1606, 1).strokeRoundedRect(2, 4, W - 4, H - 8, 16);
+  g.generateTexture(BARREL_TEX, W, H);
+  g.destroy();
+  return BARREL_TEX;
+}
 const ROLL_LIFT = 12;       // a rolling Mega Cannon ball settles to this height over the ground (px)
 const SHURIKEN_SPIN = 0.35; // radians per frame the Slinger's shuriken turns in flight
 // The bomb picture's nose points left (180°): turn it so the nose leads the way down.
@@ -49,9 +69,10 @@ export class ProjectileView {
     this.scene = scene;
     this.id = p.id;
     this.kind = p.kind;
-    this.image = scene.add.image(0, 0, PROJECTILE_KEYS[p.kind]).setDepth(2000);
-    // Merged defenses' shots: the Mega Cannon's huge cannonball, the Locklair Citadel's ballista bolt.
-    const w = p.mega ? MEGA_BALL_WIDTH : p.bolt ? BOLT_WIDTH : (DISPLAY_WIDTH[p.kind] || 12) * (p.merged ? MERGED_SCALE[p.kind] || 1 : 1);
+    this.barrel = !!p.barrel; // a Diddy Trebuchet's giant barrel (Barrel Burst)
+    this.image = scene.add.image(0, 0, this.barrel ? ensureBarrelTexture(scene) : PROJECTILE_KEYS[p.kind]).setDepth(2000);
+    // Merged defenses' shots: the Mega Cannon's huge cannonball, the Locklair Citadel's ballista bolt, the Diddy Trebuchet's barrel.
+    const w = p.mega ? MEGA_BALL_WIDTH : p.bolt ? BOLT_WIDTH : this.barrel ? BARREL_WIDTH : (DISPLAY_WIDTH[p.kind] || 12) * (p.merged ? MERGED_SCALE[p.kind] || 1 : 1);
     this.image.setScale(w / this.image.frame.width);
     if (p.bolt) this.image.setTint(0xffe2b0);
     this.last = null;
@@ -150,7 +171,7 @@ export class ProjectileView {
       if (dir !== null) this.image.setRotation(dir - BOMB_NOSE_ANGLE);
     }
     if (p.kind === 'slinger') this.image.rotation += SHURIKEN_SPIN;
-    if (LOBBED[p.kind] || p.kind === 'ksi') this.image.rotation += p.kind === 'catapult' || p.kind === 'ksi' || p.kind === 'ksiBounce' ? 0.18 : 0.12;
+    if (LOBBED[p.kind] || p.kind === 'ksi') this.image.rotation += this.barrel ? BARREL_SPIN : p.kind === 'catapult' || p.kind === 'ksi' || p.kind === 'ksiBounce' ? 0.18 : 0.12;
     // A bouncing boulder leaves from the ground again at each hop.
     if (p.kind === 'vaca' && p.fromBlast && !this.bouncing) { this.bouncing = true; this.launchOff = { x: 0, y: -6 }; }
     this.image.setPosition(x, y);

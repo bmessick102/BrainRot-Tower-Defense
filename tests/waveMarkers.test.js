@@ -103,10 +103,9 @@ describe('wave markers (world-space wave preview)', () => {
       const { entrance, edge } = pathEnds(path);
       expect(pathAngle(path)).toBeCloseTo(arrowAngle(edge, entrance), 6);
     }
-    // Top and bottom come straight down / up into their corners, the waterfall corners straight across.
+    // Top and bottom come straight down / up into their corners, the right waterfall corner straight across.
     expect(Math.sin(pathAngle('top'))).toBeGreaterThan(0.9);     // down
     expect(Math.sin(pathAngle('bottom'))).toBeLessThan(-0.9);  // up
-    expect(Math.cos(pathAngle('left'))).toBeGreaterThan(0.9);   // right
     expect(Math.cos(pathAngle('right'))).toBeLessThan(-0.9);   // left
     expect(Math.cos(pathAngle('topRight'))).toBeLessThan(-0.3); // down and to the left
     expect(Math.sin(pathAngle('topRight'))).toBeGreaterThan(0.3);

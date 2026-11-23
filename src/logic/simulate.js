@@ -14,6 +14,7 @@ import { stepWizardWalls } from './wizardWall.js';
 import { stepFlockZaps } from './flockZap.js';
 import { stepHarpoons } from './harpoon.js';
 import { stepShatters } from './shatter.js';
+import { stepJugs } from './barrelBurst.js';
 import { stepFlockTowers } from './flock.js';
 import { stepSpecialEnemies } from './specialEnemies.js';
 import { stepTraps } from './traps.js';
@@ -56,6 +57,7 @@ export function simulate(state, dt) {
   if (!state.gameOver) stepBeams(state, dt); // Tower of Rah beams
   if (!state.gameOver) stepProjectiles(state, dt);
   if (!state.gameOver) stepPools(state, dt);
+  if (!state.gameOver) stepJugs(state, dt); // Diddy Trebuchet (merged Diddypult): Barrel Burst jugs landing (barrelBurst.js)
   if (!state.gameOver) stepStrikes(state, dt); // Arrow Storms / Meteors landing
   if (!state.gameOver) stepEnemyStatus(state, dt); // burning / poisoned enemies, vulnerability timers
   if (!state.gameOver) stepShatters(state, dt); // KSI Frost Fortress (merged KSI Tower): Shatter bursts (shatter.js)

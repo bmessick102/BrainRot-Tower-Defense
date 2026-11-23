@@ -43,7 +43,7 @@ describe('edge spawning', () => {
     }
   });
 
-  it('there are 8 entrances, every one with a spawn, a route and an entrance on the grass', () => {
+  it('there are 7 entrances, every one with a spawn, a route and an entrance on the grass', () => {
     expect(Object.keys(MAP.spawnPoints).sort()).toEqual([...PATHS].sort());
     for (const path of PATHS) {
       const [sx, sy] = MAP.spawnPoints[path];

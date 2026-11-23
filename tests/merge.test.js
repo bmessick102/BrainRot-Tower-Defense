@@ -19,6 +19,8 @@ import { wallStats, wallLines, raiseWalls, stepWizardWalls, distToSegment } from
 import { zapStats, zapTargets, zap, empPulse, stepFlockZaps } from '../src/logic/flockZap.js';
 import { harpoonStats, harpoonTargets, hookEnemy, stepHarpoons } from '../src/logic/harpoon.js';
 import { shatterStats, markShatter, stepShatters } from '../src/logic/shatter.js';
+import { barrelStats, jugSpots, stepJugs } from '../src/logic/barrelBurst.js';
+import { simulate } from '../src/logic/simulate.js';
 import { stepFlockTowers } from '../src/logic/flock.js';
 import { facingToward, mergedFacingKey } from '../src/logic/merge.js';
 
@@ -40,8 +42,8 @@ const volley = (s, b, seconds = 3) => {
 const tough = (s, kind, x, y, extra = {}) => addEnemy(s, kind, x, y, { hp: 1e7, maxHp: 1e7, ...extra });
 
 describe('merging: rules', () => {
-  it('Cannon, Locklair Tower, Litman Mortar, Firework Launcher, Gandolf Tower, F.L.O.C.K Tower, Spear Thrower and KSI Tower can merge, data-driven', () => {
-    expect(MERGE_TYPES).toEqual(['cannon', 'archer', 'mortar', 'firework', 'wizard', 'flock', 'spear', 'ksi']);
+  it('Cannon, Locklair Tower, Litman Mortar, Firework Launcher, Gandolf Tower, F.L.O.C.K Tower, Spear Thrower, KSI Tower and Diddypult can merge, data-driven', () => {
+    expect(MERGE_TYPES).toEqual(['cannon', 'archer', 'mortar', 'firework', 'wizard', 'flock', 'spear', 'ksi', 'catapult']);
     for (const t of MERGE_TYPES) {
       const m = CONFIG.merges[t];
       expect(m.mastery.tiers).toHaveLength(3);
@@ -513,8 +515,8 @@ describe('saves', () => {
     expect(bad((o) => { o.buildings.find((x) => x.type === 'archer').level = 9; o.buildings.find((x) => x.type === 'archer').merged = true; })).toBe('invalid');
     expect(bad((o) => { o.buildings.find((x) => x.type === 'rvlab').merged = true; })).toBe('invalid');
     expect(bad((o) => { o.mastery = { archer: 4 }; })).toBe('invalid');
-    expect(bad((o) => { o.mastery = { catapult: 1 }; })).toBe('invalid');
-    expect(bad((o) => { o.freeRespecs = ['catapult']; })).toBe('invalid');
+    expect(bad((o) => { o.mastery = { ra: 1 }; })).toBe('invalid');       // (the Tower of Rah doesn't merge)
+    expect(bad((o) => { o.freeRespecs = ['ra']; })).toBe('invalid');
     expect(bad((o) => { o.buildings.find((x) => x.type === 'archer').merged = true; })).toBe('ok');
   });
 });
@@ -1014,7 +1016,7 @@ describe('merged balance (v0.8: counts as two buildings)', () => {
     expect(CONFIG.merges.firework.name).toBe('Missile Silo');
     expect(CONFIG.merges.firework.ability).toBe('Sky Net');
     expect(MERGE_TYPES.map((t) => CONFIG.merges[t].abilityIcon).sort()).toEqual(
-      ['ui_ability_ballista_bolt', 'ui_ability_reel_in', 'ui_ability_rolling_thunder', 'ui_ability_shall_not_pass', 'ui_ability_shatter', 'ui_ability_sky_net', 'ui_ability_triple_strike', 'ui_ability_triple_zap']);
+      ['ui_ability_ballista_bolt', 'ui_ability_barrel_burst', 'ui_ability_reel_in', 'ui_ability_rolling_thunder', 'ui_ability_shall_not_pass', 'ui_ability_shatter', 'ui_ability_sky_net', 'ui_ability_triple_strike', 'ui_ability_triple_zap']);
     expect(CONFIG.merges.wizard).toMatchObject({ name: 'Gandolf the Grand', ability: 'You Shall Not Pass' });
   });
 
@@ -1027,5 +1029,132 @@ describe('merged balance (v0.8: counts as two buildings)', () => {
       expect(dps).toBeGreaterThanOrEqual(1.99);
       expect(dps).toBeLessThanOrEqual(2.05);
     }
+  });
+});
+
+describe('Diddy Trebuchet: Barrel Burst', () => {
+  const B = CONFIG.merges.catapult.barrelBurst;
+  const setup = (research = {}, mastery = 0) => {
+    const s = village({ research });
+    const [a, b] = pair(s, 'catapult');
+    mergeBuildings(s, a.id, b.id);
+    fight(s);
+    if (mastery) { s.mastery = { catapult: mastery }; syncMastery(s); }
+    return { s, t: a, cx: a.col + a.size / 2, cy: a.row + a.size / 2 };
+  };
+  const barrel = () => levelStats('catapult', 5).damage * CONFIG.merges.catapult.damageMult;
+  const poolDps = () => levelStats('catapult', 5).poolDps * CONFIG.merges.catapult.damageMult;
+  // Fire one barrel at an enemy 10 tiles away (past the 6-tile blind spot) and let it land.
+  const shootAt = (s, t, cx, cy) => { const e = tough(s, 'grunt', cx + 10, cy); volley(s, t, 2); return e; };
+
+  it('two Level 5 Diddypults merge into the Diddy Trebuchet; a Level 4 one only shows the greyed Merge', () => {
+    const s = village();
+    const low = addBuilding(s, 'catapult', 5, 5, 4);
+    expect(checkMerge(s, low)).toMatchObject({ show: false, preview: true, reason: 'Needs Level 5' });
+    const [a, b] = pair(s, 'catapult');
+    expect(checkMerge(s, a)).toMatchObject({ show: true });
+    mergeBuildings(s, a.id, b.id);
+    expect(a.merged).toBe(true);
+    expect(displayName(a)).toBe('Diddy Trebuchet');
+    expect(maxHp(a)).toBe(levelStats('catapult', 5).hp * 2);
+  });
+
+  it('a barrel bursts where it lands: 4 jugs 2 tiles out on the diagonals, landing 0.4 s later for 50% and a 1-tile pool each', () => {
+    const { s, t, cx, cy } = setup();
+    const target = shootAt(s, t, cx, cy);
+    const [ix, iy] = [target.x, target.y];
+    expect(1e7 - target.hp).toBeCloseTo(barrel());
+    expect(events(s, 'barrelBurst')).toHaveLength(1);
+    expect(s.jugs).toHaveLength(4);
+    const d = B.distance / Math.SQRT2;
+    const want = [[d, d], [-d, d], [-d, -d], [d, -d]].map(([dx, dy]) => [ix + dx, iy + dy]);
+    for (const [wx, wy] of want) expect(s.jugs.some((j) => Math.hypot(j.x - wx, j.y - wy) < 1e-6)).toBe(true);
+    const atJug = want.map(([x, y]) => tough(s, 'grunt', x, y));
+    const pools = () => s.pools.filter((q) => q.kind === 'catapult');
+    expect(pools()).toHaveLength(1);
+    stepJugs(s, B.delay - 0.05);
+    expect(s.jugs).toHaveLength(4);                       // not yet
+    stepJugs(s, 0.06);
+    expect(s.jugs).toHaveLength(0);
+    for (const e of atJug) expect(1e7 - e.hp).toBeCloseTo(barrel() * B.mult);
+    expect(pools()).toHaveLength(5);                      // the barrel's own + one per jug
+    expect(pools().filter((q) => q.radius === B.poolRadius)).toHaveLength(4);
+    expect(new Set(pools().map((q) => q.group)).size).toBe(1);
+    expect(pools().every((q) => q.dps === poolDps())).toBe(true); // x2 like the impact
+    expect(events(s, 'jugLanded')).toHaveLength(4);
+  });
+
+  it("an enemy standing in several of its pools takes one pool's damage per tick", () => {
+    const { s, t, cx, cy } = setup();
+    const target = shootAt(s, t, cx, cy);
+    const [ix, iy] = [target.x, target.y];
+    target.x += 40; // out of the way
+    stepJugs(s, B.delay + 0.01);
+    const both = tough(s, 'grunt', ix + 0.9, iy + 0.9); // in the barrel's pool and a jug's
+    const one = tough(s, 'grunt', ix - 1.2, iy);        // in the barrel's pool only
+    for (let i = 0; i < 20; i++) stepPools(s, 0.05);
+    expect(1e7 - both.hp).toBeCloseTo(1e7 - one.hp);
+    expect(1e7 - one.hp).toBeCloseTo(poolDps(), 0);
+  });
+
+  it('Mastery: More Jugs (6), Wide Spray (3 tiles, 1.25-tile pools), Tar Pit (its own pool slows 60% for 10 s)', () => {
+    const { s, t, cx, cy } = setup({}, 3);
+    expect(barrelStats(t)).toMatchObject({ jugs: 6, distance: 3, poolRadius: 1.25, tarSlow: 0.6, tarSeconds: 10 });
+    const target = shootAt(s, t, cx, cy);
+    expect(s.jugs).toHaveLength(6);
+    for (const j of s.jugs) expect(Math.hypot(j.x - target.x, j.y - target.y)).toBeCloseTo(3);
+    const main = s.pools.find((q) => q.kind === 'catapult');
+    expect(main).toMatchObject({ slow: 0.6, duration: 10 });
+    stepJugs(s, B.delay + 0.01);
+    const jugPools = s.pools.filter((q) => q.kind === 'catapult' && q !== main);
+    expect(jugPools).toHaveLength(6);
+    expect(jugPools.every((q) => q.radius === 1.25 && q.duration === CONFIG.defenses.catapult.pool.duration && q.slow === CONFIG.defenses.catapult.pool.slow)).toBe(true);
+    // 6 evenly spread jugs, the first on a diagonal
+    expect(jugSpots(20, 20, 6, 3).map((p) => Math.round(Math.atan2(p.y - 20, p.x - 20) * 180 / Math.PI))).toEqual([45, 105, 165, -135, -75, -15]);
+  });
+
+  it('Boulder shots roll with no burst, and Hangover / Concussion come only from the barrel, never the jugs', () => {
+    const boulder = setup({ catapult: ['b', 'b', 'b', 'b', 'b'] });
+    boulder.t.shots = 3;                                 // the next shot is the 4th: a boulder
+    shootAt(boulder.s, boulder.t, boulder.cx, boulder.cy);
+    expect(events(boulder.s, 'barrelBurst')).toHaveLength(0);
+    expect(boulder.s.jugs || []).toHaveLength(0);
+    const { s, t, cx, cy } = setup({ catapult: ['c', 'c', 'c'] }); // Long Arm, Hangover, Concussion
+    const target = shootAt(s, t, cx, cy);
+    expect(target.wanderT).toBeGreaterThan(0);
+    expect(target.held).toBeGreaterThan(0);
+    const d = B.distance / Math.SQRT2;
+    const atJug = tough(s, 'grunt', target.x + d, target.y + d);
+    stepJugs(s, B.delay + 0.01);
+    expect(1e7 - atJug.hp).toBeCloseTo(barrel() * B.mult);
+    expect(atJug.wanderT || 0).toBe(0);
+    expect(atJug.held || 0).toBe(0);
+  });
+
+  it('Big Jug doubles only the barrel; Splash Zone makes jugs landing in its pool hit harder', () => {
+    const { s, t, cx, cy } = setup({ catapult: ['b', 'b', 'b'] }); // Splash Zone, Oil Moat, Big Jug
+    t.shots = 2;                                         // the next shot is the 3rd: a big jug
+    const target = shootAt(s, t, cx, cy);
+    const main = s.pools.find((q) => q.kind === 'catapult');
+    expect(main.radius).toBeCloseTo(CONFIG.defenses.catapult.pool.radius * 2);
+    expect(s.jugs.every((j) => j.damage === barrel() * B.mult && j.pool.radius === B.poolRadius)).toBe(true);
+    // A jug spot inside the big pool: that enemy is in a pool when its jug lands (Splash Zone: x2).
+    const d = B.distance / Math.SQRT2;
+    const inPool = tough(s, 'grunt', target.x + d, target.y + d);
+    stepPools(s, 0.05);
+    stepJugs(s, B.delay + 0.01);
+    expect(1e7 - inPool.hp).toBeGreaterThanOrEqual(barrel() * B.mult * 2 - 1e-6);
+  });
+
+  it('runs in the simulation like any merged ability: barrels burst and jug pools land in a real step loop', () => {
+    const { s, t, cx, cy } = setup();
+    const e = tough(s, 'grunt', cx + 10, cy);
+    e.speed = 0; e.held = 99; // stand still
+    t.cooldown = 0;
+    for (let i = 0; i < 60; i++) simulate(s, 0.05);   // 3 s: fire, 1.8 s lob, 0.4 s jugs
+    expect(events(s, 'barrelBurst').length).toBeGreaterThanOrEqual(1);
+    expect(events(s, 'jugLanded').length).toBeGreaterThanOrEqual(4);
+    expect(s.pools.filter((q) => q.kind === 'catapult').length).toBeGreaterThanOrEqual(5);
+    expect(serializeGame(s).jugs).toBeUndefined(); // jugs in the air aren't saved
   });
 });

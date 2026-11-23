@@ -11,6 +11,7 @@ import { footprintCenter, fpW, fpH } from '../logic/grid.js';
 import { parseSave, deserializeGame } from '../logic/save.js';
 import { getCapacity } from '../logic/economy.js';
 import { BuildingView } from '../objects/BuildingView.js';
+import { GrassTufts, drawGroundPlots, groundColor } from '../objects/Ground.js';
 import { WallView } from '../objects/WallView.js';
 import { requestImages } from '../assetLoader.js';
 import { Button } from '../objects/Button.js';
@@ -118,6 +119,9 @@ Tap Back to return.`, textStyle(24)).setOrigin(0.5).setAlign('center').setScroll
     gs.townHall = data.buildings.find((b) => b.type === 'townHall') || null;
     gs.getBuilding = (id) => data.buildings.find((b) => b.id === id) || null;
     this.gs = gs;
+    // The ground (v0.9.1, as in your own village): solid grass under every building and wall, and the village's grass tufts.
+    drawGroundPlots(this.add.graphics().setDepth(-9000), data.buildings, groundColor(null));
+    new GrassTufts(this, data.decorSeed).layout(data.buildings);
     for (const b of data.buildings) {
       try { this.views.set(b.id, b.type === 'wall' ? new WallView(this, b) : new BuildingView(this, b)); } catch (e) { console.error('VisitScene: could not draw', b.type, e); }
     }

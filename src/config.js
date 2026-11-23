@@ -18,10 +18,10 @@ export const CONFIG = {
     // Everything destroyed in a night is rebuilt for free when the wave is beaten. During a wave a destroyed
     // building (not a wall) can be rebuilt early for this share of its current level's cost.
     rebuildCostShare: 0.3,
-    // The most entrances (MAP paths, 8 on the 40 x 40 map) a wave can come in from, per Village Hall level (VH1 first;
-    // past the end, the last). Each wave picks a random number from 1 up to it (waves.js planPaths), the same enemies
-    // spread across them; wave 1 always comes from the top. Every entrance is in play from Village Hall 13.
-    entrancesByHall: [1, 2, 2, 3, 3, 4, 4, 5, 5, 6, 6, 7, 8, 8, 8],
+    // The most entrances (MAP paths, 7 on the 40 x 40 map since v0.9.1) a wave can come in from, per Village Hall level
+    // (VH1 first; past the end, the last). Each wave picks a random number from 1 up to it (waves.js planPaths), the same
+    // enemies spread across them; wave 1 always comes from the top. Every entrance is in play from Village Hall 13.
+    entrancesByHall: [1, 2, 2, 3, 3, 4, 4, 5, 5, 6, 6, 6, 7, 7, 7],
     // Rebuilding is always paid in gold. A level bought with Burgers (RV Lab, Fuel Station, Brisket King) counts
     // as this much gold per Burger, so its rebuild price grows with the level like every other building's.
     burgerGoldValue: 15,
@@ -795,9 +795,12 @@ export const CONFIG = {
           { name: 'EMP Pulse', desc: 'Every 12 s, a pulse stuns every enemy in zap range for 0.75 s (bosses are slowed).', fx: { empEvery: 12, empSeconds: 0.75 } }
         ]
       },
-      // v0.9.0: 0.7 -> 1.2. 0.7 (v0.8.8, to show the tile's outline) drew it smaller than a top-level (6) F.L.O.C.K Tower,
-      // which is already wider than its one tile; at 1.2 it stands 20% wider and ~15% taller (83 x 120 vs 69 x 105 px).
-      art: { key: 'bld_flock_merged', scale: 1.2, standInScale: 1.25 }
+      // Its base is a diamond whose side corners are 16% of the way up the picture and span its full width, so it stands by
+      // them (`ground` 0.16 goes on the tile's center, BuildingView). The user's pick (v0.9.1): the base's corners on the
+      // tile's edge (1.02 tiles wide). The F.L.O.C.K Tower was then drawn smaller (SPRITE_SCALE.flock 1.15 -> 0.9) so a
+      // Level 10 one stands clearly below it; 1.15 keeps the Mothership the same size (0.9 x 1.15 = 1.15 x 0.9): at zoom 2
+      // it's 66 x 95 px against a Level 10 F.L.O.C.K Tower's 57 x 87.
+      art: { key: 'bld_flock_merged', scale: 1.15, standInScale: 1.25, ground: 0.16 }
     },
     // Harpoon Ballista (v0.8.3): spears at 2x damage (2x DPS). Reel In (harpoon.js): every `every`th throw is a harpoon at
     // the toughest enemy in range (most current health, ground or air) that drags it `pull` tiles back the way it came
@@ -856,6 +859,35 @@ export const CONFIG = {
       // picture: at 1.35 it's 12% taller and 8% wider than Level 10, and its base's sides stop 6 px inside the tile
       // outline's side corners. (v0.8.11's 1.45 with its bottom 40% of the way to the front corner stood 12 px too far back.)
       art: { key: 'bld_ksi_merged', scale: 1.35, standInScale: 1.25, ground: 0.18 }
+    },
+    // Diddy Trebuchet (v0.9.1): two Level 5 Diddypults. Barrel Burst (barrelBurst.js): every shot is a giant barrel at x2
+    // damage (impact and pool); where it lands it bursts and throws `jugs` oil jugs `distance` tiles out (on the grid's
+    // diagonals: a + on screen), which land `delay` s later for `mult` of the barrel's hit (Splash Zone counts) and leave
+    // `poolRadius`-tile pools with its pool's damage and slow. The jugs' pools and the barrel's own never stack: an enemy
+    // standing in several takes one pool's damage per tick (combat.js stepPools, pool `group`). Boulders don't burst; Big
+    // Jug doubles only the barrel; Hangover, Concussion and Pressure Cap come only from the barrel's impact.
+    catapult: {
+      name: 'Diddy Trebuchet',
+      ability: 'Barrel Burst',
+      abilityIcon: 'ui_ability_barrel_burst',
+      abilityShort: 'Its barrel bursts into oil jugs that splash all around.',
+      description: 'Two Diddypults lashed into one siege engine. It hurls a giant barrel that hits twice as hard and bursts on impact, flinging oil jugs that cover the area in slick pools.',
+      abilityText: "Every shot is a giant barrel. Where it lands it bursts and throws 4 oil jugs 2 tiles out, one each way: they land a moment later for half the barrel's hit and each leaves its own 1-tile oil pool with the same damage and slow. An enemy in several pools only takes one pool's damage.",
+      cost: { gold: 170000, rp: 3500 }, // gold: the Diddypult's own last upgrade, like every merge (the brief's 200,000 was 18% over)
+      hpMult: 2, damageMult: 2, fireIntervalMult: 1, rangeAdd: 0.5,
+      barrelBurst: { jugs: 4, distance: 2, delay: 0.4, mult: 0.5, poolRadius: 1 },
+      mastery: {
+        costs: [1200, 2000, 3000], labLevel: [3, 4, 5],
+        tiers: [
+          { name: 'More Jugs', desc: 'The barrel bursts into 6 jugs.', fx: { barrelJugs: 6 } },
+          { name: 'Wide Spray', desc: 'Jugs fly 3 tiles and their pools are 1.25 tiles wide.', fx: { jugDistance: 3, jugPoolRadius: 1.25 } },
+          { name: 'Tar Pit', desc: "The barrel's own pool slows 60% and lasts 10 s.", fx: { tarSlow: 0.6, tarSeconds: 10 } }
+        ]
+      },
+      // The user's "Merged Diddypult building image v2": its base is widest (the crystals at its sides) 25% of the way up the
+      // picture, so it stands by that line (`ground` 0.25 on the footprint's center). At 1.3 it's ~30% wider and ~20% taller
+      // than a Level 5 Diddypult, and its widest row stays inside the 2 x 2 tile's outline (GameScene drawPlots).
+      art: { key: 'bld_catapult_merged', scale: 1.3, standInScale: 1.15, ground: 0.25 }
     }
   },
   // Per Village Hall level (1-15). Every hall from 11 adds 12 walls. v0.8 (user, 2026-11-22; replaced v0.6.1's Bonus

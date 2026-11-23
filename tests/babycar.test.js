@@ -48,8 +48,8 @@ describe('Da Baby Car (raid boss)', () => {
     expect(nextWaveComposition(s).special).toBeTruthy();
     expect(nextWaveComposition(s).babycar || 0).toBe(0);
     // It leads its path's queue.
-    const q = buildSpawnQueues({ babycar: 1, grunt: 3, tank: 1 }, ['left']);
-    expect(q.left[0]).toBe('babycar');
+    const q = buildSpawnQueues({ babycar: 1, grunt: 3, tank: 1 }, ['right']);
+    expect(q.right[0]).toBe('babycar');
   });
 
   it('drives in a straight line at the Village Hall (no dirt-path march, no detours)', () => {

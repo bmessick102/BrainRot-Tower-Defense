@@ -124,6 +124,14 @@ describe('save.js', () => {
     expect(mutate((o) => { o.buildings.shift(); })).toBe(false);              // no town hall
   });
 
+  it('a saved wave plan from an entrance the map no longer has (the left waterfall) is planned again; the save still loads', () => {
+    const base = serializeGame(sampleState());
+    const parsed = parseSave(JSON.stringify({ ...base, wavePlan: { number: 3, paths: ['top', 'left'] } }));
+    expect(parsed.status).toBe('ok');
+    expect(parsed.data.wavePlan).toBeNull();
+    expect(parseSave(JSON.stringify({ ...base, wavePlan: { number: 3, paths: ['top', 'bottom'] } })).data.wavePlan).toEqual({ number: 3, paths: ['top', 'bottom'] });
+  });
+
   it('old 32 x 31 saves (no grid field) are shifted onto the 40 x 40 grid, keeping the layout', () => {
     const base = serializeGame(sampleState());
     const old = JSON.parse(JSON.stringify(base));

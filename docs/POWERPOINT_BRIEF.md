@@ -2,18 +2,18 @@
 
 You are being asked to create a PowerPoint presentation (.pptx) about a video game that a small student team built. Everything you need to know is in this document. **Use only the facts written here (and in README.md, which is the source of truth). Do not invent features, numbers, quotes, release dates, or team members.** If something you want to say isn't in this document, leave it out.
 
-*This brief describes version 0.8.8.* The deck built from it is `docs/presentation/Italian_Brainrot_TD_v0.8.8.pptx` (the old v0.5 deck, `Italian_Brainrot_TD_v0.5.0.pptx`, is kept for reference).
+*This brief describes version 0.9.1.* The deck built from it is `docs/presentation/Italian_Brainrot_TD_v0.9.1.pptx` (the v0.8.8 deck is in git history) (the old v0.5 deck, `Italian_Brainrot_TD_v0.5.0.pptx`, is kept for reference).
 
 ---
 
 ## 1. What I want from you
 
-- **Deliverable:** one `.pptx` file, **24 slides**, 16:9, saved as `docs/presentation/Italian_Brainrot_TD_v<package.json version>.pptx`.
+- **Deliverable:** one `.pptx` file, **27 slides**, 16:9, saved as `docs/presentation/Italian_Brainrot_TD_v<package.json version>.pptx`.
 - **One story:** a player's journey from the first ruined Village Hall to the late game. Each slide reveals the next buildings, features and enemies the player meets, in that order. It should feel like a **game trailer in slides**: short punchy headlines, big pictures, building excitement.
 - **Speaker notes on every slide:** 2 to 3 simple sentences to say out loud.
 - **Words per slide:** at most about 15 (headline plus one line), except the enemy and building grids (a name plus 3-6 words each). Plain language a 12-year-old gets. No code terms, config keys or file names on slides; words players see in the game are fine (Burgers, Village Hall, Mastery).
 - **Every enemy appears** (24 in all), on the slide for the Village Hall where players meet it (section 4).
-- **File size:** compress pictures; aim under about 40 MB (the v0.8.8 deck is about 20 MB).
+- **File size:** compress pictures; aim under about 40 MB (the v0.9.1 deck is about 23 MB).
 
 If anything below is unclear, make a sensible choice and say what you chose in one sentence at the end.
 
@@ -21,11 +21,11 @@ If anything below is unclear, make a sensible choice and say what you chose in o
 
 ## 2. The game in one paragraph
 
-**Italian Brainrot Tower Defense** is a free, single-player base-builder tower defense that runs in a web browser (desktop, phones and tablets, no install). Every new game starts with the Village Hall in **ruins**: you rebuild it, mine gold (Bitcoin), build and upgrade defenses on an isometric grid, and survive endless waves of internet "Italian Brainrot" meme characters. A wave only starts when you press **Start Wave**, and every wave is tougher than the last, so the goal is to **survive as long as possible**. Defeated enemies and beaten waves also pay **Burgers**, the second currency, spent on perks, spells, hero levels and Mastery. Village Halls go up to **15**; each one unlocks new buildings and new enemies. Late in the game, two Level 10 defenses can **merge** into one giant building with a special ability. Players have accounts with cloud saves, leagues, a leaderboard of every village, profiles, and can visit other players' villages.
+**Italian Brainrot Tower Defense** is a free, single-player base-builder tower defense that runs in a web browser (desktop, phones and tablets, no install). Every new game starts with the Village Hall in **ruins**: you rebuild it, mine gold (Bitcoin), build and upgrade defenses on an isometric grid, and survive endless waves of internet "Italian Brainrot" meme characters. A wave only starts when you press **Start Wave**, and every wave is tougher than the last, so the goal is to **survive as long as possible**. Defeated enemies and beaten waves also pay **Burgers**, the second currency, spent on perks, spells, hero levels and Mastery. Village Halls go up to **15**; each one unlocks new buildings and new enemies. Late in the game, two top-level defenses (Level 10; the Diddypult's top is Level 5) can **merge** into one giant building with a special ability. Players have accounts with cloud saves, leagues, a leaderboard of every village, profiles, and can visit other players' villages.
 
 - **Play it:** https://bmessick102.github.io/BrainRot-Tower-Defense/
 - **Code:** https://github.com/bmessick102/BrainRot-Tower-Defense
-- **Current version:** 0.8.8
+- **Current version:** 0.9.1
 - It is an unofficial fan game, not endorsed by Supercell (the game's Credits carry Supercell's Fan Content Policy notice).
 
 ## 3. The team
@@ -47,53 +47,59 @@ If anything below is unclear, make a sensible choice and say what you chose in o
 
 Follow this order. Every content slide has a **stage marker** at the top right: a gold-rimmed pill ("VILLAGE HALL 3") with a row of 15 dots, filled up to that hall, so the progression is obvious. "Cards" are rounded dark panels with a cut-out picture on a soft glow: **red rim = enemy, green = your building, purple = new feature, orange = hero, gold = merged**.
 
-**1. Title.** The game logo over the title-screen art; tagline **"Memes are coming for your village."**; small line "Created by Brady Messick · Free in your browser · v0.8.8". Cut-outs: Tung Tung Tung Sahur, the Sneaker Shark, the crocodile bomber.
+**1. Title.** The game logo over the title-screen art; tagline **"Memes are coming for your village."**; small line "Created by Brady Messick · Free in your browser · v0.9.1". Cut-outs: Tung Tung Tung Sahur, the Sneaker Shark, the crocodile bomber.
 
 **2. The idea in one breath.** "Build a village. Survive the brainrot." / "Endless waves. Free in your browser." Three icon rows: Build and upgrade · Beat endless meme waves · Play free, even on phones. Screenshot of a village by day.
 
-**3. It starts in ruins.** (marker: THE START, no dots) "Rebuild the hall. Mine gold. Place your first Cannon." The ruined hall → Village Hall 1, and a 4-step loop ring: **Earn → Build → Upgrade → Start Wave**.
+**3. "A bigger battlefield."** (marker: THE MAP, no dots; v0.9) Two framed screenshots: the whole new 40 x 40 map with a red marker at each of its 7 entrances ("THE NEW 40 x 40 MAP"), and troops crossing the bridge ("OVER THE BRIDGE"). Chips: "40 x 40 tiles of room to build" · "7 ways in, never the lake" · "All 7 open by Village Hall 13".
 
-**4. Village Hall 1: "Then the first meme marches in."** "Waves come only when you press Start Wave." Buildings: Cannon, Bitcoin Mine, Villager House (gnomes mine and repair), Walls. Enemy: **Tung Tung Tung Sahur**.
+**4. "Grass grows. Buildings clear it."** (v0.9.1) "Just for looks: nothing ever gets in your way." A close-up of a Cannon on cleared grass among grass tufts. Rows: grass tuft "Grass tufts dot the field" · Cannon "Build on one and it vanishes" · Village Hall "Solid ground under buildings".
 
-**5. Village Hall 2: "More towers. Sneakier memes."** Buildings: Locklair Tower, Litman Mortar, Mousetrap. Enemies: **Cappuccino Assasino**, **Mr. Least**.
+**5. It starts in ruins.** (marker: THE START, no dots) "Rebuild the hall. Mine gold. Place your first Cannon." The ruined hall → Village Hall 1, and a 4-step loop ring: **Earn → Build → Upgrade → Start Wave**.
 
-**6. Village Hall 2: "Snacks become spells."** The Fuel Station brews six spells with Burgers, cast from the hotbar: Karuba Coffee (Rage), Donut (Heal), Ice Bag (Freeze), Spicy Tornado (Heat Field), Chocolate Milk (Invisibility), Energy Drink (Lightning Strike). The first Karuba Coffee is free. Burgers are won by beating enemies and waves.
+**6. Village Hall 1: "Then the first meme marches in."** "Waves come only when you press Start Wave." Buildings: Cannon, Bitcoin Mine, Villager House (gnomes mine and repair), Walls. Enemy: **Tung Tung Tung Sahur**.
 
-**7. Village Hall 3: "Then the sky fills with bombers."** New enemies: **Bombadillo Crocadillo**, **Tralalero Tralala**, **Boneca Ambalabu**, **Neegy Balloon** (with a small **Neegy**). "Your answer": Gandolf Tower, Firework Launcher, Spear Thrower, F.L.O.C.K Tower.
+**7. Village Hall 2: "More towers. Sneakier memes."** Buildings: Locklair Tower, Litman Mortar, Mousetrap. Enemies: **Cappuccino Assasino**, **Mr. Least**.
 
-**8. Village Hall 4: "Spend Burgers on new powers."** The RV Lab: every defense has 3 perk paths of 5 tiers; one pick upgrades every building of that type; the first pick locks the path (a paid reset lets you switch). Screenshot of the research window.
+**8. Village Hall 2: "Snacks become spells."** The Fuel Station brews six spells with Burgers, cast from the hotbar: Karuba Coffee (Rage), Donut (Heal), Ice Bag (Freeze), Spicy Tornado (Heat Field), Chocolate Milk (Invisibility), Energy Drink (Lightning Strike). The first Karuba Coffee is free. Burgers are won by beating enemies and waves.
 
-**9. Village Hall 4: "A king joins the fight."** The Brisket King guards his altar; Brisket Feast (once per wave) heals him, powers him up and slams nearby enemies. His levels cost Burgers. Enemies: **Tripi Tropi Tropi Tripa**, **John Pork**.
+**9. Village Hall 3: "Then the sky fills with bombers."** New enemies: **Bombadillo Crocadillo**, **Tralalero Tralala**, **Boneca Ambalabu**, **Neegy Balloon** (with a small **Neegy**). "Your answer": Gandolf Tower, Firework Launcher, Spear Thrower, F.L.O.C.K Tower.
 
-**10. Village Hall 5: "Drop the beat. Freeze the field."** DJ Babyface (Drop the Beat: nearby defenses fire faster), KSI Tower (ice bottles slow enemies). Enemies: **Skibidi Toilet**, **Bri Bri Bicus Dicus** (with the armor shield, `ui_armor_shield`, under his card text).
+**10. Village Hall 4: "Spend Burgers on new powers."** The RV Lab: every defense has 3 perk paths of 5 tiers; one pick upgrades every building of that type; the first pick locks the path (a paid reset lets you switch). Screenshot of the research window.
 
-**11. "When night falls, memes get restless."** (marker: NIGHTFALL) The day/night cycle runs on its own (about 8 minutes). Restless nights: enemies hit harder and move faster, but pay +25% gold and Burgers. With no raid on, heroes walk home and sleep at their altar. Day and night screenshots side by side. (Day and night isn't tied to a Village Hall; it sits here in the story.)
+**11. Village Hall 4: "A king joins the fight."** The Brisket King guards his altar; Brisket Feast (once per wave) heals him, powers him up and slams nearby enemies. His levels cost Burgers. Enemies: **Tripi Tropi Tropi Tripa**, **John Pork**.
 
-**12. Village Hall 6: "The dead rise. The cold creeps in."** Tower of Rah (a beam that heats up on one enemy). Enemies: **Rahhh Skeleton** (with a small **Skeleton**), **Frigo Camillo**.
+**12. Village Hall 5: "Drop the beat. Freeze the field."** DJ Babyface (Drop the Beat: nearby defenses fire faster), KSI Tower (ice bottles slow enemies). Enemies: **Skibidi Toilet**, **Bri Bri Bicus Dicus** (with the armor shield, `ui_armor_shield`, under his card text).
 
-**13. Village Hall 6: "Then the boss drives in."** **Da Baby Car**, the raid boss, drives straight at the Village Hall and bursts into troops when it falls. Every wave has a theme (e.g. Dash Gang, Air Raid, Jungle Stampede, Iron Legion); every 10th wave is a Boss Wave. Battle screenshot.
+**13. "When night falls, memes get restless."** (marker: NIGHTFALL) The day/night cycle runs on its own (about 8 minutes). Restless nights: enemies hit harder and move faster, but pay +25% gold and Burgers. With no raid on, heroes walk home and sleep at their altar. Day and night screenshots side by side. (Day and night isn't tied to a Village Hall; it sits here in the story.)
 
-**14. Village Hall 7: "Boulders from above. Dashes below."** Enemies: **La Vaca Saturno**, **Quandale Dingle** (walls stop his dash).
+**14. Village Hall 6: "The dead rise. The cold creeps in."** Tower of Rah (a beam that heats up on one enemy). Enemies: **Rahhh Skeleton** (with a small **Skeleton**), **Frigo Camillo**.
 
-**15. Village Hall 8: "A second hero takes the stage."** The Hatsune Queen: crossbow hero, hits ground and air; Encore Cloak (vanish, heal, hit harder). Enemies: **Big Yahu**, **Bombombini Gusini**.
+**15. Village Hall 6: "Then the boss drives in."** **Da Baby Car**, the raid boss, drives straight at the Village Hall and bursts into troops when it falls. Every wave has a theme (e.g. Dash Gang, Air Raid, Jungle Stampede, Iron Legion); every 10th wave is a Boss Wave. Battle screenshot.
 
-**16. Village Halls 9-10: "The ground shakes. The jungle calls."** **Lirili Larila** (VH9); The Diddypult (VH10, baby-oil pools that slow); **Brr Brr Patapim** (VH10, with a small **Chimpanzini Bananini**).
+**16. Village Hall 7: "Boulders from above. Dashes below."** Enemies: **La Vaca Saturno**, **Quandale Dingle** (walls stop his dash).
 
-**17. Village Halls 11-15: "Five more Village Halls."** **Grimace Golem** (VH11, the last enemy). What each hall adds: 11: Tower of Rah, Gandolf, Diddypult, KSI, Cannon, Mine, Storage, House · 12: Tower of Rah, Gandolf · 13: Diddypult, KSI, Locklair, Storage · 14: Cannon, Mortar, Spear Thrower, F.L.O.C.K · 15: Tower of Rah, Firework, Mine, Storage, House · every hall +12 walls.
+**17. Village Hall 8: "A second hero takes the stage."** The Hatsune Queen: crossbow hero, hits ground and air; Encore Cloak (vanish, heal, hit harder). Enemies: **Big Yahu**, **Bombombini Gusini**.
 
-**18. Merging: "Two maxed towers. One giant."** Two Level 10 copies merge (it still counts as two). The seven merged buildings and abilities: Mega Cannon (Rolling Thunder), Locklair Citadel (Ballista Bolt), Litman Triple Mortar (Triple Strike), Missile Silo (Sky Net), Gandolf the Grand (You Shall Not Pass), F.L.O.C.K Mothership (Triple Zap), Harpoon Ballista (Reel In). Eighth tile: the merge window screenshot. Each card has its ability icon (`ui_ability_*`) in a small gold box in its top-left corner, and the Harpoon Ballista shows its own picture (`bld_spear_merged_dl`).
+**18. Village Halls 9-10: "The ground shakes. The jungle calls."** **Lirili Larila** (VH9); The Diddypult (VH10, baby-oil pools that slow); **Brr Brr Patapim** (VH10, with a small **Chimpanzini Bananini**).
 
-**19. "Then go for gold."** The gold Mastery column in the RV Lab: 3 Mastery tiers per merged tower, paid in Burgers; the gear badge marks a merged building.
+**19. Village Halls 11-15: "Five more Village Halls."** **Grimace Golem** (VH11, the last enemy). What each hall adds: 11: Tower of Rah, Gandolf, Diddypult, KSI, Cannon, Mine, Storage, House · 12: Tower of Rah, Gandolf · 13: Diddypult, KSI, Locklair, Storage · 14: Cannon, Mortar, Spear Thrower, F.L.O.C.K · 15: Tower of Rah, Firework, Mine, Storage, House · every hall +12 walls.
 
-**20. "Lose a fight, never your village."** Free rebuilds after every wave · Wave stars (up to 3) · 2x wave speed · Edit mode (rearrange the base; no selling since v0.8.0).
+**20. Merging: "Two maxed towers. One giant."** "Merge two top-level defenses. Unlock a special ability." Two top-level copies merge (Level 10; the Diddypult at Level 5; it still counts as two). Eight cards, each with its ability icon: Mega Cannon (Rolling Thunder), Locklair Citadel (Ballista Bolt), Litman Triple Mortar (Triple Strike), Missile Silo (Sky Net), Gandolf the Grand (You Shall Not Pass), F.L.O.C.K Mothership (Triple Zap), Harpoon Ballista (Reel In), KSI Frost Fortress (Shatter: chilled foes burst). The ninth, the Diddy Trebuchet, has its own slide (22).
 
-**21. "Climb the leagues. Visit any village."** Accounts and cloud saves (up to 5 villages), 26 achievements, the six leagues with their waves (Bronze 5, Silver 20, Gold 40, Crystal 70, Champion 110, WarLord 160), the leaderboard (one row per village), player profiles and visiting. Leaderboard and visit screenshots.
+**21. "Then go for gold."** The gold Mastery column in the RV Lab: 3 Mastery tiers per merged tower, paid in Burgers; the gear badge marks a merged building.
 
-**22. "Polished down to the title screen."** Animated title screen, What's New, How to Play, the home-screen app icon; a band of cut-outs with "Game art and sound effects by Brady Messick and teammate Cole Martin, who also shaped the game UI".
+**22. "Then the barrels fly."** (marker: LATE GAME) "Two Level 5 Diddypults merge into the Diddy Trebuchet." A screenshot of a barrel burst into five oil pools beside the Trebuchet; card: the Diddy Trebuchet, "Barrel Burst: oil jugs everywhere"; chips "Bursts into 4 oil jugs" (its ability icon) · "Hits twice as hard" (the Diddypult).
 
-**23. "Created by Brady Messick."** The four team cards (initials, name, role; Brady's says "Game creator: the concept, the design and every part of the game.") and a "How we built it" band (section 3).
+**23. "Lose a fight, never your village."** Free rebuilds after every wave · Wave stars (up to 3) · 2x and 4x speed · Edit mode (rearrange the base; no selling since v0.8.0).
 
-**24. Closer.** App icon; **"Play free in your browser."**; the link; "Desktop, phones and tablets. No install."; small "Unofficial fan game. Not endorsed by Supercell." Behind the dark panel (80% opaque, so the text stays clear) and around the icon, all 24 enemies as cut-outs: flyers in the sky, the big ones on the hills, a crowd under the panel and three in the front corners.
+**24. "Climb the leagues. Visit any village."** Accounts and cloud saves (up to 5 villages), 26 achievements, the six leagues with their waves (Bronze 5, Silver 20, Gold 40, Crystal 70, Champion 110, WarLord 160), the leaderboard (one row per village), player profiles and visiting. Leaderboard and visit screenshots.
+
+**25. "Polished down to the title screen."** Animated title screen, What's New, How to Play, the home-screen app icon; a band of cut-outs with "Game art and sound effects by Brady Messick and teammate Cole Martin, who also shaped the game UI".
+
+**26. "Created by Brady Messick."** The four team cards (initials, name, role; Brady's says "Game creator: the concept, the design and every part of the game.") and a "How we built it" band (section 3).
+
+**27. Closer.** App icon; **"Play free in your browser."**; the link; "Desktop, phones and tablets. No install."; small "Unofficial fan game. Not endorsed by Supercell." Behind the dark panel (80% opaque, so the text stays clear) and around the icon, all 24 enemies as cut-outs: flyers in the sky, the big ones on the hills, a crowd under the panel and three in the front corners.
 
 ### Every enemy, by the Village Hall where it joins (check against README and `src/enemyText.js`)
 

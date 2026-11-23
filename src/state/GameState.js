@@ -16,6 +16,7 @@ import { advanceTutorial, applyStarterBase, canSkipTutorial, TUTORIAL_DONE_STEP,
 import { createClock, startTutorialWave, resumeClockOnLoad, startGrace, startNextWave } from '../logic/dayNight.js';
 import { simulate } from '../logic/simulate.js';
 import { deserializeGame, writeGame, SAVE_KEYS } from '../logic/save.js';
+import { newDecorSeed } from '../logic/decor.js';
 import { isWaveActive } from '../logic/util.js';
 import { applyLayout } from '../logic/layout.js';
 import { dropTheBeat } from '../logic/dj.js';
@@ -96,6 +97,7 @@ export class GameState {
     this.nets = [];              // Missile Silo nets in play (skyNet.js; not saved)
     this.barriers = [];          // Gandolf the Grand's You Shall Not Pass walls (wizardWall.js; not saved)
     this.shatters = [];          // KSI Frost Fortress's Shatter bursts waiting to go off (shatter.js; not saved)
+    this.jugs = [];              // Diddy Trebuchet's Barrel Burst jugs in the air (barrelBurst.js; not saved)
     this.research = {};          // RV Lab research: { type: ['a', 'b', ...] }, the pick at each tier
     this.mastery = {};           // merged defenses' Mastery tiers per type ({ cannon: 2 }, merge.js), saved
     this.labGuideStep = 0;       // RV Lab guide (labGuide.js): 0 = not started
@@ -109,6 +111,7 @@ export class GameState {
     this.fuelGuide = 0;          // Fuel Station guide step (spells.js FUEL_GUIDE: build, free Rage, cast it), saved
     this.activeSpells = [];      // spell zones in play during a wave (not saved)
     this.wallLevel = 1;          // every wall's level (Upgrade Walls raises them all; new walls start at it), saved
+    this.decorSeed = newDecorSeed(); // where the village's grass tufts grow (decor.js; purely visual), saved
     this.wave = createIdleWave();
     this.wavePlan = null;        // the next wave's spawn corners ({ number, paths }, waves.js), saved
     this.debuted = [];           // enemies whose debut wave this village has had (waves.js themed waves), saved
@@ -143,6 +146,7 @@ export class GameState {
     const data = deserializeGame(obj);
     this.buildings = data.buildings;
     this.wallLevel = data.wallLevel; // (its walls are already brought to it)
+    this.decorSeed = data.decorSeed ?? newDecorSeed(); // (an older save gets one now; it's saved with the village from then on)
     this.research = data.research;
     this.mastery = data.mastery || {};
     this.labGuideStep = data.labGuideStep;

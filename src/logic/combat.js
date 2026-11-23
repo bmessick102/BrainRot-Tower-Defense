@@ -16,6 +16,7 @@ import { addResearchPoints, killResearchPoints } from './researchPoints.js';
 import { fireBoulderAt, fireMissileAt, stepEnemyShot, dropGoo } from './specialEnemies.js';
 import { harpoonDue, throwHarpoons, hookEnemy } from './harpoon.js';
 import { shatterFor, markShatter, queueShatter } from './shatter.js';
+import { barrelFor, tarPool, burstBarrel } from './barrelBurst.js';
 
 export { applySlow, applyStun };
 
@@ -130,6 +131,7 @@ export function fireDefense(state, b, target, opts = {}) {
   const damage = lvl.damage * towerDamageMult(b) * (opts.damageMult ?? 1);
   if (cfg.pierce) return fireSpear(state, b, target, damage, cfg, pcfg, opts);
   const pool = cfg.pool ? catapultPool(b, cfg, lvl, fx) : null;
+  const normalPool = pool ? { ...pool } : null; // (a Diddy Trebuchet's jugs keep the normal pool, even on a Big Jug)
   if (pool && opts.poolScale) pool.radius *= opts.poolScale; // Diddypult Big Jug
   const p = {
     id: nextId(state, 'p'),
@@ -166,6 +168,12 @@ export function fireDefense(state, b, target, opts = {}) {
     if (merge.roll && !opts.kind && !enemyIsAir(target)) { p.roll = rollFor(merge.roll, fx, mfx); p.mega = true; }
     if (mfx.slowOnHit) p.fx = { ...p.fx, slowOnHit: Math.max(p.fx.slowOnHit || 0, mfx.slowOnHit), slowSeconds: Math.max(p.fx.slowSeconds || 0, mfx.slowSeconds || 1) };
     if (merge.shatter && p.chill) p.shatter = shatterFor(b, p.chill); // KSI Frost Fortress: what it chills can shatter (shatter.js)
+    // Diddy Trebuchet: the shot is a giant barrel that bursts into oil jugs where it lands (barrelBurst.js); its jugs hit
+    // for a share of a normal barrel's hit (not a Big Jug's), and Tar Pit makes its own pool slower and longer.
+    if (merge.barrelBurst && p.pool && !opts.kind) {
+      p.barrel = barrelFor(b, damage / (opts.poolScale || 1), normalPool);
+      p.pool = tarPool(b, p.pool);
+    }
   }
   if (opts.bolt) p.bolt = opts.bolt;
   if (opts.volley) p.volley = opts.volley;
@@ -298,9 +306,9 @@ export function freezeEnemy(state, e, seconds, vuln = 0) {
   emit(state, 'enemyFrozen', { id: e.id, x: e.x, y: e.y });
 }
 
-/** A Catapult shot's pool with the Toxic path applied. */
+/** A Catapult shot's pool with the Toxic path applied (a Diddy Trebuchet's: its damageMult too, like its impact). */
 function catapultPool(b, cfg, lvl, fx) {
-  const auraMult = 1 + (auraOf(b).damagePct || 0) / 100;
+  const auraMult = (1 + (auraOf(b).damagePct || 0) / 100) * ((mergedConfigOf(b) || {}).damageMult || 1);
   return {
     radius: cfg.pool.radius + (fx.poolRadiusAdd || 0),
     duration: Math.max(cfg.pool.duration + (fx.poolDurationAdd || 0), fx.poolDurationMin || 0),
@@ -1163,7 +1171,8 @@ function stepTowerProjectile(state, p, dt) {
     if (t >= 1) {
       p.done = true;
       landSplash(state, p, p.targetX, p.targetY, null);
-      if (p.pool && !state.gameOver) createPool(state, p.targetX, p.targetY, p.pool, p.kind);
+      if (p.pool && !state.gameOver) createPool(state, p.targetX, p.targetY, p.barrel ? { ...p.pool, group: p.id } : p.pool, p.kind);
+      if (p.barrel && !state.gameOver) burstBarrel(state, p, p.targetX, p.targetY); // Diddy Trebuchet's Barrel Burst
       if (p.volley && !state.gameOver) volleyLanded(state, p); // Triple Strike's Synchronized Impact
     }
   }
@@ -1174,9 +1183,9 @@ function stepTowerProjectile(state, p, dt) {
  * glue ('glue'). Hurts (dps) and slows the ground enemies standing in it. `stick` (glue): a Neegy that lands
  * in it is held that long, once.
  */
-export function createPool(state, x, y, { radius, duration, dps, slow, stick = 0, air = false, airMult = 0, grow = 0, ash = false, rage = null }, kind = null) {
+export function createPool(state, x, y, { radius, duration, dps, slow, stick = 0, air = false, airMult = 0, grow = 0, ash = false, rage = null, group = null }, kind = null) {
   if (!state.pools) state.pools = [];
-  const pool = { id: nextId(state, 'pool'), kind, x, y, radius, duration, dps, slow, stick, air, airMult, grow, grown: 0, ash, rage, age: 0, tick: 0 };
+  const pool = { id: nextId(state, 'pool'), kind, x, y, radius, duration, dps, slow, stick, air, airMult, grow, grown: 0, ash, rage, group, age: 0, tick: 0 };
   state.pools.push(pool);
   emit(state, 'poolCreated', { id: pool.id, x, y, radius, kind });
   return pool;
@@ -1184,10 +1193,13 @@ export function createPool(state, x, y, { radius, duration, dps, slow, stick = 0
 
 /**
  * Age pools; every POOL_TICK each pool damages the ground enemies inside it (overlapping pools
- * stack their damage). Anyone inside is slowed by the strongest pool they're in (slows don't stack).
+ * stack their damage, except pools of one `group`: a Diddy Trebuchet's barrel and its jugs tick together, and an enemy
+ * in several of them takes one pool's damage per tick). Anyone inside is slowed by the strongest pool they're in (slows
+ * don't stack).
  */
 export function stepPools(state, dt) {
   if (!state.pools || !state.pools.length) return;
+  const groupHits = new Set(); // "group|enemy" already hurt this tick
   for (const pool of state.pools) {
     pool.age += dt;
     pool.tick += dt;
@@ -1213,7 +1225,10 @@ export function stepPools(state, dt) {
       }
       // Fly Paper: a Neegy floating down into the glue is stuck there for a moment (once).
       if (pool.stick && e.kind === 'neegy' && !e.stuck) { e.stuck = true; applyStun(e, pool.stick); } // held once it lands
+      const grouped = pool.group !== null && pool.group !== undefined;
+      if (ticks > 0 && pool.dps > 0 && grouped && groupHits.has(`${pool.group}|${e.id}`)) continue; // one of its group already did
       if (ticks > 0 && pool.dps > 0) {
+        if (grouped) groupHits.add(`${pool.group}|${e.id}`);
         const share = air && !pool.air ? pool.airMult : 1;
         areaDamage(state, e, pool.dps * POOL_TICK * ticks * share, pool.kind === 'fire' ? 'burn' : pool.kind === 'spikes' || pool.kind === 'crack' ? 'bleed' : 'pool');
         if (!e.alive) {

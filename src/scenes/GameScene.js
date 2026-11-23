@@ -29,11 +29,12 @@ import { PoolView, POOL_COLOR } from '../objects/PoolView.js';
 import { RangeCircle } from '../objects/RangeCircle.js';
 import { DayNight } from '../objects/DayNight.js';
 import { GridOverlay } from '../objects/GridOverlay.js';
+import { GrassTufts, drawGroundPlots, groundColor } from '../objects/Ground.js';
 import { Villagers } from '../objects/Villagers.js';
 import { AirHum } from '../objects/AirHum.js';
 import { BeamHum } from '../objects/BeamHum.js';
 import { floatText, rpGainText, splashRing, fireballImpact, frostImpact, fireworkBurst, breakerExplosion, fireBreathFx } from '../objects/Effects.js';
-import { TEX, SFX, MUSIC, FIRE_SFX, ENEMY_ATTACK_SFX, ENEMY_VOICE, SPELL_SFX } from '../assetKeys.js';
+import { TEX, SFX, MUSIC, FIRE_SFX, ENEMY_ATTACK_SFX, ENEMY_VOICE, SPELL_SFX, PROJECTILE_KEYS } from '../assetKeys.js';
 import { missileWarningFx, quakeFx, ICE_BLUE } from '../objects/EnemyFx.js';
 import { playSfxClip, playSfx, playSfxCapped, playSfxEndingIn, playVoiceLine, playMusic, pauseMusic, resumeMusic, stopMusic, crossfadeMusic, fadeOutMusic, hasAmbience, startAmbience, updateAmbience, stopAmbience, soundDuration, prefetchMusic, hasMusicFile, releaseMusic } from '../audio.js';
 import { requestAudio, requestImages } from '../assetLoader.js';
@@ -78,7 +79,6 @@ const CHATTER_SECONDS = [6, 14]; // how often an enemy says its voice line while
 const FADE_ALPHA = 0.35;
 const FADE_OVERLAP = 0.12;
 // Ground plots under buildings.
-const PLOT_COLOR = 0x6b4a2b, PLOT_ALPHA = 0.22, PLOT_RIM = 0xf0dcae, PLOT_RIM_ALPHA = 0.28;
 // KSI Frost Fortress: at most one "SHATTER!" tag this often (a chain can burst many enemies in a moment).
 const SHATTER_TAG_MS = 350;
 
@@ -145,7 +145,9 @@ export class GameScene extends Phaser.Scene {
     // A soft dirt plot under every building's tiles, so you can see where each one stands even where the art
     // overlaps (drawPlots). Above the map, below lights and buildings.
     this.plotGfx = this.add.graphics().setDepth(-9000);
+    this.grassTufts = new GrassTufts(this, gs.decorSeed); // the village's grass tufts (Ground.js), hidden under buildings
     this.plotKey = '';
+    this.tuftKey = '';
     this.ghost = null;
     this.placement = null;
     this.selectedId = null;
@@ -369,6 +371,7 @@ export class GameScene extends Phaser.Scene {
     }
     this.dayNight.update(this.gs.clock);
     if (this.gridOverlay) this.gridOverlay.update(this.gs.clock);
+    this.grassTufts.setTint(this.ambientTint ?? 0xffffff);
     // Day / night ambience: follows how dark it is, and steps aside for the attack music during a wave.
     updateAmbience(this.night || 0, !isWaveInProgress(this.gs) && !this.endingGame, Math.min(delta / 1000, MAX_STEP));
     this.villagers.update(Math.min(delta / 1000, MAX_STEP), time);
@@ -532,30 +535,26 @@ export class GameScene extends Phaser.Scene {
     }
   }
 
-  /** Ground plots: drawn again only when the layout changes. */
+  /** Ground plots and grass tufts: drawn again only when the layout (or the map's grass colour) changes. */
   updateLayoutExtras() {
     const list = this.layoutList || [];
-    const key = list.map((b) => `${b.id}:${b.col},${b.row},${fpW(b)},${fpH(b)},${b.level},${b.destroyed ? 1 : 0}`).join('|')
+    const color = groundColor(this.gs.clock);
+    const layoutKey = list.map((b) => `${b.id}:${b.col},${b.row},${fpW(b)},${fpH(b)},${b.level},${b.destroyed ? 1 : 0}`).join('|')
       + `|${this.placement ? this.placement.id : ''}`;
+    const key = `${layoutKey}|${color}`;
     if (key === this.plotKey) return;
+    if (layoutKey !== this.tuftKey) { this.tuftKey = layoutKey; this.grassTufts.layout(list, this.placement ? this.placement.id : null); }
     this.plotKey = key;
-    this.drawPlots(list);
+    this.drawPlots(list, color);
   }
 
-  /** A dirt-colored diamond under each building (not walls), with a light rim. */
-  drawPlots(list) {
-    const g = this.plotGfx;
-    g.clear();
-    for (const b of list) {
-      if (b.type === 'wall' || (this.placement && this.placement.id === b.id)) continue;
-      const w = fpW(b), h = fpH(b);
-      const pts = [gridToScreen(b.col, b.row), gridToScreen(b.col + w, b.row), gridToScreen(b.col + w, b.row + h), gridToScreen(b.col, b.row + h)];
-      g.fillStyle(PLOT_COLOR, PLOT_ALPHA).fillPoints(pts, true);
-      const inset = 0.08;
-      const rim = [gridToScreen(b.col + inset, b.row + inset), gridToScreen(b.col + w - inset, b.row + inset),
-        gridToScreen(b.col + w - inset, b.row + h - inset), gridToScreen(b.col + inset, b.row + h - inset)];
-      g.lineStyle(2, PLOT_RIM, PLOT_RIM_ALPHA).strokePoints(rim, true);
-    }
+  /**
+   * Solid grass under every building's and wall's tiles (v0.9.1: the map's checker doesn't show under them), in the map's
+   * grass colour for the time of day, with a light rim round each building's plot (Ground.js). The building being moved
+   * leaves its old spot bare.
+   */
+  drawPlots(list, color = groundColor(this.gs.clock)) {
+    drawGroundPlots(this.plotGfx, list, color, this.placement ? this.placement.id : null);
   }
 
   // ---------- hover, labels and fading (keep a crowded village readable) ----------
@@ -1541,6 +1540,10 @@ export class GameScene extends Phaser.Scene {
         splashRing(this, s.x, s.y, d.radius, 0xff9a3c, { duration: 380, depth: 2710 });
       } else if (d.kind === 'fountain') {
         sparklerFx(this, s.x, s.y + 20, d.radius, TEX.light);
+      } else if (d.kind === 'jug') {
+        // A Diddy Trebuchet's oil jug landing (Barrel Burst): an oily splash ring and a small thud.
+        splashRing(this, s.x, s.y, d.radius, POOL_COLOR, { duration: 420, depth: 2710 });
+        playSfxCapped(this, SFX.catapultImpact, 2, { volume: 0.35 });
       } else if (d.kind === 'shatter') {
         splashRing(this, s.x, s.y, d.radius, POOL_COLOR, { duration: 350, depth: 2710 });
       } else if (d.kind === 'booby' || d.kind === 'supernova') {
@@ -1814,6 +1817,39 @@ export class GameScene extends Phaser.Scene {
     });
     // KSI Frost Fortress: Shatter. A chilled enemy bursts: an icy ring over the shards' reach, shards flying out, an ice
     // crack, and "SHATTER!" (at most every SHATTER_TAG_MS, so a chain through a crowd isn't a wall of text).
+    // Diddy Trebuchet's Barrel Burst: the barrel breaks into wooden planks, then its oil jugs lob out to their spots and
+    // land as the game does (d.delay of game time: shorter at 2x / 4x speed). Each jug's splash is a 'splash' of kind 'jug'.
+    on('barrelBurst', (d) => {
+      const s = at(d), speed = stepsPerFrame(this.gs) || 1;
+      const g = this.add.graphics().setDepth(2712);
+      const planks = [];
+      for (let i = 0; i < 10; i++) planks.push({ a: (i / 10) * Math.PI * 2 + Math.random() * 0.4, len: 7 + Math.random() * 5, spin: Math.random() * Math.PI, up: 18 + Math.random() * 16 });
+      const draw = (k) => { // k: 0 -> 1 as they fly out and fall
+        g.clear();
+        const r = 4 + k * 46, alpha = 1 - k * k;
+        for (const pl of planks) {
+          const x = s.x + Math.cos(pl.a) * r, y = s.y - 12 + Math.sin(pl.a) * r * 0.55 - pl.up * 4 * k * (1 - k), t = pl.spin + k * 6;
+          const dx = Math.cos(t) * pl.len, dy = Math.sin(t) * pl.len * 0.5;
+          g.lineStyle(4, 0x8a5426, alpha).lineBetween(x - dx, y - dy, x + dx, y + dy);
+          g.lineStyle(1, 0x4a2a10, alpha).lineBetween(x - dx, y - dy + 2, x + dx, y + dy + 2);
+        }
+      };
+      draw(0);
+      this.tweens.addCounter({ from: 0, to: 1, duration: 480 / speed, ease: 'Quad.easeOut', onUpdate: (tw) => draw(tw.getValue()), onComplete: () => g.destroy() });
+      playSfxCapped(this, SFX.catapultImpact, 1, { volume: 0.7 });
+      const jugKey = PROJECTILE_KEYS.catapult;
+      if (!this.textures.exists(jugKey)) return;
+      for (const j of d.jugs) {
+        const e = gridToScreen(j.x, j.y);
+        const jug = this.add.image(s.x, s.y - 12, jugKey).setDepth(2005);
+        jug.setScale(12 / jug.frame.width);
+        this.tweens.addCounter({
+          from: 0, to: 1, duration: (d.delay * 1000) / speed,
+          onUpdate: (tw) => { const k = tw.getValue(); jug.setPosition(s.x + (e.x - s.x) * k, s.y - 12 + (e.y - s.y + 12) * k - 46 * 4 * k * (1 - k)); jug.rotation += 0.25; },
+          onComplete: () => jug.destroy()
+        });
+      }
+    });
     on('enemyShattered', (d) => {
       const s = at(d);
       splashRing(this, s.x, s.y - 10, d.radius, 0xbfe9ff, { duration: 360, depth: 2710 });

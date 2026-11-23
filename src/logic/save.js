@@ -5,6 +5,7 @@ import { CONFIG } from '../config.js';
 import { BUILDING_TYPES, HERO_TYPES, WALL_ORIENTS, footprintDims, buildingSize, maxLevel, levelStats, isDefense, maxHp, wallLevel, commonWallLevel } from './buildings.js';
 import { isRectOnGrass, footprintsOverlap } from './grid.js';
 import { MAP } from '../mapTiles.js';
+import { validDecorSeed } from './decor.js';
 import { GRID_SIZE, LEGACY_GRID } from '../gridConfig.js';
 import { serializeResearch, validResearch, deserializeResearch, hasAbilities, convertOldResearch, convertMixedResearch, picksFor } from './abilities.js';
 import { validLabGuide } from './labGuide.js';
@@ -64,6 +65,7 @@ export function serializeGame(state, now = new Date()) {
     spells: serializeSpells(state),    // Fuel Station spells brewed and waiting ("rage,heal"); missing in older saves
     fuelGuide: state.fuelGuide || 0,   // Fuel Station guide step (spells.js); missing in older saves
     wallLevel: wallLevel(state), // every wall's level (walls upgrade all at once); missing in older saves
+    ...(validDecorSeed(state.decorSeed) ? { decorSeed: state.decorSeed } : {}), // where its grass tufts grow (decor.js); v0.9.1
     debuted: [...(state.debuted || [])], // enemies whose debut wave this village has had (waves.js); missing in older saves
     mastery: serializeMastery(state),           // merged defenses' Mastery tiers per type ({ cannon: 2 }, merge.js); missing in older saves
     buildings: state.buildings.map((b) => {
@@ -83,7 +85,7 @@ export function serializeGame(state, now = new Date()) {
 const isInt = (v) => Number.isInteger(v);
 const SINGLE_PATH_RE = /^(a+|b+|c+)$/;
 
-/** The next wave's saved corners: missing / null (planned on load) or { number: wave >= 1, paths: 1-4 corners }. */
+/** The next wave's saved entrances: missing / null (planned on load) or { number: wave >= 1, paths: 1 to all of PATHS }. */
 export function validWavePlan(p) {
   if (p === undefined || p === null) return true;
   return typeof p === 'object' && isInt(p.number) && p.number >= 1 && Array.isArray(p.paths)
@@ -219,6 +221,7 @@ export function validateSave(obj) {
   // freeRespecs: v0.8.0-0.8.2 saves list the types with a merge's free path reset. Still checked as before, so no save
   // changes validity, but ignored on load (v0.8.3 removed free resets; an unused one is dropped).
   if (!validMastery(obj.mastery) || !validFreeRespecs(obj.freeRespecs)) return false;
+  if (obj.decorSeed !== undefined && !validDecorSeed(obj.decorSeed)) return false;
   if (obj.wallLevel !== undefined && (!isInt(obj.wallLevel) || obj.wallLevel < 1 || obj.wallLevel > Math.min(maxLevel('wall'), Math.max(1, obj.townHallLevel)))) return false;
 
   const seen = new Set();
@@ -293,6 +296,7 @@ export function deserializeGame(obj) {
     spells: deserializeSpells(obj.spells),
     fuelGuide: obj.fuelGuide || 0,
     wallLevel: walls,
+    decorSeed: validDecorSeed(obj.decorSeed) ? obj.decorSeed : null, // null: a save from before v0.9.1 (GameState makes one)
     // null = a save from before debut waves (GameState fills it in for its hall: waves.js legacyDebuted).
     debuted: Array.isArray(obj.debuted) ? obj.debuted.filter((k) => typeof k === 'string' && CONFIG.enemies[k]) : null,
     buildings,
@@ -312,6 +316,8 @@ export function parseSave(text) {
   if (obj && typeof obj === 'object' && obj.version === 5) obj = migrateV5(obj);
   if (obj && typeof obj === 'object' && obj.version === 6) obj = migrateV6(obj);
   if (obj && typeof obj === 'object' && obj.grid === undefined) obj = migrateGrid(obj);
+  // A planned wave from an entrance the map no longer has (v0.9.1 dropped the left waterfall): plan it again on load.
+  if (obj && typeof obj === 'object' && obj.wavePlan && Array.isArray(obj.wavePlan.paths) && !obj.wavePlan.paths.every((x) => PATHS.includes(x))) obj = { ...obj, wavePlan: null };
   if (!validateSave(obj)) return { status: 'invalid', data: null };
   return { status: 'ok', data: obj };
 }

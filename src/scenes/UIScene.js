@@ -7,7 +7,7 @@ import {
   DEFENSE_TYPES, ECONOMY_TYPES, WALL_TYPES, buildableCount, buildCost, buildingName, checkBuy, checkUpgrade, countOwned, isDefense,
   levelStats, limitFor, maxHp, maxLevel, typeConfig, footprintDims, wallLevel, overCap, hallUnlocks, displayName, mergedConfigOf
 } from '../logic/buildings.js';
-import { checkMerge, mergePreview } from '../logic/merge.js';
+import { checkMerge, mergePreview, plainName } from '../logic/merge.js';
 import { abilityIcon } from '../objects/MergeIcons.js';
 import { masteryLevel, masteryTierCount, masteryTier } from '../logic/merge.js';
 import { checkRepair, formatGold, repairCost, hallIncomeRate, mineStockCap } from '../logic/economy.js';
@@ -1886,7 +1886,7 @@ New walls are built at your wall level (${wallLevel(this.gs)}), so one costs wha
     this.mergePickBar.setVisible(this.mergePicking);
     this.refreshInfo();
     if (!this.mergePicking) return;
-    this.mpText.setText(`Tap another Level ${maxLevel(d.type)} ${buildingName(d.type)} to merge`).setScale(1);
+    this.mpText.setText(`Tap another Level ${maxLevel(d.type)} ${plainName(d.type)} to merge`).setScale(1);
     const span = this.overlaySpan(82, 146), H = 60, pad = 20, gap = 16;
     fitWidth(this.mpText, span.hi - span.lo - pad * 2 - gap - this.mpCancel.btnW);
     const w = pad + this.mpText.displayWidth + gap + this.mpCancel.btnW + pad;

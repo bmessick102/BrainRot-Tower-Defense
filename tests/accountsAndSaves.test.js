@@ -255,7 +255,8 @@ describe('corrupt or tampered saves are rejected without throwing', () => {
   });
   it('Fuel Station guide', () => { for (const v of [7, -1, '2', 2.5]) bad((s) => { s.fuelGuide = v; }); });
   it('wave plan', () => {
-    for (const v of ['top', { number: 0, paths: ['top'] }, { number: 3, paths: [] }, { number: 3, paths: ['north'] }, { number: 3 }, { number: 1.5, paths: ['top'] }]) {
+    // (An entrance the map doesn't have, e.g. 'north' or v0.9.1's dropped 'left', isn't tampering: the plan is made again; save.test.js.)
+    for (const v of ['top', { number: 0, paths: ['top'] }, { number: 3, paths: [] }, { number: 3 }, { number: 1.5, paths: ['top'] }]) {
       bad((s) => { s.wavePlan = v; });
     }
   });

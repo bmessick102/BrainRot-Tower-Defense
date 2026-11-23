@@ -25,6 +25,8 @@ import { distance } from './iso.js';
 import { footprintCenter } from './grid.js';
 
 /** The types that can merge (CONFIG.merges keys), in config order. */
+/** A type's name for "another Level 5 Diddypult": without a leading "The" (The Diddypult). */
+export const plainName = (type) => buildingName(type).replace(/^The /, '');
 export const MERGE_TYPES = Object.keys(CONFIG.merges || {});
 
 export function isMergeable(type) {
@@ -73,8 +75,8 @@ export function checkMerge(state, b, otherId = null) {
   if (b.destroyed) return { ...base, ok: false, reason: 'Destroyed' };
   const candidates = mergeCandidates(state, b);
   const out = { ...base, candidates };
-  if (!candidates.length) return { ...out, ok: false, reason: `Needs another Level ${top} ${buildingName(b.type)}` };
-  if (otherId && !candidates.some((o) => o.id === otherId)) return { ...out, ok: false, reason: `Pick another Level ${top} ${buildingName(b.type)}` };
+  if (!candidates.length) return { ...out, ok: false, reason: `Needs another Level ${top} ${plainName(b.type)}` };
+  if (otherId && !candidates.some((o) => o.id === otherId)) return { ...out, ok: false, reason: `Pick another Level ${top} ${plainName(b.type)}` };
   if (isWaveActive(state)) return { ...out, ok: false, reason: 'Not during a wave' };
   if (state.gold < cost.gold) return { ...out, ok: false, reason: needGoldReason(cost.gold, Math.floor(state.gold)) };
   if (researchPoints(state) < cost.rp) return { ...out, ok: false, reason: needRpReason(cost.rp, researchPoints(state)) };
