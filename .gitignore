@@ -19,3 +19,6 @@ dist/
 
 # Windows Explorer folder settings (system files, recreated by Windows).
 desktop.ini
+
+# Office lock files (made while a deck or document is open).
+~$*
