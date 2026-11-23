@@ -13,11 +13,11 @@ export class RangeCircle {
     const c = gridToScreen(centerX, centerY);
     const g = this.gfx;
     g.clear();
-    const r = rangeEllipse(range);
+    const r = rangeEllipse(range, centerX, centerY); // sized to the tiles where it stands
     g.fillStyle(0xffffff, 0.15).fillEllipse(c.x, c.y, r.rx * 2, r.ry * 2);
     g.lineStyle(2, 0xffffff, 0.7).strokeEllipse(c.x, c.y, r.rx * 2, r.ry * 2);
     if (minRange > 0) {
-      const m = rangeEllipse(minRange);
+      const m = rangeEllipse(minRange, centerX, centerY);
       g.fillStyle(0xff0000, 0.3).fillEllipse(c.x, c.y, m.rx * 2, m.ry * 2);
     }
     g.setVisible(true);

@@ -12,7 +12,8 @@
 //   room: the marker is just as tall and the map edge is right there.
 // - bottom: underneath is the outward side (toward the map's bottom edge), away from the grass, so the chips
 //   never get near it; the disc sits a little further up the path to leave the chips room below it.
-// - left / right: underneath is beside the path, on the dirt outside the grass, in narrow columns.
+// - left / right / upperLeft: underneath is beside the path, outside the grass, in narrow columns.
+// - topLeft / topRight / bottomLeft: the paths off the diamond's edges, with room for rows of 6.
 import { MAP } from '../mapTiles.js';
 import { gridToScreen } from './iso.js';
 
@@ -25,21 +26,22 @@ export const MARKER = { disc: 40, chipW: 62, chipH: 40, gap: 6, rowGap: 4 };
  * row: its strip of map is the shortest, and the HUD's top row sits over it whenever the camera is up there,
  * so a second row would leave the marker no room to slide out from under the HUD.
  */
-export const PER_ROW = { top: 12, bottom: 6, left: 3, right: 3 };
+export const PER_ROW = { top: 12, topRight: 6, topLeft: 6, bottom: 6, bottomLeft: 6, upperLeft: 3, left: 3, right: 3 };
 /** World px kept between a marker and the nearest grass tile. */
 export const GRASS_MARGIN = 10;
 
-const HALF_W = MAP.tileWidth / 2, HALF_H = MAP.tileHeight / 2;
 let grassCache = null;
-/** Bounding box (world px) of every grass tile, where buildings can stand. */
+/** Bounding box (world px) of every grass tile, where buildings can stand (from the tile's four corners: tiles vary a little in size). */
 export function grassBoxes() {
   if (!grassCache) {
     grassCache = [];
     MAP.tiles.forEach((row, r) => {
       for (let c = 0; c < row.length; c++) {
         if (row[c] !== '1') continue;
-        const top = gridToScreen(c, r); // the tile's top corner
-        grassCache.push({ x: top.x - HALF_W, y: top.y, w: MAP.tileWidth, h: MAP.tileHeight });
+        const q = [gridToScreen(c, r), gridToScreen(c + 1, r), gridToScreen(c + 1, r + 1), gridToScreen(c, r + 1)];
+        const x0 = Math.min(...q.map((p) => p.x)), x1 = Math.max(...q.map((p) => p.x));
+        const y0 = Math.min(...q.map((p) => p.y)), y1 = Math.max(...q.map((p) => p.y));
+        grassCache.push({ x: x0, y: y0, w: x1 - x0, h: y1 - y0 });
       }
     });
   }

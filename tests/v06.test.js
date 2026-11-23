@@ -271,7 +271,7 @@ describe('Patch notes', () => {
     const fs = await import('node:fs');
     const pkg = JSON.parse(fs.readFileSync(new URL('../package.json', import.meta.url), 'utf8'));
     expect(PATCH_NOTES.version).toBe(pkg.version);
-    expect(PATCH_NOTES.entries.length).toBeGreaterThanOrEqual(10);
+    expect(PATCH_NOTES.entries.length).toBeGreaterThanOrEqual(1); // (a new minor update starts its own tab: v0.7.1)
     for (const e of PATCH_NOTES.entries) { expect(e.title).toBeTruthy(); expect(e.text).toBeTruthy(); expect(e.icon).toBeTruthy(); }
   });
 });

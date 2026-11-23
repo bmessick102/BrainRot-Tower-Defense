@@ -13,14 +13,18 @@ import { emit, random, round2 } from './util.js';
 import { isRestless, nightLootMult } from './enrage.js';
 import { countedBuildings, starsFor, starBonus } from './waveStars.js';
 
-export const PATHS = ['top', 'right', 'bottom', 'left'];
-// Endless waves add one spawn corner every 2 Village Hall levels (charter §10 said 3), so all 4 corners are in
-// play by Village Hall 9, inside the 10 Village Hall levels. TODO(design): move to the sheet's Global tab.
-export const ENDLESS_WAVES_PER_EXTRA_PATH = 2;
+// The ways in (the 40 x 40 map's eight entrances, clockwise from the top; never the lake): gridConfig.js PATHS.
+export const PATHS = ['top', 'topRight', 'right', 'bottom', 'bottomLeft', 'left', 'upperLeft', 'topLeft'];
 
-/** Enemy counts, HP multiplier, and spawn path count for wave n (1-based). */
+/** The most entrances a wave can use at Village Hall `th` (rules.entrancesByHall; past its end, the last). */
+export function entrancesForHall(th) {
+  const t = CONFIG.rules.entrancesByHall;
+  return Math.min(PATHS.length, t[Math.max(1, Math.min(th, t.length)) - 1]);
+}
+
+/** Enemy counts, HP multiplier, and spawn path count (the hall's most entrances) for Village Hall n's base wave. */
 export function waveComposition(n) {
-  return withLateKinds(baseComposition(n), n);
+  return { ...withLateKinds(baseComposition(n), n), spawnPaths: entrancesForHall(n) };
 }
 
 /**
@@ -52,13 +56,10 @@ function baseComposition(n) {
   const scripted = CONFIG.waves;
   if (n <= scripted.length) return { ...scripted[n - 1] };
   const last = scripted[scripted.length - 1];
-  const k = n - scripted.length; // halls past the last scripted one
   const grow = hallWaveGrowth(scripted.length, n), growHp = hallWaveGrowth(scripted.length, n, 'hp');
   const comp = {};
   for (const kind of ENEMY_KINDS) comp[kind] = Math.round((last[kind] || 0) * grow);
   comp.hpMultiplier = round2(last.hpMultiplier * growHp);
-  // (Village Halls 6-10 come from 2, 3, 3, 4, 4 corners, as they did before Village Hall 5 got a scripted wave; 4 after.)
-  comp.spawnPaths = Math.min(PATHS.length, last.spawnPaths + Math.floor(k / ENDLESS_WAVES_PER_EXTRA_PATH));
   return comp;
 }
 
@@ -80,13 +81,12 @@ export function choosePaths(state, n, count) {
  * then Mr. Leasts, Sneaker Sharks, Bombers, Neegy Balloons last. (Neegies only come from balloons.)
  */
 /**
- * The corners wave n attacks from (1-4), random every wave at every level. Wave 1 is always ['top'].
- * `maxCount` is the wave's own corner count (its base wave's spawnPaths): early villages stay modest
- * (up to one more than that), later ones can be anything from 1 to all 4.
+ * The entrances wave n attacks from: a random number from 1 up to `maxCount` (the hall's most, entrancesForHall),
+ * each a random entrance, new every wave. Wave 1 is always ['top'].
  */
 export function planPaths(state, n, maxCount) {
   if (n === 1) return ['top'];
-  const most = Math.min(PATHS.length, Math.max(1, (maxCount || 1) + 1));
+  const most = Math.min(PATHS.length, Math.max(1, maxCount || 1));
   return choosePaths(state, n, 1 + Math.floor(random(state) * most));
 }
 

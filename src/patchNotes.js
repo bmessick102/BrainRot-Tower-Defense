@@ -2,7 +2,7 @@
 // once per `version` (the first time the title screen opens after an update; saved in ibtd.patchNotes), and its
 // "What's New" button opens it any time. Keep `version` equal to package.json's for the release it describes.
 //
-// One tab per minor update (v0.7.1): PATCH_NOTES is the newest (its tab is "v0.8 · Latest"), PATCH_HISTORY the older
+// One tab per minor update (v0.7.1): PATCH_NOTES is the newest (its tab is "v0.9 · Latest"), PATCH_HISTORY the older
 // ones, newest first. Each has `release` (the tab's name: '0.7'), `version` (its newest patch) and `sections`.
 // When a new minor update ships, the current PATCH_NOTES content moves to the front of PATCH_HISTORY.
 //
@@ -18,206 +18,20 @@
 const allEntries = (release) => release.sections.flatMap((s) => s.entries);
 
 export const PATCH_NOTES = {
-  release: '0.8',
-  version: '0.8.12',
-  title: "What's New in v0.8.12",
+  release: '0.9',
+  version: '0.9.0',
+  title: "What's New in v0.9",
   sections: [
     {
       type: 'feature',
       entries: [
         {
-          version: '0.8.0', icon: { texture: 'hero_queen' }, title: 'New hero: the Hatsune Queen (from Village Hall 8)',
-          text: 'A crossbow hero with her own altar who shoots ground and air enemies from range while staying back. Her Encore Cloak (hotbar) hides her for 4 s while her bolts hit much harder and pierce. She has her own RV Lab tree with three paths.'
+          version: '0.9.0', icon: { texture: 'map_background' }, title: 'A bigger village: the new 40 x 40 map',
+          text: 'A new painted forest at dawn, day, dusk and night with a 40 x 40 field, much more room than before. Its tiles are drawn exactly where buildings and walls snap. Your village moves over as it is, around your Village Hall. Zoom all the way out to see the whole map.'
         },
         {
-          version: '0.8.0', icon: { texture: 'ui_merge_gear' }, title: 'Merge your defenses',
-          text: 'Two Level 10 Cannons, Locklair Towers, Litman Mortars or Firework Launchers can merge into one bigger building as strong as both, with its own special ability (the Firework Launcher becomes a Missile Silo) and a gold Mastery track. Select a Level 10 one and press Merge.'
-        },
-        {
-          version: '0.8.2', icon: { texture: 'bld_wizard_merged' }, title: 'Gandolf Towers can merge: Gandolf the Grand',
-          text: 'Two Level 10 Gandolf Towers merge into Gandolf the Grand. You Shall Not Pass: every 10 s he raises a magic wall in front of a group of ground enemies, holding them in place for his fireballs. Flyers go over it.'
-        },
-        {
-          version: '0.8.2', icon: { texture: 'bld_flock_merged' }, title: 'F.L.O.C.K Towers can merge: the Mothership',
-          text: 'Two Level 10 F.L.O.C.K Towers merge into the F.L.O.C.K Mothership, which finally fights back. Triple Zap: every second it zaps the 3 closest enemies at once, ground or air, and still marks everything in range.'
-        },
-        {
-          version: '0.8.3', icon: { texture: 'bld_spear_merged_dl' }, title: 'Spear Throwers can merge: the Harpoon Ballista',
-          text: 'Two Level 10 Spear Throwers merge into the Harpoon Ballista, whose spears hit twice as hard. Reel In: every 3rd throw harpoons the toughest enemy in range and drags it 3 tiles back the way it came. Bosses are only slowed.'
-        },
-        {
-          version: '0.8.11', icon: { texture: 'bld_ksi_merged' }, title: 'KSI Towers can merge: the KSI Frost Fortress',
-          text: 'Two Level 10 KSI Towers merge into the KSI Frost Fortress, whose bottles hit twice as hard. Shatter: any enemy it has chilled bursts into ice shards when it dies, hurting every enemy around it, so a crowd can shatter in a chain.'
-        },
-        {
-          version: '0.8.0', icon: { enemy: 'quandale' }, title: 'New enemy: Quandale Dingle (from Village Hall 7)',
-          text: 'A fast street fighter. When he gets close he dashes into a building with a big impact hit that stuns it for a moment, then keeps punching. A wall in his way stops the dash.'
-        },
-        {
-          version: '0.8.0', icon: { enemy: 'grimace' }, title: 'New enemy: Grimace Golem (from Village Hall 11)',
-          text: 'A huge purple tank that leaves goo as he walks. Troops that step in it get enraged (faster and harder hitting), and he leaves a big puddle when he falls. Take him down before the troops behind him reach the goo.'
-        },
-        {
-          version: '0.8.0', icon: { building: 'townHall', level: 11 }, title: 'Village Halls 12 to 15',
-          text: 'Four more Village Hall levels, each with its own new buildings (more Towers of Rah, Gandolfs, Diddypults and more), extra walls and tougher waves. Open your Village Hall to see what the next level adds.'
-        },
-        {
-          version: '0.8.0', icon: { texture: 'ui_start_button' }, title: '2x wave speed',
-          text: 'Press the 2x button next to Start Wave (or T) to play a wave at double speed. It stays on for the next waves until you turn it off.'
-        },
-        {
-          version: '0.8.0', icon: { texture: 'ui_medal_1' }, title: 'Leaderboard: every village',
-          text: 'Every village now has its own spot on the leaderboard, with its name under the player’s, so all your villages can climb it.'
-        }
-      ]
-    },
-    {
-      type: 'change',
-      entries: [
-        {
-          version: '0.8.9', icon: { texture: 'ui_start_button' }, title: '4x wave speed',
-          text: 'The wave speed button has a second level: press it once for 2x, again for 4x, and once more to go back to normal speed. Your choice stays for the next waves.'
-        },
-        {
-          version: '0.8.0', icon: { building: 'townHall', level: 11 }, title: 'Village Hall 11: new defenses instead of Bonus Slots',
-          text: 'Bonus Slots are gone. Village Hall 11 now gives one more Tower of Rah, Gandolf, Diddypult, KSI Tower and Cannon. Villages keep every building they built with Bonus Slots: they all keep working, you just can’t build another of that kind until you’re under the limit.'
-        },
-        {
-          version: '0.8.12', icon: { texture: 'ui_merge_gear' }, title: 'See which buildings can merge',
-          text: 'Buildings that can merge now show a greyed Merge button before Level 10, so you know what to aim for. Tap it to see how merging works.'
-        },
-        {
-          version: '0.8.6', icon: { texture: 'bld_spear_merged_dl' }, title: 'The Harpoon Ballista gets its own picture',
-          text: 'The Harpoon Ballista is no longer a glowing Spear Thrower: it has its own giant ballista tower, which turns to face the enemy it’s shooting.'
-        },
-        {
-          version: '0.8.10', icon: { texture: 'bld_spear_merged_dl' }, title: 'Harpoon Ballista fits its tile',
-          text: 'The Harpoon Ballista is drawn a little smaller again, so you can see its tile’s outline all around it.'
-        },
-        {
-          version: '0.8.8', icon: { texture: 'bld_flock_merged' }, title: 'F.L.O.C.K Mothership smaller',
-          text: 'The F.L.O.C.K Mothership is drawn smaller, so it fits on its tile and you can see the tile’s outline around it.'
-        },
-        {
-          version: '0.8.7', icon: { texture: 'bld_spear_merged_dl' }, title: 'Harpoon Ballista a little smaller',
-          text: 'The Harpoon Ballista is drawn a little smaller, closer to the size of the other merged defenses.'
-        },
-        {
-          version: '0.8.5', icon: { texture: 'bld_flock_merged' }, title: 'Triple Zap looks like a tesla coil',
-          text: 'The F.L.O.C.K Mothership\u2019s zaps are now crackling beams of electricity, straight from the tower to each of the 3 enemies it hits, that follow them until they fade.'
-        },
-        {
-          version: '0.8.5', icon: { texture: 'ui_ability_rolling_thunder' }, title: 'New merged ability icons',
-          text: 'Every merged defense\u2019s ability now has its own painted icon in the merge window, the RV Lab and the building panel. Merged buildings have a new gear badge, and armored enemies a new shield beside their health bar.'
-        },
-        {
-          version: '0.8.4', icon: { texture: 'ui_settings_button' }, title: 'A way out when something breaks',
-          text: 'If the game ever freezes because of an error, a “Something went wrong” window now appears with Keep Playing and Reload, instead of a stuck screen. Server problems show a plain message with Retry.'
-        },
-        {
-          version: '0.8.0', icon: { building: 'cannon', level: 10 }, title: 'No more selling',
-          text: 'Every Village Hall allows a set number of each building, so selling is gone: rearrange your village by moving buildings in edit mode instead. Nothing was taken from your village.'
-        },
-        {
-          version: '0.8.0', icon: { enemy: 'grimace' }, title: 'Two new wave themes',
-          text: 'Dash Gang (Quandale Dingles with Sharks) and Goo Parade (Grimace Golems leading the horde) join the rotation once those enemies are in your waves.'
-        },
-        {
-          version: '0.8.0', icon: { texture: 'ui_league_champion' }, title: 'Visit from the player’s profile',
-          text: 'The button on each leaderboard and Find Players row is now Profile. Visit their villages from inside the profile; Back returns you to their profile, then the list you came from.'
-        },
-        {
-          version: '0.8.3', icon: { building: 'rvlab' }, title: 'No free path reset after merging',
-          text: 'Merging two defenses no longer gives a free path reset in the RV Lab. Resetting a path always costs its normal Burger price. An unused free reset from an earlier merge is gone.'
-        },
-        {
-          version: '0.8.2', icon: { hero: true }, title: 'Heroes sleep at night',
-          text: 'At night, when no raid is on, the Brisket King and the Hatsune Queen walk home and sleep on their altars. Start a raid and they wake up to defend.'
-        },
-        {
-          version: '0.8.3', icon: { texture: 'bld_flock_merged' }, title: 'New F.L.O.C.K Mothership picture',
-          text: 'The F.L.O.C.K Mothership has its own picture now, instead of a bigger, glowing Level 10 F.L.O.C.K Tower.'
-        },
-        {
-          version: '0.8.4', icon: { building: 'cannon', level: 10 }, title: 'Mega Cannon a little smaller',
-          text: 'The merged Cannon is drawn a little smaller, so it doesn’t crowd the buildings around it.'
-        },
-        {
-          version: '0.8.3', icon: { texture: 'ui_achievement' }, title: 'New achievement sounds',
-          text: 'Earning an achievement plays a new sound, and pressing Claim on an achievement in your Profile has its own sound too.'
-        },
-        {
-          version: '0.8.3', icon: { texture: 'ui_medal_1' }, title: 'Pages on the leaderboard and Find Players',
-          text: 'The leaderboard now goes past the top 10: use the arrows beside its title to page through every village, 10 at a time. Find Players loads 8 players a page, so both open faster.'
-        },
-        {
-          version: '0.8.3', icon: { texture: 'ui_league_champion' }, title: 'Spam protection',
-          text: 'Find Players searches are spaced a second apart, and after a few wrong passwords in a row you wait a few seconds before trying again. Searching or opening profiles very fast for a minute pauses them briefly.'
-        },
-        {
-          version: '0.8.3', icon: { texture: 'ui_edit_layout_button' }, title: 'Cleaner edit mode',
-          text: 'In edit mode, buildings show only their level badge: the perk diamonds and Mastery stars are hidden so you can see your layout. They come back when you leave edit mode.'
-        },
-        {
-          version: '0.8.3', icon: { texture: 'bld_wizard_merged' }, title: 'Gandolf the Grand a little smaller',
-          text: 'Gandolf the Grand is drawn a little smaller, so he fits in better next to your other buildings.'
-        },
-        {
-          version: '0.8.3', icon: { texture: 'bld_firework_merged_left' }, title: 'Missile Silo a little bigger',
-          text: 'The Missile Silo, the merged Firework Launcher, is drawn a little bigger so it stands out more.'
-        },
-        {
-          version: '0.8.3', icon: { building: 'flock', level: 10 }, title: 'F.L.O.C.K Towers a little smaller',
-          text: 'Every F.L.O.C.K Tower is drawn a little smaller, and the F.L.O.C.K Mothership shrank by the same amount.'
-        },
-        {
-          version: '0.8.3', icon: { texture: 'ui_settings_button' }, title: 'Credits: audio and assets',
-          text: 'The Credits tab in Settings now has sections, with fuller team credits and who made the sound effects and images.'
-        },
-        {
-          version: '0.8.2', icon: { texture: 'ui_encore_ready' }, title: 'New Encore Cloak icon',
-          text: 'The Hatsune Queen’s Encore Cloak has its own picture now, a purple cloak, on her hotbar button and over her when it’s ready.'
-        },
-        {
-          version: '0.8.2', icon: { texture: 'ui_merge_gear' }, title: 'Bigger ability icons',
-          text: 'Merged defenses show their special ability in a bigger square box, like the heroes’ ability buttons.'
-        },
-        {
-          version: '0.8.1', icon: { texture: 'bld_cannon_merged_dl' }, title: 'Bigger shots for merged defenses',
-          text: 'The Mega Cannon fires a much bigger cannonball and the Missile Silo fires bigger rockets, so their shots stand out.'
-        },
-        {
-          version: '0.8.1', icon: { texture: 'ui_merge_gear' }, title: 'Mastery shows when it’s ready',
-          text: 'In the RV Lab, the gold Mastery column now pulses when you can research its next tier.'
-        },
-        {
-          version: '0.8.2', icon: { texture: 'ui_merge_gear' }, title: 'Mastery column look',
-          text: 'The RV Lab’s Mastery column keeps a steady gold outline (no more pulsing), and all its text is in gold.'
-        },
-        {
-          version: '0.8.1', icon: { texture: 'title_logo' }, title: 'New app icon',
-          text: 'Add the game to your home screen and it gets a proper app icon: the game’s logo over the title screen. The browser tab shows it too.'
-        },
-        {
-          version: '0.8.0', icon: { enemy: 'tank' }, title: 'Title screen',
-          text: 'Tripi Tropi, the fish giant, is smaller on the title screen so he no longer towers over everyone.'
-        },
-        {
-          version: '0.8.0', icon: { texture: 'ui_settings_button' }, title: 'New perk sound',
-          text: 'Researching a perk in the RV Lab has a new sound, and Mastery tiers play it too.'
-        }
-      ]
-    },
-    {
-      type: 'balance',
-      entries: [
-        {
-          version: '0.8.2', icon: { building: 'wizard', level: 10 }, title: 'Gandolf Towers back to 6',
-          text: 'Village Halls give up to 6 Gandolf Towers again (Village Hall 12 gives a Gandolf instead of a Litman Mortar), and pairs can now merge into Gandolf the Grand instead.'
-        },
-        {
-          version: '0.8.1', icon: { building: 'wizard', level: 10 }, title: 'Fewer Gandolf Towers',
-          text: 'Gandolf Towers now top out at 4 instead of 6: one each at Village Halls 3, 6, 9 and 11. Village Hall 12 gives a Litman Mortar instead. Villages keep every Gandolf they already built.'
+          version: '0.9.0', icon: { enemy: 'grunt' }, title: 'Raids from 8 entrances',
+          text: 'Enemies can come down every path, past the gate, over the bridge and across the waterfalls: everywhere but the lake. Bigger Village Halls open more at once (all 8 from Village Hall 13). Fog and markers show where the next wave comes from.'
         }
       ]
     },
@@ -225,64 +39,8 @@ export const PATCH_NOTES = {
       type: 'fix',
       entries: [
         {
-          version: '0.8.12', icon: { texture: 'bld_ksi_merged' }, title: 'KSI Frost Fortress sat off its tile',
-          text: 'The KSI Frost Fortress stood too far back, so its icy base hung over the tiles behind and beside it. It now stands centered on its own tile, like a Level 10 KSI Tower, and is still clearly bigger.'
-        },
-        {
-          version: '0.8.7', icon: { texture: 'bld_cannon_merged_dl' }, title: 'Merged defenses fire from the right spot',
-          text: 'Shots from merged defenses came out of the middle of the tower. Now the Mega Cannon fires from its barrel, the Missile Silo’s rockets leave from its nose, Gandolf the Grand casts from his staff and the Harpoon Ballista throws from its bolt’s tip.'
-        },
-        {
-          version: '0.8.7', icon: { texture: 'hero_queen_attack' }, title: 'The Hatsune Queen’s bolts leave her crossbow',
-          text: 'Her bolts started low, near her waist. They now fly out of the tip of her crossbow, on whichever side she’s aiming.'
-        },
-        {
-          version: '0.8.5', icon: { texture: 'ui_medal_1' }, title: 'Ranks on player cards match the leaderboard',
-          text: 'A player\u2019s card could show a different rank from the leaderboard. Its rank is now their best village\u2019s leaderboard rank, every village shows its own rank, and the village you clicked on the leaderboard is marked.'
-        },
-        {
-          version: '0.8.5', icon: { building: 'townHall', level: 15 }, title: 'Village Hall shown as 11',
-          text: 'Villages above Village Hall 11 showed as 11 on the leaderboard, player cards and Find Players. They show their real level now, and a player\u2019s numbers come from their villages everywhere.'
-        },
-        {
-          version: '0.8.4', icon: { texture: 'ui_medal_1' }, title: 'Leaderboard showed a server error',
-          text: 'After the last server update the leaderboard could show a database error instead of the list. It loads again, and if the server is ever behind it shows the per-player board instead of an error.'
-        },
-        {
-          version: '0.8.3', icon: { texture: 'ui_league_champion' }, title: 'Stuck when visiting a village again',
-          text: 'After visiting a village and pressing Back, pressing Visit or Visit Best Village again (or switching to another of the player’s villages) left the screen stuck. Visiting now works every time.'
-        },
-        {
-          version: '0.8.3', icon: { texture: 'ui_league_champion' }, title: 'Find Players buttons past the edge',
-          text: 'The Achievements sort button in Find Players ran past the right edge of the window. The sort buttons now fit inside it.'
-        },
-        {
-          version: '0.8.0', icon: { building: 'townHall', level: 1 }, title: 'Village drawn as plain blocks',
-          text: 'On a slow or patchy connection, pictures that failed to load stayed as plain blocks all game. The game now keeps trying, swaps buildings in when they arrive, and offers Retry and Reload if pictures still won’t load.'
-        },
-        {
-          version: '0.8.1', icon: { texture: 'hero_queen' }, title: 'Hatsune Queen’s shots were silent',
-          text: 'With several Locklair Towers firing, the Hatsune Queen’s crossbow shots often made no sound. Every shot now plays, like a Locklair Tower’s.'
-        },
-        {
-          version: '0.8.0', icon: { hero: true }, title: 'Hero health bar not full',
-          text: 'After upgrading a hero’s altar, the hero’s health bar looked hurt even at full health. It now stays full.'
-        },
-        {
-          version: '0.8.0', icon: { texture: 'ui_settings_button' }, title: 'Sound with the sliders at 0',
-          text: 'Music, ambience and some sounds kept playing after you turned the sliders down (in the pause menu or mid-sound). Every slider now silences its sounds right away.'
-        },
-        {
-          version: '0.8.0', icon: { texture: 'ui_league_champion' }, title: 'Black screen when visiting a village',
-          text: 'Visiting a big village showed a black screen while its pictures loaded. The village now appears right away and fills in, and if something goes wrong you get a message and a Back button.'
-        },
-        {
-          version: '0.8.0', icon: { texture: 'ui_league_champion' }, title: 'Buttons stuck after visiting a village',
-          text: 'Coming back from someone’s village and closing their card left every title screen button unclickable until a refresh. They work again.'
-        },
-        {
-          version: '0.8.0', icon: { enemy: 'quandale' }, title: 'Enemies drawn as a plain box',
-          text: 'An enemy whose picture hadn’t loaded showed up as a plain box. It now shows a simple stand-in figure instead (reload the page to get its picture back).'
+          version: '0.9.0', icon: { texture: 'bld_flock_merged' }, title: 'The F.L.O.C.K Mothership was tiny',
+          text: 'It was drawn smaller than the F.L.O.C.K Towers it was merged from. It now stands clearly bigger than a top-level F.L.O.C.K Tower.'
         }
       ]
     }
@@ -293,6 +51,277 @@ export const PATCH_NOTES = {
 
 /** Older updates, newest first: one What's New tab each (players can read them any time). */
 export const PATCH_HISTORY = [
+  {
+    release: '0.8',
+    version: '0.8.12',
+    sections: [
+      {
+        type: 'feature',
+        entries: [
+          {
+            version: '0.8.0', icon: { texture: 'hero_queen' }, title: 'New hero: the Hatsune Queen (from Village Hall 8)',
+            text: 'A crossbow hero with her own altar who shoots ground and air enemies from range while staying back. Her Encore Cloak (hotbar) hides her for 4 s while her bolts hit much harder and pierce. She has her own RV Lab tree with three paths.'
+          },
+          {
+            version: '0.8.0', icon: { texture: 'ui_merge_gear' }, title: 'Merge your defenses',
+            text: 'Two Level 10 Cannons, Locklair Towers, Litman Mortars or Firework Launchers can merge into one bigger building as strong as both, with its own special ability (the Firework Launcher becomes a Missile Silo) and a gold Mastery track. Select a Level 10 one and press Merge.'
+          },
+          {
+            version: '0.8.2', icon: { texture: 'bld_wizard_merged' }, title: 'Gandolf Towers can merge: Gandolf the Grand',
+            text: 'Two Level 10 Gandolf Towers merge into Gandolf the Grand. You Shall Not Pass: every 10 s he raises a magic wall in front of a group of ground enemies, holding them in place for his fireballs. Flyers go over it.'
+          },
+          {
+            version: '0.8.2', icon: { texture: 'bld_flock_merged' }, title: 'F.L.O.C.K Towers can merge: the Mothership',
+            text: 'Two Level 10 F.L.O.C.K Towers merge into the F.L.O.C.K Mothership, which finally fights back. Triple Zap: every second it zaps the 3 closest enemies at once, ground or air, and still marks everything in range.'
+          },
+          {
+            version: '0.8.3', icon: { texture: 'bld_spear_merged_dl' }, title: 'Spear Throwers can merge: the Harpoon Ballista',
+            text: 'Two Level 10 Spear Throwers merge into the Harpoon Ballista, whose spears hit twice as hard. Reel In: every 3rd throw harpoons the toughest enemy in range and drags it 3 tiles back the way it came. Bosses are only slowed.'
+          },
+          {
+            version: '0.8.11', icon: { texture: 'bld_ksi_merged' }, title: 'KSI Towers can merge: the KSI Frost Fortress',
+            text: 'Two Level 10 KSI Towers merge into the KSI Frost Fortress, whose bottles hit twice as hard. Shatter: any enemy it has chilled bursts into ice shards when it dies, hurting every enemy around it, so a crowd can shatter in a chain.'
+          },
+          {
+            version: '0.8.0', icon: { enemy: 'quandale' }, title: 'New enemy: Quandale Dingle (from Village Hall 7)',
+            text: 'A fast street fighter. When he gets close he dashes into a building with a big impact hit that stuns it for a moment, then keeps punching. A wall in his way stops the dash.'
+          },
+          {
+            version: '0.8.0', icon: { enemy: 'grimace' }, title: 'New enemy: Grimace Golem (from Village Hall 11)',
+            text: 'A huge purple tank that leaves goo as he walks. Troops that step in it get enraged (faster and harder hitting), and he leaves a big puddle when he falls. Take him down before the troops behind him reach the goo.'
+          },
+          {
+            version: '0.8.0', icon: { building: 'townHall', level: 11 }, title: 'Village Halls 12 to 15',
+            text: 'Four more Village Hall levels, each with its own new buildings (more Towers of Rah, Gandolfs, Diddypults and more), extra walls and tougher waves. Open your Village Hall to see what the next level adds.'
+          },
+          {
+            version: '0.8.0', icon: { texture: 'ui_start_button' }, title: '2x wave speed',
+            text: 'Press the 2x button next to Start Wave (or T) to play a wave at double speed. It stays on for the next waves until you turn it off.'
+          },
+          {
+            version: '0.8.0', icon: { texture: 'ui_medal_1' }, title: 'Leaderboard: every village',
+            text: 'Every village now has its own spot on the leaderboard, with its name under the player’s, so all your villages can climb it.'
+          }
+        ]
+      },
+      {
+        type: 'change',
+        entries: [
+          {
+            version: '0.8.9', icon: { texture: 'ui_start_button' }, title: '4x wave speed',
+            text: 'The wave speed button has a second level: press it once for 2x, again for 4x, and once more to go back to normal speed. Your choice stays for the next waves.'
+          },
+          {
+            version: '0.8.0', icon: { building: 'townHall', level: 11 }, title: 'Village Hall 11: new defenses instead of Bonus Slots',
+            text: 'Bonus Slots are gone. Village Hall 11 now gives one more Tower of Rah, Gandolf, Diddypult, KSI Tower and Cannon. Villages keep every building they built with Bonus Slots: they all keep working, you just can’t build another of that kind until you’re under the limit.'
+          },
+          {
+            version: '0.8.12', icon: { texture: 'ui_merge_gear' }, title: 'See which buildings can merge',
+            text: 'Buildings that can merge now show a greyed Merge button before Level 10, so you know what to aim for. Tap it to see how merging works.'
+          },
+          {
+            version: '0.8.6', icon: { texture: 'bld_spear_merged_dl' }, title: 'The Harpoon Ballista gets its own picture',
+            text: 'The Harpoon Ballista is no longer a glowing Spear Thrower: it has its own giant ballista tower, which turns to face the enemy it’s shooting.'
+          },
+          {
+            version: '0.8.10', icon: { texture: 'bld_spear_merged_dl' }, title: 'Harpoon Ballista fits its tile',
+            text: 'The Harpoon Ballista is drawn a little smaller again, so you can see its tile’s outline all around it.'
+          },
+          {
+            version: '0.8.8', icon: { texture: 'bld_flock_merged' }, title: 'F.L.O.C.K Mothership smaller',
+            text: 'The F.L.O.C.K Mothership is drawn smaller, so it fits on its tile and you can see the tile’s outline around it.'
+          },
+          {
+            version: '0.8.7', icon: { texture: 'bld_spear_merged_dl' }, title: 'Harpoon Ballista a little smaller',
+            text: 'The Harpoon Ballista is drawn a little smaller, closer to the size of the other merged defenses.'
+          },
+          {
+            version: '0.8.5', icon: { texture: 'bld_flock_merged' }, title: 'Triple Zap looks like a tesla coil',
+            text: 'The F.L.O.C.K Mothership\u2019s zaps are now crackling beams of electricity, straight from the tower to each of the 3 enemies it hits, that follow them until they fade.'
+          },
+          {
+            version: '0.8.5', icon: { texture: 'ui_ability_rolling_thunder' }, title: 'New merged ability icons',
+            text: 'Every merged defense\u2019s ability now has its own painted icon in the merge window, the RV Lab and the building panel. Merged buildings have a new gear badge, and armored enemies a new shield beside their health bar.'
+          },
+          {
+            version: '0.8.4', icon: { texture: 'ui_settings_button' }, title: 'A way out when something breaks',
+            text: 'If the game ever freezes because of an error, a “Something went wrong” window now appears with Keep Playing and Reload, instead of a stuck screen. Server problems show a plain message with Retry.'
+          },
+          {
+            version: '0.8.0', icon: { building: 'cannon', level: 10 }, title: 'No more selling',
+            text: 'Every Village Hall allows a set number of each building, so selling is gone: rearrange your village by moving buildings in edit mode instead. Nothing was taken from your village.'
+          },
+          {
+            version: '0.8.0', icon: { enemy: 'grimace' }, title: 'Two new wave themes',
+            text: 'Dash Gang (Quandale Dingles with Sharks) and Goo Parade (Grimace Golems leading the horde) join the rotation once those enemies are in your waves.'
+          },
+          {
+            version: '0.8.0', icon: { texture: 'ui_league_champion' }, title: 'Visit from the player’s profile',
+            text: 'The button on each leaderboard and Find Players row is now Profile. Visit their villages from inside the profile; Back returns you to their profile, then the list you came from.'
+          },
+          {
+            version: '0.8.3', icon: { building: 'rvlab' }, title: 'No free path reset after merging',
+            text: 'Merging two defenses no longer gives a free path reset in the RV Lab. Resetting a path always costs its normal Burger price. An unused free reset from an earlier merge is gone.'
+          },
+          {
+            version: '0.8.2', icon: { hero: true }, title: 'Heroes sleep at night',
+            text: 'At night, when no raid is on, the Brisket King and the Hatsune Queen walk home and sleep on their altars. Start a raid and they wake up to defend.'
+          },
+          {
+            version: '0.8.3', icon: { texture: 'bld_flock_merged' }, title: 'New F.L.O.C.K Mothership picture',
+            text: 'The F.L.O.C.K Mothership has its own picture now, instead of a bigger, glowing Level 10 F.L.O.C.K Tower.'
+          },
+          {
+            version: '0.8.4', icon: { building: 'cannon', level: 10 }, title: 'Mega Cannon a little smaller',
+            text: 'The merged Cannon is drawn a little smaller, so it doesn’t crowd the buildings around it.'
+          },
+          {
+            version: '0.8.3', icon: { texture: 'ui_achievement' }, title: 'New achievement sounds',
+            text: 'Earning an achievement plays a new sound, and pressing Claim on an achievement in your Profile has its own sound too.'
+          },
+          {
+            version: '0.8.3', icon: { texture: 'ui_medal_1' }, title: 'Pages on the leaderboard and Find Players',
+            text: 'The leaderboard now goes past the top 10: use the arrows beside its title to page through every village, 10 at a time. Find Players loads 8 players a page, so both open faster.'
+          },
+          {
+            version: '0.8.3', icon: { texture: 'ui_league_champion' }, title: 'Spam protection',
+            text: 'Find Players searches are spaced a second apart, and after a few wrong passwords in a row you wait a few seconds before trying again. Searching or opening profiles very fast for a minute pauses them briefly.'
+          },
+          {
+            version: '0.8.3', icon: { texture: 'ui_edit_layout_button' }, title: 'Cleaner edit mode',
+            text: 'In edit mode, buildings show only their level badge: the perk diamonds and Mastery stars are hidden so you can see your layout. They come back when you leave edit mode.'
+          },
+          {
+            version: '0.8.3', icon: { texture: 'bld_wizard_merged' }, title: 'Gandolf the Grand a little smaller',
+            text: 'Gandolf the Grand is drawn a little smaller, so he fits in better next to your other buildings.'
+          },
+          {
+            version: '0.8.3', icon: { texture: 'bld_firework_merged_left' }, title: 'Missile Silo a little bigger',
+            text: 'The Missile Silo, the merged Firework Launcher, is drawn a little bigger so it stands out more.'
+          },
+          {
+            version: '0.8.3', icon: { building: 'flock', level: 10 }, title: 'F.L.O.C.K Towers a little smaller',
+            text: 'Every F.L.O.C.K Tower is drawn a little smaller, and the F.L.O.C.K Mothership shrank by the same amount.'
+          },
+          {
+            version: '0.8.3', icon: { texture: 'ui_settings_button' }, title: 'Credits: audio and assets',
+            text: 'The Credits tab in Settings now has sections, with fuller team credits and who made the sound effects and images.'
+          },
+          {
+            version: '0.8.2', icon: { texture: 'ui_encore_ready' }, title: 'New Encore Cloak icon',
+            text: 'The Hatsune Queen’s Encore Cloak has its own picture now, a purple cloak, on her hotbar button and over her when it’s ready.'
+          },
+          {
+            version: '0.8.2', icon: { texture: 'ui_merge_gear' }, title: 'Bigger ability icons',
+            text: 'Merged defenses show their special ability in a bigger square box, like the heroes’ ability buttons.'
+          },
+          {
+            version: '0.8.1', icon: { texture: 'bld_cannon_merged_dl' }, title: 'Bigger shots for merged defenses',
+            text: 'The Mega Cannon fires a much bigger cannonball and the Missile Silo fires bigger rockets, so their shots stand out.'
+          },
+          {
+            version: '0.8.1', icon: { texture: 'ui_merge_gear' }, title: 'Mastery shows when it’s ready',
+            text: 'In the RV Lab, the gold Mastery column now pulses when you can research its next tier.'
+          },
+          {
+            version: '0.8.2', icon: { texture: 'ui_merge_gear' }, title: 'Mastery column look',
+            text: 'The RV Lab’s Mastery column keeps a steady gold outline (no more pulsing), and all its text is in gold.'
+          },
+          {
+            version: '0.8.1', icon: { texture: 'title_logo' }, title: 'New app icon',
+            text: 'Add the game to your home screen and it gets a proper app icon: the game’s logo over the title screen. The browser tab shows it too.'
+          },
+          {
+            version: '0.8.0', icon: { enemy: 'tank' }, title: 'Title screen',
+            text: 'Tripi Tropi, the fish giant, is smaller on the title screen so he no longer towers over everyone.'
+          },
+          {
+            version: '0.8.0', icon: { texture: 'ui_settings_button' }, title: 'New perk sound',
+            text: 'Researching a perk in the RV Lab has a new sound, and Mastery tiers play it too.'
+          }
+        ]
+      },
+      {
+        type: 'balance',
+        entries: [
+          {
+            version: '0.8.2', icon: { building: 'wizard', level: 10 }, title: 'Gandolf Towers back to 6',
+            text: 'Village Halls give up to 6 Gandolf Towers again (Village Hall 12 gives a Gandolf instead of a Litman Mortar), and pairs can now merge into Gandolf the Grand instead.'
+          },
+          {
+            version: '0.8.1', icon: { building: 'wizard', level: 10 }, title: 'Fewer Gandolf Towers',
+            text: 'Gandolf Towers now top out at 4 instead of 6: one each at Village Halls 3, 6, 9 and 11. Village Hall 12 gives a Litman Mortar instead. Villages keep every Gandolf they already built.'
+          }
+        ]
+      },
+      {
+        type: 'fix',
+        entries: [
+          {
+            version: '0.8.12', icon: { texture: 'bld_ksi_merged' }, title: 'KSI Frost Fortress sat off its tile',
+            text: 'The KSI Frost Fortress stood too far back, so its icy base hung over the tiles behind and beside it. It now stands centered on its own tile, like a Level 10 KSI Tower, and is still clearly bigger.'
+          },
+          {
+            version: '0.8.7', icon: { texture: 'bld_cannon_merged_dl' }, title: 'Merged defenses fire from the right spot',
+            text: 'Shots from merged defenses came out of the middle of the tower. Now the Mega Cannon fires from its barrel, the Missile Silo’s rockets leave from its nose, Gandolf the Grand casts from his staff and the Harpoon Ballista throws from its bolt’s tip.'
+          },
+          {
+            version: '0.8.7', icon: { texture: 'hero_queen_attack' }, title: 'The Hatsune Queen’s bolts leave her crossbow',
+            text: 'Her bolts started low, near her waist. They now fly out of the tip of her crossbow, on whichever side she’s aiming.'
+          },
+          {
+            version: '0.8.5', icon: { texture: 'ui_medal_1' }, title: 'Ranks on player cards match the leaderboard',
+            text: 'A player\u2019s card could show a different rank from the leaderboard. Its rank is now their best village\u2019s leaderboard rank, every village shows its own rank, and the village you clicked on the leaderboard is marked.'
+          },
+          {
+            version: '0.8.5', icon: { building: 'townHall', level: 15 }, title: 'Village Hall shown as 11',
+            text: 'Villages above Village Hall 11 showed as 11 on the leaderboard, player cards and Find Players. They show their real level now, and a player\u2019s numbers come from their villages everywhere.'
+          },
+          {
+            version: '0.8.4', icon: { texture: 'ui_medal_1' }, title: 'Leaderboard showed a server error',
+            text: 'After the last server update the leaderboard could show a database error instead of the list. It loads again, and if the server is ever behind it shows the per-player board instead of an error.'
+          },
+          {
+            version: '0.8.3', icon: { texture: 'ui_league_champion' }, title: 'Stuck when visiting a village again',
+            text: 'After visiting a village and pressing Back, pressing Visit or Visit Best Village again (or switching to another of the player’s villages) left the screen stuck. Visiting now works every time.'
+          },
+          {
+            version: '0.8.3', icon: { texture: 'ui_league_champion' }, title: 'Find Players buttons past the edge',
+            text: 'The Achievements sort button in Find Players ran past the right edge of the window. The sort buttons now fit inside it.'
+          },
+          {
+            version: '0.8.0', icon: { building: 'townHall', level: 1 }, title: 'Village drawn as plain blocks',
+            text: 'On a slow or patchy connection, pictures that failed to load stayed as plain blocks all game. The game now keeps trying, swaps buildings in when they arrive, and offers Retry and Reload if pictures still won’t load.'
+          },
+          {
+            version: '0.8.1', icon: { texture: 'hero_queen' }, title: 'Hatsune Queen’s shots were silent',
+            text: 'With several Locklair Towers firing, the Hatsune Queen’s crossbow shots often made no sound. Every shot now plays, like a Locklair Tower’s.'
+          },
+          {
+            version: '0.8.0', icon: { hero: true }, title: 'Hero health bar not full',
+            text: 'After upgrading a hero’s altar, the hero’s health bar looked hurt even at full health. It now stays full.'
+          },
+          {
+            version: '0.8.0', icon: { texture: 'ui_settings_button' }, title: 'Sound with the sliders at 0',
+            text: 'Music, ambience and some sounds kept playing after you turned the sliders down (in the pause menu or mid-sound). Every slider now silences its sounds right away.'
+          },
+          {
+            version: '0.8.0', icon: { texture: 'ui_league_champion' }, title: 'Black screen when visiting a village',
+            text: 'Visiting a big village showed a black screen while its pictures loaded. The village now appears right away and fills in, and if something goes wrong you get a message and a Back button.'
+          },
+          {
+            version: '0.8.0', icon: { texture: 'ui_league_champion' }, title: 'Buttons stuck after visiting a village',
+            text: 'Coming back from someone’s village and closing their card left every title screen button unclickable until a refresh. They work again.'
+          },
+          {
+            version: '0.8.0', icon: { enemy: 'quandale' }, title: 'Enemies drawn as a plain box',
+            text: 'An enemy whose picture hadn’t loaded showed up as a plain box. It now shows a simple stand-in figure instead (reload the page to get its picture back).'
+          }
+        ]
+      }
+    ],
+    get entries() { return allEntries(this); }
+  },
   {
     release: '0.7',
     version: '0.7.1',

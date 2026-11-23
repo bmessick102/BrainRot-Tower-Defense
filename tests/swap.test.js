@@ -24,21 +24,21 @@ describe('edit mode swap (planSwap)', () => {
   });
 
   it('different sizes trade places centered on each other', () => {
-    const s = makeStateWithTownHall();               // 3x3 Village Hall at (17, 15)
+    const s = makeStateWithTownHall();               // 3x3 Village Hall at (19, 19)
     const th = s.buildings[0];
-    const mine = addBuilding(s, 'mine', 10, 16);
-    const plan = planSwap(s.buildings, mine, 17, 16);
+    const mine = addBuilding(s, 'mine', 12, 20);
+    const plan = planSwap(s.buildings, mine, 19, 20);
     expect(plan.ok).toBe(true);
     expect(plan.otherId).toBe(th.id);
-    expect(plan.to).toEqual({ col: 18, row: 16 });   // 2x2 centered (rounded) in the hall's spot
-    expect(plan.otherTo).toEqual({ col: 10, row: 16 }); // 3x3 centered (rounded) on the mine's spot
+    expect(plan.to).toEqual({ col: 20, row: 20 });   // 2x2 centered (rounded) in the hall's spot
+    expect(plan.otherTo).toEqual({ col: 12, row: 20 }); // 3x3 centered (rounded) on the mine's spot
   });
 
   it("is refused when the other building wouldn't fit in the old spot", () => {
     const s = makeStateWithTownHall();
-    const mine = addBuilding(s, 'mine', 10, 16);
-    addBuilding(s, 'cannon', 12, 16);                // right next to the mine: no room for a 3x3 there
-    const plan = planSwap(s.buildings, mine, 17, 16);
+    const mine = addBuilding(s, 'mine', 12, 20);
+    addBuilding(s, 'cannon', 14, 20);                // right next to the mine: no room for a 3x3 there
+    const plan = planSwap(s.buildings, mine, 19, 20);
     expect(plan.ok).toBe(false);
   });
 

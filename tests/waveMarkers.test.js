@@ -103,10 +103,16 @@ describe('wave markers (world-space wave preview)', () => {
       const { entrance, edge } = pathEnds(path);
       expect(pathAngle(path)).toBeCloseTo(arrowAngle(edge, entrance), 6);
     }
+    // Top and bottom come straight down / up into their corners, the waterfall corners straight across.
     expect(Math.sin(pathAngle('top'))).toBeGreaterThan(0.9);     // down
     expect(Math.sin(pathAngle('bottom'))).toBeLessThan(-0.9);  // up
     expect(Math.cos(pathAngle('left'))).toBeGreaterThan(0.9);   // right
     expect(Math.cos(pathAngle('right'))).toBeLessThan(-0.9);   // left
+    expect(Math.cos(pathAngle('topRight'))).toBeLessThan(-0.3); // down and to the left
+    expect(Math.sin(pathAngle('topRight'))).toBeGreaterThan(0.3);
+    expect(Math.cos(pathAngle('bottomLeft'))).toBeGreaterThan(0.3); // over the bridge: up and to the right
+    expect(Math.sin(pathAngle('bottomLeft'))).toBeLessThan(-0.3);
+    for (const p of ['topLeft', 'upperLeft']) { expect(Math.cos(pathAngle(p))).toBeGreaterThan(0.3); expect(Math.sin(pathAngle(p))).toBeGreaterThan(0.3); } // down and to the right
   });
 
   it('slides in along the path (never onto the grass) to get out from under the HUD', () => {
@@ -121,12 +127,9 @@ describe('wave markers (world-space wave preview)', () => {
       // first clear spot further in, still clear of the grass.
       const back = anchorAt(range, range.dMin);
       const m = markerRect(L, back.x, back.y, range.scale);
-      const cover = {
-        top: { x: m.x, y: m.y, w: m.w, h: m.h / 4 },
-        bottom: { x: m.x, y: m.y + m.h * 0.75, w: m.w, h: m.h / 4 },
-        left: { x: m.x, y: m.y, w: m.w / 4, h: m.h },
-        right: { x: m.x + m.w * 0.75, y: m.y, w: m.w / 4, h: m.h }
-      }[path];
+      // Cover the marker's outermost corner (the one furthest back along the path): sliding in along the path in
+      // any direction moves the marker off it.
+      const cover = { x: range.ux > 0 ? m.x : m.x + m.w - 4, y: range.uy > 0 ? m.y : m.y + m.h - 4, w: 4, h: 4 };
       const d = pickAlongPath(range, L, id, [cover]);
       expect(d).toBeGreaterThan(range.dMin);
       expect(d).toBeLessThanOrEqual(range.dMax);

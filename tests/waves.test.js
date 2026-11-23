@@ -19,7 +19,7 @@ const w5 = CONFIG.waves[4];
 describe('waves.js', () => {
   it('waves 1 to 5 match config (Village Hall 5 has a scripted base wave too)', () => {
     expect(CONFIG.waves).toHaveLength(5);
-    for (let n = 1; n <= 3; n++) expect(waveComposition(n)).toEqual({ ...CONFIG.waves[n - 1], ...LATE_ZERO }); // (the late kinds join from VH4)
+    for (let n = 1; n <= 3; n++) expect(waveComposition(n)).toEqual({ ...CONFIG.waves[n - 1], ...LATE_ZERO, spawnPaths: CONFIG.rules.entrancesByHall[n - 1] }); // (the late kinds join from VH4)
     // From Village Hall 4 the v0.6 kinds join (John Pork first) and the regular troops make room for them.
     expect(waveComposition(4).pork).toBe(CONFIG.enemies.pork.baseCount);
     expect(waveComposition(5).toilet).toBe(CONFIG.enemies.toilet.baseCount);
@@ -78,7 +78,7 @@ describe('waves.js', () => {
     for (const k of CONFIG.rules.lateKindPool) expect(c[k]).toBeLessThanOrEqual(Math.round((w5[k] || 0) * cg)); // (made room for the v0.6 kinds)
     expect(c.toilet).toBe(Math.round(CONFIG.enemies.toilet.baseCount * cg)); // joined at Village Hall 5
     expect(c.hpMultiplier).toBe(Math.round(w5.hpMultiplier * hg * 100) / 100);
-    expect(c.spawnPaths).toBe(2);
+    expect(c.spawnPaths).toBe(4);
   });
 
   it('wave 8 follows the endless formulas', () => {
@@ -87,11 +87,12 @@ describe('waves.js', () => {
     for (const k of ENEMY_KINDS) if (!CONFIG.enemies[k].fromTownHall && !CONFIG.rules.lateKindPool.includes(k)) expect(c[k]).toBe(Math.round((w5[k] || 0) * cg ** 3));
     expect(c.toilet).toBe(Math.round(CONFIG.enemies.toilet.baseCount * cg ** 3));
     expect(c.hpMultiplier).toBe(Math.round(w5.hpMultiplier * hg ** 3 * 100) / 100);
-    expect(c.spawnPaths).toBe(3);
+    expect(c.spawnPaths).toBe(5);
   });
 
-  it('spawn corners by Village Hall: 1, 1, 2, 2, 2, 2, 3, 3, 4, 4', () => {
-    expect([1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map((n) => waveComposition(n).spawnPaths)).toEqual([1, 1, 2, 2, 2, 2, 3, 3, 4, 4]);
+  it('most entrances by Village Hall: 1, 2, 2, 3, 3, 4, 4, 5, 5, 6, 6, 7, then all 8 from Village Hall 13', () => {
+    expect(PATHS).toHaveLength(8);
+    expect(Array.from({ length: 15 }, (_, i) => waveComposition(i + 1).spawnPaths)).toEqual([1, 2, 2, 3, 3, 4, 4, 5, 5, 6, 6, 7, 8, 8, 8]);
   });
 
   it('each Village Hall base wave is tougher than the one before (total enemy HP x hpMultiplier)', () => {
@@ -104,13 +105,11 @@ describe('waves.js', () => {
     }
   });
 
-  it('all 4 corners are in play by wave 9', () => {
-    expect(waveComposition(9).spawnPaths).toBe(4);
-  });
-
-  it('spawn paths cap at 4', () => {
-    expect(waveComposition(11).spawnPaths).toBe(4);
-    expect(waveComposition(30).spawnPaths).toBe(4);
+  it('every entrance is in play from Village Hall 13, and never more than there are', () => {
+    expect(waveComposition(12).spawnPaths).toBe(7);
+    expect(waveComposition(13).spawnPaths).toBe(PATHS.length);
+    expect(waveComposition(30).spawnPaths).toBe(PATHS.length);
+    expect(PATHS).not.toContain('lake');
   });
 
   it('splits enemies evenly and interleaves the troop types instead of sending one type at a time', () => {
@@ -133,10 +132,10 @@ describe('waves.js', () => {
     expect(q.top[0]).toBe('babycar');
   });
 
-  it('the wave plan has 1-4 random corners, is made ahead, and is kept until the wave is cleared', () => {
+  it('the wave plan has 1 up to the hall\'s most entrances, is made ahead, and is kept until the wave is cleared', () => {
     const seen = new Set();
-    for (let seed = 1; seed < 80; seed++) {
-      const state = makeStateWithTownHall({}, 10);
+    for (let seed = 1; seed < 120; seed++) {
+      const state = makeStateWithTownHall({}, 10); // Village Hall 10: up to 6
       state.rng = seededRng(seed);
       state.wavesCleared = 20;
       const plan = getWavePlan(state);
@@ -147,7 +146,14 @@ describe('waves.js', () => {
       triggerWave(state);
       expect(state.wave.paths).toEqual(plan.paths);
     }
-    expect([...seen].sort()).toEqual([1, 2, 3, 4]);
+    expect([...seen].sort()).toEqual([1, 2, 3, 4, 5, 6]);
+    // Village Hall 1 (after the tutorial wave) only ever comes from one entrance.
+    for (let seed = 1; seed < 20; seed++) {
+      const state = makeStateWithTownHall({}, 1);
+      state.rng = seededRng(seed);
+      state.wavesCleared = 3;
+      expect(getWavePlan(state).paths).toHaveLength(1);
+    }
   });
 
   it('wave 1 plans only the top corner; the plan is replaced for a new wave number', () => {
@@ -205,7 +211,7 @@ describe('waves.js', () => {
   });
 
   it('the Village Hall picks the base wave; the first wave is exactly that base', () => {
-    for (let th = 1; th <= 3; th++) expect(scaledWaveComposition(th, 1)).toEqual({ ...CONFIG.waves[th - 1], babycar: 0, bones: 0, chimp: 0, ...LATE_ZERO }); // (no Da Baby Cars or late kinds in these base waves)
+    for (let th = 1; th <= 3; th++) expect(scaledWaveComposition(th, 1)).toEqual({ ...CONFIG.waves[th - 1], babycar: 0, bones: 0, chimp: 0, ...LATE_ZERO, spawnPaths: CONFIG.rules.entrancesByHall[th - 1] }); // (no Da Baby Cars or late kinds in these base waves)
     expect(scaledWaveComposition(4, 1)).toEqual({ ...waveComposition(4), babycar: 0, bones: 0, chimp: 0 });
     expect(scaledWaveComposition(7, 1)).toEqual(waveComposition(7));
     expect(scaledWaveComposition(16, 1)).toEqual(waveComposition(CONFIG.rules.maxTownHallLevel)); // capped
@@ -223,7 +229,7 @@ describe('waves.js', () => {
       expect(c.grunt).toBe(Math.round(base.grunt * waveRamp(n).count));
       expect(c.hpMultiplier).toBeCloseTo(base.hpMultiplier * waveRamp(n).hp, 2);
       expect(c.bomber).toBe(0); // kinds the hall's base wave doesn't have never show up
-      expect(c.spawnPaths).toBe(base.spawnPaths);
+      expect(c.spawnPaths).toBe(2); // Village Hall 2's most entrances, whatever the wave
       if (prev) { expect(c.grunt).toBeGreaterThan(prev.grunt); expect(c.hpMultiplier).toBeGreaterThan(prev.hpMultiplier); }
       prev = c;
     }

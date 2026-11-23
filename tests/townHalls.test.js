@@ -199,12 +199,12 @@ describe('a village over its caps (built with Bonus Slots before v0.8)', () => {
 describe('waves at Village Halls 12-15', () => {
   const strength = (c) => waveStrength(c) * c.hpMultiplier;
 
-  it('every base wave is valid: whole counts, 4 corners, a finite health multiplier', () => {
+  it('every base wave is valid: whole counts, its entrances, a finite health multiplier', () => {
     for (const th of halls) {
       const c = waveComposition(th);
       for (const k of ENEMY_KINDS) expect(Number.isInteger(c[k] || 0) && (c[k] || 0) >= 0, `${k} VH${th}`).toBe(true);
       expect(Number.isFinite(c.hpMultiplier) && c.hpMultiplier > 0).toBe(true);
-      if (th >= 9) expect(c.spawnPaths).toBe(4);
+      expect(c.spawnPaths).toBe([1, 2, 2, 3, 3, 4, 4, 5, 5, 6, 6, 7, 8, 8, 8][th - 1]);
     }
   });
 

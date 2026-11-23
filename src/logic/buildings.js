@@ -1,5 +1,6 @@
 // Building types, stats by level, costs, limits, and upgrade rules. Every number comes from CONFIG.
 import { CONFIG } from '../config.js';
+import { FOOTPRINTS } from '../gridConfig.js';
 import { isWaveActive, nextId } from './util.js';
 import { canPlaceRect, footprintsOverlap, fpW, fpH } from './grid.js';
 import { ABILITIES, picksFor } from '../abilityConfig.js';
@@ -61,8 +62,8 @@ export function buildingName(type) {
 /** Square footprint size (walls are 1 x segmentLength, a single tile by default; use footprintDims for them). */
 export function buildingSize(type) {
   if (type === 'wall') return 1;
-  if (type === 'townHall') return CONFIG.grid.townHallSize;
-  return typeConfig(type).size ?? CONFIG.grid.buildingSize; // a type can set its own (F.L.O.C.K Tower: 1)
+  if (type === 'townHall') return FOOTPRINTS.townHall;
+  return typeConfig(type).size ?? FOOTPRINTS.default; // a type can set its own (F.L.O.C.K Tower, Mousetrap: 1)
 }
 
 /** Footprint width and height for a type (and wall orientation). */

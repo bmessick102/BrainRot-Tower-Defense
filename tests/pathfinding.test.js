@@ -64,11 +64,11 @@ describe('walls', () => {
 
 describe('ground pathfinding', () => {
   it('walks around a wall when there is a short way around', () => {
-    const s = makeStateWithTownHall(); // TH cols 17-19, rows 15-17
+    const s = makeStateWithTownHall(); // TH cols 19-21, rows 19-21
     const th = s.buildings[0];
     // A short vertical wall in the straight line from the enemy to the town hall.
-    const w = wall(s, 12, 15, 'y');
-    const e = addEnemy(s, 'grunt', 6.5, 16.5);
+    const w = wall(s, 14, 19, 'y');
+    const e = addEnemy(s, 'grunt', 8.5, 20.5);
     e.targetId = th.id;
     run(s, e, 60, () => th.hp < CONFIG.townHall.levels[0].hp);
     expect(th.hp).toBeLessThan(CONFIG.townHall.levels[0].hp);
@@ -78,8 +78,8 @@ describe('ground pathfinding', () => {
   it('breaks through when the target is sealed in', () => {
     const s = makeStateWithTownHall();
     const th = s.buildings[0];
-    const walls = encloseWithWalls(s, 17, 15, 20, 18);
-    const e = addEnemy(s, 'grunt', 8.5, 16.5, { hp: 9999, maxHp: 9999 });
+    const walls = encloseWithWalls(s, 19, 19, 22, 22);
+    const e = addEnemy(s, 'grunt', 10.5, 20.5, { hp: 9999, maxHp: 9999 });
     e.targetId = th.id;
     run(s, e, 400, () => th.hp < CONFIG.townHall.levels[0].hp);
     expect(walls.some((w) => w.destroyed)).toBe(true);
@@ -91,8 +91,8 @@ describe('ground pathfinding', () => {
     const th = s.buildings[0];
     // A long wall line across most of the map between enemy and target.
     const line = [];
-    for (let r = 0; r < 31; r += N) line.push(wall(s, 12, r, 'y'));
-    const e = addEnemy(s, 'grunt', 6.5, 16.5, { hp: 9999, maxHp: 9999 });
+    for (let r = 0; r < 40; r += N) line.push(wall(s, 14, r, 'y'));
+    const e = addEnemy(s, 'grunt', 8.5, 20.5, { hp: 9999, maxHp: 9999 });
     e.targetId = th.id;
     const nav = getNav(s);
     const step = nextStep(nav, distanceField(nav, th, 0.5), e.x, e.y);
@@ -103,7 +103,7 @@ describe('ground pathfinding', () => {
 
   it('rebuilds paths when a wall is destroyed', () => {
     const s = makeStateWithTownHall();
-    const w = wall(s, 12, 15, 'y');
+    const w = wall(s, 14, 19, 'y');
     const before = getNav(s);
     damageBuilding(s, w, 99999);
     const after = getNav(s);
@@ -113,8 +113,8 @@ describe('ground pathfinding', () => {
   it('Sneaker Sharks leap a full ring of walls without breaking any', () => {
     const s = makeStateWithTownHall();
     const th = s.buildings[0];
-    const walls = encloseWithWalls(s, 17, 15, 20, 18);
-    const e = addEnemy(s, 'shark', 8.5, 16.5, { hp: 9999, maxHp: 9999 });
+    const walls = encloseWithWalls(s, 19, 19, 22, 22);
+    const e = addEnemy(s, 'shark', 10.5, 20.5, { hp: 9999, maxHp: 9999 });
     e.targetId = th.id;
     let hopped = false;
     run(s, e, 60, () => { if (e.overWall) hopped = true; return th.hp < CONFIG.townHall.levels[0].hp; });
@@ -130,7 +130,7 @@ describe('ground pathfinding', () => {
   it('melee attacks say which enemy struck (for its hit sound)', () => {
     const s = makeStateWithTownHall();
     const th = s.buildings[0];
-    const e = addEnemy(s, 'tank', 16.4, 16.5);
+    const e = addEnemy(s, 'tank', 18.4, 20.5);
     e.targetId = th.id;
     run(s, e, 3, () => s.events.some((ev) => ev.name === 'enemyAttack'));
     expect(s.events.find((ev) => ev.name === 'enemyAttack').data.kind).toBe('tank');
@@ -139,12 +139,12 @@ describe('ground pathfinding', () => {
   it('Sneaker Sharks still walk around other buildings', () => {
     const s = makeStateWithTownHall();
     const th = s.buildings[0];
-    const blocker = createBuilding(s, 'cannon', 10, 16, 1);
+    const blocker = createBuilding(s, 'cannon', 12, 20, 1);
     s.buildings.push(blocker);
-    const e = addEnemy(s, 'shark', 6, 17.5, { hp: 9999, maxHp: 9999 });
+    const e = addEnemy(s, 'shark', 8, 21.5, { hp: 9999, maxHp: 9999 });
     e.targetId = th.id;
     let entered = false;
-    run(s, e, 40, () => { if (e.x > 10 && e.x < 12 && e.y > 16 && e.y < 18) entered = true; return th.hp < CONFIG.townHall.levels[0].hp; });
+    run(s, e, 40, () => { if (e.x > 12 && e.x < 14 && e.y > 20 && e.y < 22) entered = true; return th.hp < CONFIG.townHall.levels[0].hp; });
     expect(entered).toBe(false);
     expect(blocker.hp).toBe(CONFIG.defenses.cannon.levels[0].hp);
   });
@@ -152,12 +152,12 @@ describe('ground pathfinding', () => {
   it('air enemies fly straight over walls', () => {
     const s = makeStateWithTownHall();
     const th = s.buildings[0];
-    const walls = encloseWithWalls(s, 17, 15, 20, 18);
-    const b = addEnemy(s, 'bomber', 8.5, 16.5);
+    const walls = encloseWithWalls(s, 19, 19, 22, 22);
+    const b = addEnemy(s, 'bomber', 10.5, 20.5);
     b.targetId = th.id;
     run(s, b, 30);
-    expect(b.x).toBeCloseTo(18.5, 3);
-    expect(b.y).toBeCloseTo(16.5, 3);
+    expect(b.x).toBeCloseTo(20.5, 3);
+    expect(b.y).toBeCloseTo(20.5, 3);
     expect(walls.every((w) => !w.destroyed && w.hp === CONFIG.walls.levels[0].hp)).toBe(true);
   });
 });

@@ -7,13 +7,21 @@
 // Levels 6-10 extend the sheet's growth (costs x2, HP/damage x1.25, storage capacity x1.5);
 // they are NOT in Game_Balance_Sheet.xlsx yet: copy them in before the next re-export.
 // Map shape, image origin, town hall position, and spawn points live in src/mapTiles.js.
+import { TILE_WORLD, FOOTPRINTS } from './gridConfig.js';
+
+// The grid's numbers (tile size, corners, the hall's and the usual footprint) live in src/gridConfig.js; a type's own
+// footprint is its `size` below.
 export const CONFIG = {
-  grid: { tileWidth: 64, tileHeight: 32, townHallSize: 3, buildingSize: 2 },
+  grid: { tileWidth: TILE_WORLD.width, tileHeight: TILE_WORLD.height, townHallSize: FOOTPRINTS.townHall, buildingSize: FOOTPRINTS.default },
   startingGold: 250, // 100 rebuilds the ruined Village Hall (level 0 -> 1), 150 buys the first Mine
   rules: {
     // Everything destroyed in a night is rebuilt for free when the wave is beaten. During a wave a destroyed
     // building (not a wall) can be rebuilt early for this share of its current level's cost.
     rebuildCostShare: 0.3,
+    // The most entrances (MAP paths, 8 on the 40 x 40 map) a wave can come in from, per Village Hall level (VH1 first;
+    // past the end, the last). Each wave picks a random number from 1 up to it (waves.js planPaths), the same enemies
+    // spread across them; wave 1 always comes from the top. Every entrance is in play from Village Hall 13.
+    entrancesByHall: [1, 2, 2, 3, 3, 4, 4, 5, 5, 6, 6, 7, 8, 8, 8],
     // Rebuilding is always paid in gold. A level bought with Burgers (RV Lab, Fuel Station, Brisket King) counts
     // as this much gold per Burger, so its rebuild price grows with the level like every other building's.
     burgerGoldValue: 15,
@@ -100,7 +108,7 @@ export const CONFIG = {
   },
   // Day/night clock in seconds: a cycle of its own (about 8 minutes), separate from the waves.
   dayNight: { daySeconds: 240, duskSeconds: 30, nightSeconds: 180, dawnSeconds: 30 },
-  camera: { startZoom: 0.75, minZoom: 0.5, maxZoom: 2.0, dragThresholdPx: 6 },
+  camera: { startZoom: 0.75, minZoom: 0.35, maxZoom: 2.0, dragThresholdPx: 6 }, // 0.35: the whole 40 x 40 map and every entrance fit (GameScene.minZoom keeps the screen filled)
   townHall: {
     name: "Village Hall",
     // Every game starts with the hall in ruins (level 0): nothing can be built, no gnomes live there,
@@ -787,7 +795,9 @@ export const CONFIG = {
           { name: 'EMP Pulse', desc: 'Every 12 s, a pulse stuns every enemy in zap range for 0.75 s (bosses are slowed).', fx: { empEvery: 12, empSeconds: 0.75 } }
         ]
       },
-      art: { key: 'bld_flock_merged', scale: 0.7, standInScale: 1.25 } // v0.8.8: 1.25 -> 0.7, so the tile's outline shows around it
+      // v0.9.0: 0.7 -> 1.2. 0.7 (v0.8.8, to show the tile's outline) drew it smaller than a top-level (6) F.L.O.C.K Tower,
+      // which is already wider than its one tile; at 1.2 it stands 20% wider and ~15% taller (83 x 120 vs 69 x 105 px).
+      art: { key: 'bld_flock_merged', scale: 1.2, standInScale: 1.25 }
     },
     // Harpoon Ballista (v0.8.3): spears at 2x damage (2x DPS). Reel In (harpoon.js): every `every`th throw is a harpoon at
     // the toughest enemy in range (most current health, ground or air) that drags it `pull` tiles back the way it came
@@ -1389,11 +1399,11 @@ export const CONFIG = {
   // defenses (DJ, a 2nd Spear / Gandolf / Firework...), so it has a scripted base wave of its own; the endless
   // formula (rules.endlessCountGrowth / endlessHpGrowth) grows from it for Village Halls 6-10.
   waves: [
-    { grunt: 7, slinger: 0, bomber: 0, tank: 0, shark: 0, thief: 0, breaker: 0, balloon: 0, neegy: 0, spawnPaths: 1, hpMultiplier: 1 },
-    { grunt: 11, slinger: 2, bomber: 0, tank: 0, shark: 0, thief: 2, breaker: 0, balloon: 0, neegy: 0, spawnPaths: 1, hpMultiplier: 1 },
-    { grunt: 18, slinger: 4, bomber: 2, tank: 0, shark: 2, thief: 4, breaker: 2, balloon: 1, neegy: 0, spawnPaths: 2, hpMultiplier: 1 },
-    { grunt: 22, slinger: 5, bomber: 3, tank: 1, shark: 3, thief: 4, breaker: 3, balloon: 1, neegy: 0, spawnPaths: 2, hpMultiplier: 1 },
-    { grunt: 45, slinger: 10, bomber: 8, tank: 3, shark: 6, thief: 8, breaker: 5, balloon: 2, neegy: 0, spawnPaths: 2, hpMultiplier: 1.15 }
+    { grunt: 7, slinger: 0, bomber: 0, tank: 0, shark: 0, thief: 0, breaker: 0, balloon: 0, neegy: 0, hpMultiplier: 1 },
+    { grunt: 11, slinger: 2, bomber: 0, tank: 0, shark: 0, thief: 2, breaker: 0, balloon: 0, neegy: 0, hpMultiplier: 1 },
+    { grunt: 18, slinger: 4, bomber: 2, tank: 0, shark: 2, thief: 4, breaker: 2, balloon: 1, neegy: 0, hpMultiplier: 1 },
+    { grunt: 22, slinger: 5, bomber: 3, tank: 1, shark: 3, thief: 4, breaker: 3, balloon: 1, neegy: 0, hpMultiplier: 1 },
+    { grunt: 45, slinger: 10, bomber: 8, tank: 3, shark: 6, thief: 8, breaker: 5, balloon: 2, neegy: 0, hpMultiplier: 1.15 }
   ]
 };
 

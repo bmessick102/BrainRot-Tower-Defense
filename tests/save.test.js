@@ -23,10 +23,10 @@ const brokenStorage = {
 
 function sampleState() {
   const state = makeStateWithTownHall({ gold: 640, wavesCleared: 2, tutorialStep: 11, tutorialDone: true }, 3);
-  const mine = addBuilding(state, 'mine', 13, 15, 2);
+  const mine = addBuilding(state, 'mine', 15, 19, 2);
   mine.stock = 84;
-  addBuilding(state, 'storage', 21, 15, 1);
-  addBuilding(state, 'cannon', 17, 11, 3);
+  addBuilding(state, 'storage', 23, 19, 1);
+  addBuilding(state, 'cannon', 19, 15, 3);
   return state;
 }
 
@@ -47,7 +47,7 @@ describe('save.js', () => {
     const saved = serializeGame(sampleState());
     expect(saved.version).toBe(SAVE_VERSION);
     expect(saved).toMatchObject({ gold: 640, townHallLevel: 3, wavesCleared: 2, tutorialStep: 11, tutorialDone: true });
-    expect(saved.buildings[1]).toEqual({ id: 'b2', type: 'mine', level: 2, col: 13, row: 15, stock: 84 });
+    expect(saved.buildings[1]).toEqual({ id: 'b2', type: 'mine', level: 2, col: 15, row: 19, stock: 84 });
     expect(typeof saved.savedAt).toBe('string');
   });
 
@@ -119,9 +119,22 @@ describe('save.js', () => {
     expect(mutate((o) => { o.buildings[1].type = 'wall'; })).toBe(false);
     expect(mutate((o) => { o.buildings[1].level = 6; })).toBe(false);
     expect(mutate((o) => { o.buildings[1].level = 0; })).toBe(false);
-    expect(mutate((o) => { o.buildings[1].col = 17; })).toBe(false);          // overlaps the town hall
-    expect(mutate((o) => { o.buildings[1].col = 0; o.buildings[1].row = 0; })).toBe(false); // forest
+    expect(mutate((o) => { o.buildings[1].col = 19; o.buildings[1].row = 19; })).toBe(false); // overlaps the town hall
+    expect(mutate((o) => { o.buildings[1].col = 39; o.buildings[1].row = 39; })).toBe(false); // hangs off the grid
     expect(mutate((o) => { o.buildings.shift(); })).toBe(false);              // no town hall
+  });
+
+  it('old 32 x 31 saves (no grid field) are shifted onto the 40 x 40 grid, keeping the layout', () => {
+    const base = serializeGame(sampleState());
+    const old = JSON.parse(JSON.stringify(base));
+    delete old.grid;
+    old.buildings.forEach((b) => { b.col -= 2; b.row -= 4; }); // what the same layout looked like on the old grid
+    const parsed = parseSave(JSON.stringify(old));
+    expect(parsed.status).toBe('ok');
+    expect(parsed.data.grid).toBe(40);
+    expect(parsed.data.buildings).toEqual(base.buildings);
+    // A save that already says 40 is left alone.
+    expect(parseSave(JSON.stringify(base)).data.buildings).toEqual(base.buildings);
   });
 
   it('missing save is "none"; unavailable storage never throws', () => {

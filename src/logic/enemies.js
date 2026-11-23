@@ -146,10 +146,13 @@ export function spawnEnemy(state, kind, path, hpMultiplier = 1, pack = 1) {
   const e = createEnemy(state, kind, sx, sy, hpMultiplier * pack);
   if (pack > 1) e.pack = pack;
   if (MAP.edgeSpawnPoints && !isAirKind(kind) && !enemyConfig(kind).ramsToHall && !enemyConfig(kind).burrows) { // the Da Baby Car drives and the Toilet tunnels straight in
-    const [ex, ey] = MAP.spawnPoints[path];
+    // Through the path's bends (MAP.spawnRoutes) to its entrance on the grass.
+    const points = [...((MAP.spawnRoutes && MAP.spawnRoutes[path]) || []), MAP.spawnPoints[path]];
     // Keep a bit of the spawn spread so the column stays loose, but narrow it to fit the dirt path.
     const k = ENTRY_SPREAD / SPAWN_JITTER;
-    e.entry = { x: ex + (e.x - sx) * k, y: ey + (e.y - sy) * k };
+    const route = points.map(([px, py]) => ({ x: px + (e.x - sx) * k, y: py + (e.y - sy) * k }));
+    e.entry = route.shift();
+    e.route = route;
   }
   e.targetId = (enemyConfig(kind).drops ? balloonStop(state, e, enemyConfig(kind)) : pickTarget(state, e))?.id ?? null;
   state.enemies.push(e);
@@ -386,7 +389,7 @@ function stepEnemyBody(state, e, dt, nav) {
 
   if (e.entry && cfg.type !== 'air') {
     // Still marching in along the dirt path from the map edge.
-    if (moveToward(e, e.entry.x, e.entry.y, step) <= ENTRY_REACHED) e.entry = null;
+    if (moveToward(e, e.entry.x, e.entry.y, step) <= ENTRY_REACHED) e.entry = e.route && e.route.length ? e.route.shift() : null; // next bend, or onto the grass
     e.attacking = false;
     return;
   }

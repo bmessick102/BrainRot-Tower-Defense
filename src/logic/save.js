@@ -4,6 +4,8 @@ import { validHeroSleep } from './hero.js';
 import { CONFIG } from '../config.js';
 import { BUILDING_TYPES, HERO_TYPES, WALL_ORIENTS, footprintDims, buildingSize, maxLevel, levelStats, isDefense, maxHp, wallLevel, commonWallLevel } from './buildings.js';
 import { isRectOnGrass, footprintsOverlap } from './grid.js';
+import { MAP } from '../mapTiles.js';
+import { GRID_SIZE, LEGACY_GRID } from '../gridConfig.js';
 import { serializeResearch, validResearch, deserializeResearch, hasAbilities, convertOldResearch, convertMixedResearch, picksFor } from './abilities.js';
 import { validLabGuide } from './labGuide.js';
 import { validHype } from './dj.js';
@@ -43,6 +45,7 @@ export function serializeGame(state, now = new Date()) {
   const clock = state.clock || { phase: 'day', t: 0 };
   return {
     version: SAVE_VERSION,
+    grid: GRID_SIZE, // the 40 x 40 grid (saves without it come from the older 32 x 31 map: see migrateGrid)
     savedAt: now.toISOString(),
     gold: Math.floor(state.gold),
     townHallLevel: th ? th.level : 1,
@@ -179,6 +182,19 @@ export function migrateV6(obj) {
   return { ...obj, version: 7, buildings };
 }
 
+/**
+ * Saves from before the 40 x 40 map have no `grid` field: their buildings sit on the old 32 x 31 grid (Village Hall at
+ * (17, 15)). Every building moves by the same shift, so the old Village Hall lands on the new one's anchor and the
+ * layout keeps its exact shape; the old grid fits well inside the new one, so nothing can end up off the map.
+ */
+export function migrateGrid(obj) {
+  if (!obj || !Array.isArray(obj.buildings)) return obj;
+  const dc = MAP.townHallAnchor[0] - LEGACY_GRID.townHallAnchor[0];
+  const dr = MAP.townHallAnchor[1] - LEGACY_GRID.townHallAnchor[1];
+  const buildings = obj.buildings.map((b) => (b && Number.isInteger(b.col) && Number.isInteger(b.row) ? { ...b, col: b.col + dc, row: b.row + dr } : b));
+  return { ...obj, grid: GRID_SIZE, buildings };
+}
+
 /** True only for a well-formed version 7 save whose buildings all sit on grass without overlapping. */
 export function validateSave(obj) {
   if (!obj || typeof obj !== 'object') return false;
@@ -295,6 +311,7 @@ export function parseSave(text) {
   if (obj && typeof obj === 'object' && obj.version === 4) obj = migrateV4(obj);
   if (obj && typeof obj === 'object' && obj.version === 5) obj = migrateV5(obj);
   if (obj && typeof obj === 'object' && obj.version === 6) obj = migrateV6(obj);
+  if (obj && typeof obj === 'object' && obj.grid === undefined) obj = migrateGrid(obj);
   if (!validateSave(obj)) return { status: 'invalid', data: null };
   return { status: 'ok', data: obj };
 }

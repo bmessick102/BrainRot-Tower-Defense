@@ -8,7 +8,7 @@ import { makeStateWithTownHall, addBuilding, addEnemy } from './helpers.js';
 
 describe('enemies.js', () => {
   it('picks the nearest non-destroyed building by footprint distance', () => {
-    const state = makeStateWithTownHall();       // town hall at (17,15) size 4
+    const state = makeStateWithTownHall();       // town hall at (19,19)
     const mine = addBuilding(state, 'mine', 6, 6);
     expect(findNearestBuilding(state, 5, 5).id).toBe(mine.id);
     expect(findNearestBuilding(state, 22, 18).id).toBe(state.buildings[0].id);
@@ -46,15 +46,15 @@ describe('enemies.js', () => {
   });
 
   it('walks around a building in its way instead of through it', () => {
-    const state = makeStateWithTownHall();          // TH at cols 17-19, rows 15-17
+    const state = makeStateWithTownHall();          // TH at cols 19-21, rows 19-21
     const th = state.buildings[0];
-    const blocker = addBuilding(state, 'cannon', 10, 16);  // on the straight line to the town hall
-    const e = addEnemy(state, 'grunt', 6, 17.5);
+    const blocker = addBuilding(state, 'cannon', 12, 20);  // on the straight line to the town hall
+    const e = addEnemy(state, 'grunt', 8, 21.5);
     e.targetId = th.id;
     let enteredBlocker = false;
     for (let i = 0; i < 600 && th.hp === CONFIG.townHall.levels[0].hp; i++) {
       stepEnemy(state, e, 0.05);
-      if (e.x > 10 && e.x < 12 && e.y > 16 && e.y < 18) enteredBlocker = true;
+      if (e.x > 12 && e.x < 14 && e.y > 20 && e.y < 22) enteredBlocker = true;
     }
     expect(th.hp).toBeLessThan(CONFIG.townHall.levels[0].hp); // reached and hit the target
     expect(blocker.hp).toBe(CONFIG.defenses.cannon.levels[0].hp); // never attacked the cannon
@@ -65,10 +65,10 @@ describe('enemies.js', () => {
   it('ground enemies stop at attack range and hit their target', () => {
     const state = makeStateWithTownHall();
     const th = state.buildings[0];
-    const e = addEnemy(state, 'grunt', 10, 17);
+    const e = addEnemy(state, 'grunt', 12, 20.5);
     e.targetId = th.id;
     for (let i = 0; i < 400; i++) stepEnemy(state, e, 0.05);
-    expect(17 - e.x).toBeCloseTo(CONFIG.enemies.grunt.attackRange, 5);
+    expect(19 - e.x).toBeCloseTo(CONFIG.enemies.grunt.attackRange, 5);
     expect(th.hp).toBeLessThan(CONFIG.townHall.levels[0].hp);
   });
 

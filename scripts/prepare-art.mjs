@@ -98,7 +98,7 @@ const TARGETS = [
   // before anything else, so they're sized close to how big they show on the 1280x720 screen to keep that first load small.
   { match: /^title_bg$/, width: 1280, trim: false, needsAlpha: false },
   // The village map, one picture per time of day (art-source/map; drawn at MAP.imageWidth x imageHeight).
-  { match: /^game_map_grid(_[a-z]+)?$/, width: 1672, trim: false, needsAlpha: false },    // the painted landscape with no characters
+  { match: /^game_map_grid(_[a-z]+)?$/, width: 2672, trim: false, needsAlpha: false },    // the painted landscape with no characters
   { match: /^title_logo$/, width: 560, trim: true, needsAlpha: true },
   { match: /^title_(wizard|archer)$/, width: 420, fit: 'box', trim: true, needsAlpha: true },
   { match: /^title_mortar_fire$/, width: 340, trim: true, needsAlpha: true }, // the mortar firing (idle is bld_mortar_lv4_r)

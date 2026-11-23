@@ -4,16 +4,20 @@ import { MAP } from '../src/mapTiles.js';
 import { CONFIG } from '../src/config.js';
 
 describe('grid.js', () => {
-  it('loads MAP.tiles with exactly 803 grass tiles', () => {
+  it('loads MAP.tiles as the full 40 x 40 grid (the grid is the grass diamond)', () => {
     expect(MAP.tiles).toHaveLength(MAP.rows);
     MAP.tiles.forEach((row) => expect(row).toHaveLength(MAP.cols));
-    expect(countGrassTiles()).toBe(803);
+    expect(MAP.cols).toBe(40);
+    expect(MAP.rows).toBe(40);
+    expect(countGrassTiles()).toBe(1600);
   });
 
   it('treats tiles outside the map as not grass', () => {
     expect(isGrass(-1, 5)).toBe(false);
     expect(isGrass(5, MAP.rows)).toBe(false);
-    expect(isGrass(0, 0)).toBe(false); // corner is forest
+    expect(isGrass(0, 0)).toBe(true);   // the top corner tile is the first tile of the grid
+    expect(isGrass(39, 39)).toBe(true); // ...and the bottom corner tile the last
+    expect(isGrass(MAP.cols, 0)).toBe(false);
   });
 
   it('places the town hall at its anchor', () => {
@@ -27,13 +31,12 @@ describe('grid.js', () => {
     expect(canPlaceAt([th], 19, 17, 3).ok).toBe(false);
   });
 
-  it('rejects any footprint that touches a non-grass tile', () => {
-    // Row 0 starts with six forest tiles: a footprint at col 4 covers cols 4..6, and cols 4-5 are forest.
-    expect(isGrass(4, 0)).toBe(false);
-    expect(canPlaceAt([], 4, 0, 3).ok).toBe(false);
-    expect(canPlaceAt([], 6, 0, 3).ok).toBe(true);
-    // Bottom edge: row 30 is mostly forest.
-    expect(isFootprintOnGrass(14, 28, 3)).toBe(false);
+  it('rejects any footprint that touches a tile outside the grid', () => {
+    expect(canPlaceAt([], -1, 0, 3).ok).toBe(false);
+    expect(canPlaceAt([], 0, 0, 3).ok).toBe(true);
+    expect(canPlaceAt([], 38, 38, 3).ok).toBe(false); // would cover col 40
+    expect(canPlaceAt([], 37, 37, 3).ok).toBe(true);  // exactly fills the last three tiles
+    expect(isFootprintOnGrass(38, 10, 3)).toBe(false);
   });
 
   it('lets buildings touch by default (buildingGap is ' + CONFIG.rules.buildingGap + ')', () => {

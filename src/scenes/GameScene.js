@@ -28,6 +28,7 @@ import { ProjectileView } from '../objects/ProjectileView.js';
 import { PoolView, POOL_COLOR } from '../objects/PoolView.js';
 import { RangeCircle } from '../objects/RangeCircle.js';
 import { DayNight } from '../objects/DayNight.js';
+import { GridOverlay } from '../objects/GridOverlay.js';
 import { Villagers } from '../objects/Villagers.js';
 import { AirHum } from '../objects/AirHum.js';
 import { BeamHum } from '../objects/BeamHum.js';
@@ -112,6 +113,8 @@ export class GameScene extends Phaser.Scene {
     // The map image is drawn at MAP.imageWidth x MAP.imageHeight world pixels (see mapTiles.js).
     this.add.image(0, 0, TEX.map).setOrigin(0, 0).setDisplaySize(MAP.imageWidth, MAP.imageHeight).setDepth(-10000);
     this.dayNight = new DayNight(this); // night map crossfade + ambient tint for world sprites
+    // Press G: the 40 x 40 debug grid over the map. Dev builds only: in the game G is the Encore key (AbilityHotbar).
+    this.gridOverlay = import.meta.env && import.meta.env.DEV ? new GridOverlay(this) : null;
     this.villagers = new Villagers(this, gs); // decorative gnomes: wander by day, inside at night
     this.airHum = new AirHum(this); // plane drone while Bombers fly
     this.beamHum = new BeamHum(this); // Tower of Rah beam loop while any beam burns
@@ -291,7 +294,7 @@ export class GameScene extends Phaser.Scene {
       if (b.type !== 'catapult' || b.destroyed || !waveOn) continue;
       const moat = abilityFx(b).moatRadius;
       if (!moat) continue;
-      const c = footprintCenter(b), sc = gridToScreen(c.x, c.y), { rx, ry } = rangeEllipse(moat);
+      const c = footprintCenter(b), sc = gridToScreen(c.x, c.y), { rx, ry } = rangeEllipse(moat, c.x, c.y);
       this.ringGfx.fillStyle(POOL_COLOR, 0.12).fillEllipse(sc.x, sc.y, rx * 2, ry * 2);
       this.ringGfx.lineStyle(2, POOL_COLOR, 0.45).strokeEllipse(sc.x, sc.y, rx * 2, ry * 2);
     }
@@ -299,7 +302,7 @@ export class GameScene extends Phaser.Scene {
     for (const e of this.gs.enemies) {
       const A = e.alive && CONFIG.enemies[e.kind].chillAura;
       if (!A) continue;
-      const sc = gridToScreen(e.x, e.y), { rx, ry } = rangeEllipse(A.radius);
+      const sc = gridToScreen(e.x, e.y), { rx, ry } = rangeEllipse(A.radius, e.x, e.y);
       const pulse = 0.85 + 0.15 * Math.sin(time * 0.004 + e.x);
       this.ringGfx.fillStyle(0x8fd8ff, 0.1 * pulse).fillEllipse(sc.x, sc.y, rx * 2, ry * 2);
       this.ringGfx.lineStyle(2, 0xbfeaff, 0.5 * pulse).strokeEllipse(sc.x, sc.y, rx * 2, ry * 2);
@@ -350,7 +353,7 @@ export class GameScene extends Phaser.Scene {
     for (const b of this.gs.buildings) {
       if (b.type !== 'flock' || b.destroyed) continue;
       const c = gridToScreen(footprintCenter(b).x, footprintCenter(b).y);
-      const { rx, ry } = rangeEllipse(towerRange(b));
+      const { rx, ry } = rangeEllipse(towerRange(b), footprintCenter(b).x, footprintCenter(b).y);
       const ring = this.add.graphics().setDepth(2590).setPosition(c.x, c.y).setScale(0.1).setAlpha(0.55);
       ring.lineStyle(3, 0x4cd6ff, 1).strokeEllipse(0, 0, rx * 2, ry * 2);
       ring.fillStyle(0x4cd6ff, 0.06).fillEllipse(0, 0, rx * 2, ry * 2);
@@ -365,6 +368,7 @@ export class GameScene extends Phaser.Scene {
       for (let i = stepsPerFrame(this.gs); i > 0; i--) this.gs.update(step);
     }
     this.dayNight.update(this.gs.clock);
+    if (this.gridOverlay) this.gridOverlay.update(this.gs.clock);
     // Day / night ambience: follows how dark it is, and steps aside for the attack music during a wave.
     updateAmbience(this.night || 0, !isWaveInProgress(this.gs) && !this.endingGame, Math.min(delta / 1000, MAX_STEP));
     this.villagers.update(Math.min(delta / 1000, MAX_STEP), time);

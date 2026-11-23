@@ -6,11 +6,13 @@ import { emit } from './util.js';
 
 export const TUTORIAL_DONE_STEP = 10;
 
-// Charter §11 starter base (anchor tiles). The town hall uses MAP.townHallAnchor.
+// Charter §11 starter base (anchor tiles). The town hall uses MAP.townHallAnchor; the rest sit around it
+// (a mine 4 tiles left, a storage 4 right, a cannon 4 up: the same layout as ever, wherever the hall is).
+const [HALL_COL, HALL_ROW] = MAP.townHallAnchor;
 export const STARTER_BASE = [
-  { type: 'mine', col: 13, row: 15 },
-  { type: 'storage', col: 21, row: 15 },
-  { type: 'cannon', col: 17, row: 11 }
+  { type: 'mine', col: HALL_COL - 4, row: HALL_ROW },
+  { type: 'storage', col: HALL_COL + 4, row: HALL_ROW },
+  { type: 'cannon', col: HALL_COL, row: HALL_ROW - 4 }
 ];
 
 const NONE = { shop: false, cards: [], select: [], collect: false, upgrade: [], move: false, repair: false };
