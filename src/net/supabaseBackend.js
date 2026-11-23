@@ -240,7 +240,7 @@ export class SupabaseBackend {
     if (!error) {
       return (data || []).map((r) => ({
         rank: Number(r.rank), username: r.username, villageName: r.village_name || null,
-        bestWave: r.best_wave, bestTownHall: r.town_hall, isMe: !!r.is_me
+        bestWave: r.best_wave, bestTownHall: r.town_hall, isMe: !!r.is_me, baseId: r.base_id || null
       }));
     }
     if (!isServerSetupError(error)) throw friendlyError(error);
@@ -259,7 +259,7 @@ export class SupabaseBackend {
     if (!error) {
       const rows = (data || []).map((r) => ({
         rank: Number(r.rank), pos: Number(r.pos), username: r.username, villageName: r.village_name || null,
-        bestWave: r.best_wave, bestTownHall: r.town_hall, isMe: !!r.is_me
+        bestWave: r.best_wave, bestTownHall: r.town_hall, isMe: !!r.is_me, baseId: r.base_id || null // (v0.8.5; none before it, or for a private village)
       }));
       return boardPage(rows, offset, limit);
     }
@@ -297,7 +297,7 @@ export class SupabaseBackend {
       username: r.username, joinedAt: r.joined_at, publicBases: !!r.public_bases, isMe: !!r.is_me,
       bestWave: r.best_wave || 0, bestTownHall: r.best_town_hall || 0, rank: Number(r.rank) || null,
       achievements: (r.achievements || []).map((a) => ({ id: a.id, earnedAt: a.earned_at })),
-      bases: (r.bases || []).map((b) => ({ id: b.id, name: b.name, townHall: b.town_hall, bestWave: b.best_wave, wave: b.wave }))
+      bases: (r.bases || []).map((b) => ({ id: b.id, name: b.name, townHall: b.town_hall, bestWave: b.best_wave, wave: b.wave, rank: b.rank != null ? Number(b.rank) : null }))
     };
   }
 

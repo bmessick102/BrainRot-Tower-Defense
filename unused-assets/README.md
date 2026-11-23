@@ -152,6 +152,8 @@ v0.8.0 new enemies (Quandale Dingle, Grimace Golem):
 | `Litman MultiMortar Image V2.png` | `art-source/buildings/bld_mortar_merged.png` (v0.8.1, replaces the v0.8.0 merged Mortar picture) |
 | `Merged Gandolf Tower.png` | `art-source/buildings/bld_wizard_merged.png` (v0.8.2, Gandolf the Grand) |
 | `Cloack Icon for Hatsune Queen Ability.png` | `art-source/ui/ui_encore_ready.png` (v0.8.2, the Hatsune Queen's Encore Cloak icon) |
+| `Merged FLOCK Tower.png` | `art-source/buildings/bld_flock_merged.png` (v0.8.3; the same file, installed then) |
+| `ui_ability_*.png` (7), `ui_merge_gear.png`, `ui_armor_shield.png` | dropped already named, moved straight to `art-source/ui/` (v0.8.5: merged ability icons, the new merge gear (replaces `Gear Icon Image.png`), the armor shield) |
 | `Merged Firework Launcher aimed left image 2.png` | `art-source/buildings/bld_firework_merged_left.png` (v0.8.0, merged Firework Launcher, aiming left) |
 | `Merged Firework Launcher aimed right Image.png` | `art-source/buildings/bld_firework_merged_right.png` (v0.8.0, aiming right) |
 | `merged cannon_sprites.zip` (and an identical `cannon_sprites.zip`) | `art-source/buildings/bld_cannon_merged_dl/_dr/_ul/_ur.png` (v0.8.0, the Mega Cannon, 4 facings) |

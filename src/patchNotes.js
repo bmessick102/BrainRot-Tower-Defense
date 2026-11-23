@@ -19,8 +19,8 @@ const allEntries = (release) => release.sections.flatMap((s) => s.entries);
 
 export const PATCH_NOTES = {
   release: '0.8',
-  version: '0.8.4',
-  title: "What's New in v0.8.4",
+  version: '0.8.5',
+  title: "What's New in v0.8.5",
   sections: [
     {
       type: 'feature',
@@ -73,6 +73,14 @@ export const PATCH_NOTES = {
         {
           version: '0.8.0', icon: { building: 'townHall', level: 11 }, title: 'Village Hall 11: new defenses instead of Bonus Slots',
           text: 'Bonus Slots are gone. Village Hall 11 now gives one more Tower of Rah, Gandolf, Diddypult, KSI Tower and Cannon. Villages keep every building they built with Bonus Slots: they all keep working, you just can’t build another of that kind until you’re under the limit.'
+        },
+        {
+          version: '0.8.5', icon: { texture: 'bld_flock_merged' }, title: 'Triple Zap looks like a tesla coil',
+          text: 'The F.L.O.C.K Mothership\u2019s zaps are now crackling beams of electricity, straight from the tower to each of the 3 enemies it hits, that follow them until they fade.'
+        },
+        {
+          version: '0.8.5', icon: { texture: 'ui_ability_rolling_thunder' }, title: 'New merged ability icons',
+          text: 'Every merged defense\u2019s ability now has its own painted icon in the merge window, the RV Lab and the building panel. Merged buildings have a new gear badge, and armored enemies a new shield beside their health bar.'
         },
         {
           version: '0.8.4', icon: { texture: 'ui_settings_button' }, title: 'A way out when something breaks',
@@ -188,6 +196,14 @@ export const PATCH_NOTES = {
     {
       type: 'fix',
       entries: [
+        {
+          version: '0.8.5', icon: { texture: 'ui_medal_1' }, title: 'Ranks on player cards match the leaderboard',
+          text: 'A player\u2019s card could show a different rank from the leaderboard. Its rank is now their best village\u2019s leaderboard rank, every village shows its own rank, and the village you clicked on the leaderboard is marked.'
+        },
+        {
+          version: '0.8.5', icon: { building: 'townHall', level: 15 }, title: 'Village Hall shown as 11',
+          text: 'Villages above Village Hall 11 showed as 11 on the leaderboard, player cards and Find Players. They show their real level now, and a player\u2019s numbers come from their villages everywhere.'
+        },
         {
           version: '0.8.4', icon: { texture: 'ui_medal_1' }, title: 'Leaderboard showed a server error',
           text: 'After the last server update the leaderboard could show a database error instead of the list. It loads again, and if the server is ever behind it shows the per-player board instead of an error.'

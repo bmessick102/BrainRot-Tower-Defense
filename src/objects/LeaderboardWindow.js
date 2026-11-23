@@ -152,9 +152,9 @@ export class LeaderboardWindow {
     // The row opens the player's card, and so does its Profile button.
     if (this.onOpenPlayer) {
       const zone = m.add(s.add.zone(x, y, w - VISIT_W - 12, ROW_H).setOrigin(0).setInteractive({ useHandCursor: true }));
-      zone.on('pointerup', () => this.onOpenPlayer(r.username));
+      zone.on('pointerup', () => this.onOpenPlayer(r.username, r.baseId)); // (on that village: its rank and numbers)
     }
-    if (this.onOpenPlayer) m.add(profileButton(s, x + w - 6, cy, 30, () => this.onOpenPlayer(r.username)));
+    if (this.onOpenPlayer) m.add(profileButton(s, x + w - 6, cy, 30, () => this.onOpenPlayer(r.username, r.baseId)));
   }
 
   close() { this.modal.close(); }

@@ -1,3 +1,6 @@
+-- Superseded: search_players, get_player_profile and get_player_base are now in migration-2026-11-22-spam-guard.sql and
+-- migration-2026-11-23-village-ranks.sql (rate limits, paging, village ranks). Do not run this file again on a database
+-- that has those: it would bring back the older versions.
 -- v0.7: see other players. Run once in the Supabase SQL editor (safe to re-run); schema.sql has the same.
 --   search_players     - find players by name, league (a wave range), Village Hall, sorted by wave / hall / achievements
 --   get_player_profile - a player's card: stats, rank, achievements, and their villages (best first) unless hidden

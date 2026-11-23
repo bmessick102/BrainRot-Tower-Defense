@@ -59,11 +59,15 @@ begin
   perform public.rate_limit_hit('search', 20, 60);
   return query
   with found as (
-    select p.username, coalesce(s.best_wave, 0) as best_wave, coalesce(s.best_town_hall, 0) as best_town_hall,
+    -- A player's numbers come from their villages (as on their card and the leaderboard); the all-time stats only
+    -- for a player with no villages left (v0.8.5).
+    select p.username, coalesce(v.best_wave, s.best_wave, 0) as best_wave, coalesce(v.best_town_hall, s.best_town_hall, 0) as best_town_hall,
            (select count(*)::int from public.achievements a where a.user_id = p.id) as achievements,
            (p.id = auth.uid()) as is_me
     from public.profiles p
     left join public.player_stats s on s.user_id = p.id
+    left join lateral (select max(b.best_wave) as best_wave, max(b.town_hall) as best_town_hall
+                       from public.bases b where b.user_id = p.id) v on true
     where qq = '' or p.username ilike '%' || replace(replace(replace(qq, '\', '\\'), '%', '\%'), '_', '\_') || '%'
   )
   select f.username, f.best_wave, f.best_town_hall, f.achievements, f.is_me from found f
@@ -87,21 +91,28 @@ begin
   if name is null or char_length(name) > 16 then return null; end if;
   select id into uid from public.profiles where lower(username) = lower(name);
   if uid is null then return null; end if;
+  with board as (
+    -- Every village's leaderboard rank (the same order as get_village_leaderboard).
+    select b.id, b.user_id, rank() over (order by b.best_wave desc, b.best_wave_at asc nulls last) as rank
+    from public.bases b where b.best_wave > 0
+  ), mine as (
+    select b.*, bd.rank from public.bases b left join board bd on bd.id = b.id where b.user_id = uid
+  )
   select jsonb_build_object(
     'username', p.username,
     'joined_at', p.created_at,
     'public_bases', p.public_bases,
     'is_me', uid = auth.uid(),
-    'best_wave', coalesce(s.best_wave, 0),
-    'best_town_hall', coalesce(s.best_town_hall, 0),
-    'rank', (select count(*) + 1 from public.player_stats s2 where s2.best_wave > coalesce(s.best_wave, 0)),
+    'best_wave', coalesce((select max(m.best_wave) from mine m), s.best_wave, 0),
+    'best_town_hall', coalesce((select max(m.town_hall) from mine m), s.best_town_hall, 0),
+    'rank', (select min(m.rank) from mine m),
     'achievements', coalesce((select jsonb_agg(jsonb_build_object('id', a.achievement, 'earned_at', a.earned_at) order by a.earned_at)
                               from public.achievements a where a.user_id = uid), '[]'::jsonb),
     'bases', case when p.public_bases or uid = auth.uid() then
-               coalesce((select jsonb_agg(jsonb_build_object('id', b.id, 'name', b.name, 'town_hall', b.town_hall,
-                                                            'best_wave', b.best_wave, 'wave', b.wave)
-                                          order by b.best_wave desc, b.town_hall desc)
-                         from public.bases b where b.user_id = uid and b.save is not null), '[]'::jsonb)
+               coalesce((select jsonb_agg(jsonb_build_object('id', m.id, 'name', m.name, 'town_hall', m.town_hall,
+                                                            'best_wave', m.best_wave, 'wave', m.wave, 'rank', m.rank)
+                                          order by m.best_wave desc, m.best_wave_at asc nulls last, m.id)
+                         from mine m where m.save is not null), '[]'::jsonb)
              else '[]'::jsonb end
   ) into result
   from public.profiles p
@@ -134,8 +145,9 @@ end $$;
 -- view their villages. 40 calls a minute per player (rate_limit_hit). The old one-argument version is dropped (an
 -- older game still works: `off` defaults to 0).
 drop function if exists public.get_village_leaderboard(int);
+drop function if exists public.get_village_leaderboard(int, int);
 create or replace function public.get_village_leaderboard(lim int default 10, off int default 0)
-returns table (rank bigint, pos bigint, username text, village_name text, best_wave int, town_hall int, is_me boolean)
+returns table (rank bigint, pos bigint, username text, village_name text, best_wave int, town_hall int, is_me boolean, base_id uuid)
 language plpgsql security definer set search_path = '' as $$
 #variable_conflict use_column
 declare
@@ -150,13 +162,14 @@ begin
            row_number() over (order by b.best_wave desc, b.best_wave_at asc nulls last, b.id) as pos,
            row_number() over (partition by b.user_id order by b.best_wave desc, b.best_wave_at asc nulls last, b.id) as own_order,
            p.username,
-           case when p.public_bases or b.user_id = auth.uid() then b.name end as village_name,
-           b.best_wave, b.town_hall, (b.user_id = auth.uid()) as is_me
+           (p.public_bases or b.user_id = auth.uid()) as shown,
+           b.name, b.id, b.best_wave, b.town_hall, (b.user_id = auth.uid()) as is_me
     from public.bases b
     join public.profiles p on p.id = b.user_id
     where b.best_wave > 0
   )
-  select r.rank, r.pos, r.username, r.village_name, r.best_wave, r.town_hall, r.is_me
+  select r.rank, r.pos, r.username, case when r.shown then r.name end, r.best_wave, r.town_hall, r.is_me,
+         case when r.shown then r.id end
   from ranked r
   where (r.pos > o and r.pos <= o + l) or (r.is_me and r.own_order = 1)
   order by r.pos;

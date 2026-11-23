@@ -551,8 +551,8 @@ describe('Supabase backend guards (mocked, no network)', () => {
     const calls = [];
     be.db = { rpc: async (name) => { calls.push(name); return { data: rows, error: null }; } };
     expect(await be.leaderboard(10)).toEqual([
-      { rank: 1, username: 'Ann', villageName: 'Home', bestWave: 9, bestTownHall: 4, isMe: true },
-      { rank: 2, username: 'Bob', villageName: null, bestWave: 7, bestTownHall: 3, isMe: false }]);
+      { rank: 1, username: 'Ann', villageName: 'Home', bestWave: 9, bestTownHall: 4, isMe: true, baseId: null },
+      { rank: 2, username: 'Bob', villageName: null, bestWave: 7, bestTownHall: 3, isMe: false, baseId: null }]);
     be.db = { rpc: async (name) => {
       calls.push(name);
       return name === 'get_village_leaderboard'

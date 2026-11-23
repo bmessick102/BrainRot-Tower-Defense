@@ -189,12 +189,17 @@ export class LocalBackend {
     this.write(d);
   }
 
+  /** Villages in leaderboard order: best wave first, then who got there first. Only ones on the board unless `all`. */
+  villageOrder(d, all = false) {
+    return d.bases.filter((b) => all || b.bestWave > 0).sort((a, b) => (b.bestWave || 0) - (a.bestWave || 0)
+      || String(a.bestWaveAt || a.updatedAt).localeCompare(String(b.bestWaveAt || b.updatedAt)) || String(a.id).localeCompare(String(b.id)));
+  }
+
   async leaderboard(limit = 10) {
     await wait();
     const d = this.db();
     // One row per village (like get_village_leaderboard): best wave first, then who got there first.
-    const bases = d.bases.filter((b) => b.bestWave > 0).sort((a, b) => b.bestWave - a.bestWave
-      || String(a.bestWaveAt || a.updatedAt).localeCompare(String(b.bestWaveAt || b.updatedAt)) || String(a.id).localeCompare(String(b.id)));
+    const bases = this.villageOrder(d);
     const seen = new Set();
     const rows = bases.map((b, i) => {
       const u = d.users.find((x) => x.id === b.userId);
@@ -203,7 +208,7 @@ export class LocalBackend {
       const hidden = u && u.publicBases === false && !isMe;
       return {
         rank: i + 1, username: u ? u.username : '?', villageName: hidden ? null : b.name, bestWave: b.bestWave, bestTownHall: b.townHall || 0,
-        isMe, first
+        isMe, first, baseId: hidden ? null : b.id
       };
     });
     return rows.filter((r) => r.rank <= limit || (r.isMe && r.first)).map(({ first, ...r }) => r); // eslint-disable-line no-unused-vars
@@ -226,7 +231,11 @@ export class LocalBackend {
     const q = String(query || '').trim().toLowerCase();
     const rows = d.users.map((u) => {
       const s = d.stats.find((x) => x.userId === u.id) || { bestWave: 0, bestTownHall: 0 };
-      return { username: u.username, bestWave: s.bestWave, bestTownHall: s.bestTownHall, achievements: d.achievements.filter((a) => a.userId === u.id).length, isMe: u.id === this.userId };
+      // v0.8.5, like search_players: the player's villages' numbers (the all-time stats only with no villages).
+      const own = d.bases.filter((b) => b.userId === u.id);
+      const bestWave = own.length ? Math.max(...own.map((b) => b.bestWave || 0)) : s.bestWave;
+      const bestTownHall = own.length ? Math.max(...own.map((b) => b.townHall || 0)) : s.bestTownHall;
+      return { username: u.username, bestWave, bestTownHall, achievements: d.achievements.filter((a) => a.userId === u.id).length, isMe: u.id === this.userId };
     }).filter((r) => (!q || r.username.toLowerCase().includes(q)) && r.bestWave >= (minWave || 0)
       && (maxWave == null || r.bestWave <= maxWave) && (townHall == null || r.bestTownHall === townHall));
     const key = sort === 'hall' ? 'bestTownHall' : sort === 'achievements' ? 'achievements' : 'bestWave';
@@ -244,14 +253,17 @@ export class LocalBackend {
     if (!u) return null;
     const s = d.stats.find((x) => x.userId === u.id) || { bestWave: 0, bestTownHall: 0 };
     const isMe = u.id === this.userId, open = u.publicBases !== false;
+    // v0.8.5, like get_player_profile: ranks and numbers in village-leaderboard terms.
+    const rankOf = new Map(this.villageOrder(d).map((b, i) => [b.id, i + 1]));
+    const own = this.villageOrder(d, true).filter((b) => b.userId === u.id);
     return {
       username: u.username, joinedAt: u.createdAt || null, publicBases: open, isMe,
-      bestWave: s.bestWave, bestTownHall: s.bestTownHall,
-      rank: d.stats.filter((x) => x.bestWave > s.bestWave).length + 1,
+      bestWave: own.length ? Math.max(...own.map((b) => b.bestWave || 0)) : s.bestWave,
+      bestTownHall: own.length ? Math.max(...own.map((b) => b.townHall || 0)) : s.bestTownHall,
+      rank: own.map((b) => rankOf.get(b.id)).filter(Boolean)[0] || null,
       achievements: d.achievements.filter((a) => a.userId === u.id).map((a) => ({ id: a.id, earnedAt: a.earnedAt })),
-      bases: open || isMe ? d.bases.filter((b) => b.userId === u.id && b.save)
-        .sort((a, b) => b.bestWave - a.bestWave || b.townHall - a.townHall)
-        .map((b) => ({ id: b.id, name: b.name, townHall: b.townHall, bestWave: b.bestWave, wave: b.wave })) : []
+      bases: open || isMe ? own.filter((b) => b.save)
+        .map((b) => ({ id: b.id, name: b.name, townHall: b.townHall, bestWave: b.bestWave, wave: b.wave, rank: rankOf.get(b.id) || null })) : []
     };
   }
 

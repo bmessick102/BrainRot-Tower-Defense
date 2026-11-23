@@ -246,6 +246,6 @@ Tap Back to return.`, textStyle(24)).setOrigin(0.5).setAlign('center').setScroll
   /** Back to the title screen: the owner's card again, over the window it was opened from (closing it lands there). */
   leave() {
     this.scene.stop('VisitHudScene');
-    this.scene.start('TitleScene', { reopenPlayer: this.username, reopenFrom: this.from });
+    this.scene.start('TitleScene', { reopenPlayer: this.username, reopenFrom: this.from, reopenBase: this.baseId });
   }
 }

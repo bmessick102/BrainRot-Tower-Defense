@@ -1,6 +1,6 @@
 // Ability icons of the merged defenses (CONFIG.merges[type].abilityIcon): a glossy gold box like the hero ability
 // slots on the hotbar (v0.8.2: it was a disc). The art is a texture (art-source/ui/<key>.png, e.g. ui_ability_sky_net)
-// drawn inside the box; until it exists, a simple symbol is drawn in code (a rolling ball, a bolt, three shells, a net,
+// drawn inside the box (the user's painted icons since v0.8.5); if one is missing, a simple symbol is drawn in code (a rolling ball, a bolt, three shells, a net,
 // a staff and a wall, a hook on a chain).
 import { fitIcon, drawGlossy } from './uiDraw.js';
 

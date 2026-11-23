@@ -128,8 +128,9 @@ end $$;
 -- view their villages. 40 calls a minute per player (rate_limit_hit). The old one-argument version is dropped (an
 -- older game still works: `off` defaults to 0).
 drop function if exists public.get_village_leaderboard(int);
+drop function if exists public.get_village_leaderboard(int, int);
 create or replace function public.get_village_leaderboard(lim int default 10, off int default 0)
-returns table (rank bigint, pos bigint, username text, village_name text, best_wave int, town_hall int, is_me boolean)
+returns table (rank bigint, pos bigint, username text, village_name text, best_wave int, town_hall int, is_me boolean, base_id uuid)
 language plpgsql security definer set search_path = '' as $$
 #variable_conflict use_column
 declare
@@ -144,13 +145,14 @@ begin
            row_number() over (order by b.best_wave desc, b.best_wave_at asc nulls last, b.id) as pos,
            row_number() over (partition by b.user_id order by b.best_wave desc, b.best_wave_at asc nulls last, b.id) as own_order,
            p.username,
-           case when p.public_bases or b.user_id = auth.uid() then b.name end as village_name,
-           b.best_wave, b.town_hall, (b.user_id = auth.uid()) as is_me
+           (p.public_bases or b.user_id = auth.uid()) as shown,
+           b.name, b.id, b.best_wave, b.town_hall, (b.user_id = auth.uid()) as is_me
     from public.bases b
     join public.profiles p on p.id = b.user_id
     where b.best_wave > 0
   )
-  select r.rank, r.pos, r.username, r.village_name, r.best_wave, r.town_hall, r.is_me
+  select r.rank, r.pos, r.username, case when r.shown then r.name end, r.best_wave, r.town_hall, r.is_me,
+         case when r.shown then r.id end
   from ranked r
   where (r.pos > o and r.pos <= o + l) or (r.is_me and r.own_order = 1)
   order by r.pos;

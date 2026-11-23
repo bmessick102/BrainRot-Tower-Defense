@@ -77,6 +77,21 @@ export class HealthBar {
     this.gearBg.lineStyle(2, 0xffc83a, 1).strokeCircle(gx, 0, size / 2);
   }
 
+  /**
+   * Show or hide the armor shield picture (TEX.armorShield), made the first time it's needed. Returns true when the
+   * picture is showing (false when it's hidden or its art isn't loaded, so the caller draws the kite instead).
+   */
+  armorShield(show) {
+    if (!show) { if (this.shieldImg) this.shieldImg.setVisible(false); return false; }
+    if (!this.shieldImg) {
+      if (!this.scene.textures.exists(TEX.armorShield)) return false;
+      this.shieldImg = this.scene.add.image(0, 0, TEX.armorShield);
+      this.container.add(this.shieldImg);
+    }
+    this.shieldImg.setVisible(true);
+    return true;
+  }
+
   /** Change the fill color (redrawn on the next draw). */
   setColor(color) {
     if (color === this.color) return;
@@ -158,12 +173,17 @@ export class HealthBar {
       g.fillStyle(0x2c261f, 1).fillRoundedRect(ix, sy, iw, sh, sh / 2);
       g.fillStyle(0xb9c9d8, 1).fillRoundedRect(ix, sy, Math.max(sh, iw * armor), sh, sh / 2);
       g.fillStyle(0xffffff, 0.45).fillRect(ix + sh / 2, sy + 1, Math.max(0, iw * armor - sh), 1);
-      // Shield: a small kite shape past the bar's right end.
+      // Shield past the bar's right end: the picture (TEX.armorShield) when it's loaded, else a small kite shape.
       const cx = x + w + 6, cy = y + h / 2 - 1, s = h * 0.95;
-      g.fillStyle(COLORS.frame, 1).fillPoints([{ x: cx - s * 0.62, y: cy - s * 0.72 }, { x: cx + s * 0.62, y: cy - s * 0.72 }, { x: cx + s * 0.62, y: cy - s * 0.05 }, { x: cx, y: cy + s * 0.85 }, { x: cx - s * 0.62, y: cy - s * 0.05 }], true);
-      g.fillStyle(0x8fa6bd, 1).fillPoints([{ x: cx - s * 0.45, y: cy - s * 0.55 }, { x: cx + s * 0.45, y: cy - s * 0.55 }, { x: cx + s * 0.45, y: cy - s * 0.08 }, { x: cx, y: cy + s * 0.6 }, { x: cx - s * 0.45, y: cy - s * 0.08 }], true);
-      g.fillStyle(0xe6eef5, 1).fillRect(cx - 1, cy - s * 0.5, 2, s * 0.95);
-    }
+      if (this.armorShield(true)) {
+        const img = this.shieldImg, sz = h * 1.75;
+        img.setScale(sz / Math.max(img.frame.width, img.frame.height)).setPosition(cx + 1, cy - s * 0.1);
+      } else {
+        g.fillStyle(COLORS.frame, 1).fillPoints([{ x: cx - s * 0.62, y: cy - s * 0.72 }, { x: cx + s * 0.62, y: cy - s * 0.72 }, { x: cx + s * 0.62, y: cy - s * 0.05 }, { x: cx, y: cy + s * 0.85 }, { x: cx - s * 0.62, y: cy - s * 0.05 }], true);
+        g.fillStyle(0x8fa6bd, 1).fillPoints([{ x: cx - s * 0.45, y: cy - s * 0.55 }, { x: cx + s * 0.45, y: cy - s * 0.55 }, { x: cx + s * 0.45, y: cy - s * 0.08 }, { x: cx, y: cy + s * 0.6 }, { x: cx - s * 0.45, y: cy - s * 0.08 }], true);
+        g.fillStyle(0xe6eef5, 1).fillRect(cx - 1, cy - s * 0.5, 2, s * 0.95);
+      }
+    } else this.armorShield(false);
 
     if (this.badgeText && this.badgeStyle === 'crown') {
       if (this.crownImg) {

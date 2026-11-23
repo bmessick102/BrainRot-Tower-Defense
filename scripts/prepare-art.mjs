@@ -78,6 +78,8 @@ const TARGETS = [
   { match: /^ui_research_ready$/, width: 128, trim: true, needsAlpha: true }, // book over the RV Lab: research ready
   { match: /^ui_beat_ready$/, width: 128, trim: true, needsAlpha: true },     // over DJ Babyface: Drop the Beat ready
   { match: /^ui_merge_gear$/, width: 128, trim: true, needsAlpha: true },     // v0.8: the badge over merged defenses
+  { match: /^ui_ability_[a-z_]+$/, width: 192, fit: 'box', trim: true, needsAlpha: true }, // v0.8.5: merged ability icons (MergeIcons.js)
+  { match: /^ui_armor_shield$/, width: 64, fit: 'box', trim: true, needsAlpha: true },     // v0.8.5: the shield by an armored enemy's health bar
   { match: /^ui_feast_ready$/, width: 192, trim: true, needsAlpha: true },    // the Brisket Feast HUD button / ready icon
   { match: /^ui_encore_ready$/, width: 192, trim: true, needsAlpha: true },   // v0.8.2: the Hatsune Queen's Encore Cloak icon (a cloak)
   { match: /^ui_hero_crown$/, width: 128, trim: true, needsAlpha: true },     // the hero level crown beside his health bar

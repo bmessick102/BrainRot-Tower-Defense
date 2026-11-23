@@ -94,7 +94,7 @@ describe('SupabaseBackend paging (mocked, no network)', () => {
     const p = await be.leaderboardPage(10, 10);
     expect(calls).toEqual([['get_village_leaderboard', { lim: 11, off: 10 }]]);
     expect(p.rows).toHaveLength(10);
-    expect(p.rows[0]).toEqual({ rank: 11, pos: 11, username: 'p11', villageName: 'v11', bestWave: 189, bestTownHall: 9, isMe: false });
+    expect(p.rows[0]).toEqual({ rank: 11, pos: 11, username: 'p11', villageName: 'v11', bestWave: 189, bestTownHall: 9, isMe: false, baseId: null });
     expect(p.hasMore).toBe(true);
     expect(p.mine).toMatchObject({ pos: 40, isMe: true });
   });
@@ -125,5 +125,40 @@ describe('SupabaseBackend paging (mocked, no network)', () => {
     expect(rows2.map((r) => r.username)).toEqual(rows.map((r) => r.username));
     const bad = make(() => ({ data: null, error: { code: '42501', message: 'permission denied' } }));
     await expect(bad.be.searchPlayers({ offset: 8 })).rejects.toThrow();
+  });
+});
+
+describe('ranks and numbers match the village leaderboard (v0.8.5)', () => {
+  it('LocalBackend: a card ranks by the best village, every village carries its board rank, and the board row its village id', async () => {
+    const be = new LocalBackend(memStorage());
+    const id = {};
+    await be.signUp({ email: 'k@example.com', password: 'secret123', username: 'Kebahon' });
+    id.k = be.userId;
+    const main = await be.createBase({ name: 'Main', bestWave: 138, townHall: 15, save: { version: 7 } });
+    const alt = await be.createBase({ name: 'Alt', bestWave: 40, townHall: 3, save: { version: 7 } });
+    await be.saveStats({ bestWave: 150, bestTownHall: 11, counters: {} }); // all-time 150: a village since deleted
+    await be.signUp({ email: 's@example.com', password: 'secret123', username: 'Silver' });
+    const silver = await be.createBase({ name: 'Silver Town', bestWave: 102, townHall: 14, save: { version: 7 } });
+    await be.saveStats({ bestWave: 102, bestTownHall: 14, counters: {} });
+    const board = await be.leaderboardPage(0, 10);
+    expect(board.rows.map((r) => [r.rank, r.villageName, r.baseId])).toEqual([[1, 'Main', main.id], [2, 'Silver Town', silver.id], [3, 'Alt', alt.id]]);
+    const card = await be.playerProfile('kebahon');
+    expect(card.rank).toBe(1);                                   // the board rank of their best village
+    expect([card.bestWave, card.bestTownHall]).toEqual([138, 15]); // their villages' numbers, not the deleted 150 / old 11
+    expect(card.bases.map((b) => [b.name, b.rank])).toEqual([['Main', 1], ['Alt', 3]]);
+    const found = await be.searchPlayers({ query: 'keb' });
+    expect([found[0].bestWave, found[0].bestTownHall]).toEqual([138, 15]); // Find Players: the same numbers as the card
+  });
+
+  it('SupabaseBackend maps base_id on board rows and rank on a card\'s villages', async () => {
+    const be = new SupabaseBackend('https://example.invalid', 'anon-key');
+    be.userId = 'user-a';
+    be.db = { rpc: async (name) => (name === 'get_village_leaderboard'
+      ? { data: [{ rank: 4, pos: 4, username: 'K', village_name: 'Alt', best_wave: 40, town_hall: 3, is_me: false, base_id: 'b-alt' }], error: null }
+      : { data: { username: 'K', rank: 1, best_wave: 138, best_town_hall: 15, achievements: [], bases: [{ id: 'b-main', name: 'Main', town_hall: 15, best_wave: 138, wave: 139, rank: 1 }, { id: 'b-new', name: 'New', town_hall: 1, best_wave: 0, wave: 1, rank: null }] }, error: null }) };
+    const page = await be.leaderboardPage(3, 10);
+    expect(page.rows[0].baseId).toBe('b-alt');
+    const card = await be.playerProfile('K');
+    expect(card.bases.map((b) => b.rank)).toEqual([1, null]);
   });
 });

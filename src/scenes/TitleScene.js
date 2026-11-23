@@ -54,7 +54,8 @@ export class TitleScene extends Phaser.Scene {
     this.offline = !!(data && data.offline) || !session.configured; // no server set up: always offline
     this.justLoggedIn = !!(data && data.justLoggedIn);
     this.reopenPlayer = (data && data.reopenPlayer) || null; // back from visiting a village: that player's card again
-    this.reopenFrom = (data && data.reopenFrom) || null;     // ...over the window it was opened from ('leaderboard' / 'search')
+    this.reopenFrom = (data && data.reopenFrom) || null;
+    this.reopenBase = (data && data.reopenBase) || null;   // ...on the village they visited (marked on the card)     // ...over the window it was opened from ('leaderboard' / 'search')
     this.notice = (data && data.notice) || '';
   }
 
@@ -151,7 +152,7 @@ export class TitleScene extends Phaser.Scene {
       // the card lands where the player was.
       if (this.reopenFrom === 'leaderboard') this.openLeaderboard();
       else if (this.reopenFrom === 'search') this.openSearch();
-      this.openPlayerCard(this.reopenPlayer);
+      this.openPlayerCard(this.reopenPlayer, this.reopenBase); // (on the village just visited)
       return;
     }
     // Patch notes, once per version: returning players see what changed; a brand-new player has nothing to compare
@@ -227,17 +228,17 @@ export class TitleScene extends Phaser.Scene {
     this.windowOpen = true;
     this.leaderboard = new LeaderboardWindow(this, {
       session, onClose: () => { this.windowOpen = false; this.leaderboard = null; },
-      onOpenPlayer: (name) => this.openPlayerCard(name)
+      onOpenPlayer: (name, baseId) => this.openPlayerCard(name, baseId)
     });
   }
 
   // ---------- other players (v0.7) ----------
-  /** A player's card, over whatever window opened it. */
-  openPlayerCard(username) {
+  /** A player's card, over whatever window opened it; `baseId`: the village it's about (a leaderboard row's), marked on it. */
+  openPlayerCard(username, baseId = null) {
     this.windowOpen = true;
     if (this.search) this.search.setFieldVisible(false);
     new PlayerCardWindow(this, {
-      session, username,
+      session, username, focusBaseId: baseId,
       onVisit: (profile, baseId) => this.visitVillage(profile.username, baseId, profile.bases),
       onClose: () => {
         if (this.search) this.search.setFieldVisible(true);

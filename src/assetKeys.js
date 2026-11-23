@@ -25,7 +25,8 @@ export const TEX = {
   researchReady: 'ui_research_ready', // the book bobbing over the RV Lab when research is ready (falls back to the RP token)
   beatReady: 'ui_beat_ready',        // over DJ Babyface when Drop the Beat is ready (falls back to a "DROP!" label)
   feastReady: 'ui_feast_ready',      // Brisket Feast's hotbar icon, and over him while it's ready (a gold crown)
-  heroCrown: 'ui_hero_crown'         // the crown behind the hero's level number beside his health bar
+  heroCrown: 'ui_hero_crown',        // the crown behind the hero's level number beside his health bar
+  armorShield: 'ui_armor_shield'     // beside an armored enemy's health bar while its armor holds (falls back to a drawn kite)
 };
 
 /** Base (single-model) building texture. */
