@@ -7,6 +7,7 @@ The version shows in the bottom-left corner of every screen (`package.json` `ver
 A smaller F.L.O.C.K Mothership. Saves load as they are.
 
 ### Changes
+- **Presentation** (docs only): `docs/presentation/Italian_Brainrot_TD_v0.8.8.pptx` replaces the v0.8.6 deck. The last slide has all 24 enemies as cut-outs behind its panel (now 80% opaque) and around the app icon; every screenshot and app icon is clipped to rounded corners matching its frame (slide 2's icon now sits inside its ring); the title slide says v0.8.8. POWERPOINT_BRIEF.md matches. (The game's own icons already had smooth rounded corners: favicon-32/192 and icon-512 have anti-aliased transparent corners; apple-touch-icon and icon-maskable stay full-bleed, as iOS and Android round them.)
 - **F.L.O.C.K Mothership smaller:** `CONFIG.merges.flock.art.scale` 1.25 -> 0.7, so its base fits inside its 1x1 tile and the plot's rim (GameScene `drawPlots`) shows around it. On a 1x1 tile even the Level 10 F.L.O.C.K Tower (`SPRITE_SCALE.flock` 1.15) covers its rim, so the Mothership is now drawn a little smaller than it. `standInScale` (unused: the picture exists) stays 1.25. ZapFx's emitter follows the picture's top, so the zaps still leave from it.
 
 ## 0.8.7

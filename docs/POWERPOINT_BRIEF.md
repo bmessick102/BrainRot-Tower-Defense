@@ -2,7 +2,7 @@
 
 You are being asked to create a PowerPoint presentation (.pptx) about a video game that a small student team built. Everything you need to know is in this document. **Use only the facts written here (and in README.md, which is the source of truth). Do not invent features, numbers, quotes, release dates, or team members.** If something you want to say isn't in this document, leave it out.
 
-*This brief describes version 0.8.6.* The deck built from it is `docs/presentation/Italian_Brainrot_TD_v0.8.6.pptx` (the old v0.5 deck, `Italian_Brainrot_TD_v0.5.0.pptx`, is kept for reference).
+*This brief describes version 0.8.8.* The deck built from it is `docs/presentation/Italian_Brainrot_TD_v0.8.8.pptx` (the old v0.5 deck, `Italian_Brainrot_TD_v0.5.0.pptx`, is kept for reference).
 
 ---
 
@@ -13,7 +13,7 @@ You are being asked to create a PowerPoint presentation (.pptx) about a video ga
 - **Speaker notes on every slide:** 2 to 3 simple sentences to say out loud.
 - **Words per slide:** at most about 15 (headline plus one line), except the enemy and building grids (a name plus 3-6 words each). Plain language a 12-year-old gets. No code terms, config keys or file names on slides; words players see in the game are fine (Burgers, Village Hall, Mastery).
 - **Every enemy appears** (24 in all), on the slide for the Village Hall where players meet it (section 4).
-- **File size:** compress pictures; aim under about 40 MB (the v0.8.6 deck is about 16 MB).
+- **File size:** compress pictures; aim under about 40 MB (the v0.8.8 deck is about 20 MB).
 
 If anything below is unclear, make a sensible choice and say what you chose in one sentence at the end.
 
@@ -25,7 +25,7 @@ If anything below is unclear, make a sensible choice and say what you chose in o
 
 - **Play it:** https://bmessick102.github.io/BrainRot-Tower-Defense/
 - **Code:** https://github.com/bmessick102/BrainRot-Tower-Defense
-- **Current version:** 0.8.6
+- **Current version:** 0.8.8
 - It is an unofficial fan game, not endorsed by Supercell (the game's Credits carry Supercell's Fan Content Policy notice).
 
 ## 3. The team
@@ -47,7 +47,7 @@ If anything below is unclear, make a sensible choice and say what you chose in o
 
 Follow this order. Every content slide has a **stage marker** at the top right: a gold-rimmed pill ("VILLAGE HALL 3") with a row of 15 dots, filled up to that hall, so the progression is obvious. "Cards" are rounded dark panels with a cut-out picture on a soft glow: **red rim = enemy, green = your building, purple = new feature, orange = hero, gold = merged**.
 
-**1. Title.** The game logo over the title-screen art; tagline **"Memes are coming for your village."**; small line "Created by Brady Messick · Free in your browser · v0.8.6". Cut-outs: Tung Tung Tung Sahur, the Sneaker Shark, the crocodile bomber.
+**1. Title.** The game logo over the title-screen art; tagline **"Memes are coming for your village."**; small line "Created by Brady Messick · Free in your browser · v0.8.8". Cut-outs: Tung Tung Tung Sahur, the Sneaker Shark, the crocodile bomber.
 
 **2. The idea in one breath.** "Build a village. Survive the brainrot." / "Endless waves. Free in your browser." Three icon rows: Build and upgrade · Beat endless meme waves · Play free, even on phones. Screenshot of a village by day.
 
@@ -93,7 +93,7 @@ Follow this order. Every content slide has a **stage marker** at the top right: 
 
 **23. "Created by Brady Messick."** The four team cards (initials, name, role; Brady's says "Game creator: the concept, the design and every part of the game.") and a "How we built it" band (section 3).
 
-**24. Closer.** App icon; **"Play free in your browser."**; the link; "Desktop, phones and tablets. No install."; small "Unofficial fan game. Not endorsed by Supercell."
+**24. Closer.** App icon; **"Play free in your browser."**; the link; "Desktop, phones and tablets. No install."; small "Unofficial fan game. Not endorsed by Supercell." Behind the dark panel (80% opaque, so the text stays clear) and around the icon, all 24 enemies as cut-outs: flyers in the sky, the big ones on the hills, a crowd under the panel and three in the front corners.
 
 ### Every enemy, by the Village Hall where it joins (check against README and `src/enemyText.js`)
 
@@ -130,6 +130,7 @@ Sub-troops (Neegy, Skeleton, Chimpanzini Bananini) appear smaller next to whoeve
 
 - **Cut-outs** (transparent PNGs in `art-source/`): enemies `enemies/enemy_<kind>.png` (grunt, slinger, thief, bomber, shark, breaker, balloon, neegy, tank, pork, toilet, bicus, skeleton, bones, frigo, babycar, vaca, quandale, yahu, bombo, lirili, patapim, chimp, grimace); buildings `buildings/bld_<type>_lv1..lv5.png` (townHall also lv0 = the ruins; ra lv1-4; fuelStation lv1-4; wall lv1-8) and the merged ones `bld_cannon_merged_dl`, `bld_archer_merged`, `bld_mortar_merged`, `bld_firework_merged_left`, `bld_wizard_merged`, `bld_flock_merged` (no Spear Thrower merged picture yet); heroes `heroes/hero_brisket*.png`, `hero_queen*.png`; spells `spells/ui_spell_*.png`; UI `ui/` (coin, burger `ui_research_point`, league badges, medals, merge gear, Feast and Encore icons, edit-layout button); gnomes `villagers/`.
 - **Title and map:** `art-source/title/` (title_bg, title_logo...), `art-source/map/` (day, dusk, night, dawn). Logo `docs/branding/Italian_Brainrot_TD_Logo.png`, app icon `docs/branding/app_icon.png`.
+- **Smooth corners:** square pictures (screenshots, the app icon) are clipped to rounded rectangles matching their frame's corners (the app icon on its own: 22% corners), never square corners inside a rounded frame.
 - **Screenshots** (fresh for v0.8.3): a village by day and the same at night, Da Baby Car leading a themed wave with the hotbar, the RV Lab research window, the RV Lab with the gold Mastery column, the merge window, the Fuel Station window, What's New, How to Play (Enemies tab), the leaderboard, a player card, visiting a village, the title screen. **No email address may show in any screenshot** (the game shows usernames only).
 - **How the v0.8.3 screenshots were made:** the dev server with `?backend=local` and headless Chrome. The local backend's database (`ibtd.dev.db` in localStorage) was seeded with demo accounts (made-up usernames like BrainrotBoss and TungTungTitan) and villages built with the game's own rules (a Village Hall 15 village with every merged defense, a Village Hall 8 village), so the leaderboard and profiles have rows. Those players are demo data, not real players.
 
