@@ -268,9 +268,9 @@ The day/night clock ([src/logic/dayNight.js](src/logic/dayNight.js)) is a cycle 
 - **Sounds:** clicking her altar plays the altar sound (`SFX.altarSelect`, like the Brisket King's); clicking her plays her voice (`sfx_queen_select`, never over itself). Her shots reuse the Locklair arrow sound.
 - **Art:** `art-source/heroes/hero_queen`, `_attack`, `_sleep`; the altar is `bld_queenAltar_lv1`-`lv5`, one per 2 levels.
 
-## 2x wave speed
+## 2x / 4x wave speed
 
-[src/logic/fastForward.js](src/logic/fastForward.js): a round **2x** toggle beside Start Wave (hotkey **T**), shown during the wave countdown and the wave. While on, GameScene runs the simulation twice per frame with the normal step, so nothing tunnels or skips; between waves the game always runs at 1x (the day/night clock, building and income aren't sped up). The choice is saved in the settings (`fast` in `ibtd.settings`) and stays on for later waves. The server's wave check (one wave per 30 s) still holds: at 2x its credit lags and catches up.
+[src/logic/fastForward.js](src/logic/fastForward.js): a round wave speed button beside Start Wave (hotkey **T**), shown during the wave countdown and the wave. Each press steps through `WAVE_SPEEDS`: off -> **2x** (orange, pulsing ring) -> **4x** (v0.8.9; red "4x", faster pulse) -> off. GameScene runs the simulation 2 or 4 times per frame with the normal step, so nothing tunnels or skips; between waves the game always runs at 1x (the day/night clock, building and income aren't sped up). The choice is saved in the settings (`fast` in `ibtd.settings`: `true` = 2x, `4` = 4x) and stays for later waves. The server's wave check (one wave per 30 s) still holds: at 2x or 4x its credit lags and catches up.
 
 ## Merging defenses
 

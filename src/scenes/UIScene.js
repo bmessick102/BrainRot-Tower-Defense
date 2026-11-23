@@ -18,8 +18,8 @@ import {
   canSkipTutorial, currentStep, goldNeeded, isGuideVisible, isWaitingForGold, tutorialAllows
 } from '../logic/tutorial.js';
 import { isWaveActive } from '../logic/util.js';
-import { canFastForward, isFastForward, setFastForward } from '../logic/fastForward.js';
-import { loadFastSetting, saveFastSetting } from '../logic/save.js';
+import { canFastForward, getWaveSpeed, setWaveSpeed, nextWaveSpeed } from '../logic/fastForward.js';
+import { loadWaveSpeed, saveFastSetting } from '../logic/save.js';
 import { gnomeStats, gnomeTier } from '../logic/villagers.js';
 import { Button } from '../objects/Button.js';
 import { ResourceBar, formatSpaced } from '../objects/ResourceBar.js';
@@ -105,8 +105,8 @@ const masteryButtonSub = (gs, type) => `${masteryLevel(gs, type)} / ${masteryTie
 const MERGE_COLOR = 0xd9a21b; // the Merge buttons and the "MERGED" tag: gold
 const EARLY_W = 150; // "Start Wave" button beside the wave pill
 const EARLY_GAP = 10;
-const FAST_D = 46;  // the round "2x" wave speed toggle after the Start Wave / Cancel buttons
-const FAST_ON = 0xf08a1a, FAST_OFF = 0x5b5750;
+const FAST_D = 46;  // the round "2x" / "4x" wave speed button after the Start Wave / Cancel buttons
+const FAST_ON = 0xf08a1a, FAST_MAX = 0xe0402a, FAST_OFF = 0x5b5750; // the wave speed button: 2x, 4x, off
 const CANCEL_W = 112; // "Cancel" beside Start Now during the countdown
 const EARLY_H = 54;         // Start Wave button height: room for its label and a hint line without touching the edges
 const PILL_H = 46;          // the wave pill beside it
@@ -408,9 +408,9 @@ export class UIScene extends Phaser.Scene {
       { color: COLORS.buttonDanger, fontSize: 19, radius: 12 });
     this.cancelWaveBtn.setLabel('Cancel', 'Not yet');
     this.cancelWaveBtn.setVisible(false);
-    // The 2x toggle (also the T key): during the countdown and the wave. On = bright orange with a pulsing ring.
-    // The choice is remembered (settings) and stays on for the following waves.
-    setFastForward(loadFastSetting(this.gs.storage));
+    // The wave speed button (also the T key): during the countdown and the wave. Each press: off -> 2x (bright orange,
+    // pulsing ring) -> 4x (red, faster pulse) -> off. The choice is remembered (settings) for the following waves.
+    setWaveSpeed(loadWaveSpeed(this.gs.storage));
     this.fastGlow = this.add.graphics().setVisible(false);
     this.fastGlow.lineStyle(4, 0xffd27a, 1).strokeCircle(0, 0, FAST_D / 2 + 4);
     this.fastGlowTween = null;
@@ -424,21 +424,34 @@ export class UIScene extends Phaser.Scene {
     });
   }
 
+  /** Each press (or T): off -> 2x -> 4x -> off. */
   toggleFast() {
-    setFastForward(!isFastForward());
-    saveFastSetting(this.gs.storage, isFastForward());
+    setWaveSpeed(nextWaveSpeed(getWaveSpeed()));
+    saveFastSetting(this.gs.storage, getWaveSpeed());
     this.styleFast();
   }
 
-  /** Off: dark grey; on: bright orange with a slow pulsing ring around it. */
+  /**
+   * Off: dark grey "2x" (the next press); 2x: bright orange "2x" with a slow pulsing ring; 4x: red "4x" with a faster
+   * pulse.
+   */
   styleFast() {
-    const on = isFastForward(), b = this.fastBtn;
-    b.color = on ? FAST_ON : FAST_OFF;
+    const speed = getWaveSpeed(), on = speed > 1, b = this.fastBtn;
+    const label = speed === 4 ? '4x' : '2x';
+    if (b.label.text !== label) b.setLabel(label);
+    b.color = speed === 4 ? FAST_MAX : on ? FAST_ON : FAST_OFF;
     b.redraw();
     const show = b.visible && on;
     this.fastGlow.setVisible(show);
+    if (show && this.fastGlowTween && this.fastGlowSpeed !== speed) {
+      this.fastGlowTween.remove(); // the pulse changes with the speed
+      this.fastGlowTween = null;
+      this.fastGlow.setAlpha(1).setScale(1);
+    }
     if (show && !this.fastGlowTween) {
-      this.fastGlowTween = this.tweens.add({ targets: this.fastGlow, alpha: { from: 1, to: 0.25 }, scale: { from: 1, to: 1.12 }, duration: 600, yoyo: true, repeat: -1 });
+      this.fastGlowSpeed = speed;
+      this.fastGlow.clear().lineStyle(4, speed === 4 ? 0xff8a6a : 0xffd27a, 1).strokeCircle(0, 0, FAST_D / 2 + 4);
+      this.fastGlowTween = this.tweens.add({ targets: this.fastGlow, alpha: { from: 1, to: 0.25 }, scale: { from: 1, to: 1.12 }, duration: speed === 4 ? 320 : 600, yoyo: true, repeat: -1 });
     } else if (!show && this.fastGlowTween) {
       this.fastGlowTween.remove();
       this.fastGlowTween = null;

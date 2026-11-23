@@ -2,6 +2,13 @@
 
 The version shows in the bottom-left corner of every screen (`package.json` `version` plus the commit). Details for everything below are in [README.md](README.md).
 
+## 0.8.9
+
+4x wave speed. Saves and settings load as they are.
+
+### Changes
+- **4x wave speed** (src/logic/fastForward.js, UIScene `toggleFast` / `styleFast`): the 2x toggle is now a three-step button, `WAVE_SPEEDS` [1, 2, 4]: each press (or T) goes off -> 2x -> 4x -> off (`nextWaveSpeed`). At 4x GameScene runs the same capped step four times a frame during a wave (`stepsPerFrame` returns the speed), so the wave plays out exactly as at 1x (tests/fastForward.test.js: same result in a quarter of the frames); between waves it's still 1x. The button reads "2x" (grey when off, orange with a pulsing ring at 2x) and "4x" (red, faster pulse). New `getWaveSpeed` / `setWaveSpeed` / `toWaveSpeed`; `isFastForward` / `setFastForward` / `FAST_FACTOR` (2) kept. Settings: `fast` in ibtd.settings is `true` for 2x (as before, so a 0.8.8 setting loads as 2x) and `4` for 4x (save.js `loadWaveSpeed`, `saveFastSetting(storage, speed)`; `loadFastSetting` = speed > 1); `saveGraphicsSetting` and `saveSettings` keep it. How to Play explains the three steps.
+
 ## 0.8.8
 
 A smaller F.L.O.C.K Mothership. Saves load as they are.

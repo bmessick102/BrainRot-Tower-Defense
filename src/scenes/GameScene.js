@@ -358,7 +358,7 @@ export class GameScene extends Phaser.Scene {
 
   update(time, delta) {
     if (!this.endingGame) {
-      // 2x wave speed: the same capped step run twice (src/logic/fastForward.js), never one doubled step.
+      // 2x / 4x wave speed: the same capped step run 2 or 4 times (src/logic/fastForward.js), never one longer step.
       const step = Math.min(delta / 1000, MAX_STEP);
       for (let i = stepsPerFrame(this.gs); i > 0; i--) this.gs.update(step);
     }

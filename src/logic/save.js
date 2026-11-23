@@ -369,24 +369,31 @@ export function loadSettings(storage) {
 
 export function saveSettings(storage, settings) {
   const graphics = loadGraphicsSetting(storage); // kept: it's saved on its own (saveGraphicsSetting)
-  return writeKey(storage, SAVE_KEYS.settings, JSON.stringify(withFast({ music: settings.music, sfx: settings.sfx, graphics }, loadFastSetting(storage))));
+  return writeKey(storage, SAVE_KEYS.settings, JSON.stringify(withFast({ music: settings.music, sfx: settings.sfx, graphics }, loadWaveSpeed(storage))));
 }
 
-// The 2x wave speed toggle (src/logic/fastForward.js) lives in the same settings object: written only when on,
-// and kept by every other settings save.
-const withFast = (obj, fast) => (fast ? { ...obj, fast: true } : obj);
+// The wave speed button (src/logic/fastForward.js) lives in the same settings object: `fast` is written only when
+// sped up (true for 2x, as before v0.8.9; 4 for 4x), and kept by every other settings save.
+const withFast = (obj, speed) => (speed === 4 ? { ...obj, fast: 4 } : speed > 1 ? { ...obj, fast: true } : obj);
 
-export function loadFastSetting(storage) {
+/** The saved wave speed: 1, 2 or 4. */
+export function loadWaveSpeed(storage) {
   try {
-    return JSON.parse(readKey(storage, SAVE_KEYS.settings) || 'null')?.fast === true;
+    const fast = JSON.parse(readKey(storage, SAVE_KEYS.settings) || 'null')?.fast;
+    return fast === 4 ? 4 : fast === true ? 2 : 1;
   } catch {
-    return false;
+    return 1;
   }
 }
 
+/** Is the saved wave speed above 1x? */
+export const loadFastSetting = (storage) => loadWaveSpeed(storage) > 1;
+
+/** Save the wave speed: 1, 2 or 4 (true = 2x, false = 1x). */
 export function saveFastSetting(storage, fast) {
+  const speed = fast === true ? 2 : fast === 4 || fast === 2 ? fast : 1;
   const { music, sfx } = loadSettings(storage);
-  return writeKey(storage, SAVE_KEYS.settings, JSON.stringify(withFast({ music, sfx, graphics: loadGraphicsSetting(storage) }, !!fast)));
+  return writeKey(storage, SAVE_KEYS.settings, JSON.stringify(withFast({ music, sfx, graphics: loadGraphicsSetting(storage) }, speed)));
 }
 
 /** Graphics quality saved with the settings (src/quality.js): 'auto' (the default), 'high' or 'low'. */
@@ -405,5 +412,5 @@ export function loadGraphicsSetting(storage) {
 export function saveGraphicsSetting(storage, graphics) {
   const { music, sfx } = loadSettings(storage);
   const g = GRAPHICS_SETTINGS.includes(graphics) ? graphics : 'auto';
-  return writeKey(storage, SAVE_KEYS.settings, JSON.stringify(withFast({ music, sfx, graphics: g }, loadFastSetting(storage))));
+  return writeKey(storage, SAVE_KEYS.settings, JSON.stringify(withFast({ music, sfx, graphics: g }, loadWaveSpeed(storage))));
 }

@@ -19,8 +19,8 @@ const allEntries = (release) => release.sections.flatMap((s) => s.entries);
 
 export const PATCH_NOTES = {
   release: '0.8',
-  version: '0.8.8',
-  title: "What's New in v0.8.8",
+  version: '0.8.9',
+  title: "What's New in v0.8.9",
   sections: [
     {
       type: 'feature',
@@ -70,6 +70,10 @@ export const PATCH_NOTES = {
     {
       type: 'change',
       entries: [
+        {
+          version: '0.8.9', icon: { texture: 'ui_start_button' }, title: '4x wave speed',
+          text: 'The wave speed button has a second level: press it once for 2x, again for 4x, and once more to go back to normal speed. Your choice stays for the next waves.'
+        },
         {
           version: '0.8.0', icon: { building: 'townHall', level: 11 }, title: 'Village Hall 11: new defenses instead of Bonus Slots',
           text: 'Bonus Slots are gone. Village Hall 11 now gives one more Tower of Rah, Gandolf, Diddypult, KSI Tower and Cannon. Villages keep every building they built with Bonus Slots: they all keep working, you just can’t build another of that kind until you’re under the limit.'
