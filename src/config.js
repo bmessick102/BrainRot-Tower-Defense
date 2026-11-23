@@ -787,7 +787,7 @@ export const CONFIG = {
           { name: 'EMP Pulse', desc: 'Every 12 s, a pulse stuns every enemy in zap range for 0.75 s (bosses are slowed).', fx: { empEvery: 12, empSeconds: 0.75 } }
         ]
       },
-      art: { key: 'bld_flock_merged', scale: 1.25, standInScale: 1.25 }
+      art: { key: 'bld_flock_merged', scale: 0.7, standInScale: 1.25 } // v0.8.8: 1.25 -> 0.7, so the tile's outline shows around it
     },
     // Harpoon Ballista (v0.8.3): spears at 2x damage (2x DPS). Reel In (harpoon.js): every `every`th throw is a harpoon at
     // the toughest enemy in range (most current health, ground or air) that drags it `pull` tiles back the way it came

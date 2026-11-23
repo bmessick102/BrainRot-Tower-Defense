@@ -2,6 +2,13 @@
 
 The version shows in the bottom-left corner of every screen (`package.json` `version` plus the commit). Details for everything below are in [README.md](README.md).
 
+## 0.8.8
+
+A smaller F.L.O.C.K Mothership. Saves load as they are.
+
+### Changes
+- **F.L.O.C.K Mothership smaller:** `CONFIG.merges.flock.art.scale` 1.25 -> 0.7, so its base fits inside its 1x1 tile and the plot's rim (GameScene `drawPlots`) shows around it. On a 1x1 tile even the Level 10 F.L.O.C.K Tower (`SPRITE_SCALE.flock` 1.15) covers its rim, so the Mothership is now drawn a little smaller than it. `standInScale` (unused: the picture exists) stays 1.25. ZapFx's emitter follows the picture's top, so the zaps still leave from it.
+
 ## 0.8.7
 
 Shots leave merged defenses and the Hatsune Queen's crossbow from the right spot, and a smaller Harpoon Ballista. Saves load as they are.

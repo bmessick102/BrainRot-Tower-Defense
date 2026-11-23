@@ -19,8 +19,8 @@ const allEntries = (release) => release.sections.flatMap((s) => s.entries);
 
 export const PATCH_NOTES = {
   release: '0.8',
-  version: '0.8.7',
-  title: "What's New in v0.8.7",
+  version: '0.8.8',
+  title: "What's New in v0.8.8",
   sections: [
     {
       type: 'feature',
@@ -77,6 +77,10 @@ export const PATCH_NOTES = {
         {
           version: '0.8.6', icon: { texture: 'bld_spear_merged_dl' }, title: 'The Harpoon Ballista gets its own picture',
           text: 'The Harpoon Ballista is no longer a glowing Spear Thrower: it has its own giant ballista tower, which turns to face the enemy it’s shooting.'
+        },
+        {
+          version: '0.8.8', icon: { texture: 'bld_flock_merged' }, title: 'F.L.O.C.K Mothership smaller',
+          text: 'The F.L.O.C.K Mothership is drawn smaller, so it fits on its tile and you can see the tile’s outline around it.'
         },
         {
           version: '0.8.7', icon: { texture: 'bld_spear_merged_dl' }, title: 'Harpoon Ballista a little smaller',
