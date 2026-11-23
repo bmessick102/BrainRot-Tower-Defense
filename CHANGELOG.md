@@ -2,6 +2,15 @@
 
 The version shows in the bottom-left corner of every screen (`package.json` `version` plus the commit). Details for everything below are in [README.md](README.md).
 
+## 0.10.0
+
+Wave difficulty by wave number instead of Village Hall, enemies joining at set waves, and the Hatsune Queen's new poses. No database changes; older saves keep their waves cleared (a high-hall village at a low wave now gets easier waves, a low-hall village at a high wave harder ones).
+
+### Changes
+- **Wave stages** (waves.js, enemies.js `waveStage`, config `rules.waveStages`): the wave number now picks the base wave, not the Village Hall. `rules.waveStages` [1, 4, 7, 10, 14, 18, 23, 28, 34, 40, 48, 56, 65, 75, 85] is the wave where each of the 15 stages starts; stage s fights the old Village Hall s base wave (`CONFIG.waves`, then the endless formula), its rotating themes and its most entrances (`rules.entrancesByHall` -> `entrancesByStage`, same numbers: all 8 from stage 13 = wave 65). `rules.waveRamp` still adds +8% enemies / +5% HP per wave. `scaledWaveComposition(stage, n)`, `themesAt(stage, n)`, `waveThemeKey(stage, n, debut)`; `nextWaveInfo` returns `stage` (no `th`). Da Baby Car's burst picks troops from the running wave's stage. The Village Hall level no longer touches any of it.
+- **Enemies join at set waves** (config enemies `fromTownHall` -> `fromWave`, `rules.babyCar` `fromWave` 18 / `lateWave` 34): John Pork 10, Skibidi Toilet and Bri Bri Bicus Dicus 14, Rahhh Skeleton and Frigo Camillo 18, La Vaca Saturno and Quandale Dingle 23, Big Yahu and Bombombini Gusini 28, Lirili Larila 34, Brr Brr Patapim 40, Grimace Golem 48 (each the first wave of its old hall's stage). A kind is absent before its fromWave and has `baseCount` from its stage, growing per stage after it. Debut waves follow the wave (`debutKindsAt(n)`, `nextDebut`); an old save without a `debuted` list counts the kinds due by its next wave as met (`legacyDebuted(n)`). How to Play says "From wave N"; the loading tip says waves grow with every wave survived.
+- **Hatsune Queen poses** (HeroView `QUEEN_VIEW`, art-source/heroes/hero_queen_defeated / _wake / _select, the user's pictures): knocked out (`defeated`, height 46), waking (`wake`, 58) and clicked (`select`, a wave, 74) instead of reusing her sleep / standing pictures; her Hero tab picture follows too (UIScene).
+
 ## 0.9.4
 
 A sound for brewing spells. No save or database changes.

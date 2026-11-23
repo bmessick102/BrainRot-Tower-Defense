@@ -42,7 +42,7 @@ describe('first-time tips', () => {
     gs.emit('baseReset', {});
     expect(gs.tipQueue).toContain('themes');
     const g2 = village({ vh: 7 });
-    g2.wavesCleared = 3; // wave 4: a Da Baby Car wave at Village Hall 7
+    g2.wavesCleared = 21; // wave 22: a Da Baby Car wave (every 2nd from wave 18)
     g2.tipsSeen = ['themes', 'pork', 'toilet', 'skeleton', 'vaca', 'bicus', 'frigo']; // (those came up already)
     g2.emit('townHallUpgraded', { level: 7 });
     expect(g2.tipQueue).toContain('boss');

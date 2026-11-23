@@ -97,10 +97,10 @@ function defenseHitsEnemy(defType, enemyKind) {
   return CONFIG.enemies[enemyKind].type === 'air' ? cfg.hitsAir : cfg.hitsGround;
 }
 
-/** First wave (1-based) whose roster includes this enemy, or null if only endless waves bring it. */
+/** First wave whose roster includes this enemy (its scripted stage's first wave), or null if only endless waves bring it. */
 function firstWave(kind) {
   const i = CONFIG.waves.findIndex((w) => (w[kind] || 0) > 0);
-  return i >= 0 ? i + 1 : null;
+  return i >= 0 ? CONFIG.rules.waveStages[i] : null;
 }
 
 const round1 = (n) => Math.round(n * 10) / 10;
@@ -825,8 +825,8 @@ export class HowToPlayScene extends Phaser.Scene {
     if (cfg.goo) tags.push([`Goo trail: enrages troops +${Math.round((cfg.goo.damageMult - 1) * 100)}%`, 0x8a3fd1], ['Big puddle when he falls', 0xc98a12]);
     const fw = firstWave(kind);
     const dropper = cfg.droppedBy && CONFIG.enemies[cfg.droppedBy];
-    const bossFrom = cfg.boss && CONFIG.rules.babyCar ? `From Village Hall ${CONFIG.rules.babyCar.fromTownHall}`
-      : cfg.fromTownHall ? `From Village Hall ${cfg.fromTownHall}` : null;
+    const bossFrom = cfg.boss && CONFIG.rules.babyCar ? `From wave ${CONFIG.rules.babyCar.fromWave}`
+      : cfg.fromWave ? `From wave ${cfg.fromWave}` : null;
     tags.push([dropper ? `From ${dropper.name}s` : bossFrom || (fw ? `From wave ${fw}` : 'Endless waves'), COLORS.buttonDark]);
     y = this.tagRow(p, ENEMY_LAYOUT.rx, y + 6, tags);
     y = this.description(ENEMY_DESCRIPTIONS[kind], y + 4);

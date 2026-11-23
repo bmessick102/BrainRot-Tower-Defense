@@ -13,7 +13,15 @@ import { enrageFactor } from './enrage.js';
 import { walkToward, moveToward } from './motion.js';
 import { stepEnemyAbility, breatheFire } from './specialEnemies.js';
 
-/** A Village Hall's base wave (scripted for the first ones, the last scripted one grown after that). */
+/** The stage wave number n fights (1 .. rules.waveStages.length, v0.9.5): its base wave, themes and most entrances. */
+export function waveStage(n) {
+  const starts = CONFIG.rules.waveStages;
+  let stage = 1;
+  for (let i = 1; i < starts.length; i++) if (n >= starts[i]) stage = i + 1;
+  return stage;
+}
+
+/** A wave stage's base wave (scripted for the first ones, the last scripted one grown after that). */
 function baseWaveFor(th) {
   const scripted = CONFIG.waves;
   if (th <= scripted.length) return scripted[th - 1];
@@ -25,9 +33,9 @@ function baseWaveFor(th) {
 }
 
 /**
- * How much a Village Hall's base wave grows from Village Hall `from` to `to` (which: 'count' or 'hp'): x
- * rules.endlessCountGrowth / endlessHpGrowth per hall up to Village Hall topHallGrowth.from - 1 (11), then x
- * topHallGrowth.count / hp per hall (Village Halls 12-15 get a few more defenses per hall, not new levels).
+ * How much a wave stage's base wave grows from stage `from` to `to` (which: 'count' or 'hp'): x
+ * rules.endlessCountGrowth / endlessHpGrowth per stage up to stage topHallGrowth.from - 1 (11), then x
+ * topHallGrowth.count / hp per stage (the old Village Halls 12-15 rates; stages by wave number since v0.9.5).
  */
 export function hallWaveGrowth(from, to, which = 'count') {
   const R = CONFIG.rules, top = R.topHallGrowth;
@@ -803,11 +811,9 @@ export function removeDeadEnemies(state) {
   state.enemies = state.enemies.filter((e) => e.alive);
 }
 
-/** The Village Hall's base wave composition (which ground troops a Da Baby Car can burst into). */
+/** The running wave's stage's base wave composition (which ground troops a Da Baby Car can burst into). */
 function burstBase(state) {
-  const th = state.buildings.find((b) => b.type === 'townHall');
-  const lvl = Math.max(1, Math.min(th ? th.level : 1, CONFIG.rules.maxTownHallLevel));
-  return baseWaveFor(lvl);
+  return baseWaveFor(waveStage((state.wave && state.wave.number) || 1));
 }
 
 /** Drop troops on open ground at (or near) a point, e.g. where a balloon was shot down or a Da Baby Car burst. */

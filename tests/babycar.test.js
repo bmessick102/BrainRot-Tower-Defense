@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest';
 import { CONFIG } from '../src/config.js';
 import { createEnemy, stepEnemy, removeDeadEnemies, babyCarBurst } from '../src/logic/enemies.js';
 import { damageEnemy } from '../src/logic/combat.js';
-import { babyCarCount, nextWaveComposition, buildSpawnQueues, themesAt, waveThemeKey } from '../src/logic/waves.js';
+import { babyCarCount, nextWaveComposition, buildSpawnQueues, themesAt, waveThemeKey, waveStage, debutKindsAt } from '../src/logic/waves.js';
 import { maxHp } from '../src/logic/buildings.js';
 import { makeStateWithTownHall, addBuilding } from './helpers.js';
 
@@ -32,18 +32,21 @@ describe('Da Baby Car (raid boss)', () => {
     expect(CAR.researchPoints).toBe(40); // v0.5 rebalance (was 25)
   });
 
-  it('comes every 2nd wave from Village Hall 6 (2 cars from Village Hall 9), never in pure themed waves', () => {
-    expect(babyCarCount(5, 2)).toBe(0);
-    expect(babyCarCount(B.fromTownHall, 2)).toBe(1);
-    expect(babyCarCount(B.fromTownHall, 3)).toBe(0);
-    expect(babyCarCount(9, 4)).toBe(2);
+  it('comes every 2nd wave from wave 18 (2 cars from wave 34), never in pure themed waves', () => {
+    expect(B.fromWave).toBe(18);
+    expect(babyCarCount(16)).toBe(0);
+    expect(babyCarCount(B.fromWave)).toBe(1);
+    expect(babyCarCount(B.fromWave + 1)).toBe(0);
+    expect(babyCarCount(B.lateWave)).toBe(2);
     // A headliner theme on an even wave brings one; a pure theme (the old special waves) never does.
-    const T = CONFIG.waveThemes, list = themesAt(7);
-    const waveOf = (pred) => { for (let n = 2; n < 60; n += 2) { const k = waveThemeKey(7, n); if (n % T.boss.every && k && pred(T.types[k])) return n; } return null; };
+    const T = CONFIG.waveThemes, list = themesAt(waveStage(B.fromWave));
+    const waveOf = (pred) => { for (let n = B.fromWave; n < 90; n += 2) { const k = waveThemeKey(waveStage(n), n); if (n % T.boss.every && k && pred(T.types[k])) return n; } return null; };
     const mixed = waveOf((t) => !t.pure), pure = waveOf((t) => t.pure);
     expect(list.length).toBeGreaterThan(2);
-    const s = makeStateWithTownHall({ tutorialDone: true, tutorialStep: 10, wavesCleared: mixed - 1 }, 7);
-    expect(nextWaveComposition(s).babycar).toBe(1);
+    const s = makeStateWithTownHall({ tutorialDone: true, tutorialStep: 10, wavesCleared: mixed - 1 }, 2); // (any hall)
+    s.debuted = debutKindsAt(1000);
+    expect(nextWaveComposition(s).babycar).toBe(babyCarCount(mixed));
+    expect(babyCarCount(mixed)).toBeGreaterThan(0);
     s.wavesCleared = pure - 1;
     expect(nextWaveComposition(s).special).toBeTruthy();
     expect(nextWaveComposition(s).babycar || 0).toBe(0);

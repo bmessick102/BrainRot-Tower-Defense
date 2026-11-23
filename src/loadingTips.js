@@ -9,7 +9,7 @@ export const LOADING_TIPS = [
   'Every enemy you defeat drops gold. Tougher enemies are worth more.',
 
   // Village Hall and building
-  'Upgrading your Village Hall unlocks new buildings and more of each, but brings bigger attacks with new enemy types.',
+  'Upgrading your Village Hall unlocks new buildings and more of each. The waves grow with every wave you survive, and new enemy types join at set waves.',
   'If your Village Hall falls, the night is lost. Build your defenses around it.',
   'Edit mode can clear your whole village into the hotbar with Remove All, so you can lay it out from scratch between waves.',
   'Press R (or the Rotate button) while placing a wall to rotate it.',

@@ -1,9 +1,10 @@
 // AUTO-GENERATED from Game_Balance_Sheet.xlsx. Edit the spreadsheet, then re-export.
 // Units: distances in tiles, times in seconds, money in gold.
 // levels[i] = level i+1. Building cost at level 1 = shop price; later levels = upgrade price.
-// waves[i] = the base wave for Village Hall i+1; Village Halls 6+ use the endless formula in logic/waves.js.
-// Waves start when the player presses Start Wave. Each wave is the Village Hall's base wave scaled up by
-// rules.waveRamp for every wave survived before it (so waves keep getting harder at any hall level).
+// waves[i] = the base wave for wave stage i+1; stages 6+ use the endless formula in logic/waves.js.
+// Waves start when the player presses Start Wave. v0.9.5: difficulty follows the wave number, not the Village Hall:
+// rules.waveStages says which stage (base wave) a wave number fights, and rules.waveRamp scales it up for every wave
+// survived before it. Each enemy kind joins at its own wave (fromWave).
 // Levels 6-10 extend the sheet's growth (costs x2, HP/damage x1.25, storage capacity x1.5);
 // they are NOT in Game_Balance_Sheet.xlsx yet: copy them in before the next re-export.
 // Map shape, image origin, town hall position, and spawn points live in src/mapTiles.js.
@@ -18,10 +19,14 @@ export const CONFIG = {
     // Everything destroyed in a night is rebuilt for free when the wave is beaten. During a wave a destroyed
     // building (not a wall) can be rebuilt early for this share of its current level's cost.
     rebuildCostShare: 0.3,
-    // The most entrances (MAP paths, 8 on the v0.9.2 map) a wave can come in from, per Village Hall level (VH1 first;
+    // Wave stages (v0.9.5): the wave number where each stage starts (stage 1 first). A stage picks the base wave
+    // (CONFIG.waves, then the endless formula: the old per-Village-Hall base waves), its rotating themes and its
+    // most entrances; past the last start, the last stage. Difficulty no longer depends on the Village Hall.
+    waveStages: [1, 4, 7, 10, 14, 18, 23, 28, 34, 40, 48, 56, 65, 75, 85],
+    // The most entrances (MAP paths, 8 on the v0.9.2 map) a wave can come in from, per wave stage (stage 1 first;
     // past the end, the last). Each wave picks a random number from 1 up to it (waves.js planPaths), the same enemies
-    // spread across them; wave 1 always comes from the top. Every entrance is in play from Village Hall 13.
-    entrancesByHall: [1, 2, 2, 3, 3, 4, 4, 5, 5, 6, 6, 7, 8, 8, 8],
+    // spread across them; wave 1 always comes from the top. Every entrance is in play from stage 13 (wave 65).
+    entrancesByStage: [1, 2, 2, 3, 3, 4, 4, 5, 5, 6, 6, 7, 8, 8, 8],
     // Rebuilding is always paid in gold. A level bought with Burgers (RV Lab, Fuel Station, Brisket King) counts
     // as this much gold per Burger, so its rebuild price grows with the level like every other building's.
     burgerGoldValue: 15,
@@ -35,7 +40,7 @@ export const CONFIG = {
     waveCountdown: 30,
     tutorialCountdown: 10,
     // Every wave survived makes the next ones bigger: +countPerWave enemies and +hpPerWave enemy HP
-    // (shares of the Village Hall's base wave, linear: wave 11 has 1 + 10 x 0.08 = 1.8x the enemies).
+    // (shares of the wave stage's base wave, linear: wave 11 has 1 + 10 x 0.08 = 1.8x the enemies).
     waveRamp: { countPerWave: 0.08, hpPerWave: 0.05 },
     // Starting the next wave within this many seconds of clearing the last counts as a quick start
     // (the "Bring It On" achievement).
@@ -54,9 +59,9 @@ export const CONFIG = {
     // Restless nights (src/logic/enrage.js): while it's dark, attacking enemies deal `damage`x damage and move
     // `speed`x faster, and every kill (and the wave-cleared research points) pays +lootBonus gold and RP.
     night: { damage: 1.25, speed: 1.15, lootBonus: 0.25 },
-    // Da Baby Car raid boss (enemies.babycar): from Village Hall `fromTownHall`, every `every`th wave (normal
-    // waves only, not special ones) brings `count` of them, `countLate` from Village Hall `lateTownHall`.
-    babyCar: { fromTownHall: 6, every: 2, count: 1, lateTownHall: 9, countLate: 2 },
+    // Da Baby Car raid boss (enemies.babycar): from wave `fromWave`, every `every`th wave (normal waves only, not
+    // special ones) brings `count` of them, `countLate` from wave `lateWave`.
+    babyCar: { fromWave: 18, every: 2, count: 1, lateWave: 34, countLate: 2 },
     // Wave stars (src/logic/waveStars.js): each beaten wave is rated by how many of the buildings standing
     // when it started (walls don't count) were lost: none = 3 stars, at least `twoStarShare` still standing =
     // 2 stars, else 1. `bonus[stars - 1]` of the wave's gold and RP is paid on top.
@@ -68,19 +73,19 @@ export const CONFIG = {
     // areaExponent: area damage (splash, pools, traps...) hits a packed enemy pack ** areaExponent times over
     // (combat.js areaPack), tuned so a capped wave takes about as much damage as the uncapped crowd would.
     crowdCap: { maxEnemies: 400, maxSizeBoost: 0.35, areaExponent: 0.66 },
-    // Village Halls 6-11: their base wave is the previous hall's with x endlessCountGrowth enemies and x endlessHpGrowth
-    // health (Village Halls 12-15: topHallGrowth below) (v0.5: 1.18 / 1.14 from the scripted VH5 wave; was 1.15 / 1.1 from VH4).
+    // Wave stages 6-11 (the old Village Halls 6-11): their base wave is the previous stage's with x endlessCountGrowth
+    // enemies and x endlessHpGrowth health (stages 12-15: topHallGrowth below) (v0.5: 1.18 / 1.14 from the scripted VH5 wave; was 1.15 / 1.1 from VH4).
     endlessCountGrowth: 1.18,
-    // v0.6 enemies (fromTownHall kinds, waves.js withLateKinds): this share of their total health comes back out of the
+    // v0.6 enemies (fromWave kinds, waves.js withLateKinds): this share of their total health comes back out of the
     // regular troops (lateKindPool, each cut by the same share, at most lateKindMaxCut), so a hall's wave keeps about
     // the same strength while the new threats join it.
     lateKindOffset: 0.7,
     lateKindPool: ['grunt', 'slinger', 'bomber', 'tank', 'shark', 'thief'],
     lateKindMaxCut: 0.55, // v0.7: 0.35 -> 0.55 so Village Halls 9-11 make room for Lirili Larila, the new Patapim and Bombombini too
     endlessHpGrowth: 1.14,
-    // Village Halls 12-15 (v0.8): past Village Hall `from` - 1 (11) buildings get no new levels, only a few more
-    // defenses per hall (limits), so their base waves grow gentler than the endless formula above: x `count` enemies
-    // and x `hp` health per hall (x1.07 strength). Kinds that join by Village Hall grow the same way past it.
+    // Wave stages 12-15 (v0.8 as Village Halls 12-15, wave stages since v0.9.5): past stage `from` - 1 (11) the base
+    // waves grow gentler than the endless formula above: x `count` enemies and x `hp` health per stage (x1.07
+    // strength). Kinds that join later (fromWave) grow the same way past their stage.
     topHallGrowth: { from: 12, count: 1.04, hp: 1.03 },
     maxTownHallLevel: 15,
     // (v0.6.1-v0.7 had Bonus Slots at Village Hall 11: 5 extra defenses of any kind past their caps. v0.8 replaced
@@ -1033,7 +1038,7 @@ export const CONFIG = {
       bounty: 10,
       researchPoints: 3
     },
-    // Raid boss, mixed into normal waves from Village Hall 6 (rules.babyCar). It drives in a straight line
+    // Raid boss, mixed into normal waves from wave 18 (rules.babyCar). It drives in a straight line
     // from the map edge to the Village Hall (no path, no detours) and rams through everything in its way:
     // a wall breaks in one hit, any other building takes ramDamage and stalls it ramPause s. At the hall it
     // batters away (damage every attackInterval s). Destroyed, it bursts into a mix of the wave's ground
@@ -1058,7 +1063,7 @@ export const CONFIG = {
       bounty: 150,
       researchPoints: 40
     },
-    // Burrower, in waves from Village Hall `fromTownHall` (baseCount at that hall, growing like the others).
+    // Burrower, in waves from wave `fromWave` (baseCount from the stage that wave is in, growing like the others).
     // It tunnels underground, straight under walls and buildings, to the nearest building, surfaces next to it
     // (surfaceSeconds, then it attacks) and, when that building falls, burrows to the next. Underground
     // nothing can target or hurt it (splash, pools and traps included) unless a F.L.O.C.K Tower sees it.
@@ -1069,7 +1074,7 @@ export const CONFIG = {
       type: "ground",
       burrows: true,
       surfaceSeconds: 0.5,
-      fromTownHall: 5,
+      fromWave: 14,
       baseCount: 4,
       hp: 280,
       speed: 1.15,
@@ -1124,7 +1129,7 @@ export const CONFIG = {
       bounty: 7,
       researchPoints: 1
     },
-    // ---------- v0.6 enemies (src/logic/specialEnemies.js). Each joins the waves from its fromTownHall (baseCount
+    // ---------- v0.6 enemies (src/logic/specialEnemies.js). Each joins the waves from its fromWave (baseCount
     // there, growing like the Skibidi Toilet's); waves.js takes rules.lateKindOffset of its health back out of the
     // regular troops so a wave's strength only creeps up. ----------
     // A melee bruiser (sturdier than Tung Tung Sahur). Whenever a standing F.L.O.C.K Tower's range covers him, he stops
@@ -1136,7 +1141,7 @@ export const CONFIG = {
       radius: 0.28,
       type: "ground",
       call: { radius: 5, seconds: 6, cooldown: 14, poseSeconds: 1.2 },
-      fromTownHall: 4,
+      fromWave: 10,
       baseCount: 2,
       hp: 420,
       speed: 1,
@@ -1157,7 +1162,7 @@ export const CONFIG = {
       radius: 0.26,
       type: "ground",
       summon: { kind: "bones", count: 3, range: 4, cooldown: 10, maxAlive: 6, poseSeconds: 0.8, riseSeconds: 0.6 },
-      fromTownHall: 6,
+      fromWave: 18,
       baseCount: 2,
       hp: 520,
       speed: 0.85,
@@ -1192,7 +1197,7 @@ export const CONFIG = {
       radius: 0.45,
       type: "air",
       bounce: { count: 3, step: 1.5, radius: 1, falloff: 0.3 },
-      fromTownHall: 7,
+      fromWave: 23,
       baseCount: 1,
       hp: 1500,
       speed: 0.6,
@@ -1211,7 +1216,7 @@ export const CONFIG = {
       radius: 0.26,
       type: "ranged",
       missileStrike: true,
-      fromTownHall: 8,
+      fromWave: 28,
       baseCount: 2,
       hp: 650,
       speed: 0.8,
@@ -1231,7 +1236,7 @@ export const CONFIG = {
       radius: 0.5,
       type: "ground",
       quake: { radius: 2.5, every: 5, damage: 150, wallMult: 4, stompSeconds: 0.5 },
-      fromTownHall: 9,
+      fromWave: 34,
       baseCount: 1,
       hp: 2800,
       speed: 0.45,
@@ -1250,7 +1255,7 @@ export const CONFIG = {
       radius: 0.5,
       type: "ground",
       spawn: { kind: "chimp", every: 3, count: 1, maxAlive: 8 },
-      fromTownHall: 10,
+      fromWave: 40,
       baseCount: 1,
       hp: 2400,
       speed: 0.45,
@@ -1289,7 +1294,7 @@ export const CONFIG = {
       type: "ground",
       armor: 450,
       armorReduction: 0.3,
-      fromTownHall: 5,
+      fromWave: 14,
       baseCount: 2,
       hp: 300,
       speed: 0.8,
@@ -1308,7 +1313,7 @@ export const CONFIG = {
       radius: 0.3,
       type: "ground",
       chillAura: { radius: 2.5, slowPct: 35 },
-      fromTownHall: 6,
+      fromWave: 18,
       baseCount: 1,
       hp: 750,
       speed: 0.6,
@@ -1327,7 +1332,7 @@ export const CONFIG = {
       radius: 0.42,
       type: "air",
       breath: { splashRadius: 1, splashPct: 35 },
-      fromTownHall: 8,
+      fromWave: 28,
       baseCount: 1,
       hp: 1100,
       speed: 0.75,
@@ -1348,7 +1353,7 @@ export const CONFIG = {
       radius: 0.26,
       type: "ground",
       dash: { minRange: 1.5, range: 4, speed: 4.5, maxSeconds: 1.4, cooldown: 2, impactMult: 3, stunSeconds: 1.5 },
-      fromTownHall: 7,
+      fromWave: 23,
       baseCount: 2,
       hp: 380,
       speed: 1.35,
@@ -1368,7 +1373,7 @@ export const CONFIG = {
       radius: 0.4,
       type: "ground",
       goo: { every: 1, radius: 0.55, seconds: 6, rageSeconds: 4, speedMult: 1.3, damageMult: 1.3, deathRadius: 2, deathSeconds: 8 },
-      fromTownHall: 11,
+      fromWave: 48,
       baseCount: 1,
       hp: 3200,
       speed: 0.5,
@@ -1380,7 +1385,7 @@ export const CONFIG = {
     }
   },
   // Themed waves (v0.7, src/logic/waves.js; replaced v0.6's special wave every 3rd wave). From wave `fromWave` every
-  // wave has a theme, rotating through `order` and skipping themes whose `needs` kinds aren't in that Village Hall's
+  // wave has a theme, rotating through `order` and skipping themes whose `needs` kinds aren't in that wave stage's
   // base wave yet, so back-to-back waves differ. Each keeps about the strength of the normal wave it re-mixes (its
   // total enemy HP x `strength`, default 1):
   //   - a headliner theme gives `share` of that strength to its `mix` (weights over the kinds the wave has) and keeps
@@ -1388,9 +1393,9 @@ export const CONFIG = {
   //   - a `pure` theme is only its mix (null = every ground kind of the normal wave) and pays `bonusBounty` x the
   //     wave's bounty on top when cleared (the old special waves).
   // Above `maxEnemiesFactor` x the normal wave's enemy count the counts shrink and the health grows to match.
-  // Two waves come first: a debut (the first wave at which an enemy that joins by Village Hall can come, if the
+  // Two waves come first: a debut (the first wave at which an enemy that joins later (fromWave) can come, if the
   // village hasn't had its debut: `debut.share` of the wave is that enemy), then every boss.every-th wave, the
-  // Boss Wave (the boss.headliners toughest kinds the wave has, Da Baby Car(s) when the hall has them, and
+  // Boss Wave (the boss.headliners toughest kinds the wave has, Da Baby Car(s) once the waves have them, and
   // boss.bonusBounty x the bounty on top). Da Baby Cars also keep their own schedule (rules.babyCar) on headliner
   // and debut waves; pure themes never have them.
   waveThemes: {

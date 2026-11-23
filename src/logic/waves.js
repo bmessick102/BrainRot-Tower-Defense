@@ -1,8 +1,9 @@
 // Wave composition, spawn paths, spawn schedule, the wave lifecycle, and difficulty scaling.
-// Difficulty: the Village Hall level picks a base wave (scripted for TH1-4, the endless formula above
-// that), and every wave survived ramps it up (waveRamp), so waves keep getting harder at any hall level.
+// Difficulty (v0.9.5: by wave number, not the Village Hall): the wave number's stage (rules.waveStages) picks a base
+// wave (scripted for stages 1-5, the endless formula above that), every wave survived ramps it up (waveRamp), and each
+// later enemy kind joins at its own wave (fromWave).
 import { CONFIG } from '../config.js';
-import { ENEMY_KINDS, spawnEnemy, hallWaveGrowth } from './enemies.js';
+import { ENEMY_KINDS, spawnEnemy, hallWaveGrowth, waveStage } from './enemies.js';
 import { repairAll, salvageMine, addGold, getCapacity, storageCapacity } from './economy.js';
 import { abilityFx } from './abilities.js';
 import { isDark } from './clockLight.js';
@@ -16,31 +17,42 @@ import { countedBuildings, starsFor, starBonus } from './waveStars.js';
 // The ways in (the map's eight entrances, clockwise from the top): gridConfig.js PATHS.
 export const PATHS = ['top', 'cave', 'right', 'stairsRight', 'bottom', 'stoneBridge', 'left', 'stairsLeft'];
 
-/** The most entrances a wave can use at Village Hall `th` (rules.entrancesByHall; past its end, the last). */
-export function entrancesForHall(th) {
-  const t = CONFIG.rules.entrancesByHall;
-  return Math.min(PATHS.length, t[Math.max(1, Math.min(th, t.length)) - 1]);
+const clampStage = (stage) => Math.max(1, Math.min(stage, CONFIG.rules.waveStages.length));
+
+export { waveStage }; // (lives in enemies.js, which a Da Baby Car's burst needs it in too)
+
+/** The most entrances a wave of this stage can use (rules.entrancesByStage; past its end, the last). */
+export function entrancesForStage(stage) {
+  const t = CONFIG.rules.entrancesByStage;
+  return Math.min(PATHS.length, t[Math.max(1, Math.min(stage, t.length)) - 1]);
 }
 
-/** Enemy counts, HP multiplier, and spawn path count (the hall's most entrances) for Village Hall n's base wave. */
-export function waveComposition(n) {
-  return { ...withLateKinds(baseComposition(n), n), spawnPaths: entrancesForHall(n) };
+/** The stage a later enemy kind joins in (the stage of its fromWave). */
+const joinStage = (cfg) => waveStage(cfg.fromWave);
+
+/**
+ * Enemy counts, HP multiplier, and spawn path count (the stage's most entrances) for stage `stage`'s base wave, as
+ * fought at wave `n` (a later kind only from its own fromWave; leave n out for the whole stage).
+ */
+export function waveComposition(stage, n = Infinity) {
+  return { ...withLateKinds(baseComposition(stage), stage, n), spawnPaths: entrancesForStage(stage) };
 }
 
 /**
- * Enemy kinds that join the waves from a Village Hall level (fromTownHall on the enemy, e.g. the Skibidi
- * Toilet): baseCount at that hall, growing like the base wave per hall after it (hallWaveGrowth in enemies.js).
+ * Enemy kinds that join the waves at a wave number (fromWave on the enemy, e.g. the Skibidi Toilet): baseCount from
+ * that wave's stage, growing like the base wave per stage after it (hallWaveGrowth in enemies.js).
  * The v0.6 kinds (OFFSET_KINDS) make room for themselves: rules.lateKindOffset of their total health comes back out of
  * the regular troops (rules.lateKindPool, each cut by the same share, never more than rules.lateKindMaxCut).
  */
 export const OFFSET_KINDS = ['pork', 'skeleton', 'vaca', 'yahu', 'patapim', 'lirili', 'bicus', 'frigo', 'bombo', 'quandale', 'grimace'];
 
-function withLateKinds(comp, n) {
+function withLateKinds(comp, stage, n = Infinity) {
   let added = 0;
   for (const k of ENEMY_KINDS) {
     const cfg = CONFIG.enemies[k];
-    if (!cfg.fromTownHall || !cfg.baseCount) continue;
-    comp[k] = n >= cfg.fromTownHall ? Math.round(cfg.baseCount * hallWaveGrowth(cfg.fromTownHall, n)) : 0;
+    if (!cfg.fromWave || !cfg.baseCount) continue;
+    const from = joinStage(cfg);
+    comp[k] = stage >= from && n >= cfg.fromWave ? Math.round(cfg.baseCount * hallWaveGrowth(from, stage)) : 0;
     if (OFFSET_KINDS.includes(k)) added += comp[k] * cfg.hp;
   }
   if (added > 0) {
@@ -81,7 +93,7 @@ export function choosePaths(state, n, count) {
  * then Mr. Leasts, Sneaker Sharks, Bombers, Neegy Balloons last. (Neegies only come from balloons.)
  */
 /**
- * The entrances wave n attacks from: a random number from 1 up to `maxCount` (the hall's most, entrancesForHall),
+ * The entrances wave n attacks from: a random number from 1 up to `maxCount` (the stage's most, entrancesForStage),
  * each a random entrance, new every wave. Wave 1 is always ['top'].
  */
 export function planPaths(state, n, maxCount) {
@@ -98,7 +110,7 @@ export function getWavePlan(state) {
   const n = nightWaveNumber(state);
   const p = state.wavePlan;
   const valid = p && p.number === n && Array.isArray(p.paths) && p.paths.length >= 1 && p.paths.every((x) => PATHS.includes(x));
-  if (!valid) state.wavePlan = { number: n, paths: planPaths(state, n, scaledWaveComposition(townHallLevel(state), n).spawnPaths) };
+  if (!valid) state.wavePlan = { number: n, paths: planPaths(state, n, scaledWaveComposition(waveStage(n), n).spawnPaths) };
   return state.wavePlan;
 }
 
@@ -171,7 +183,7 @@ export function nightWaveNumber(state) {
 }
 
 /**
- * How much bigger wave n is than its Village Hall's base wave: every wave survived before it adds
+ * How much bigger wave n is than its stage's base wave: every wave survived before it adds
  * rules.waveRamp.countPerWave more enemies and rules.waveRamp.hpPerWave more enemy HP (linear).
  */
 export function waveRamp(n) {
@@ -181,12 +193,12 @@ export function waveRamp(n) {
 }
 
 /**
- * Wave n fought at Village Hall `th`: the Village Hall picks the base wave (which enemy types appear, how
- * many, from how many corners: TH1 -> the first scripted wave ... TH10 -> the endless formula's wave 10),
- * then waveRamp(n) scales the enemy counts and HP. Kinds absent from the base stay absent.
+ * Wave n fought at stage `stage` (waveStage(n) in the game): the stage picks the base wave (which enemy types appear,
+ * how many, from how many corners: stage 1 -> the first scripted wave ... stage 10 -> the endless formula's 10th),
+ * then waveRamp(n) scales the enemy counts and HP. Kinds absent from the base (or not joined by wave n) stay absent.
  */
-export function scaledWaveComposition(th, n) {
-  const base = waveComposition(Math.max(1, Math.min(th, CONFIG.rules.maxTownHallLevel)));
+export function scaledWaveComposition(stage, n) {
+  const base = waveComposition(clampStage(stage), n);
   const ramp = waveRamp(n);
   const comp = { ...base };
   for (const kind of ENEMY_KINDS) comp[kind] = Math.round((base[kind] || 0) * ramp.count);
@@ -196,9 +208,8 @@ export function scaledWaveComposition(th, n) {
 
 // ---------- themed waves (CONFIG.waveThemes, v0.7) ----------
 const WT = () => CONFIG.waveThemes;
-const clampHall = (th) => Math.max(1, Math.min(th, CONFIG.rules.maxTownHallLevel));
 // Enemies that debut in v0.7 (new, or Brr Brr Patapim's new ability) and v0.8: an older save that already met every
-// enemy at its hall still gets their debut waves (legacyDebuted). (Saves with a `debuted` list get v0.8's on their own.)
+// enemy due by its wave still gets their debut waves (legacyDebuted). (Saves with a `debuted` list get v0.8's on their own.)
 const V07_DEBUTS = ['bicus', 'frigo', 'bombo', 'lirili', 'patapim', 'quandale', 'grimace'];
 
 /** Total enemy HP of a composition (before its hpMultiplier): the strength a themed wave keeps. */
@@ -206,38 +217,38 @@ export function waveStrength(comp) {
   return ENEMY_KINDS.reduce((sum, k) => sum + (comp[k] || 0) * CONFIG.enemies[k].hp, 0);
 }
 
-/** The rotating themes possible at Village Hall th: those whose `needs` kinds are in its base wave, in `order`. */
-export function themesAt(th) {
-  const base = waveComposition(clampHall(th));
+/** The rotating themes possible at a stage (at wave n): those whose `needs` kinds are in its base wave, in `order`. */
+export function themesAt(stage, n = Infinity) {
+  const base = waveComposition(clampStage(stage), n);
   return WT().order.filter((key) => WT().types[key].needs.every((k) => (base[k] || 0) > 0));
 }
 
-/** Kinds that join the waves by Village Hall (fromTownHall), in ENEMY_KINDS order: the ones that get a debut wave. */
-export function debutKindsAt(th) {
-  return ENEMY_KINDS.filter((k) => { const c = CONFIG.enemies[k]; return c.fromTownHall && c.baseCount && c.fromTownHall <= th; });
+/** Kinds that join the waves at a wave number (fromWave) due by wave n, in ENEMY_KINDS order: the ones that get a debut wave. */
+export function debutKindsAt(n) {
+  return ENEMY_KINDS.filter((k) => { const c = CONFIG.enemies[k]; return c.fromWave && c.baseCount && c.fromWave <= n; });
 }
 
-/** For a save from before debut waves: every debut kind of its hall counts as met, except the v0.7 ones. */
-export function legacyDebuted(th) {
-  return debutKindsAt(th).filter((k) => !V07_DEBUTS.includes(k));
+/** For a save from before debut waves: every debut kind due by its wave counts as met, except the v0.7 ones. */
+export function legacyDebuted(n) {
+  return debutKindsAt(n).filter((k) => !V07_DEBUTS.includes(k));
 }
 
-/** The enemy whose debut wave is next for this village (or null): the first debut kind of its hall it hasn't met. */
+/** The enemy whose debut wave is next for this village (or null): the first kind due by its next wave it hasn't met. */
 export function nextDebut(state) {
   if (!Array.isArray(state.debuted)) return null; // (only a real village keeps the list; GameState always has one)
   const met = new Set(state.debuted);
-  return debutKindsAt(townHallLevel(state)).find((k) => !met.has(k)) || null;
+  return debutKindsAt(nightWaveNumber(state)).find((k) => !met.has(k)) || null;
 }
 
 /**
- * The theme key of wave n at Village Hall th (null = a plain wave): 'debut:<kind>' if `debutKind` is due, else
+ * The theme key of wave n at stage `stage` (null = a plain wave): 'debut:<kind>' if `debutKind` is due, else
  * 'boss' every boss.every-th wave, else the next rotating theme. Wave 1 (and anything before fromWave) is plain.
  */
-export function waveThemeKey(th, n, debutKind = null) {
+export function waveThemeKey(stage, n, debutKind = null) {
   if (n < WT().fromWave) return null;
   if (debutKind) return `debut:${debutKind}`;
   if (WT().boss.every && n % WT().boss.every === 0) return 'boss';
-  const list = themesAt(th);
+  const list = themesAt(stage, n);
   return list.length ? list[(n - WT().fromWave) % list.length] : null;
 }
 
@@ -309,31 +320,31 @@ export function themedComposition(normal, key) {
   return comp;
 }
 
-/** The village's next wave: its theme (key and info, or null), Village Hall level, wave number and raid bosses. */
+/** The village's next wave: its theme (key and info, or null), stage, wave number and raid bosses. */
 export function nextWaveInfo(state) {
-  const th = townHallLevel(state), n = nightWaveNumber(state);
-  const theme = waveThemeKey(th, n, n >= WT().fromWave ? nextDebut(state) : null);
+  const n = nightWaveNumber(state), stage = waveStage(n);
+  const theme = waveThemeKey(stage, n, n >= WT().fromWave ? nextDebut(state) : null);
   const info = themeInfo(theme);
-  const babyCars = theme === 'boss' ? bossWaveCars(th) : info && info.pure ? 0 : babyCarCount(th, n);
+  const babyCars = theme === 'boss' ? bossWaveCars(n) : info && info.pure ? 0 : babyCarCount(n);
   // (`special` / `specialInfo`: the theme under the names the HUD and tips have always read.)
-  return { number: n, th, theme, themeInfo: info, special: theme, specialInfo: info, babyCars };
+  return { number: n, stage, theme, themeInfo: info, special: theme, specialInfo: info, babyCars };
 }
 
-/** Da Baby Cars on a Boss Wave: one more than its hall's usual count (none before the hall that has them). */
-export function bossWaveCars(th) {
+/** Da Baby Cars on Boss Wave n: one more than the usual count by then (none before the wave they join). */
+export function bossWaveCars(n) {
   const B = CONFIG.rules.babyCar;
-  if (!B || th < B.fromTownHall) return 0;
-  return (th >= B.lateTownHall ? B.countLate : B.count) + 1;
+  if (!B || n < B.fromWave) return 0;
+  return (n >= B.lateWave ? B.countLate : B.count) + 1;
 }
 
 /**
- * How many Da Baby Cars (raid bosses) wave n at Village Hall th brings on its own schedule (rules.babyCar): from
- * fromTownHall, every `every`th wave; more from lateTownHall. (Pure themes never have them; Boss Waves bring more.)
+ * How many Da Baby Cars (raid bosses) wave n brings on its own schedule (rules.babyCar): from wave fromWave, every
+ * `every`th wave; more from wave lateWave. (Pure themes never have them; Boss Waves bring more.)
  */
-export function babyCarCount(th, n) {
+export function babyCarCount(n) {
   const B = CONFIG.rules.babyCar;
-  if (!B || th < B.fromTownHall || n % B.every !== 0) return 0;
-  return th >= B.lateTownHall ? B.countLate : B.count;
+  if (!B || n < B.fromWave || n % B.every !== 0) return 0;
+  return n >= B.lateWave ? B.countLate : B.count;
 }
 
 /**
@@ -357,8 +368,8 @@ export function applyCrowdCap(comp) {
 
 /** The composition of the village's next wave (its theme included), capped at the crowd limit. */
 export function nextWaveComposition(state) {
-  const { number, th, theme, babyCars } = nextWaveInfo(state);
-  const normal = { ...scaledWaveComposition(th, number), babycar: 0 };
+  const { number, stage, theme, babyCars } = nextWaveInfo(state);
+  const normal = { ...scaledWaveComposition(stage, number), babycar: 0 };
   const comp = theme ? themedComposition(normal, theme) : normal;
   return applyCrowdCap({ ...comp, babycar: babyCars });
 }

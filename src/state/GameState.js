@@ -158,7 +158,7 @@ export class GameState {
     this.wavesCleared = data.wavesCleared;
     this.nightsAtMaxTownHall = data.nightsAtMaxTownHall;
     // An older save already met its hall's enemies, except the ones new (or reworked) in v0.7.
-    this.debuted = data.debuted || legacyDebuted(this.townHallLevel);
+    this.debuted = data.debuted || legacyDebuted((data.wavesCleared || 0) + 1); // (an old save: kinds due by its next wave)
     this.clock = data.clock;
     this.tutorialStep = Math.min(Math.max(1, data.tutorialStep), TUTORIAL_DONE_STEP);
     this.tutorialDone = data.tutorialDone || this.tutorialStep >= TUTORIAL_DONE_STEP;

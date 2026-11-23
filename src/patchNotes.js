@@ -2,7 +2,7 @@
 // once per `version` (the first time the title screen opens after an update; saved in ibtd.patchNotes), and its
 // "What's New" button opens it any time. Keep `version` equal to package.json's for the release it describes.
 //
-// One tab per minor update (v0.7.1): PATCH_NOTES is the newest (its tab is "v0.9 · Latest"), PATCH_HISTORY the older
+// One tab per minor update (v0.7.1): PATCH_NOTES is the newest (its tab is "v0.10 · Latest"), PATCH_HISTORY the older
 // ones, newest first. Each has `release` (the tab's name: '0.7'), `version` (its newest patch) and `sections`.
 // When a new minor update ships, the current PATCH_NOTES content moves to the front of PATCH_HISTORY.
 //
@@ -18,88 +18,113 @@
 const allEntries = (release) => release.sections.flatMap((s) => s.entries);
 
 export const PATCH_NOTES = {
-  release: '0.9',
-  version: '0.9.4',
-  title: "What's New in v0.9.4",
+  release: '0.10',
+  version: '0.10.0',
+  title: "What's New in v0.10",
   sections: [
-    {
-      type: 'feature',
-      entries: [
-        {
-          version: '0.9.0', icon: { texture: 'map_background' }, title: 'A bigger village: the new 40 x 40 map',
-          text: 'A new painted forest at dawn, day, dusk and night with a 40 x 40 field, much more room than before. Its tiles are drawn exactly where buildings and walls snap. Your village moves over as it is, around your Village Hall. Zoom all the way out to see the whole map.'
-        },
-        {
-          version: '0.9.0', icon: { enemy: 'grunt' }, title: 'Raids from 8 entrances',
-          text: 'Enemies can come down every path, past the gate, over the bridge and across the waterfalls: everywhere but the lake. Bigger Village Halls open more at once (all 8 from Village Hall 13). Fog and markers show where the next wave comes from.'
-        },
-        {
-          version: '0.9.1', icon: { texture: 'bld_catapult_merged' }, title: 'Diddypults can merge: the Diddy Trebuchet',
-          text: 'Two Level 5 Diddypults merge into the Diddy Trebuchet, which hurls a giant barrel that hits twice as hard. Barrel Burst: the barrel bursts into oil jugs that splash all around it, each leaving its own slick pool.'
-        }
-      ]
-    },
     {
       type: 'change',
       entries: [
         {
-          version: '0.9.3', icon: { building: 'rvlab', level: 5 }, title: 'Every Mastery path in the RV Lab',
-          text: 'Every building that can merge now shows its Mastery path in the RV Lab, greyed out until you have a merged one, so you can see what is coming. Merge two to unlock it.'
+          version: '0.10.0', icon: { enemy: 'grunt' }, title: 'Waves get harder by wave, not by Village Hall',
+          text: 'How tough a wave is now depends only on its wave number, so upgrading your Village Hall no longer brings bigger waves: build up freely. More entrances open as the waves go on (all 8 from wave 65).'
         },
         {
-          version: '0.9.4', icon: { building: 'fuelStation', level: 1 }, title: 'A sound for brewing spells',
-          text: 'Brewing a spell at the Fuel Station now plays its own sound.'
+          version: '0.10.0', icon: { enemy: 'pork' }, title: 'New enemies join at set waves',
+          text: 'Each enemy type first shows up at its own wave, whatever your Village Hall: John Pork at wave 10, the Skibidi Toilet and Bri Bri Bicus Dicus at 14, up to the Grimace Golem at 48. Da Baby Car drives in from wave 18.'
         },
         {
-          version: '0.9.3', icon: { building: 'cannon', level: 1 }, title: 'A sound for placing buildings',
-          text: 'Buildings now land with their own sound when you place one you bought, move one, or set one down in edit mode. Walls keep their usual sound.'
-        },
-        {
-          version: '0.9.3', icon: { texture: 'map_background' }, title: 'Tiles blend into the grass',
-          text: 'The tiles no longer stop in a hard staircase at the edge of the field: they fade softly into the painted grass, and never over bushes, rocks or bridges.'
-        },
-        {
-          version: '0.9.3', icon: { texture: 'map_background' }, title: 'A sharp picture on big screens',
-          text: 'The game now draws at your screen\u2019s full resolution, so text, buildings and the map stay crisp on large and high-resolution screens. Zoom in on a computer and the map loads its full detail. Low graphics keeps the old, lighter picture.'
-        },
-        {
-          version: '0.9.2', icon: { texture: 'map_background' }, title: 'A new map: forest and mountains',
-          text: 'A new painted battlefield between a forest and snowy mountains, with more room to build: tiles cover the grass right up to its edge. Enemies come over five bridges, out of a cave and down two stairways: 8 ways in, all 8 from Village Hall 13.'
-        },
-        {
-          version: '0.9.1', icon: { enemy: 'grunt' }, title: 'Raids from 7 entrances',
-          text: 'Enemies no longer come across the left waterfall: the path by the stone pillar right beside it already brings them in there. All 7 entrances are in play from Village Hall 13.'
-        },
-        {
-          version: '0.9.1', icon: { texture: 'deco_grass' }, title: 'Grass tufts and solid ground',
-          text: 'Grass tufts now grow across your field, just for looks: build or move something onto one and it\u2019s gone. Every building and wall also stands on a solid patch of grass instead of the checker, in your village and when you visit others.'
-        },
-        {
-          version: '0.9.1', icon: { texture: 'bld_flock_merged' }, title: 'F.L.O.C.K Mothership stands on its tile',
-          text: 'It now stands centered on its tile, its base reaching the tile\u2019s edge instead of covering it. F.L.O.C.K Towers are drawn a little smaller at every level, so the Mothership stands clearly above a Level 10 one.'
-        }
-      ]
-    },
-    {
-      type: 'fix',
-      entries: [
-        {
-          version: '0.9.2', icon: { hero: true }, title: 'A player\u2019s card kept reopening',
-          text: 'After visiting a village from the leaderboard, going back to the title screen from the game reopened that player\u2019s card every time. It only reopens right after a visit now.'
-        },
-        {
-          version: '0.9.0', icon: { texture: 'bld_flock_merged' }, title: 'The F.L.O.C.K Mothership was tiny',
-          text: 'It was drawn smaller than the F.L.O.C.K Towers it was merged from. It now stands clearly bigger than a top-level F.L.O.C.K Tower.'
+          version: '0.10.0', icon: { texture: 'hero_queen_select' }, title: 'New Hatsune Queen poses',
+          text: 'The Hatsune Queen has her own pictures now for being knocked out, waking up with a big stretch, and waving when you click on her.'
         }
       ]
     }
   ],
-  /** Every entry, section by section (what the asset plan and tests read). */
   get entries() { return allEntries(this); }
 };
 
 /** Older updates, newest first: one What's New tab each (players can read them any time). */
 export const PATCH_HISTORY = [
+  {
+    release: '0.9',
+    version: '0.9.4',
+    sections: [
+      {
+        type: 'feature',
+        entries: [
+          {
+            version: '0.9.0', icon: { texture: 'map_background' }, title: 'A bigger village: the new 40 x 40 map',
+            text: 'A new painted forest at dawn, day, dusk and night with a 40 x 40 field, much more room than before. Its tiles are drawn exactly where buildings and walls snap. Your village moves over as it is, around your Village Hall. Zoom all the way out to see the whole map.'
+          },
+          {
+            version: '0.9.0', icon: { enemy: 'grunt' }, title: 'Raids from 8 entrances',
+            text: 'Enemies can come down every path, past the gate, over the bridge and across the waterfalls: everywhere but the lake. Bigger Village Halls open more at once (all 8 from Village Hall 13). Fog and markers show where the next wave comes from.'
+          },
+          {
+            version: '0.9.1', icon: { texture: 'bld_catapult_merged' }, title: 'Diddypults can merge: the Diddy Trebuchet',
+            text: 'Two Level 5 Diddypults merge into the Diddy Trebuchet, which hurls a giant barrel that hits twice as hard. Barrel Burst: the barrel bursts into oil jugs that splash all around it, each leaving its own slick pool.'
+          }
+        ]
+      },
+      {
+        type: 'change',
+        entries: [
+          {
+            version: '0.9.3', icon: { building: 'rvlab', level: 5 }, title: 'Every Mastery path in the RV Lab',
+            text: 'Every building that can merge now shows its Mastery path in the RV Lab, greyed out until you have a merged one, so you can see what is coming. Merge two to unlock it.'
+          },
+          {
+            version: '0.9.4', icon: { building: 'fuelStation', level: 1 }, title: 'A sound for brewing spells',
+            text: 'Brewing a spell at the Fuel Station now plays its own sound.'
+          },
+          {
+            version: '0.9.3', icon: { building: 'cannon', level: 1 }, title: 'A sound for placing buildings',
+            text: 'Buildings now land with their own sound when you place one you bought, move one, or set one down in edit mode. Walls keep their usual sound.'
+          },
+          {
+            version: '0.9.3', icon: { texture: 'map_background' }, title: 'Tiles blend into the grass',
+            text: 'The tiles no longer stop in a hard staircase at the edge of the field: they fade softly into the painted grass, and never over bushes, rocks or bridges.'
+          },
+          {
+            version: '0.9.3', icon: { texture: 'map_background' }, title: 'A sharp picture on big screens',
+            text: 'The game now draws at your screen\u2019s full resolution, so text, buildings and the map stay crisp on large and high-resolution screens. Zoom in on a computer and the map loads its full detail. Low graphics keeps the old, lighter picture.'
+          },
+          {
+            version: '0.9.2', icon: { texture: 'map_background' }, title: 'A new map: forest and mountains',
+            text: 'A new painted battlefield between a forest and snowy mountains, with more room to build: tiles cover the grass right up to its edge. Enemies come over five bridges, out of a cave and down two stairways: 8 ways in, all 8 from Village Hall 13.'
+          },
+          {
+            version: '0.9.1', icon: { enemy: 'grunt' }, title: 'Raids from 7 entrances',
+            text: 'Enemies no longer come across the left waterfall: the path by the stone pillar right beside it already brings them in there. All 7 entrances are in play from Village Hall 13.'
+          },
+          {
+            version: '0.9.1', icon: { texture: 'deco_grass' }, title: 'Grass tufts and solid ground',
+            text: 'Grass tufts now grow across your field, just for looks: build or move something onto one and it\u2019s gone. Every building and wall also stands on a solid patch of grass instead of the checker, in your village and when you visit others.'
+          },
+          {
+            version: '0.9.1', icon: { texture: 'bld_flock_merged' }, title: 'F.L.O.C.K Mothership stands on its tile',
+            text: 'It now stands centered on its tile, its base reaching the tile\u2019s edge instead of covering it. F.L.O.C.K Towers are drawn a little smaller at every level, so the Mothership stands clearly above a Level 10 one.'
+          }
+        ]
+      },
+      {
+        type: 'fix',
+        entries: [
+          {
+            version: '0.9.2', icon: { hero: true }, title: 'A player\u2019s card kept reopening',
+            text: 'After visiting a village from the leaderboard, going back to the title screen from the game reopened that player\u2019s card every time. It only reopens right after a visit now.'
+          },
+          {
+            version: '0.9.0', icon: { texture: 'bld_flock_merged' }, title: 'The F.L.O.C.K Mothership was tiny',
+            text: 'It was drawn smaller than the F.L.O.C.K Towers it was merged from. It now stands clearly bigger than a top-level F.L.O.C.K Tower.'
+          }
+        ]
+      }
+    ],
+    /** Every entry, section by section (what the asset plan and tests read). */
+    get entries() { return allEntries(this); }
+
+  },
   {
     release: '0.8',
     version: '0.8.12',

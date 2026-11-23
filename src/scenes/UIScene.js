@@ -1294,10 +1294,13 @@ New walls are built at your wall level (${wallLevel(this.gs)}), so one costs wha
       const k = hs === 'down' ? 'hero_brisket_defeated' : hs === 'asleep' || (this.gs.hero && this.gs.hero.resting) ? 'hero_brisket_sleep' : 'hero_brisket';
       if (this.textures.exists(k)) picKey = k;
     }
-    // ...and the Hatsune Queen (asleep or knocked out: her sleeping picture; shooting while she has a target).
+    // ...and the Hatsune Queen (knocked out, waking up or asleep in her own pictures; shooting while she has a target).
     if (b.type === 'queenAltar' && this.infoTab === 'hero') {
       const q = this.gs.queen;
-      const k = q && (q.status === 'down' || q.status === 'asleep' || q.status === 'waking' || q.resting) ? 'hero_queen_sleep' : q && q.attacking ? 'hero_queen_attack' : 'hero_queen';
+      const k = !q ? 'hero_queen'
+        : q.status === 'down' || (q.status === 'asleep' && q.knockedOut) ? 'hero_queen_defeated'
+          : q.status === 'waking' ? 'hero_queen_wake'
+            : q.status === 'asleep' || q.resting ? 'hero_queen_sleep' : q.attacking ? 'hero_queen_attack' : 'hero_queen';
       if (this.textures.exists(k)) picKey = k;
     }
     this.infoHeroBadge.setVisible(b.type === 'altar' && this.infoTab !== 'hero');

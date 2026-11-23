@@ -225,17 +225,18 @@ describe('waves at Village Halls 12-15', () => {
     expect(waveComposition(15).hpMultiplier).toBe(Math.round(waveComposition(11).hpMultiplier * G.hp ** 4 * 100) / 100);
   });
 
-  it('no new enemies past Village Hall 11: same themes and debut waves; higher halls are capped at 15', () => {
-    for (let th = 12; th <= MAX; th++) {
-      expect(themesAt(th)).toEqual(themesAt(11));
-      expect(debutKindsAt(th)).toEqual(debutKindsAt(11));
+  it('no new enemies past wave stage 11 (wave 48): same themes and debut waves; higher stages are capped at 15', () => {
+    const S = CONFIG.rules.waveStages;
+    for (let st = 12; st <= MAX; st++) {
+      expect(themesAt(st)).toEqual(themesAt(11));
+      expect(debutKindsAt(S[st - 1])).toEqual(debutKindsAt(S[10]));
     }
     expect(scaledWaveComposition(20, 1)).toEqual(scaledWaveComposition(15, 1));
   });
 
-  it('late waves at Village Hall 15 stay under the crowd cap (plain, themed and Boss Waves)', () => {
-    for (const n of [1, 9, 10, 25, 50, 100]) {
-      const s = makeStateWithTownHall({ wavesCleared: n - 1, debuted: debutKindsAt(15) }, 15);
+  it('late waves stay under the crowd cap (plain, themed and Boss Waves)', () => {
+    for (const n of [1, 9, 10, 25, 50, 100, 200]) {
+      const s = makeStateWithTownHall({ wavesCleared: n - 1, debuted: debutKindsAt(1000) }, 15);
       const c = nextWaveComposition(s);
       const troops = ENEMY_KINDS.filter((k) => !CONFIG.enemies[k].boss).reduce((a, k) => a + (c[k] || 0), 0);
       expect(troops).toBeLessThanOrEqual(CONFIG.rules.crowdCap.maxEnemies + 5);

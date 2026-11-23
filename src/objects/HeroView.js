@@ -34,17 +34,17 @@ export const BRISKET_VIEW = {
   noFlip: new Set(['sleep', 'wake', 'defeated', 'select']),
   ringColor: 0xffd34a, readyIcon: () => TEX.feastReady, readyIconW: 30
 };
-// The Hatsune Queen: her standing picture faces left, her shooting picture aims right. Her one sleeping picture is
-// also her knocked-out and waking pose. She has no separate select pose (clicked: her standing picture).
+// The Hatsune Queen: her standing picture faces left, her shooting picture aims right. v0.9.5: her own knocked-out
+// (sitting, dazed), waking (a yawn and a stretch) and clicked (a wave) pictures, like the Brisket King's.
 export const QUEEN_VIEW = {
   heroKey: 'queen', getAltar: getQueenAltar, stats: queenStats, ready: checkEncore, snore: false, holdAttack: true, bolts: true,
   keys: {
     stand: 'hero_queen', attack: 'hero_queen_attack', attack2: 'hero_queen_attack',
-    sleep: 'hero_queen_sleep', wake: 'hero_queen_sleep', defeated: 'hero_queen_sleep', select: 'hero_queen'
+    sleep: 'hero_queen_sleep', wake: 'hero_queen_wake', defeated: 'hero_queen_defeated', select: 'hero_queen_select'
   },
-  height: { stand: 70, attack: 66, attack2: 66, sleep: 50, wake: 50, defeated: 46, select: 70 },
+  height: { stand: 70, attack: 66, attack2: 66, sleep: 50, wake: 58, defeated: 46, select: 74 },
   facesRight: { stand: false, attack: true, attack2: true, select: false },
-  noFlip: new Set(['sleep', 'wake', 'defeated']),
+  noFlip: new Set(['sleep', 'wake', 'defeated', 'select']),
   ringColor: ENCORE_COLOR, readyIcon: (scene) => ensureEncoreTextures(scene), readyIconW: 32
 };
 const BOLT_W = 40;              // her bolt on screen (the Locklair's arrow is 34)
