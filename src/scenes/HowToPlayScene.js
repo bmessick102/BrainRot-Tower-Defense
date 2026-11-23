@@ -487,7 +487,7 @@ export class HowToPlayScene extends Phaser.Scene {
       'Walls share one level: "Upgrade Walls" raises every wall at once, and new walls are built at that level.',
       `After you beat a wave, destroyed buildings are rebuilt free. During a wave you can Rebuild one early for ${Math.round(CONFIG.rules.rebuildCostShare * 100)}% of its cost.`,
       "Buildings can't be sold: each Village Hall allows a set number of every building, so rearrange your village by moving them in edit mode.",
-      `Merging: two Level 10 ${MERGE_NAMES} can merge into one stronger building with its own ability (Merge button, between waves, gold + Burgers). It still counts as two toward the limit, so merging doesn't free a slot.`
+      `Merging: two Level 10 ${MERGE_NAMES} can merge into one stronger building with its own ability (Merge button, between waves, gold + Burgers). It still counts as two toward the limit, so merging doesn't free a slot. Before Level 10, a greyed Merge button shows which buildings can merge.`
     ]);
 
     // Right: the RV Lab and abilities, in three numbered steps plus an example.

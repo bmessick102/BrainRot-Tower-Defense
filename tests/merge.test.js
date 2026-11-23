@@ -64,6 +64,21 @@ describe('merging: rules', () => {
     }
   });
 
+  it('preview (the greyed Merge before max level): a standing, unmerged mergeable type below its top level only', () => {
+    const s = village();
+    const low = addBuilding(s, 'cannon', 13, 15, 3);
+    expect(checkMerge(s, low)).toMatchObject({ show: false, preview: true, reason: `Needs Level ${TOP('cannon')}` });
+    expect(checkMerge(s, addBuilding(s, 'ksi', 17, 11, 1)).preview).toBe(true);
+    expect(checkMerge(s, addBuilding(s, 'mine', 2, 2, 1)).preview).toBe(false);        // not a mergeable type
+    expect(checkMerge(s, addBuilding(s, 'wall', 2, 8, 1)).preview).toBe(false);        // walls never merge
+    const ruin = addBuilding(s, 'cannon', 5, 5, 3); ruin.destroyed = true;
+    expect(checkMerge(s, ruin).preview).toBe(false);                                   // destroyed: Rebuild shows
+    const [a, b] = pair(s, 'cannon');
+    expect(checkMerge(s, a)).toMatchObject({ show: true, preview: false });            // max level: the real Merge
+    mergeBuildings(s, a.id, b.id);
+    expect(checkMerge(s, a)).toMatchObject({ show: false, preview: false });           // merged
+  });
+
   it('needs two max-level, unmerged, standing copies of the same type', () => {
     const s = village();
     const a = addBuilding(s, 'cannon', 13, 15, TOP('cannon') - 1);

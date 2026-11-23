@@ -103,6 +103,9 @@ const BANNER_MS = 2500;
 /** The Mastery button's second line: how far the type's Mastery is ("1 / 3 tiers"). */
 const masteryButtonSub = (gs, type) => `${masteryLevel(gs, type)} / ${masteryTierCount(type)} tiers`;
 const MERGE_COLOR = 0xd9a21b; // the Merge buttons and the "MERGED" tag: gold
+// The greyed Merge preview on a mergeable building below its top level (v0.8.12): a dimmed gold, narrower than Upgrade.
+const MERGE_PREVIEW_DIM = 0xa8955e;
+const MERGE_PREVIEW_W = { info: 118, qb: 104 };
 const EARLY_W = 150; // "Start Wave" button beside the wave pill
 const EARLY_GAP = 10;
 const FAST_D = 46;  // the round "2x" / "4x" wave speed button after the Start Wave / Cancel buttons
@@ -1261,6 +1264,9 @@ New walls are built at your wall level (${wallLevel(this.gs)}), so one costs wha
       brew: new Button(this, INFO_W / 2, 0, bw, INFO_BTN_H, 'Brew Spells', () => this.openFuelStation(), { color: 0x8e5bd6, fontSize: 19 }),
       // A max-level Cannon / Locklair / Mortar: Merge (in the Upgrade button's place: it has nothing left to upgrade).
       merge: new Button(this, INFO_W / 2, 0, bw, INFO_BTN_H, 'Merge', () => this.onMerge(), { color: MERGE_COLOR, fontSize: 19 }),
+      // Below its top level: a greyed Merge beside Upgrade ("Needs Level 10"); a tap says how merging works.
+      mergePreview: new Button(this, INFO_W - 16 - MERGE_PREVIEW_W.info / 2, 0, MERGE_PREVIEW_W.info, INFO_BTN_H, 'Merge', null,
+        { color: MERGE_COLOR, disabledColor: MERGE_PREVIEW_DIM, fontSize: 17, onDisabledClick: () => this.mergePreviewTip() }),
       // A merged defense: its Mastery (gold), the RV Lab opened on the Mastery column.
       mastery: new Button(this, INFO_W / 2, 0, bw, INFO_BTN_H, 'Mastery', () => this.openAbilities(true), { color: MERGE_COLOR, fontSize: 19 })
     };
@@ -1741,6 +1747,8 @@ New walls are built at your wall level (${wallLevel(this.gs)}), so one costs wha
       brew: new Button(this, 0, QB.h / 2, QB.abilityW, QB.btnH, 'Brew', () => this.openFuelStation(), { color: 0x8e5bd6, fontSize: 17 }),
       info: new Button(this, 0, QB.h / 2, QB.infoW, QB.btnH, 'Info', () => this.openInfo(), { color: COLORS.buttonBlue, fontSize: 17 }),
       merge: new Button(this, 0, QB.h / 2, QB.upgradeW, QB.btnH, 'Merge', () => this.onMerge(), { color: MERGE_COLOR, fontSize: 17 }),
+      mergePreview: new Button(this, 0, QB.h / 2, MERGE_PREVIEW_W.qb, QB.btnH, 'Merge', null,
+        { color: MERGE_COLOR, disabledColor: MERGE_PREVIEW_DIM, fontSize: 15, onDisabledClick: () => this.mergePreviewTip() }),
       mastery: new Button(this, 0, QB.h / 2, QB.abilityW, QB.btnH, 'Mastery', () => this.openAbilities(true), { color: MERGE_COLOR, fontSize: 17 })
     };
     const close = new Button(this, 0, 0, 34, 32, '', () => this.world.select(null), { color: COLORS.buttonDanger, icon: 'x', radius: 8 });
@@ -1778,6 +1786,13 @@ New walls are built at your wall level (${wallLevel(this.gs)}), so one costs wha
       btn.upgrade.setLabel(u.label, u.sub).setEnabled(u.ok);
       btn.upgrade.resize(Math.max(QB.upgradeW, Math.ceil(Math.max(btn.upgrade.label.width, btn.upgrade.sub.width)) + 24)); // "Upgrade Walls · 105,600"
       shown.push(btn.upgrade);
+      // A mergeable type below its top level: a greyed Merge beside Upgrade (a tap explains).
+      const pv = this.mergeButtonState(b);
+      if (pv.preview) {
+        btn.mergePreview.setLabel('Merge', `Needs Level ${pv.top}`).setEnabled(false);
+        btn.mergePreview.resize(Math.max(MERGE_PREVIEW_W.qb, Math.ceil(Math.max(btn.mergePreview.label.width, btn.mergePreview.sub.width)) + 18));
+        shown.push(btn.mergePreview);
+      }
     }
     const ab = this.abilityButtonState(b);
     if (ab.show) {
@@ -1835,9 +1850,15 @@ New walls are built at your wall level (${wallLevel(this.gs)}), so one costs wha
    */
   mergeButtonState(b) {
     const c = checkMerge(this.gs, b);
-    if (!c.show) return { show: false };
+    if (!c.show) return { show: false, preview: !!c.preview, top: maxLevel(b.type) };
     const sub = c.ok ? `${formatGold(c.cost.gold)} gold + ${rpText(c.cost.rp)}` : c.reason;
     return { show: true, label: 'Merge', sub, ok: c.ok };
+  }
+
+  /** The greyed Merge preview tapped: one line on how merging works. */
+  mergePreviewTip() {
+    const b = this.gs.getBuilding(this.selectedId);
+    if (b) this.showBanner(`Upgrade to Level ${maxLevel(b.type)}, then merge two into one stronger building.`);
   }
 
   /** Merge pressed: the panel closes and the map asks for the second copy (GameScene.beginMergePick). */
@@ -1995,6 +2016,10 @@ New walls are built at your wall level (${wallLevel(this.gs)}), so one costs wha
     // Max level and mergeable: Merge in the Upgrade button's place.
     const mg = b.destroyed ? { show: false } : this.mergeButtonState(b);
     btn.merge.setVisible(mg.show);
+    // Below its top level, a mergeable type: Upgrade shares its row with a greyed Merge on the right (v0.8.12).
+    const preview = !mg.show && !!mg.preview;
+    const upW = INFO_W - 32 - (preview ? MERGE_PREVIEW_W.info + 6 : 0);
+    btn.upgrade.resize(upW).setX(16 + upW / 2);
     if (mg.show) {
       btn.merge.setLabel(mg.label, mg.sub).setEnabled(mg.ok);
       visible.push(btn.merge);
@@ -2003,6 +2028,8 @@ New walls are built at your wall level (${wallLevel(this.gs)}), so one costs wha
       btn.upgrade.setLabel(u.label, u.sub).setEnabled(u.ok);
       visible.push(btn.upgrade);
     }
+    btn.mergePreview.setVisible(preview);
+    if (preview) btn.mergePreview.setLabel('Merge', `Needs Level ${mg.top}`).setEnabled(false);
 
     // RV Lab: a defense's Abilities, or the RV Lab's Research. (Not on ruins: Rebuild takes that row, which
     // keeps the tallest panel at three buttons, clear of the Settings icon.)
@@ -2029,6 +2056,7 @@ New walls are built at your wall level (${wallLevel(this.gs)}), so one costs wha
 
     for (const bt of Object.values(btn)) if (!visible.includes(bt)) bt.setY(-1000);
     for (const bt of visible) { bt.setY(y + INFO_BTN_H / 2).setVisible(true); y += INFO_BTN_H + 6; }
+    if (preview) btn.mergePreview.setY(btn.upgrade.y); // (beside Upgrade, on its row)
     const h = y + 8;
     this.infoBg.clear();
     drawWindow(this.infoBg, 0, 0, INFO_W, h, { header: INFO_HEADER });

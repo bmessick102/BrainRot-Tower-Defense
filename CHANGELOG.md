@@ -2,6 +2,16 @@
 
 The version shows in the bottom-left corner of every screen (`package.json` `version` plus the commit). Details for everything below are in [README.md](README.md).
 
+## 0.8.12
+
+A greyed Merge button shows which buildings can merge, and the KSI Frost Fortress stands centered on its tile. Saves load as they are.
+
+### Changes
+- **Greyed Merge preview** (merge.js `checkMerge`, UIScene, Button.js): `checkMerge` returns a new `preview` flag (a type in `CONFIG.merges`, not merged, not destroyed, below `maxLevel`; `show` is unchanged and still means the real Merge at max level). `mergeButtonState` passes it on with `top`. The info panel then shares the Upgrade row with a 118 px `mergePreview` button on its right (Upgrade narrows to fit), and the quick bar adds a compact one (104 px, or wider if its text needs it) right after Upgrade. Both are disabled, labelled "Merge" with "Needs Level N", in a dimmed gold (`MERGE_PREVIEW_DIM` over `MERGE_COLOR`). A tap shows "Upgrade to Level N, then merge two into one stronger building." in the banner (`mergePreviewTip`), through a new Button option `onDisabledClick` (a disabled button used to ignore taps). Not on non-mergeable types, walls, merged or destroyed buildings; at max level Merge still takes the Upgrade button's place. How to Play's merging line mentions it.
+
+### Bug Fixes
+- **KSI Frost Fortress sat off its tile:** 0.8.11 put its picture's bottom 40% of the way from the footprint's center to its front corner (12.8 px below the center at zoom 1; a Level 10 KSI's is 24.6), checked only against the front half of the plot rim. Its base is a round ice mound, widest 15-20% of the way up the picture, so that pushed the widest part ~18 px behind the tile's center line and over the tiles behind and beside it. `art.ground` now means what `GROUND_SHARE` does for the altars: the share of the picture's height (from its bottom) where its base's side corners meet the ground, placed on the footprint's center (BuildingView `sync`). The Frost Fortress uses 0.18 at `art.scale` 1.35 (was 1.45): its bottom lands 28 px below the center (Level 10: 25), it's 12% taller and 8% wider than Level 10 (106 x 158 vs 98 x 141 px), and its base's sides stop 6 px inside the outline's side corners. Like the normal KSI Tower's, its round base still covers the outline's front edges (the art's base isn't diamond-shaped).
+
 ## 0.8.11
 
 KSI Towers merge into the KSI Frost Fortress (Shatter). Saves load as they are.

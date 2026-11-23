@@ -361,14 +361,14 @@ export class BuildingView {
     if (mergeK !== 1) this.sprite.setScale(this.sprite.scaleX * mergeK, this.sprite.scaleY * mergeK);
     const merged = !!mergedConfigOf(b) && !b.destroyed;
     const standIn = merged && isMergedStandIn(this.scene, b);
-    // A merged picture with its own ground point (CONFIG.merges[type].art.ground, v0.8.11): its bottom stands that share of
-    // the way from the footprint's center to its front corner, not at the Level 10 picture's spot. A picture whose wide
-    // base is drawn at its very bottom (the KSI Frost Fortress's ice) would cover the tile's outline out there, where it
-    // narrows to the corner.
+    // A merged picture with a ground share (CONFIG.merges[type].art.ground, like GROUND_SHARE for the altars): the share of
+    // its height, from its bottom, where its base's side corners meet the ground. That point goes on the footprint's center,
+    // so a base that's widest well above the picture's bottom (the KSI Frost Fortress's round ice mound) stands centered on
+    // its tile instead of being pushed back by its own size (v0.8.12).
     const ground = merged && !standIn ? mergedConfigOf(b).art && mergedConfigOf(b).art.ground : undefined;
     if (typeof ground === 'number') {
-      const c = gridToScreen(b.col + b.size / 2, b.row + b.size / 2), fc = gridToScreen(b.col + b.size, b.row + b.size);
-      front = { x: c.x + (fc.x - c.x) * ground, y: c.y + (fc.y - c.y) * ground };
+      const c = gridToScreen(b.col + b.size / 2, b.row + b.size / 2);
+      front = { x: c.x, y: c.y + this.sprite.displayHeight * ground };
       this.sprite.setPosition(front.x, front.y);
     }
     if (b.destroyed && FLAT_RUBBLE[b.type] && key === buildingDestroyedKey(b.type)) {

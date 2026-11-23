@@ -36,6 +36,8 @@ export class Button extends Phaser.GameObjects.Container {
     this.circle = !!opts.circle;
     this.icon = opts.icon ?? null;
     this.onClick = onClick;
+    // Called when a disabled button is tapped (a greyed button that explains itself), instead of nothing.
+    this.onDisabledClick = opts.onDisabledClick ?? null;
     this.enabled = true;
     this.hover = false;
 
@@ -49,7 +51,8 @@ export class Button extends Phaser.GameObjects.Container {
     this.on('pointerout', () => { this.hover = false; this.redraw(); });
     this.on(opts.onRelease ? 'pointerup' : 'pointerdown', (pointer, lx, ly, event) => {
       if (event) event.stopPropagation();
-      if (!this.enabled || !this.onClick) return;
+      if (!this.enabled) { if (this.onDisabledClick) this.onDisabledClick(); return; }
+      if (!this.onClick) return;
       playSfx(scene, SFX.uiClick);
       this.squash();
       this.onClick();

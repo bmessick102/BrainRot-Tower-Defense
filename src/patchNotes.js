@@ -19,8 +19,8 @@ const allEntries = (release) => release.sections.flatMap((s) => s.entries);
 
 export const PATCH_NOTES = {
   release: '0.8',
-  version: '0.8.11',
-  title: "What's New in v0.8.11",
+  version: '0.8.12',
+  title: "What's New in v0.8.12",
   sections: [
     {
       type: 'feature',
@@ -81,6 +81,10 @@ export const PATCH_NOTES = {
         {
           version: '0.8.0', icon: { building: 'townHall', level: 11 }, title: 'Village Hall 11: new defenses instead of Bonus Slots',
           text: 'Bonus Slots are gone. Village Hall 11 now gives one more Tower of Rah, Gandolf, Diddypult, KSI Tower and Cannon. Villages keep every building they built with Bonus Slots: they all keep working, you just can’t build another of that kind until you’re under the limit.'
+        },
+        {
+          version: '0.8.12', icon: { texture: 'ui_merge_gear' }, title: 'See which buildings can merge',
+          text: 'Buildings that can merge now show a greyed Merge button before Level 10, so you know what to aim for. Tap it to see how merging works.'
         },
         {
           version: '0.8.6', icon: { texture: 'bld_spear_merged_dl' }, title: 'The Harpoon Ballista gets its own picture',
@@ -220,6 +224,10 @@ export const PATCH_NOTES = {
     {
       type: 'fix',
       entries: [
+        {
+          version: '0.8.12', icon: { texture: 'bld_ksi_merged' }, title: 'KSI Frost Fortress sat off its tile',
+          text: 'The KSI Frost Fortress stood too far back, so its icy base hung over the tiles behind and beside it. It now stands centered on its own tile, like a Level 10 KSI Tower, and is still clearly bigger.'
+        },
         {
           version: '0.8.7', icon: { texture: 'bld_cannon_merged_dl' }, title: 'Merged defenses fire from the right spot',
           text: 'Shots from merged defenses came out of the middle of the tower. Now the Mega Cannon fires from its barrel, the Missile Silo’s rockets leave from its nose, Gandolf the Grand casts from his staff and the Harpoon Ballista throws from its bolt’s tip.'

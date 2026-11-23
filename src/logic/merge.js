@@ -61,10 +61,13 @@ export function mergeCandidates(state, b) {
  */
 export function checkMerge(state, b, otherId = null) {
   const m = b && mergeConfig(b.type);
-  if (!m) return { ok: false, reason: "Can't merge", show: false, candidates: [] };
+  if (!m) return { ok: false, reason: "Can't merge", show: false, preview: false, candidates: [] };
   const cost = mergeCost(b.type);
   const top = maxLevel(b.type);
-  const base = { cost, candidates: [], show: !b.merged && b.level >= top };
+  // show: the real Merge button (max level, in the Upgrade button's place). preview (v0.8.12): a mergeable type that's
+  // still below its top level (standing, not merged): the panel shows a greyed Merge beside Upgrade, so players see
+  // which buildings can merge and what to aim for.
+  const base = { cost, candidates: [], show: !b.merged && b.level >= top, preview: !b.merged && !b.destroyed && b.level < top };
   if (b.merged) return { ...base, ok: false, reason: 'Already merged' };
   if (b.level < top) return { ...base, ok: false, reason: `Needs Level ${top}` };
   if (b.destroyed) return { ...base, ok: false, reason: 'Destroyed' };

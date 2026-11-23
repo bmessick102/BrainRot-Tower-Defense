@@ -840,11 +840,12 @@ export const CONFIG = {
           { name: 'Splinter', desc: 'Ice shards chill everything they hit, so those enemies can shatter too.', fx: { shatterChill: 1 } }
         ]
       },
-      // Its icy base is drawn right at the bottom of the picture and is wide, so it stands further back on its plot than a
-      // Level 10 picture would (`ground`: its bottom 40% of the way from the plot's center to its front corner; BuildingView).
-      // Measured against the plot rim (GameScene drawPlots) on the trimmed picture: at 1.45 its base stays inside the
-      // 2x2 tile's outline (95% of the rim) while standing 20% taller and 16% wider than a Level 10 KSI Tower.
-      art: { key: 'bld_ksi_merged', scale: 1.45, standInScale: 1.25, ground: 0.4 }
+      // Its base is a round ice mound, widest 15-20% of the way up the picture (Level 10's is widest at 8-13%), so it stands
+      // by its side corners (`ground` 0.18: that height goes on the footprint's center, BuildingView), sitting on its tile
+      // like a Level 10 one (its bottom 28 px below the tile's center at zoom 1, Level 10's 25). Measured on the trimmed
+      // picture: at 1.35 it's 12% taller and 8% wider than Level 10, and its base's sides stop 6 px inside the tile
+      // outline's side corners. (v0.8.11's 1.45 with its bottom 40% of the way to the front corner stood 12 px too far back.)
+      art: { key: 'bld_ksi_merged', scale: 1.35, standInScale: 1.25, ground: 0.18 }
     }
   },
   // Per Village Hall level (1-15). Every hall from 11 adds 12 walls. v0.8 (user, 2026-11-22; replaced v0.6.1's Bonus
