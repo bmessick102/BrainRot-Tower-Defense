@@ -2,6 +2,17 @@
 
 The version shows in the bottom-left corner of every screen (`package.json` `version` plus the commit). Details for everything below are in [README.md](README.md).
 
+## 0.8.7
+
+Shots leave merged defenses and the Hatsune Queen's crossbow from the right spot, and a smaller Harpoon Ballista. Saves load as they are.
+
+### Changes
+- **Harpoon Ballista smaller:** `CONFIG.merges.spear.art.scale` 1.25 -> 1.15.
+
+### Bug Fixes
+- **Merged defenses' shots left from the wrong spot:** ProjectileView placed every tower's shot at its kind's `MUZZLE` share of the picture's height over its center, which didn't fit the merged pictures (the Mega Cannon's barrel mouth is off to one side, the Missile Silo's nose is up front, Gandolf the Grand's staff is on top), and line shots (the Harpoon Ballista's spears) ignored the muzzle and flew 30 px over the footprint's center from the start. New `MERGED_MUZZLE` in BuildingView.js gives the muzzle on each merged picture, per facing (x = share of the width from the left, y = share of the height from the bottom; mirrored if the sprite is flipped), and `BuildingView.muzzlePoint()` turns it into screen px. ProjectileView's `launchOffset` uses it first (`fromMuzzle`); a line shot from a muzzle starts there and settles to its flight height over its first `LINE_BLEND` (1.2) tiles. HarpoonFx's chain and NetFx's Sky Net rocket start from it too. Checked in a running game: the first frame of every merged shot sits on its muzzle (the mortar's 6 px is its arc).
+- **Hatsune Queen's bolts left from her waist:** HeroView drew them from her ground spot, `BOLT_LIFT` (34 px) up. New `HeroView.crossbowTip`: from `CROSSBOW_TIP` ({ x: 0.37, y: 0.79 }) of her shooting picture (`hero_queen_attack`, sized by `QUEEN_VIEW.height.attack`), on the side of her target; the side offset blends away as the bolt homes in. Checked in a running game: a bolt's first frame is 21 px to the side and 52 px over her feet, the crossbow's tip, mirrored when she aims left.
+
 ## 0.8.6
 
 The Harpoon Ballista's own picture, and an updated presentation. Saves load as they are.

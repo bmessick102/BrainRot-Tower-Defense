@@ -20,7 +20,7 @@ export class HarpoonFx {
     const bv = this.scene.views.buildings.get(e.reelSourceId), ev = this.scene.views.enemies.get(e.id);
     if (!bv || !bv.sprite || !ev || !ev.sprite) return null;
     const s = ev.sprite;
-    return { from: bv.topCenter(), to: { x: s.x, y: s.y - s.displayHeight * 0.45 } };
+    return { from: (bv.muzzlePoint && bv.muzzlePoint()) || bv.topCenter(), to: { x: s.x, y: s.y - s.displayHeight * 0.45 } };
   }
 
   update(time) {

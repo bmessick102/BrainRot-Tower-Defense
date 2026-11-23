@@ -145,6 +145,22 @@ export function mergedSizeFactor(scene, b) {
   return isMergedStandIn(scene, b) ? art.standInScale || 1.15 : art.scale || 1;
 }
 
+// Where a merged defense's shots leave its picture (v0.8.6), measured on each picture (each facing of the turning ones):
+// x = share of its width from the left edge, y = share of its height from the bottom. The Mega Cannon's barrel mouth,
+// the Locklair Citadel's archers, the middle of the Triple Mortar's three barrels, Gandolf the Grand's staff, the Missile
+// Silo's rocket nose and the Harpoon Ballista's bolt tip. Used by ProjectileView (shots), HarpoonFx (the chain) and
+// NetFx (the Sky Net rocket); see BuildingView.muzzlePoint.
+export const MERGED_MUZZLE = {
+  bld_cannon_merged_dl: { x: 0.26, y: 0.65 }, bld_cannon_merged_dr: { x: 0.74, y: 0.65 },
+  bld_cannon_merged_ul: { x: 0.14, y: 0.80 }, bld_cannon_merged_ur: { x: 0.86, y: 0.80 },
+  bld_archer_merged: { x: 0.47, y: 0.88 },
+  bld_mortar_merged: { x: 0.51, y: 0.82 },
+  bld_wizard_merged: { x: 0.41, y: 0.95 },
+  bld_firework_merged_left: { x: 0.18, y: 0.80 }, bld_firework_merged_right: { x: 0.82, y: 0.80 },
+  bld_spear_merged_dl: { x: 0.16, y: 0.72 }, bld_spear_merged_dr: { x: 0.85, y: 0.72 },
+  bld_spear_merged_ul: { x: 0.10, y: 0.89 }, bld_spear_merged_ur: { x: 0.93, y: 0.92 }
+};
+
 /** The gear that marks merged buildings (ui_merge_gear; nothing is drawn when its art is missing). */
 export const MERGE_GEAR = 'ui_merge_gear';
 const GEAR_SIZE = 28;
@@ -722,6 +738,19 @@ export class BuildingView {
   /** Top-center of the sprite in world pixels (for tutorial arrows and labels). */
   topCenter() {
     return { x: this.sprite.x, y: this.sprite.y - this.sprite.displayHeight };
+  }
+
+  /**
+   * Where this building's shots leave its picture (screen px), for pictures listed in MERGED_MUZZLE (the merged
+   * defenses, each facing): the barrel, the bolt's tip, the staff. Null for any other picture (ProjectileView then uses
+   * its share-of-height MUZZLE).
+   */
+  muzzlePoint() {
+    const s = this.sprite;
+    const m = s && s.texture && MERGED_MUZZLE[s.texture.key];
+    if (!m) return null;
+    const fx = s.flipX ? 1 - m.x : m.x;
+    return { x: s.x + (fx - s.originX) * s.displayWidth, y: s.y + (1 - m.y - s.originY) * s.displayHeight };
   }
 
   /** Is the world point on a visible pixel of this building's sprite? */

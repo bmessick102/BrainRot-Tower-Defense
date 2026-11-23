@@ -42,6 +42,7 @@ const MUZZLE = { cannon: 0.5, archer: 0.85, mortar: 0.6, wizard: 0.88, firework:
 // Where shots hit a building: this share of its picture's height above its base.
 const BUILDING_HIT = 0.45;
 const MIN_BLEND = 1; // tiles
+const LINE_BLEND = 1.2; // tiles over which a line shot from a merged muzzle settles to its flight height
 
 export class ProjectileView {
   constructor(scene, p) {
@@ -74,6 +75,9 @@ export class ProjectileView {
     if (p.owner === 'tower') {
       const v = views.buildings && views.buildings.get(p.sourceId);
       const s = v && v.sprite;
+      // A merged defense: from the spot measured on its picture (its barrel, its bolt's tip...; BuildingView.muzzlePoint).
+      const mp = v && v.muzzlePoint ? v.muzzlePoint() : null;
+      if (mp) { this.fromMuzzle = true; return { x: mp.x - g.x, y: mp.y - g.y }; }
       if (s && MUZZLE[p.kind] !== undefined) return { x: s.x - g.x, y: s.y - MUZZLE[p.kind] * s.displayHeight - g.y };
       return { x: 0, y: -(LOBBED[p.kind] ? MORTAR_LAUNCH : SHOT_HEIGHT[p.kind] || 20) };
     }
@@ -172,15 +176,26 @@ export class ProjectileView {
   /** Straight-line shots: keep the height they had when they hit (pierce), or roll along the ground (boulder). */
   syncLine(p, s) {
     if (this.lineLift === undefined) {
+      // A line thrown from a merged defense's muzzle (the Harpoon Ballista's bolt tip) leaves from there and settles to
+      // its flight height over its first LINE_BLEND tiles; other lines fly at their height from the start.
+      this.lineBlend = this.fromMuzzle && !this.last;
+      this.lineFrom = distance(p.startX, p.startY, p.x, p.y); // (how far it already flew before it was first drawn)
       this.lineLift = this.last ? this.last.y - s.y : -(LINE_LIFT[p.kind] ?? 16);
       if (p.kind === 'boulder') this.lineLift = -(LINE_LIFT.boulder);
+    }
+    let ox = 0, lift = this.lineLift;
+    if (this.lineBlend) {
+      const k = Math.min(1, Math.max(0, distance(p.startX, p.startY, p.x, p.y) - this.lineFrom) / LINE_BLEND);
+      if (k >= 1) this.lineBlend = false;
+      ox = this.launchOff.x * (1 - k);
+      lift = this.launchOff.y * (1 - k) + this.lineLift * k;
     }
     // Rolling Thunder: the ball drops to the ground and rolls (spinning) along it.
     if (p.rolling) {
       this.lineLift += (-ROLL_LIFT - this.lineLift) * 0.25;
       this.image.rotation += 0.3 * Math.sign(p.dirX - p.dirY || 1);
     }
-    const x = s.x, y = s.y + this.lineLift;
+    const x = s.x + ox, y = s.y + lift;
     if (p.kind === 'boulder') this.image.rotation += 0.25 * Math.sign(p.dirX - p.dirY || 1);
     if (p.kind === 'spear' || (p.bolt && p.kind === 'archer')) { // point along the flight (its picture points right; a Skewer bolt too)
       const n = gridToScreen(p.x + p.dirX, p.y + p.dirY);

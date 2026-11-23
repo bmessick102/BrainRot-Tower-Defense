@@ -19,8 +19,8 @@ const allEntries = (release) => release.sections.flatMap((s) => s.entries);
 
 export const PATCH_NOTES = {
   release: '0.8',
-  version: '0.8.6',
-  title: "What's New in v0.8.6",
+  version: '0.8.7',
+  title: "What's New in v0.8.7",
   sections: [
     {
       type: 'feature',
@@ -77,6 +77,10 @@ export const PATCH_NOTES = {
         {
           version: '0.8.6', icon: { texture: 'bld_spear_merged_dl' }, title: 'The Harpoon Ballista gets its own picture',
           text: 'The Harpoon Ballista is no longer a glowing Spear Thrower: it has its own giant ballista tower, which turns to face the enemy it’s shooting.'
+        },
+        {
+          version: '0.8.7', icon: { texture: 'bld_spear_merged_dl' }, title: 'Harpoon Ballista a little smaller',
+          text: 'The Harpoon Ballista is drawn a little smaller, closer to the size of the other merged defenses.'
         },
         {
           version: '0.8.5', icon: { texture: 'bld_flock_merged' }, title: 'Triple Zap looks like a tesla coil',
@@ -200,6 +204,14 @@ export const PATCH_NOTES = {
     {
       type: 'fix',
       entries: [
+        {
+          version: '0.8.7', icon: { texture: 'bld_cannon_merged_dl' }, title: 'Merged defenses fire from the right spot',
+          text: 'Shots from merged defenses came out of the middle of the tower. Now the Mega Cannon fires from its barrel, the Missile Silo’s rockets leave from its nose, Gandolf the Grand casts from his staff and the Harpoon Ballista throws from its bolt’s tip.'
+        },
+        {
+          version: '0.8.7', icon: { texture: 'hero_queen_attack' }, title: 'The Hatsune Queen’s bolts leave her crossbow',
+          text: 'Her bolts started low, near her waist. They now fly out of the tip of her crossbow, on whichever side she’s aiming.'
+        },
         {
           version: '0.8.5', icon: { texture: 'ui_medal_1' }, title: 'Ranks on player cards match the leaderboard',
           text: 'A player\u2019s card could show a different rank from the leaderboard. Its rank is now their best village\u2019s leaderboard rank, every village shows its own rank, and the village you clicked on the leaderboard is marked.'

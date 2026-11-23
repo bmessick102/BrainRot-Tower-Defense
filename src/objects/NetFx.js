@@ -63,8 +63,11 @@ export class NetFx {
   /** The net rocket on its way: a bright ball with a short trail, arcing up and over to its spot. */
   drawRocket(n) {
     const t = Math.max(0, Math.min(1, 1 - n.delay / (n.flightTime || 0.5)));
-    const a = gridToScreen(n.fromX, n.fromY), b = gridToScreen(n.x, n.y);
-    const at = (k) => ({ x: a.x + (b.x - a.x) * k, y: a.y - 40 + (b.y - NET_HEIGHT - (a.y - 40)) * k - Math.sin(Math.PI * k) * ROCKET_ARC });
+    const g0 = gridToScreen(n.fromX, n.fromY), b = gridToScreen(n.x, n.y);
+    // From the Missile Silo's rocket nose (BuildingView.muzzlePoint), else 40 px over its footprint's center.
+    const bv = this.scene.views && this.scene.views.buildings && this.scene.views.buildings.get(n.sourceId);
+    const a = (bv && bv.muzzlePoint && bv.muzzlePoint()) || { x: g0.x, y: g0.y - 40 };
+    const at = (k) => ({ x: a.x + (b.x - a.x) * k, y: a.y + (b.y - NET_HEIGHT - a.y) * k - Math.sin(Math.PI * k) * ROCKET_ARC });
     const g = this.air;
     for (let i = 4; i >= 1; i--) { const p = at(Math.max(0, t - i * 0.04)); g.fillStyle(GOLD, 0.15 * (5 - i)).fillCircle(p.x, p.y, 3 + i); }
     const p = at(t);

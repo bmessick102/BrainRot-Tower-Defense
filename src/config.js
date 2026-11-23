@@ -813,7 +813,7 @@ export const CONFIG = {
       },
       // Four facings like the Spear Thrower's own (turned toward its target; down-left is the plain picture for windows).
       art: {
-        key: 'bld_spear_merged_dl', scale: 1.25, standInScale: 1.25,
+        key: 'bld_spear_merged_dl', scale: 1.15, standInScale: 1.25, // v0.8.7: 1.25 -> 1.15 (a little smaller)
         facings: { dl: 'bld_spear_merged_dl', dr: 'bld_spear_merged_dr', ul: 'bld_spear_merged_ul', ur: 'bld_spear_merged_ur' }
       }
     }

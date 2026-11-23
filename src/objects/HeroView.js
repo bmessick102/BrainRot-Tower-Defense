@@ -48,7 +48,10 @@ export const QUEEN_VIEW = {
   ringColor: ENCORE_COLOR, readyIcon: (scene) => ensureEncoreTextures(scene), readyIconW: 32
 };
 const BOLT_W = 40;              // her bolt on screen (the Locklair's arrow is 34)
-const BOLT_LIFT = 34;           // px over the ground her bolts leave from (her crossbow)
+const BOLT_LIFT = 34;           // px over the ground her bolts leave from when her shooting picture isn't loaded
+// Her crossbow's tip in her shooting picture (hero_queen_attack, facing right; v0.8.6): x = share of the picture's width
+// right of its center, y = share of its height above her feet. Her bolts leave from here, on the side she faces.
+const CROSSBOW_TIP = { x: 0.37, y: 0.79 };
 const CLOAK_COLOR = 0x9ff7f0;   // her shimmer while Encore Cloak lasts
 const ATTACK_POSE_MS = 340;     // the attack picture shows this long after each swing
 const ZZZ_EVERY_MS = 1400;
@@ -280,6 +283,21 @@ export class HeroView {
    * The Hatsune Queen's bolts in flight: the arrow picture, turned along its flight, lifted from her crossbow's height
    * to the middle of its target (a flyer's body high up) as it closes in. A bolt from Encore Cloak glows teal.
    */
+  /**
+   * Where a new bolt leaves her crossbow, from the spot it was shot at: { x: px sideways, lift: px up }. The tip of the
+   * crossbow in her shooting picture (CROSSBOW_TIP), on the side of her target (the way she faces when she shoots).
+   */
+  crossbowTip(gs, p) {
+    const key = this.spec.keys.attack;
+    const h = this.spec.height.attack;
+    if (!h || !this.scene.textures.exists(key)) return { x: 0, lift: BOLT_LIFT };
+    const src = this.scene.textures.get(key).getSourceImage();
+    const w = (h * src.width) / src.height;
+    const t = gs.enemies.find((e) => e.id === p.targetId);
+    const right = t ? gridToScreen(t.x, t.y).x >= gridToScreen(p.startX ?? p.x, p.startY ?? p.y).x : this.facingRight;
+    return { x: (right ? 1 : -1) * CROSSBOW_TIP.x * w, lift: CROSSBOW_TIP.y * h };
+  }
+
   syncBolts(gs) {
     const bolts = gs.queenBolts || [];
     const seen = new Set();
@@ -292,11 +310,13 @@ export class HeroView {
         const img = this.scene.add.image(0, 0, this.scene.textures.exists(key) ? key : TEX.light).setDepth(2000);
         img.setScale((p.cloak ? BOLT_W * 1.2 : BOLT_W) / img.frame.width);
         if (p.cloak) img.setTint(0x7ff0e8);
-        v = { img, startD: null, last: null, lift: BOLT_LIFT };
+        const from = this.crossbowTip(gs, p);
+        v = { img, startD: null, last: null, lift0: from.lift, offX0: from.x, lift: from.lift, offX: from.x };
         this.boltViews.set(p.id, v);
       }
       const g = gridToScreen(p.x, p.y);
-      // Headed for the target's body while homing; straight on at the height it has once it pierces.
+      // From her crossbow's tip, headed for the target's body while homing; straight on at the height (and the side
+      // offset) it has once it pierces.
       const t = p.homing ? gs.enemies.find((e) => e.id === p.targetId) : null;
       if (t) {
         const tv = enemyViews && enemyViews.get(t.id);
@@ -305,9 +325,10 @@ export class HeroView {
         const d = Math.hypot(t.x - p.x, t.y - p.y);
         if (v.startD === null) v.startD = Math.max(0.5, d);
         const k = Math.max(0, Math.min(1, 1 - d / v.startD));
-        v.lift = BOLT_LIFT + (end - BOLT_LIFT) * k;
+        v.lift = v.lift0 + (end - v.lift0) * k;
+        v.offX = v.offX0 * (1 - k);
       }
-      const x = g.x, y = g.y - v.lift;
+      const x = g.x + v.offX, y = g.y - v.lift;
       if (v.last && Math.hypot(x - v.last.x, y - v.last.y) > 0.01) v.img.setRotation(Math.atan2(y - v.last.y, x - v.last.x));
       else if (!v.last && t) { const tg = gridToScreen(t.x, t.y); v.img.setRotation(Math.atan2(tg.y - 20 - y, tg.x - x)); }
       v.last = { x, y };
