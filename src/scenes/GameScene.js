@@ -1513,8 +1513,8 @@ export class GameScene extends Phaser.Scene {
       playSfxCapped(this, SFX.enemyHitBig, ENEMY_HIT_MAX);
     });
     // Skibidi Toilet: a puff of dirt where it pops up or dives back down.
-    on('enemySurfaced', (d) => { const s = gridToScreen(d.x, d.y); splashRing(this, s.x, s.y, 0.45, 0x8f673d, { duration: 320, depth: 2710 }); });
-    on('enemyBurrowed', (d) => { const s = gridToScreen(d.x, d.y); splashRing(this, s.x, s.y, 0.35, 0x6b4a2b, { duration: 260, depth: 2710 }); });
+    on('enemySurfaced', (d) => { const s = gridToScreen(d.x, d.y); splashRing(this, s.x, s.y, 0.45, 0x8f673d, { duration: 320, depth: 2710 }); playSfxCapped(this, SFX.toiletSurface, 2); });
+    on('enemyBurrowed', (d) => { const s = gridToScreen(d.x, d.y); splashRing(this, s.x, s.y, 0.35, 0x6b4a2b, { duration: 260, depth: 2710 }); playSfxCapped(this, SFX.toiletDig, 2); });
     // DJ Babyface drops the beat: a party ring over its range, a big label, and the boosted defenses pop.
     on('beatDropped', (d) => {
       const dj = this.gs.getBuilding(d.id);
@@ -1542,13 +1542,14 @@ export class GameScene extends Phaser.Scene {
       this.cameras.main.shake(160, 0.005);
       playSfx(this, this.cache.audio.exists(SFX.heroFeast) ? SFX.heroFeast : SFX.upgrade);
     });
-    on('heroKnockedOut', () => { const s = heroAt(); if (s) floatText(this, s.x, s.y - 80, 'Knocked out! Zzz', '#d9e4ff', 18); playSfx(this, SFX.buildingDestroyed); });
-    on('heroSecondWind', (d) => { const s = gridToScreen(d.x, d.y); floatText(this, s.x, s.y - 80, 'Second Wind!', '#9bf07a', 18); });
-    on('heroReady', () => { const s = heroAt(); if (s) floatText(this, s.x, s.y - 80, 'Ready!', '#ffd34a', 16); });
+    on('heroKnockedOut', () => { const s = heroAt(); if (s) floatText(this, s.x, s.y - 80, 'Knocked out! Zzz', '#d9e4ff', 18); playSfx(this, SFX.heroKnockedOut); });
+    on('heroSecondWind', (d) => { const s = gridToScreen(d.x, d.y); floatText(this, s.x, s.y - 80, 'Second Wind!', '#9bf07a', 18); playSfx(this, SFX.heroReady); });
+    on('heroReady', () => { const s = heroAt(); if (s) floatText(this, s.x, s.y - 80, 'Ready!', '#ffd34a', 16); playSfx(this, SFX.heroReady); });
     // The Hatsune Queen: her bolts (the Locklair's arrow sound), Encore Cloak, knockouts and getting back up.
     const queenAt = () => { const h = this.gs.queen; return h ? gridToScreen(h.x, h.y) : null; };
     on('queenShot', () => playSfx(this, FIRE_SFX.archer)); // the same shot sound as a Locklair Tower, never skipped
     on('queenBoltHit', (d) => {
+      playSfxCapped(this, SFX.arrowHit, 3, { volume: 0.7 });
       if (!d.crit && !d.head) return;
       const s = gridToScreen(d.x, d.y);
       floatText(this, s.x, s.y - (d.air ? 90 : 46), d.head ? 'HEADLINER!' : 'CRIT!', d.head ? '#ffb3e6' : '#7ff0e8', d.head ? 16 : 14);
@@ -1560,9 +1561,15 @@ export class GameScene extends Phaser.Scene {
       playSfx(this, this.cache.audio.exists(SPELL_SFX.invisibility) ? SPELL_SFX.invisibility : SFX.upgrade); // she vanishes
     });
     on('queenDodge', (d) => { const s = gridToScreen(d.x, d.y); floatText(this, s.x, s.y - 70, 'Dodge!', '#d9e4ff', 14); });
-    on('queenKnockedOut', () => { const s = queenAt(); if (s) floatText(this, s.x, s.y - 70, 'Knocked out! Zzz', '#d9e4ff', 18); playSfx(this, SFX.buildingDestroyed); });
-    on('queenCurtainCall', (d) => { const s = gridToScreen(d.x, d.y); floatText(this, s.x, s.y - 80, 'Curtain Call!', '#9bf07a', 18); });
-    on('queenReady', () => { const s = queenAt(); if (s) floatText(this, s.x, s.y - 80, 'Ready!', '#7ff0e8', 16); });
+    on('queenKnockedOut', () => { const s = queenAt(); if (s) floatText(this, s.x, s.y - 70, 'Knocked out! Zzz', '#d9e4ff', 18); playSfx(this, SFX.heroKnockedOut); });
+    on('queenCurtainCall', (d) => { const s = gridToScreen(d.x, d.y); floatText(this, s.x, s.y - 80, 'Curtain Call!', '#9bf07a', 18); playSfx(this, SFX.heroReady); });
+    on('queenReady', () => { const s = queenAt(); if (s) floatText(this, s.x, s.y - 80, 'Ready!', '#7ff0e8', 16); playSfx(this, SFX.heroReady); });
+    // The Locklair Mage: the same knocked-out and ready sounds as the other heroes.
+    on('mageKnockedOut', () => playSfx(this, SFX.heroKnockedOut));
+    on('mageRevived', () => playSfx(this, SFX.heroReady));
+    on('mageReady', () => playSfx(this, SFX.heroReady));
+    // A Locklair arrow lands (the Queen's bolts share the sound, above).
+    on('arrowHit', () => playSfxCapped(this, SFX.arrowHit, 3, { volume: 0.7 }));
     // ...and when it's wrecked it bursts open and its troops pour out.
     on('babyCarBurst', (d) => {
       const s = gridToScreen(d.x, d.y);
@@ -1597,6 +1604,7 @@ export class GameScene extends Phaser.Scene {
       v.flash(this.time.now);
       const top = v.topCenter();
       floatText(this, top.x + Phaser.Math.Between(-20, 20), top.y + 30, `${Math.round(d.amount)}`, COLORS.textBad, 15);
+      playSfxCapped(this, SFX.buildingDamaged, 2, { volume: 0.35 }); // (quiet: it happens all the time)
     });
     on('storageDrained', (d) => {
       const v = this.views.buildings.get(d.id);
@@ -1783,7 +1791,7 @@ export class GameScene extends Phaser.Scene {
       v.pop();
     });
     // KSI Tower Fully Frozen: an enemy freezes solid.
-    on('enemyFrozen', (d) => { const s = enemyPos(d); splashRing(this, s.x, s.y - 4, 0.45, 0xffffff, { duration: 360, depth: 2710 }); });
+    on('enemyFrozen', (d) => { const s = enemyPos(d); splashRing(this, s.x, s.y - 4, 0.45, 0xffffff, { duration: 360, depth: 2710 }); playSfxCapped(this, SFX.enemyFrozen, 2); });
     // Melee hits: a horde swinging at once would be a wall of noise, so only a few overlap.
     on('enemyAttack', (d) => {
       const view = this.views.enemies.get(d.id);
@@ -1829,13 +1837,14 @@ export class GameScene extends Phaser.Scene {
     // Neegy Balloon: a puff where it lets troops go, and a pop when it's done.
     on('balloonDrop', (d) => {
       const s = enemyPos(d);
-      if (d.onDeath) splashRing(this, s.x, s.y - 50, 0.7, 0xff5a3c, { duration: 420, depth: 2710 }); // shot down
+      if (d.onDeath) { splashRing(this, s.x, s.y - 50, 0.7, 0xff5a3c, { duration: 420, depth: 2710 }); playSfxCapped(this, SFX.balloonDied, 2); } // shot down
       splashRing(this, s.x, s.y - 40, 0.5, 0xffe08a, { duration: 380, depth: 2710 });
     });
     on('balloonPopped', (d) => {
       const s = enemyPos(d);
       splashRing(this, s.x, s.y - 50, 0.7, 0xff5a3c, { duration: 420, depth: 2710 });
       floatText(this, s.x, s.y - 60, 'Pop!', '#ffd0c0', 16);
+      playSfxCapped(this, SFX.balloonDied, 2);
     });
     // A Mousetrap snaps: a burst ring the size of its catch radius, a jolt, and "SNAP!".
     on('trapSprung', (d) => {
@@ -1850,6 +1859,7 @@ export class GameScene extends Phaser.Scene {
     on('chainLightning', (d) => {
       const pts = d.points.map((p) => { const g = gridToScreen(p.x, p.y); return { x: g.x, y: g.y - 18 }; });
       chainLightningFx(this, pts, TEX.light);
+      playSfxCapped(this, SPELL_SFX.lightning, 1, { volume: 0.3 }); // the F.L.O.C.K Mothership's zap sound
     });
     on('strikeIncoming', (d) => {
       const s = gridToScreen(d.x, d.y);

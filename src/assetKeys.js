@@ -114,7 +114,7 @@ export const SFX = {
   patapimVoice: 'sfx_patapim_voice',       // "Brr brr patapim" (now and then while one is in the wave)
   liriliVoice: 'sfx_lirili_voice',         // "Lirili larila" (cropped to 3 s; now and then while one is in the wave)
   babycarVoice: 'sfx_babycar_voice',       // Da Baby Car's line (now and then while one is in the wave)
-  raBeam: 'sfx_ra_beam',                   // looping while a Tower of Rah beam burns
+  raBeam: 'sfx_spell_heat',                // looping while a Tower of Rah beam burns: the burning sound of the Heat spell (v0.12.4)
   raHeatUp: 'sfx_ra_heat_up',              // a Tower of Rah beam heats up to its next stage
   buildingSelect: 'sfx_building_select', // clicking a building
   heroSelect: 'sfx_hero_select',         // clicking the Brisket King himself (his voice; never talks over itself)
@@ -123,6 +123,14 @@ export const SFX = {
   heroSnore: 'sfx_hero_snore',           // looping softly while the Brisket King is asleep (HeroView's SnoreLoop)
   queenSelect: 'sfx_queen_select',       // clicking the Hatsune Queen or her altar (her voice; never talks over itself)
   mageAttack: 'sfx_mage_attack',         // the Locklair Mage's staff zap (v0.12; one at a time)
+  heroKnockedOut: 'sfx_hero_knocked_out', // the King, the Queen or the Mage is knocked out (v0.12.4)
+  heroReady: 'sfx_hero_ready',            // a hero is ready again or gets back up (Second Wind, Curtain Call, waking up)
+  arrowHit: 'sfx_arrow_hit',              // a Locklair arrow or one of the Queen's bolts hits
+  buildingDamaged: 'sfx_building_damaged', // an enemy hurts a building (quiet and capped)
+  enemyFrozen: 'sfx_enemy_frozen',        // an enemy freezes solid (KSI Fully Frozen)
+  toiletSurface: 'sfx_toilet_surface',    // a Skibidi Toilet pops up out of the ground
+  toiletDig: 'sfx_toilet_dig',            // ...and digs back down
+  balloonDied: 'sfx_balloon_died',        // a Neegy Balloon is shot down or pops
   invalid: 'sfx_invalid',               // placing/dropping a building on an invalid spot
   hit: 'sfx_hit',
   buildingDestroyed: 'sfx_building_destroyed',

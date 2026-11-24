@@ -1130,6 +1130,7 @@ function stepTowerProjectile(state, p, dt) {
       if (p.splashRadius > 0) landSplash(state, p, p.x, p.y, target);
       else {
         damageEnemy(state, target, p.damage * hitMult(p, target, target.x, target.y) + hitFlat(p, target), p.source);
+        if (p.kind === 'archer') emit(state, 'arrowHit', { x: target.x, y: target.y }); // the arrow's hit sound
         if (!target.alive) onTowerKill(state, p, target);
         else hitEffects(state, p, target, Math.hypot(dir.x, dir.y) > 1e-6 ? dir : { x: target.x - p.startX, y: target.y - p.startY });
         const fx = p.fx || {};

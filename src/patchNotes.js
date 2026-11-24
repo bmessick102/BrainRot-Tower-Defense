@@ -19,8 +19,8 @@ const allEntries = (release) => release.sections.flatMap((s) => s.entries);
 
 export const PATCH_NOTES = {
   release: '0.12',
-  version: '0.12.3',
-  title: "What's New in v0.12.3",
+  version: '0.12.4',
+  title: "What's New in v0.12.4",
   sections: [
     {
       type: 'feature',
@@ -41,6 +41,10 @@ export const PATCH_NOTES = {
         {
           version: '0.12.1', icon: { hero: true }, title: 'Hero profiles in the shop',
           text: "Every hero's card in the shop has a button that opens the hero's profile: picture, stats at any level (step through them with the arrows), ability and perk paths. It works before you build the hero, too."
+        },
+        {
+          version: '0.12.4', icon: { enemy: 'toilet' }, title: 'New sounds',
+          text: 'Heroes now have sounds for being knocked out and getting back up, and you can hear arrows and bolts land, buildings take damage, enemies freeze, the Skibidi Toilet surface and dig, and Neegy Balloons pop. New spear hit sound too.'
         },
         {
           version: '0.12.3', icon: { texture: 'ui_encore_ready' }, title: 'New ability icons for the Brisket King and the Hatsune Queen',

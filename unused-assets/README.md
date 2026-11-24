@@ -132,6 +132,14 @@ v0.6 drops (KSI Tower, the five v0.6 enemies, the Skeleton, spell sounds); sound
 | `Lightning Spell Icon(energy Drink).png` | `art-source/spells/ui_spell_lightning.png` |
 | `Spear thrower sound 1.mp3`, `sound 2.mp3` | `public/assets/audio/sfx_spear_fire1.mp3`, `sfx_spear_fire2.mp3` |
 | `Spear thrower hit enemy sound effect.mp3` | `public/assets/audio/sfx_spear_hit.mp3` |
+| `Sppear thrower hit sound(replace current and delete it).mp3` | `art-source/audio/sfx_spear_hit.mp3` (replaced the old one) |
+| `Hero Knocked out sound.mp3` | `art-source/audio/sfx_hero_knocked_out.mp3` |
+| `hero ready or hero revived.mp3` | `art-source/audio/sfx_hero_ready.mp3` |
+| `Queen arrow hit sound(...).mp3` | `art-source/audio/sfx_arrow_hit.mp3` |
+| `building taking damage(make less loud).mp3` | `art-source/audio/sfx_building_damaged.mp3` (played at 35%) |
+| `enemy frozen sound.mp3` | `art-source/audio/sfx_enemy_frozen.mp3` |
+| `Skibidi toilet appears above ground.mp3`, `skibidi toilet digging underground.mp3` | `art-source/audio/sfx_toilet_surface.mp3`, `sfx_toilet_dig.mp3` |
+| `Neegy balloon died.mp3` | `art-source/audio/sfx_balloon_died.mp3` |
 
 ## Not here on purpose
 

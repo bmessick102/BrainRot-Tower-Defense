@@ -2,6 +2,14 @@
 
 The version shows in the bottom-left corner of every screen (`package.json` `version` plus the commit). Details for everything below are in [README.md](README.md).
 
+## 0.12.4
+
+New sound effects from the user's drops. No database or save changes.
+
+### Changes
+- **New sounds** (`SFX` in `src/assetKeys.js`, played in `GameScene`): `sfx_hero_knocked_out` (the King, the Queen or the Mage knocked out; replaces the building-destroyed sound there), `sfx_hero_ready` (ready again, Second Wind, Curtain Call, the Mage's Undying and waking), `sfx_arrow_hit` (a Locklair arrow lands, new `arrowHit` event in `combat.js stepTowerProjectile`, and the Queen's bolts; at most 3, 70%), `sfx_building_damaged` (an enemy hurts a building; at most 2, 35%), `sfx_enemy_frozen` (KSI Fully Frozen), `sfx_toilet_surface` / `sfx_toilet_dig` (the Skibidi Toilet), `sfx_balloon_died` (a Neegy Balloon shot down or popped). `sfx_spear_hit` replaced with the user's new one. Chain lightning plays the lightning sound (at most 1, 30%).
+- **Tower of Rah beam loop**: `SFX.raBeam` now plays `sfx_spell_heat` (the Heat spell's burning sound) instead of `sfx_ra_beam`.
+
 ## 0.12.3
 
 New hero ability icons. No database or save changes.
