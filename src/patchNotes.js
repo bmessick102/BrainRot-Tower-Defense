@@ -19,8 +19,8 @@ const allEntries = (release) => release.sections.flatMap((s) => s.entries);
 
 export const PATCH_NOTES = {
   release: '0.10',
-  version: '0.10.2',
-  title: "What's New in v0.10.2",
+  version: '0.10.3',
+  title: "What's New in v0.10.3",
   sections: [
     {
       type: 'feature',
@@ -47,6 +47,10 @@ export const PATCH_NOTES = {
           text: 'The Brisket King and the Hatsune Queen now have 15 levels (paid in Burgers), and their altars change look every 3 levels. The Queen gets two levels per Village Hall from 8 to 14, and Level 15 at Village Hall 15.'
         },
         {
+          version: '0.10.3', icon: { building: 'ra', level: 8 }, title: 'Towers of Rah are drawn smaller',
+          text: 'Every Tower of Rah is drawn a little smaller, so the Great Pyramid of Rah can sit squarely on its tile and still stand above a Level 8 one. Each level still looks bigger than the one before.'
+        },
+        {
           version: '0.10.2', icon: { building: 'ra', level: 5 }, title: 'Towers of Rah grow at every level',
           text: 'Every Tower of Rah level now stands a little taller than the one before (Level 5 used to look smaller than Level 4). Low levels are drawn a bit smaller to make room, so the Great Pyramid fits its tile.'
         },
@@ -62,6 +66,15 @@ export const PATCH_NOTES = {
         {
           version: '0.10.1', icon: { building: 'cannon', level: 1 }, title: 'More defenses at Village Halls 11 to 15',
           text: 'Every Village Hall after 10 adds a Cannon and a Locklair Tower, plus more of other defenses in turn. At Village Hall 15 every other defense that can merge comes in an even number, so none is left without a merge partner.'
+        }
+      ]
+    },
+    {
+      type: 'fix',
+      entries: [
+        {
+          version: '0.10.3', icon: { texture: 'bld_ra_merged' }, title: 'The Great Pyramid of Rah sits on its tile',
+          text: 'It stood too far back, so its round stone base hung over the back edges of its tile. Now its base sits in the middle of the tile, with the tile’s outline showing all the way around it.'
         }
       ]
     }

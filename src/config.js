@@ -932,12 +932,14 @@ export const CONFIG = {
           { name: 'Blinding Light', desc: 'Enemies the lance touches are slowed 30% while it touches them (bosses 15%).', fx: { lanceSlow: 0.3 } }
         ]
       },
-      // The user's picture: a wide round base (widest 22% of the way up, 97% of the picture's width) under a short tower.
-      // At 1.7 x a Level 8 Tower of Rah's size (SPRITE_SCALE.ra 0.48 with TIER_GROWTH.ra, BuildingView.js) it's 103 x 158 px
-      // at zoom 1 against Level 8's 66 x 133 (1.55x wider, 1.19x taller), standing on Level 8's spot: its base stays
-      // inside the tile's outline (GameScene drawPlots, inset 0.08), 13 px short of each side corner and about 10% short
-      // of the front edges. At SPRITE_SCALE.ra's old 0.54 it couldn't be 15% taller than Level 8 and stay inside.
-      art: { key: 'bld_ra_merged', scale: 1.7, standInScale: 1.15 }
+      // The user's picture: a short tower on a wide round stone base. The base's ground ring is 97% of the picture's width
+      // and its middle is 17.5% of the way up the picture, so `ground` 0.175 puts the ring's middle on the tile's center
+      // (BuildingView). v0.10.2 stood it on Level 8's spot at 1.7: the ring's middle was 11 px behind the tile's center
+      // and its back stones hung over the tile's back edges. Centered, the whole ring has to fit the tile's outline
+      // (GameScene drawPlots, inset 0.08): at 1.52 x a Level 8 Tower of Rah (SPRITE_SCALE.ra 0.40 with TIER_GROWTH.ra) it's
+      // 77 x 117 px at zoom 1 against Level 8's 55 x 111 (1.39x wider, 1.06x taller); the ring's edge stays about 10% inside
+      // the outline all round (its front 20 px below the tile's center, the outline's front corner 32 px).
+      art: { key: 'bld_ra_merged', scale: 1.52, standInScale: 1.15, ground: 0.175 }
     }
   },
   // Per Village Hall level (1-15). Every hall from 11 adds 12 walls. v0.8 (user, 2026-11-22; replaced v0.6.1's Bonus

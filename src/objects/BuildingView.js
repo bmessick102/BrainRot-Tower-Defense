@@ -178,15 +178,16 @@ const DEFAULT_SPRITE_SCALE = 0.75;
 // F.L.O.C.K Tower: 1.15 of its single tile, so it stands a bit wider than the tile (v0.8.3: 10% smaller than the
 // earlier 1.28). The merged Mothership is drawn art.scale times this, so it shrank by the same 10%.
 // Mousetrap: a flat 1-tile trap, drawn a little wider than its tile.
-// Tower of Rah: a tall, slim tower, drawn narrower than its footprint (it starts small and grows a lot). v0.10.2: 0.54 ->
-// 0.48 with TIER_GROWTH.ra 0.03, so every level stands 3-4% taller than the one before (its Level 5-6 picture is
-// squatter than Level 3-4's and drew shorter) and the merged Great Pyramid of Rah (CONFIG.merges.ra.art) fits its tile.
-// Measured at zoom 1 (visible pixels): Level 1 58 x 105 px (was 59 x 118), Level 8 66 x 133 (was 68 x 136).
+// Tower of Rah: a tall, slim tower, drawn narrower than its footprint (it starts small and grows a lot). With
+// TIER_GROWTH.ra 0.03 every level stands 3-4% taller than the one before (its Level 5-6 picture is squatter than
+// Level 3-4's and drew shorter). v0.10.2: 0.54 -> 0.48; v0.10.3: 0.40, so the merged Great Pyramid of Rah
+// (CONFIG.merges.ra.art), whose round base must sit centered inside its tile, still stands above a Level 8 one.
+// Measured at zoom 1 (visible pixels): Level 1 44 x 87 px, Level 8 55 x 111 (v0.10.2: 58 x 105 / 66 x 133; before: 59 x 118 / 68 x 136).
 // RV Lab: a long RV on its own paved pad; 0.77 of its 2x2 footprint (10% bigger than the earlier 0.7).
 // KSI Tower: a tall, slim tower like the Locklair's, a little narrower than the default. (The merged KSI Frost Fortress
 // stands further back on its plot instead, CONFIG.merges.ksi.art.ground, so it fits the tile's outline at this size.)
 // Mortar: 0.585 (was 0.65, v0.8: 10% smaller at every level so the 25% bigger merged Triple Mortar stands out).
-const SPRITE_SCALE = { mortar: 0.585, cannon: 0.63, firework: 0.52, catapult: 0.66, spear: 0.66, ksi: 0.62, flock: 0.9, mousetrap: 1.1, ra: 0.48, rvlab: 0.77, dj: 0.77, altar: 0.66, queenAltar: 0.66, fuelStation: 0.8 };
+const SPRITE_SCALE = { mortar: 0.585, cannon: 0.63, firework: 0.52, catapult: 0.66, spear: 0.66, ksi: 0.62, flock: 0.9, mousetrap: 1.1, ra: 0.40, rvlab: 0.77, dj: 0.77, altar: 0.66, queenAltar: 0.66, fuelStation: 0.8 };
 
 // Buildings grow as they level up: this share of their normal size at Level 1, up to LEVEL_SIZE.max at
 // their top level (Level 10, or the type's own top level). They only grow on upgrades that keep the same

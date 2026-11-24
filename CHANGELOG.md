@@ -2,6 +2,16 @@
 
 The version shows in the bottom-left corner of every screen (`package.json` `version` plus the commit). Details for everything below are in [README.md](README.md).
 
+## 0.10.3
+
+The Great Pyramid of Rah stands centered on its tile, and every Tower of Rah is drawn smaller to keep it above a Level 8 one. No save or database changes.
+
+### Changes
+- **Tower of Rah sizes** (`SPRITE_SCALE.ra` 0.48 -> 0.40 in `BuildingView.js`; `TIER_GROWTH.ra` 0.03 kept, so each level still stands 3-4% taller than the last): visible size at zoom 1 Level 1 44 x 87 px (0.10.2: 58 x 105), Level 8 55 x 111 (0.10.2: 66 x 133). Every Tower of Rah is about 17% smaller than in 0.10.2.
+
+### Bug Fixes
+- **The Great Pyramid of Rah stood off its tile** (`CONFIG.merges.ra.art`): at `scale` 1.7 on Level 8's spot, its round base's ground ring (97% of the picture's width, its middle 17.5% of the way up) had its middle 11 px behind the tile's center, and the stones at its back sides hung over the tile's back edges (0.10.2's fit check only tested the front half of the base). Now `ground` 0.175 puts the ring's middle on the tile's center and `scale` 1.52 keeps the whole ring about 10% inside the plot rim (inset 0.08): 77 x 117 px at zoom 1, 1.39x wider and 1.06x taller than Level 8.
+
 ## 0.10.2
 
 Towers of Rah merge into the Great Pyramid of Rah (Solar Lance), and every Tower of Rah level now draws bigger than the one before. No save or database changes (`merged` and `mastery.ra` use the existing save fields; older saves load as before).
