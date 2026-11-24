@@ -467,7 +467,7 @@ export class HowToPlayScene extends Phaser.Scene {
         'Build as long as you like. Press Start Wave to get 30 seconds to get ready. A "!" shows where enemies will come from.',
         `Day turns to night about every 8 minutes. At night, enemies hit ${Math.round((CONFIG.rules.night.damage - 1) * 100)}% harder and move faster, but you earn +${Math.round(CONFIG.rules.night.lootBonus * 100)}% gold and Burgers.`,
         `Each wave is harder than the last and new enemies join at set waves; your Village Hall doesn't change that. Every ${CONFIG.waveThemes.boss.every}th wave is a Boss Wave, and special waves pay bonus gold.`,
-        `The round "2x" button beside Start Wave${IS_TOUCH ? '' : ' (or press T)'} speeds a wave up: press once for 2x, again for 4x, and again for normal speed. It stays until you change it.`,
+        `The round "1x" button beside Start Wave${IS_TOUCH ? '' : ' (or press T)'} shows the wave's speed: press it for 2x, again for 4x, and again for 1x. It stays until you change it.`,
         `You get 1 to 3 stars for how much of your village survives. 3 stars pays +${Math.round(CONFIG.rules.waveStars.bonus[2] * 100)}% gold and Burgers. After a wave, everything destroyed is rebuilt free.`,
         'If your Village Hall falls, you can Retry the wave.'
       ]],

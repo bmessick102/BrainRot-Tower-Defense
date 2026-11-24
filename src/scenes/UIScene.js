@@ -109,7 +109,7 @@ const MERGE_PREVIEW_DIM = 0xa8955e;
 const MERGE_PREVIEW_W = { info: 118, qb: 104 };
 const EARLY_W = 150; // "Start Wave" button beside the wave pill
 const EARLY_GAP = 10;
-const FAST_D = 46;  // the round "2x" / "4x" wave speed button after the Start Wave / Cancel buttons
+const FAST_D = 46;  // the round "1x" / "2x" / "4x" wave speed button after the Start Wave / Cancel buttons
 const FAST_ON = 0xf08a1a, FAST_MAX = 0xe0402a, FAST_OFF = 0x5b5750; // the wave speed button: 2x, 4x, off
 const CANCEL_W = 112; // "Cancel" beside Start Now during the countdown
 const EARLY_H = 54;         // Start Wave button height: room for its label and a hint line without touching the edges
@@ -412,13 +412,11 @@ export class UIScene extends Phaser.Scene {
       { color: COLORS.buttonDanger, fontSize: 19, radius: 12 });
     this.cancelWaveBtn.setLabel('Cancel', 'Not yet');
     this.cancelWaveBtn.setVisible(false);
-    // The wave speed button (also the T key): during the countdown and the wave. Each press: off -> 2x (bright orange,
-    // pulsing ring) -> 4x (red, faster pulse) -> off. The choice is remembered (settings) for the following waves.
+    // The wave speed button (also the T key): during the countdown and the wave. It shows the speed the wave runs at
+    // (v0.12.5: 1x, then 2x, then 4x, then back to 1x; before, it showed the next speed and pulsed a ring while sped
+    // up). The choice is remembered (settings) for the following waves.
     setWaveSpeed(loadWaveSpeed(this.gs.storage));
-    this.fastGlow = this.add.graphics().setVisible(false);
-    this.fastGlow.lineStyle(4, 0xffd27a, 1).strokeCircle(0, 0, FAST_D / 2 + 4);
-    this.fastGlowTween = null;
-    this.fastBtn = new Button(this, 0, -500, FAST_D, FAST_D, '2x', () => this.toggleFast(),
+    this.fastBtn = new Button(this, 0, -500, FAST_D, FAST_D, '1x', () => this.toggleFast(),
       { circle: true, fontSize: 18, color: FAST_OFF });
     this.fastBtn.setVisible(false);
     this.input.keyboard.on('keydown-T', () => {
@@ -435,32 +433,13 @@ export class UIScene extends Phaser.Scene {
     this.styleFast();
   }
 
-  /**
-   * Off: dark grey "2x" (the next press); 2x: bright orange "2x" with a slow pulsing ring; 4x: red "4x" with a faster
-   * pulse.
-   */
+  /** The current speed on the button: "1x" (dark grey), "2x" (orange) or "4x" (red). No ring or pulse around it. */
   styleFast() {
-    const speed = getWaveSpeed(), on = speed > 1, b = this.fastBtn;
-    const label = speed === 4 ? '4x' : '2x';
+    const speed = getWaveSpeed(), b = this.fastBtn;
+    const label = `${speed}x`;
     if (b.label.text !== label) b.setLabel(label);
-    b.color = speed === 4 ? FAST_MAX : on ? FAST_ON : FAST_OFF;
+    b.color = speed === 4 ? FAST_MAX : speed > 1 ? FAST_ON : FAST_OFF;
     b.redraw();
-    const show = b.visible && on;
-    this.fastGlow.setVisible(show);
-    if (show && this.fastGlowTween && this.fastGlowSpeed !== speed) {
-      this.fastGlowTween.remove(); // the pulse changes with the speed
-      this.fastGlowTween = null;
-      this.fastGlow.setAlpha(1).setScale(1);
-    }
-    if (show && !this.fastGlowTween) {
-      this.fastGlowSpeed = speed;
-      this.fastGlow.clear().lineStyle(4, speed === 4 ? 0xff8a6a : 0xffd27a, 1).strokeCircle(0, 0, FAST_D / 2 + 4);
-      this.fastGlowTween = this.tweens.add({ targets: this.fastGlow, alpha: { from: 1, to: 0.25 }, scale: { from: 1, to: 1.12 }, duration: speed === 4 ? 320 : 600, yoyo: true, repeat: -1 });
-    } else if (!show && this.fastGlowTween) {
-      this.fastGlowTween.remove();
-      this.fastGlowTween = null;
-      this.fastGlow.setAlpha(1).setScale(1);
-    }
   }
 
   refreshWave() {
@@ -502,7 +481,7 @@ export class UIScene extends Phaser.Scene {
     if (!counting || !canCall) this.cancelWaveBtn.setY(-500);
     const fastShown = canFastForward(this.gs) && !this.world.editMode && !!text;
     this.fastBtn.setVisible(fastShown);
-    if (!fastShown) { this.fastBtn.setY(-500); this.fastGlow.setY(-500); }
+    if (!fastShown) this.fastBtn.setY(-500);
     this.styleFast();
     if (!text) { this.earlyBtn.setY(-500); return; }
     // Before a special wave the button turns red and says what's coming; at night it says the wave will be
@@ -553,7 +532,6 @@ export class UIScene extends Phaser.Scene {
     if (fastShown) {
       const fx = left + tw + (canCall ? EARLY_GAP + bw : 0) + (counting && canCall ? EARLY_GAP + CANCEL_W : 0) + EARLY_GAP + FAST_D / 2;
       this.fastBtn.setPosition(fx, TOP_ROW_CY);
-      this.fastGlow.setPosition(fx, TOP_ROW_CY - 2);
     }
   }
 

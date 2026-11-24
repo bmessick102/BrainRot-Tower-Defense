@@ -36,7 +36,7 @@ import { BeamHum } from '../objects/BeamHum.js';
 import { floatText, rpGainText, splashRing, fireballImpact, frostImpact, fireworkBurst, breakerExplosion, fireBreathFx } from '../objects/Effects.js';
 import { TEX, SFX, MUSIC, FIRE_SFX, ENEMY_ATTACK_SFX, ENEMY_VOICE, SPELL_SFX, PROJECTILE_KEYS } from '../assetKeys.js';
 import { missileWarningFx, quakeFx, ICE_BLUE } from '../objects/EnemyFx.js';
-import { playSfxClip, playSfx, playSfxCapped, playSfxEndingIn, playVoiceLine, playMusic, pauseMusic, resumeMusic, stopMusic, crossfadeMusic, fadeOutMusic, hasAmbience, startAmbience, updateAmbience, stopAmbience, soundDuration, prefetchMusic, hasMusicFile, releaseMusic } from '../audio.js';
+import { playSfxClip, playSfx, playSfxCapped, playSfxEndingIn, playVoiceLine, playMusic, pauseMusic, resumeMusic, stopMusic, crossfadeMusic, fadeOutMusic, hasAmbience, startAmbience, updateAmbience, stopAmbience, soundDuration, prefetchMusic, hasMusicFile, releaseMusic, keepAudioAlive } from '../audio.js';
 import { requestAudio, requestImages } from '../assetLoader.js';
 import { villageImageKeys, reachableImageKeys } from '../assetPlan.js';
 import { COLORS } from '../theme.js';
@@ -94,6 +94,9 @@ const FADE_OVERLAP = 0.12;
 // KSI Frost Fortress: at most one "SHATTER!" tag this often (a chain can burst many enemies in a moment).
 // The Locklair Mage's Arcane Aegis: at most one "blocked" ring this often (many hits land on covered buildings).
 const AEGIS_SPARK_MS = 150;
+// Arcane Aegis cast (v0.12.5): every building it covers flashes white AEGIS_FLASHES times, AEGIS_FLASH_GAP_MS apart
+// (past BuildingView's 400 ms hit-flash throttle), each AEGIS_FLASH_MS long.
+const AEGIS_FLASHES = 3, AEGIS_FLASH_GAP_MS = 450, AEGIS_FLASH_MS = 170;
 const SHATTER_TAG_MS = 350;
 
 // A level-up that reaches a new ability tier: the unlock sound starts this long before the upgrade sound ends.
@@ -430,6 +433,8 @@ export class GameScene extends Phaser.Scene {
     this.villagers.update(Math.min(delta / 1000, MAX_STEP), time);
     this.airHum.update(this.endingGame ? [] : this.gs.enemies, delta / 1000);
     this.beamHum.update(this.endingGame ? [] : this.gs.buildings, delta / 1000);
+    // The browser may suspend the audio under load (a big wave at 4x): wake it up again (audio.js keepAudioAlive).
+    if (time - (this.audioCheckAt || 0) > 1000) { this.audioCheckAt = time; keepAudioAlive(this); }
     this.flockScan(delta);
     this.drawBeams(time);
     this.frigoSounds(delta);
@@ -1920,6 +1925,16 @@ export class GameScene extends Phaser.Scene {
       const s = gridToScreen(d.x, d.y);
       splashRing(this, s.x, s.y, d.radius, 0xffd98a, { duration: 650, depth: 2650 });
       playSfxCapped(this, SPELL_SFX.invisibility, 1, { volume: 0.5 });
+      // The buildings it covers (marked this step) flash white a few times.
+      const ids = this.gs.buildings.filter((b) => b._mageAegis).map((b) => b.id);
+      for (let i = 0; i < AEGIS_FLASHES; i++) {
+        this.time.delayedCall(i * AEGIS_FLASH_GAP_MS, () => {
+          for (const id of ids) {
+            const v = this.views.buildings.get(id);
+            if (v && v.flash) { v.lastFlash = -Infinity; v.flash(this.time.now, AEGIS_FLASH_MS); }
+          }
+        });
+      }
     });
     on('aegisBlocked', (d) => {
       if (this.time.now - (this.lastAegisSpark || 0) < AEGIS_SPARK_MS) return;
@@ -2133,11 +2148,25 @@ export class GameScene extends Phaser.Scene {
       this.playCalmMusic();
     });
     on('waveStarted', () => {
+      // Its sides open in turn (v0.12.5): the "!" stays only on the ones sending enemies, the rest join one by one.
+      const w = this.gs.wave;
+      if (w && w.paths && w.open !== undefined) this.showSpawnMarkers(w.paths.slice(0, w.open));
       if (this.placement) this.cancelPlacement();
       this.cancelMergePick();
       this.setEditMode(false);
       playSfx(this, SFX.waveStart);
       this.playAttackMusic(); // hard cut to the attack soundtrack at full volume, no fade-in
+    });
+    on('entranceOpened', (d) => {
+      // Another side joins the wave: its "!" comes back with a ring pulse and a short horn.
+      const w = this.gs.wave;
+      if (w && w.paths) this.showSpawnMarkers(w.paths.slice(0, w.open));
+      const p = this.waveMarkers.alertPoint(d.path);
+      if (p) {
+        splashRing(this, p.x, p.y, 0.9, 0xff5a4a, { duration: 700, depth: 2700 });
+        this.time.delayedCall(180, () => splashRing(this, p.x, p.y, 0.9, 0xff5a4a, { duration: 700, depth: 2700 }));
+      }
+      playSfxCapped(this, SFX.waveCountdown, 1, { volume: 0.35 });
     });
     on('waveCleared', () => {
       this.breakerAnnounced = false;

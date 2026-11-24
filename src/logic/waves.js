@@ -443,7 +443,21 @@ export function skipCountdown(state) {
   return true;
 }
 
-/** The countdown ('waveTick' each second), then one enemy per path every spawnInterval seconds. */
+/** How many of a wave's `n` entrances are open when it starts (rules.spawnSpread: 2 from startTwoFrom, else 1). */
+export function startingEntrances(n) {
+  return Math.min(n, n >= CONFIG.rules.spawnSpread.startTwoFrom ? 2 : 1);
+}
+
+/** Seconds between spawns at each entrance with `open` entrances open (rules.spawnInterval + perEntrance each). */
+export function spawnGap(open) {
+  return CONFIG.rules.spawnInterval + CONFIG.rules.spawnSpread.perEntrance * Math.max(0, open - 1);
+}
+
+/**
+ * The countdown ('waveTick' each second), then one enemy per open entrance every spawnGap(open) seconds. The wave's
+ * entrances open in turn (v0.12.5): startingEntrances at first, then one more every spawnSpread.every s
+ * ('entranceOpened'); an entrance with nothing left to send doesn't hold the next one back.
+ */
 export function stepWaveSpawning(state, dt) {
   const w = state.wave;
   if (!w || w.phase === 'idle') return;
@@ -454,18 +468,36 @@ export function stepWaveSpawning(state, dt) {
     if (w.countdown > 0) return;
     w.phase = 'active';
     w.spawnTimer = 0; // first enemies spawn the moment the countdown ends
+    w.open = startingEntrances(w.paths.length);
+    w.openTimer = CONFIG.rules.spawnSpread.every;
     emit(state, 'waveStarted', { number: w.number });
   } else {
     w.spawnTimer -= dt;
+    // The next entrance joins (sooner if every open one has run out of enemies).
+    if (w.open === undefined) w.open = w.paths.length; // (a wave from before v0.12.5: all open)
+    if (w.open < w.paths.length) {
+      w.openTimer -= dt;
+      const openEmpty = w.paths.slice(0, w.open).every((p) => !(w.queues[p] && w.queues[p].length));
+      if (w.openTimer <= 0 || openEmpty) {
+        const path = w.paths[w.open];
+        w.open++;
+        w.openTimer = CONFIG.rules.spawnSpread.every;
+        emit(state, 'entranceOpened', { number: w.number, path, open: w.open, of: w.paths.length });
+      }
+    }
   }
   while (w.spawnTimer <= 0 && queuedCount(state) > 0) {
-    for (const path of w.paths) {
+    const open = w.paths.slice(0, w.open === undefined ? w.paths.length : w.open);
+    let spawned = 0;
+    for (const path of open) {
       const kind = w.queues[path].shift();
-      if (kind) spawnEnemy(state, kind, path, w.hpMultiplier, w.pack || 1);
+      if (kind) { spawnEnemy(state, kind, path, w.hpMultiplier, w.pack || 1); spawned++; }
     }
+    // The open entrances are empty: no gap, so the next entrance sends its first enemy the moment it opens.
+    if (!spawned) { w.spawnTimer = 0; break; }
     // Crowd cap: packed enemies come proportionally further apart, so the wave arrives at the same strength
     // per second as the uncapped one would (just fewer, tougher enemies).
-    w.spawnTimer += CONFIG.rules.spawnInterval * (w.pack || 1);
+    w.spawnTimer += spawnGap(open.length) * (w.pack || 1);
   }
   // Restless nights: tell the UI when the enemies turn restless (it got dark) or calm down (it got light).
   const restless = isRestless(state);

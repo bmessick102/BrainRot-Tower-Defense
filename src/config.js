@@ -54,6 +54,10 @@ export const CONFIG = {
     // Resetting a type's path costs this share of what its picks cost to research (no refund of the picks).
     respecShare: 0.5,
     spawnInterval: 0.8,
+    // v0.12.5 (players found many-sided waves too hard): each entrance spawns every spawnInterval + perEntrance x (open
+    // entrances - 1) s (1 entrance 0.8 s, 2 -> 1.0, 4 -> 1.4, 8 -> 2.2), and a wave's entrances open in turn: it starts
+    // from startingEntrances (2 when it has `startTwoFrom` or more, else 1) and the next one joins every `every` s.
+    spawnSpread: { perEntrance: 0.2, every: 8, startTwoFrom: 5 },
     // Anti-stall (src/logic/enrage.js): `after` s after a wave's last enemy spawns, enemies start to enrage.
     enrage: { after: 90, ramp: 30, maxDamage: 5, maxSpeed: 2 },
     // Restless nights (src/logic/enrage.js): while it's dark, attacking enemies deal `damage`x damage and move
@@ -1091,7 +1095,11 @@ export const CONFIG = {
       attackInterval: 2,
       attackRange: 0,
       bounty: 15,
-      researchPoints: 4
+      researchPoints: 4,
+      // F.L.O.C.K Frequency Jam stops its bombs while it's in range (v0.12.5: only Bombers, as the perk says; Neegy
+      // Balloons' troop drops are checked in stepBalloon). It used to stop every flyer, so a La Vaca Saturno hovering in
+      // a jamming F.L.O.C.K's range, out of every air defense's reach, could never throw and the wave never ended.
+      jammable: true
     },
     tank: {
       name: "Tripi Tropi Tropi Tripa",

@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { CONFIG } from '../src/config.js';
-import { applyCrowdCap, scaledWaveComposition, waveStrength, nextWaveComposition, triggerWave, stepWaveSpawning } from '../src/logic/waves.js';
+import { applyCrowdCap, scaledWaveComposition, waveStrength, nextWaveComposition, triggerWave, stepWaveSpawning, spawnGap, startingEntrances } from '../src/logic/waves.js';
 import { ENEMY_KINDS, spawnEnemy, stepEnemy, dropTroopsAt, enemyLevel } from '../src/logic/enemies.js';
 import { damageEnemy, applySplash, areaPack } from '../src/logic/combat.js';
 import { makeStateWithTownHall, addBuilding } from './helpers.js';
@@ -67,7 +67,7 @@ describe('crowd cap', () => {
     const pack = s.wave.pack;
     stepWaveSpawning(s, 0.01); // goes active, first group spawns
     const first = s.enemies.length;
-    stepWaveSpawning(s, CONFIG.rules.spawnInterval * pack - 0.05);
+    stepWaveSpawning(s, spawnGap(startingEntrances(s.wave.paths.length)) * pack - 0.05);
     expect(s.enemies.length).toBe(first); // not yet
     stepWaveSpawning(s, 0.1);
     expect(s.enemies.length).toBeGreaterThan(first);

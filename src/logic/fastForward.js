@@ -1,4 +1,4 @@
-// The wave speed button (the round "2x" / "4x" button beside Start Wave, hotkey T). Pure logic, no Phaser.
+// The wave speed button (the round button beside Start Wave showing "1x" / "2x" / "4x", hotkey T). Pure logic, no Phaser.
 // Each press steps through WAVE_SPEEDS: off (1x) -> 2x -> 4x -> off (v0.8.9: 4x added; it was a 2x toggle).
 //
 // How it works: while a wave is counting down or running, GameScene.update runs the simulation `stepsPerFrame`

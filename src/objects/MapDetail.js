@@ -43,9 +43,16 @@ export class MapDetail {
     return this.scene.cameras.main.zoom > texelsPerWorldPx * ZOOM_IN_AT;
   }
 
-  /** Every frame: follow the layers' fades; every CHECK_MS, work out which pieces are wanted. */
+  /**
+   * Every frame: follow the layers' fades; every CHECK_MS, work out which pieces are wanted, and at once whenever the
+   * camera moved or zoomed (v0.12.5: zooming out fast showed black edges for up to CHECK_MS, where the soft picture
+   * was still hidden under pieces that no longer covered the view).
+   */
   update(time) {
     for (const p of this.pieces.values()) if (p.image) p.image.setAlpha(p.layer.image.alpha);
+    const cam = this.scene.cameras.main;
+    const viewKey = `${Math.round(cam.scrollX)}|${Math.round(cam.scrollY)}|${cam.zoom.toFixed(4)}`;
+    if (viewKey !== this.lastView) { this.lastView = viewKey; this.nextCheck = 0; }
     if (time < this.nextCheck) return;
     this.nextCheck = time + CHECK_MS;
     const now = Date.now();

@@ -200,11 +200,11 @@ export class WallView {
     this.hpBar.draw(top.x, top.y - 12, b.hp / max, !b.destroyed && b.hp < max, b.level);
   }
 
-  flash(time) {
+  flash(time, ms = 80) {
     if (time - (this.lastFlash || -Infinity) < FLASH_MIN_GAP_MS) return;
     this.lastFlash = time;
     for (const s of this.tiles) s.setTintFill(0xffffff);
-    this.flashUntil = time + 80;
+    this.flashUntil = time + ms;
   }
 
   /** Upgraded: the same click bounce as buildings (its new size and picture come with the next sync). */

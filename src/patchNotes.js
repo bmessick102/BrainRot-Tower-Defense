@@ -19,8 +19,8 @@ const allEntries = (release) => release.sections.flatMap((s) => s.entries);
 
 export const PATCH_NOTES = {
   release: '0.12',
-  version: '0.12.4',
-  title: "What's New in v0.12.4",
+  version: '0.12.5',
+  title: "What's New in v0.12.5",
   sections: [
     {
       type: 'feature',
@@ -39,12 +39,24 @@ export const PATCH_NOTES = {
       type: 'change',
       entries: [
         {
+          version: '0.12.5', icon: { texture: 'ui_spawn_marker' }, title: 'Waves arrive one side at a time',
+          text: 'A wave from several sides now starts from one or two of them, and another side joins every 8 seconds. Its red "!" lights up and pulses as it opens, so you can see where the next push comes from.'
+        },
+        {
           version: '0.12.1', icon: { hero: true }, title: 'Hero profiles in the shop',
           text: "Every hero's card in the shop has a button that opens the hero's profile: picture, stats at any level (step through them with the arrows), ability and perk paths. It works before you build the hero, too."
         },
         {
           version: '0.12.4', icon: { enemy: 'toilet' }, title: 'New sounds',
           text: 'Heroes now have sounds for being knocked out and getting back up, and you can hear arrows and bolts land, buildings take damage, enemies freeze, the Skibidi Toilet surface and dig, and Neegy Balloons pop. New spear hit sound too.'
+        },
+        {
+          version: '0.12.5', icon: { texture: 'ui_aegis_ready' }, title: 'Arcane Aegis flashes the buildings it protects',
+          text: 'When the Locklair Mage casts his Aegis, every building and wall it covers flashes white a few times, so you can see at a glance what is safe.'
+        },
+        {
+          version: '0.12.5', icon: { texture: 'ui_settings_button' }, title: 'The speed button shows the speed',
+          text: 'The round button beside Start Wave now reads 1x, 2x or 4x. Press it to go from 1x to 2x to 4x and back to 1x. The glowing ring around it is gone.'
         },
         {
           version: '0.12.3', icon: { texture: 'ui_encore_ready' }, title: 'New ability icons for the Brisket King and the Hatsune Queen',
@@ -76,6 +88,10 @@ export const PATCH_NOTES = {
       type: 'balance',
       entries: [
         {
+          version: '0.12.5', icon: { enemy: 'grunt' }, title: 'Fewer enemies at once from many sides',
+          text: 'The more sides a wave attacks from, the more slowly each side sends its enemies: one every 0.8 s from one side, 1 s from two, 1.4 s from four and 2.2 s from eight. Waves are just as big, only more spread out.'
+        },
+        {
           version: '0.12.2', icon: { building: 'mageAltar', level: 20 }, title: "The Locklair Mage's aura reaches as far as his zap",
           text: 'Sanctuary Aura and Arcane Aegis now reach 6 tiles, the same as his staff (they reached 4.5). Long Staff and Wider Sanctuary each grow that one range.'
         }
@@ -84,6 +100,18 @@ export const PATCH_NOTES = {
     {
       type: 'fix',
       entries: [
+        {
+          version: '0.12.5', icon: { enemy: 'vaca' }, title: 'A La Vaca Saturno could freeze and hold up the wave',
+          text: "A La Vaca Saturno hovering inside a F.L.O.C.K Tower's Frequency Jam stopped throwing and never came closer, so the wave couldn't end. Frequency Jam now only stops Bombers' bombs and Neegy Balloons' troops, as it says."
+        },
+        {
+          version: '0.12.5', icon: { texture: 'ui_settings_button' }, title: 'Sound cutting out at 4x speed',
+          text: 'In big fights at 4x the sound could crackle and then go silent for the rest of the game. Sounds now make room for each other when it gets crowded, and the sound comes back by itself if it stops.'
+        },
+        {
+          version: '0.12.5', icon: { texture: 'ui_spawn_marker' }, title: 'Black edges when zooming out fast',
+          text: 'Zooming out quickly could leave the sides of the map black for a moment. The whole map now stays drawn while you zoom.'
+        },
         {
           version: '0.12.1', icon: { building: 'mageAltar', level: 10 }, title: "The Locklair Mage's zap leaves from his staff's gem",
           text: 'His lightning and the glow on his staff sat a little to the side of the gem. Both now come from the middle of the gem at the top of his staff.'

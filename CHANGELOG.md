@@ -2,6 +2,23 @@
 
 The version shows in the bottom-left corner of every screen (`package.json` `version` plus the commit). Details for everything below are in [README.md](README.md).
 
+## 0.12.5
+
+Many-sided waves spread out, plus fixes for a stuck La Vaca Saturno, sound at 4x and black map edges. No database or save changes.
+
+### Changes
+- **A wave's entrances open in turn** (`stepWaveSpawning` in `src/logic/waves.js`, `CONFIG.rules.spawnSpread`): when the countdown ends the wave sends from `startingEntrances(n)` of its `paths` (1, or 2 when it has `startTwoFrom` 5+), and the next one opens every `every` 8 s (`w.open`, `w.openTimer`; new `entranceOpened` event). An entrance opens early once every open one has run out of enemies, and a pass where nothing spawned adds no gap. A wave saved from before (no `w.open`) runs with every entrance open. GameScene: the "!" badges warn about every side during the countdown, then show only the open ones; a new side gets its badge back with two red rings (`WaveMarkers.alertPoint`) and the countdown sound at 35%.
+- **Arcane Aegis flash** (GameScene `mageAegis`): every building with `_mageAegis` (walls too) flashes white 3 times, 450 ms apart, 170 ms each (`AEGIS_FLASHES`, `AEGIS_FLASH_GAP_MS`, `AEGIS_FLASH_MS`). `BuildingView.flash` / `WallView.flash` take an optional length (`ms`, 80 by default). Its length is unchanged (4 s).
+- **Speed button shows the speed** (`UIScene.styleFast`): labelled `1x` / `2x` / `4x` and stepping 1x -> 2x -> 4x -> 1x; it stays visible at 1x during waves, and the pulsing glow ring (`fastGlow`) is removed. How to Play updated.
+
+### Balance
+- **Slower spawns per entrance with more entrances** (`spawnGap(open)` = `rules.spawnInterval` 0.8 + `spawnSpread.perEntrance` 0.2 x (open entrances - 1), still x the crowd-cap pack): 0.8 s with 1 open, 1.0 with 2, 1.4 with 4, 2.2 with 8. Wave sizes are unchanged.
+
+### Bug Fixes
+- **La Vaca Saturno stuck in a Frequency Jam** (`enemies.js stepEnemy`, `jammable: true` on `CONFIG.enemies.bomber`): the F.L.O.C.K Frequency Jam perk disarmed every air enemy (`e.airJammed`), so a La Vaca Saturno (or Bombo) hovering in a jammer's range, out of every anti-air's reach, never attacked or moved and the wave couldn't end. Now only `jammable` enemies (Bombers) are disarmed; Neegy Balloons' drops are still checked in `stepBalloon`. Test: `tests/frequencyJam.test.js`.
+- **Sound crackling and going silent at 4x** (`src/audio.js`): at most `MAX_LIVE_SFX` 18 effects play at once (`liveSfxCount()`), `playSfx`'s same-sound gap grows with the crowd (`SFX_MIN_GAP_MS x (1 + live / CROWD_GAP_PER 6)`), `playVoiceLine` / `playSfxClip` respect the cap, and `keepAudioAlive(scene)` (GameScene, every second) resumes a suspended AudioContext that isn't waiting for a first click. Test: `tests/audioCrowd.test.js`.
+- **Black map edges after a fast zoom-out** (`MapDetail.update`): the soft map's visibility check ran on a timer, so the soft map stayed hidden for a moment after a big zoom out. A camera change (scroll or zoom) now runs the check on that frame.
+
 ## 0.12.4
 
 New sound effects from the user's drops. No database or save changes.

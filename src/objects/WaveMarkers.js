@@ -54,6 +54,13 @@ export class WaveMarkers {
     }
   }
 
+  /** World position of path `path`'s "!" warning (shown or not), or null when it has no marker. */
+  alertPoint(path) {
+    const it = this.items.find((x) => x.path === path);
+    if (!it) return null;
+    return { x: it.c.x + ALERT.x * it.c.scaleX, y: it.c.y + ALERT.y * it.c.scaleY };
+  }
+
   /** World position of the first "!" warning (for the tutorial's pointer), or null. */
   alertWorld() {
     const it = this.items.find((x) => x.alert);

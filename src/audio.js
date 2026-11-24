@@ -14,6 +14,11 @@ const TRACK_GAIN = {
 };
 // Avoid stacking the same effect dozens of times in one frame (e.g. a big splash).
 const SFX_MIN_GAP_MS = 40;
+// Crowded audio (v0.12.5: a big wave at 2x / 4x crackled, then went silent): at most MAX_LIVE_SFX effects play at once
+// (more are skipped), and the gap between two plays of the same effect grows with how many are playing
+// (SFX_MIN_GAP_MS x (1 + playing / CROWD_GAP_PER)), so a busy fight thins out its repeats instead of piling up.
+const MAX_LIVE_SFX = 18;
+const CROWD_GAP_PER = 6;
 
 let music = null;
 let musicKey = null;
@@ -79,6 +84,27 @@ function trackSfx(snd, base) {
   snd.once('destroy', drop);
 }
 
+/** How many effect sounds are playing right now (dead ones are dropped from the count). */
+export function liveSfxCount() {
+  for (const snd of liveSfx.keys()) if (!isAlive(snd) || (!snd.isPlaying && !snd.isPaused)) liveSfx.delete(snd);
+  return liveSfx.size;
+}
+
+/** Is there room for one more effect? (MAX_LIVE_SFX) */
+const sfxRoom = () => liveSfxCount() < MAX_LIVE_SFX;
+
+/**
+ * Keep the game's audio running: a browser can suspend (or 'interrupt') the audio context under load or after the tab
+ * was hidden, and then every sound is silent until something resumes it. Called every second or so by GameScene; does
+ * nothing while the browser still waits for the first click (Phaser unlocks it then).
+ */
+export function keepAudioAlive(scene) {
+  const mgr = scene && scene.sound;
+  const ctx = mgr && mgr.context;
+  if (!ctx || mgr.locked || ctx.state === 'running' || ctx.state === 'closed') return;
+  try { const p = ctx.resume(); if (p && p.catch) p.catch(() => {}); } catch { /* not allowed yet */ }
+}
+
 export function getMusicLevel() { return musicLevel; }
 export function getSfxLevel() { return sfxLevel; }
 
@@ -108,8 +134,10 @@ const audioLocked = (scene) => !!(scene.sound && scene.sound.locked);
 
 export function playSfx(scene, key, config = undefined) {
   if (!key || !scene.cache.audio.exists(key) || audioLocked(scene)) return;
+  const live = liveSfxCount();
+  if (live >= MAX_LIVE_SFX) return; // crowded: skipped
   const now = performance.now();
-  if (now - (lastPlayed.get(key) || 0) < SFX_MIN_GAP_MS) return;
+  if (now - (lastPlayed.get(key) || 0) < SFX_MIN_GAP_MS * (1 + live / CROWD_GAP_PER)) return;
   lastPlayed.set(key, now);
   if (sfxLevel <= 0) return;
   const base = config && config.volume !== undefined ? config.volume : 1;
@@ -128,7 +156,7 @@ export function playVoiceLine(scene, keys, group = null) {
   const id = group || keys.join('|');
   const current = voices.get(id);
   if (current && current.isPlaying) return;
-  if (audioLocked(scene)) return;
+  if (audioLocked(scene) || !sfxRoom()) return;
   const loaded = keys.filter((k) => scene.cache.audio.exists(k));
   if (!loaded.length) return;
   if (sfxLevel <= 0) return;
@@ -156,7 +184,7 @@ export function playSfxCapped(scene, key, maxAtOnce, config = undefined) {
  */
 const clipStarts = new Map();
 export function playSfxClip(scene, key, { maxSeconds = 0, fadeMs = 400, maxAtOnce = 2, minGapMs = 300, volume = 1 } = {}) {
-  if (!key || !scene.cache.audio.exists(key) || audioLocked(scene) || sfxLevel <= 0) return null;
+  if (!key || !scene.cache.audio.exists(key) || audioLocked(scene) || sfxLevel <= 0 || !sfxRoom()) return null;
   const now = performance.now();
   if (now - (clipStarts.get(key) || -Infinity) < minGapMs) return null;
   if (scene.sound.getAll(key).filter((s) => s.isPlaying).length >= maxAtOnce) return null;

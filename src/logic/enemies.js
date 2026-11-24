@@ -422,7 +422,7 @@ function stepEnemyBody(state, e, dt, nav) {
 
   e.attacking = !!attackTarget;
   // Firework Showstopper: too dazzled to attack (it still walks). Frequency Jam: no bombs.
-  const disarmed = e.disarmT > 0 || (e.airJammed && cfg.type === 'air');
+  const disarmed = e.disarmT > 0 || (e.airJammed && cfg.jammable); // (Frequency Jam: Bombers only, CONFIG jammable)
   if (attackTarget && e.cooldown <= 0 && !disarmed) {
     e.cooldown = cfg.attackInterval;
     if (cfg.explodes) { explode(state, e, cfg); return; }

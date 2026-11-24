@@ -681,12 +681,15 @@ export class BuildingView {
     this.facing = others[Math.floor(Math.random() * others.length)];
   }
 
-  /** Hit flash: tint white for 80 ms. Throttled so a building under constant attack flickers instead of staying white. */
-  flash(time) {
+  /**
+   * Hit flash: tint white for `ms` (80 by default; Arcane Aegis pulses longer). Throttled so a building under constant
+   * attack flickers instead of staying white.
+   */
+  flash(time, ms = 80) {
     if (time - (this.lastFlash || -Infinity) < FLASH_MIN_GAP_MS) return;
     this.lastFlash = time;
     this.sprite.setTintFill(0xffffff);
-    this.flashUntil = time + 80;
+    this.flashUntil = time + ms;
   }
 
   /** Click effect: the building squashes and springs back while gold rings ripple out from its footprint. */
