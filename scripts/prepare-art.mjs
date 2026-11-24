@@ -47,6 +47,7 @@ const TARGETS = [
   { match: /^bld_flock_lv[0-9]+$/, width: 384, trim: 'group', needsAlpha: true },
   { match: /^bld_mousetrap_lv[0-9]+$/, width: 384, trim: 'group', needsAlpha: true },
   { match: /^bld_ra_lv[0-9]+$/, width: 384, trim: true, needsAlpha: true },
+  { match: /^bld_mageAltar_lv[0-9]+$/, width: 384, trim: 'group', needsAlpha: true }, // v0.12: the Locklair Mage (hero and pedestal in one picture), 5 pictures, one shared box
   { match: /^bld_dj_lv[0-9]+$/, width: 384, trim: true, needsAlpha: true },
   // Fuel Station: 4 levels drawn on one canvas, one shared box (so each level keeps its scale and ground point).
   { match: /^bld_fuelStation_lv[0-9]+$/, width: 384, trim: 'group', needsAlpha: true },
@@ -84,6 +85,7 @@ const TARGETS = [
   { match: /^ui_research_point$/, width: 128, trim: true, needsAlpha: true }, // the Burger (research points, shown as Burgers)
   { match: /^ui_research_ready$/, width: 128, trim: true, needsAlpha: true }, // book over the RV Lab: research ready
   { match: /^ui_beat_ready$/, width: 128, trim: true, needsAlpha: true },     // over DJ Babyface: Drop the Beat ready
+  { match: /^ui_aegis_ready$/, width: 192, trim: true, needsAlpha: true },    // v0.12: the Locklair Mage's Arcane Aegis (AegisIcon.js draws a stand-in until it exists)
   { match: /^ui_merge_gear$/, width: 128, trim: true, needsAlpha: true },     // v0.8: the badge over merged defenses
   { match: /^ui_ability_[a-z_]+$/, width: 192, fit: 'box', trim: true, needsAlpha: true }, // v0.8.5: merged ability icons (MergeIcons.js)
   { match: /^ui_armor_shield$/, width: 64, fit: 'box', trim: true, needsAlpha: true },     // v0.8.5: the shield by an armored enemy's health bar

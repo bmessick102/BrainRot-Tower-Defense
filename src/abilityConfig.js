@@ -543,3 +543,35 @@ registerPerkTree('queenAltar', {
     t('Curtain Call', 'Knocked out in a raid, she gets back up after 20 s with 40% health (once per wave).', { queenReviveSeconds: 20, queenReviveHpPct: 0.4 })
   ] }
 });
+
+// ---------- the Locklair Mage (his building's tree; read by src/logic/mage.js through mageStats) ----------
+// mageDamagePct / mageRangeAdd / mageFasterPct: his zap's damage, range and speed. mageChain / mageChainPct: each zap
+// jumps on to that many enemies near its target for that share. mageOverchargeEvery / mageOverchargeMult: every Nth zap
+// hits harder. mageHealPct / auraRadiusAdd: Sanctuary Aura's healing and reach. mageWard: buildings in his aura take that
+// share less damage while he's awake (combat.js damageBuilding, b._mageWard). aegisCharges / aegisSecondsAdd /
+// aegisHealPct: Arcane Aegis per wave, longer, and healing the buildings it covers by that share at once.
+// hpPct: his health (his building's, through maxHp). mageSleepFasterPct: shorter naps. mageReviveSeconds /
+// mageReviveHpPct: knocked out in a raid, he's back up after a while (once per raid).
+registerPerkTree('mageAltar', {
+  a: { name: 'Archmage', tiers: [
+    t('Arcane Focus', "The Locklair Mage's zaps deal 25% more damage.", { mageDamagePct: 25 }),
+    t('Long Staff', 'He zaps 1.5 tiles farther.', { mageRangeAdd: 1.5 }),
+    t('Chain Spark', 'Each zap jumps on to 1 more enemy nearby for 50% damage.', { mageChain: 1, mageChainPct: 0.5 }),
+    t('Quickened Staff', 'He zaps 25% faster.', { mageFasterPct: 25 }),
+    t('Arcane Overload', 'Every 4th zap deals triple damage.', { mageOverchargeEvery: 4, mageOverchargeMult: 3 })
+  ] },
+  b: { name: 'Sanctuary', tiers: [
+    t('Soothing Light', 'Sanctuary Aura heals 30% more.', { mageHealPct: 30 }),
+    t('Wider Sanctuary', 'His aura reaches 1 tile farther (Arcane Aegis too).', { auraRadiusAdd: 1 }),
+    t('Warding Light', "While he's awake, buildings in his aura take 15% less damage.", { mageWard: 0.15 }),
+    t('Restoration', 'Sanctuary Aura heals 80% more in all.', { mageHealPct: 50 }), // (Pct keys add up: 30 + 50)
+    t('Twin Aegis', 'Arcane Aegis can be cast twice per wave.', { aegisCharges: 2 })
+  ] },
+  c: { name: 'Eternity', tiers: [
+    t('Stone Skin', 'The Locklair Mage has 30% more health.', { hpPct: 30 }),
+    t('Lasting Aegis', 'Arcane Aegis lasts 6 s instead of 4 s.', { aegisSecondsAdd: 2 }),
+    t('Deep Meditation', 'He sleeps 40% shorter after a raid.', { mageSleepFasterPct: 40 }),
+    t('Aegis Surge', 'Arcane Aegis also heals every building it covers 25% of its health.', { aegisHealPct: 0.25 }),
+    t('Undying', 'Knocked out in a raid, he rises again after 20 s with 40% health (once per raid).', { mageReviveSeconds: 20, mageReviveHpPct: 0.4 })
+  ] }
+});

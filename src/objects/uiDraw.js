@@ -224,11 +224,12 @@ export function fitIcon(img, w, h = w) {
 // (hero_brisket) on a gold chip, the Hatsune Queen's (hero_queen, v0.8) on a teal one.
 const HERO_FACES = {
   brisket: { key: 'hero_brisket', x: 44, y: 0, w: 100, h: 96, chip: 0xe0a82e, back: 0x3a2412 },
-  queen: { key: 'hero_queen', x: 61, y: 0, w: 70, h: 64, chip: 0x2fc7c0, back: 0x123a3a }
+  queen: { key: 'hero_queen', x: 61, y: 0, w: 70, h: 64, chip: 0x2fc7c0, back: 0x123a3a },
+  mage: { key: 'bld_mageAltar_lv1', x: 150, y: 48, w: 76, h: 70, chip: 0x9b4dff, back: 0x2a1240 } // (his face on his Level 1 statue, v0.12)
 };
 
-/** Which hero an altar type holds ('brisket' for 'altar', 'queen' for 'queenAltar'). */
-export const heroKindOf = (type) => (type === 'queenAltar' ? 'queen' : 'brisket');
+/** Which hero an altar type holds ('brisket' for 'altar', 'queen' for 'queenAltar', 'mage' for 'mageAltar'). */
+export const heroKindOf = (type) => (type === 'queenAltar' ? 'queen' : type === 'mageAltar' ? 'mage' : 'brisket');
 
 /**
  * A hero's badge, shown wherever its altar is (shop card and info, How to Play, building info, RV Lab list): a

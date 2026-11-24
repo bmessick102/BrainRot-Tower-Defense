@@ -526,8 +526,9 @@ export function checkWaveCleared(state) {
   state.jugs = [];     // Diddy Trebuchet's oil jugs still in the air (barrelBurst.js)
   let ruins = repairAll(state);
   resetTraps(state); // every Mousetrap is set again for the next wave
-  // Once per night: Last Stand; Spellsteal and Ready Rack start over.
-  for (const b of state.buildings) { b.lastStandUsed = false; b.lastStandT = 0; b.stealStacks = 0; b.rack = 0; b.djBoostT = 0; }
+  // Once per night: Last Stand; Spellsteal and Ready Rack start over. DJ Babyface's hype meter empties (v0.11.1, the
+  // user's call: every wave starts from zero, so the meter never shows a charge between waves).
+  for (const b of state.buildings) { b.lastStandUsed = false; b.lastStandT = 0; b.stealStacks = 0; b.rack = 0; b.djBoostT = 0; if (b.type === 'dj') b.hype = 0; }
   // No working mine and too broke to rebuild one: the gnomes salvage the cheapest for free.
   const salvaged = salvageMine(state);
   if (salvaged) ruins--;

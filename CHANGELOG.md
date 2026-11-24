@@ -2,6 +2,17 @@
 
 The version shows in the bottom-left corner of every screen (`package.json` `version` plus the commit). Details for everything below are in [README.md](README.md).
 
+## 0.12.0
+
+The Locklair Mage (third hero, Village Hall 10), the F.L.O.C.K Mothership's new lightning, and DJ Babyface's hype meter emptying after each wave. No database changes; no save version change (`mageAltar` is a new building type; older saves load unchanged, a saved DJ charge is dropped).
+
+### New Features
+- **The Locklair Mage** (`CONFIG.mageAltar`, new `src/logic/mage.js`, `src/objects/MageFx.js`, `src/objects/AegisIcon.js`; `mageAltar` in `BUILDING_TYPES` / `HERO_TYPES`, `limits.mageAltar` 1 from VH10): a stationary hero whose building is his body and health (crown health bar, `badgeStyle: 'crown'`, always shown). 20 levels (`townHall` 10 for Levels 1-10, then N; Level 1 120,000 gold, Levels 2-20 2,000-10,000 Burgers; hp x1.08, heroDamage x1.06, heal x1.07 per level). Staff zap every 1.6 s, 6 tiles, ground and air, one target (purple `ZapFx` from `MERGED_MUZZLE.bld_mageAltar_lv*`, `sfx_mage_attack`). Sanctuary Aura: buildings (not his own) and the other heroes within 4.5 tiles heal `heal` HP/s in raids. Arcane Aegis (`useAegis`, hotbar slot `aegis`, key H, once per wave): buildings in his aura take no damage for 4 s (`b._mageAegis` in `damageBuilding`). Naps after every raid (`max(minSleepSeconds 20, lowest health share lost x 120)`, KO = 120 s); destroyed = knocked out, the statue stays (`STANDS_WHEN_DESTROYED`, grey tint, stars, normal depth). Perk tree `mageAltar` (Archmage / Sanctuary / Eternity; `mageWard` reduces damage in `damageBuilding`). Hero tab (`drawMageInfo`, `drawAegisCard`), shop / How to Play / visit badges (`HERO_FACES.mage`, his face on `bld_mageAltar_lv1`), range circle = zap range. Art `bld_mageAltar_lv1`-`lv5` (prepare-art `trim: 'group'`, a picture per 4 levels in `LEVELS_PER_ART_BY_TYPE` / `ART_LEVELS`; `SPRITE_SCALE` 0.78, `GROUND_SHARE` 0.21). Ability icon: a drawn stand-in (`ui_aegis_ready`; prepare-art rule added for the real picture). New tests: `tests/mage.test.js`.
+
+### Changes
+- **F.L.O.C.K Mothership's Triple Zap is a lightning bolt** (`ZapFx.js`, the user's reference picture): a zigzag (kinks every 16 px, up to 9 px off the line, re-struck every 70 ms) with a blue-violet haze, cyan glow, pale body and white core, plus 3 short forks; low graphics keeps glow + core. Colors are now an option (`ZAP_COLORS`, `MAGE_ZAP_COLORS`) and the bolt leaves a picture's `muzzlePoint()` when it has one. Its sound is unchanged: the user's "Merged FLOCK tower attack sound.mp3" is byte-for-byte `sfx_spell_lightning`, which it already plays.
+- **DJ Babyface's hype meter empties when a wave is beaten** (`checkWaveCleared` sets `b.hype = 0`; it's no longer saved, and a saved charge loads as 0). Before, the charge carried over and showed half full between waves.
+
 ## 0.11.0
 
 Village Halls 16-20 with the user's five new hall pictures, walls to 10 levels (one every 2 halls), both heroes to Level 20, and two new achievements. **Database:** run `supabase/migration-2026-11-23-village-halls-20.sql` (raises the server's Village Hall cap from 15 to 20; without it a Hall 16-20 village shows as 15 on the leaderboard and in player search). **Save version 8:** walls at Level 6+ move up one level (same picture and HP).

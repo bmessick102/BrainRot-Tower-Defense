@@ -3,6 +3,7 @@
 // feeds the tutorial, and autosaves. Logic emits events through state.emit(); views listen.
 import { useFeast } from '../logic/hero.js';
 import { useEncore } from '../logic/queen.js';
+import { useAegis } from '../logic/mage.js';
 import { heroesWaveStarted, heroesAfterWave } from '../logic/heroes.js';
 import { CONFIG } from '../config.js';
 import { MAP } from '../mapTiles.js';
@@ -177,6 +178,10 @@ export class GameState {
   }
 
   /** The Hatsune Queen's Encore Cloak (during a wave). */
+  useAegis() { // the Locklair Mage's Arcane Aegis (mage.js)
+    return useAegis(this);
+  }
+
   useEncore() {
     return useEncore(this);
   }

@@ -12,11 +12,12 @@ import { TEX, SFX } from '../assetKeys.js';
 import { playSfx } from '../audio.js';
 import { hotbarSlots, slotForKey } from '../logic/hotbar.js';
 import { ensureEncoreTextures, ENCORE_COLOR } from './EncoreIcon.js';
+import { ensureAegisTexture, AEGIS_COLOR } from './AegisIcon.js';
 
 const S = 60, GAP = 8, PAD = 10;          // slot size, gap, panel padding
 const BOTTOM = 712;                       // the panel's bottom edge on screen
 const DEPTH = 450;                        // over the quick bar / info panel (400), under the shop (500) and guide (700)
-const SLOT_COLOR = { feast: COLORS.button, encore: 0x1f9e98, beat: 0xa25cff, spell: 0x4a5159 };
+const SLOT_COLOR = { feast: COLORS.button, encore: 0x1f9e98, aegis: 0x6a2fc0, beat: 0xa25cff, spell: 0x4a5159 };
 const TIP_W = 270;
 
 export class AbilityHotbar {
@@ -50,13 +51,14 @@ export class AbilityHotbar {
     return on && !this.gs.gameOver && !this.world.editMode && slots.length > 0;
   }
 
-  /** Number keys 1-9 use the slots (F stays a shortcut for Brisket Feast, G for Encore Cloak). */
+  /** Number keys 1-9 use the slots (F stays a shortcut for Brisket Feast, G for Encore Cloak, H for Arcane Aegis). */
   onKey(ev) {
     if (!this.c.visible || Modal.isOpen(this.scene)) return;
     const slots = this.slots || [];
     const key = ev.key;
     const slot = key === 'f' || key === 'F' ? slots.find((s) => s.type === 'feast')
-      : key === 'g' || key === 'G' ? slots.find((s) => s.type === 'encore') : slotForKey(slots, key);
+      : key === 'g' || key === 'G' ? slots.find((s) => s.type === 'encore')
+        : key === 'h' || key === 'H' ? slots.find((s) => s.type === 'aegis') : slotForKey(slots, key);
     if (slot) this.activate(slot);
   }
 
@@ -67,6 +69,7 @@ export class AbilityHotbar {
     if (!slot.ready) { playSfx(this.scene, SFX.invalid); return; }
     if (slot.type === 'feast') this.gs.useFeast(); // its sound and effects play from the heroFeast event
     else if (slot.type === 'encore') this.gs.useEncore(); // ...and Encore Cloak's from queenEncore
+    else if (slot.type === 'aegis') this.gs.useAegis(); // ...and Arcane Aegis's from mageAegis
     else if (slot.type === 'beat') this.gs.dropTheBeat(slot.buildingId);
     else if (slot.type === 'spell') { playSfx(this.scene, SFX.uiClick); this.world.beginSpellAim(slot.kind); }
   }
@@ -161,9 +164,9 @@ export class AbilityHotbar {
   /** The slot's picture: the Feast crown and beat art when loaded, the spell's picture (or its drawn icon). */
   iconFor(s) {
     const sc = this.scene;
-    const key = s.type === 'spell' ? spellIconTexture(sc, s.kind) : s.type === 'feast' ? TEX.feastReady : s.type === 'encore' ? ensureEncoreTextures(sc) : TEX.beatReady;
+    const key = s.type === 'spell' ? spellIconTexture(sc, s.kind) : s.type === 'feast' ? TEX.feastReady : s.type === 'encore' ? ensureEncoreTextures(sc) : s.type === 'aegis' ? ensureAegisTexture(sc) : TEX.beatReady;
     if (sc.textures.exists(key)) return fitIcon(sc.add.image(S / 2, S / 2 - 2, key), s.type === 'spell' ? 48 : 44);
-    return sc.add.text(S / 2, S / 2 - 3, s.type === 'feast' ? 'FEAST' : s.type === 'encore' ? 'ENCORE' : 'DROP', textStyle(13, '#ffe2ff')).setOrigin(0.5);
+    return sc.add.text(S / 2, S / 2 - 3, s.type === 'feast' ? 'FEAST' : s.type === 'encore' ? 'ENCORE' : s.type === 'aegis' ? 'AEGIS' : 'DROP', textStyle(13, '#ffe2ff')).setOrigin(0.5);
   }
 
   drawSlot(v, s, time, aiming) {
@@ -174,7 +177,7 @@ export class AbilityHotbar {
     v.face.setAlpha(ready || aiming ? 1 : 0.7);
     // Meter along the bottom (Feast charges left, hype), filled in the slot's color.
     v.meter.clear();
-    if (s.meter !== null && s.meter !== undefined) drawStatBar(v.meter, 5, S - 12, S - 10, s.meter, s.type === 'beat' ? 0xe0a8ff : s.type === 'encore' ? 0x7ff0e8 : 0xffd34a, 8);
+    if (s.meter !== null && s.meter !== undefined) drawStatBar(v.meter, 5, S - 12, S - 10, s.meter, s.type === 'beat' ? 0xe0a8ff : s.type === 'encore' ? 0x7ff0e8 : s.type === 'aegis' ? 0xd7a8ff : 0xffd34a, 8);
     // Count badge (spells brewed, Feast charges).
     const n = s.count;
     if (n !== v.lastBadge) {
@@ -185,7 +188,7 @@ export class AbilityHotbar {
     // Ready: a pulsing glow in the slot's color. Aiming: a steady gold ring.
     v.glow.clear();
     v.ring.clear();
-    const color = s.type === 'spell' ? SPELL_COLORS[s.kind] : s.type === 'beat' ? 0xc070ff : s.type === 'encore' ? ENCORE_COLOR : 0xffd34a;
+    const color = s.type === 'spell' ? SPELL_COLORS[s.kind] : s.type === 'beat' ? 0xc070ff : s.type === 'encore' ? ENCORE_COLOR : s.type === 'aegis' ? AEGIS_COLOR : 0xffd34a;
     if (aiming) {
       v.ring.lineStyle(4, 0xffe066, 1).strokeRoundedRect(-3, -3, S + 6, S + 6, 13);
     } else if (s.guide) {
@@ -217,7 +220,7 @@ export class AbilityHotbar {
     const c = sc.add.container(0, 0).setDepth(DEPTH + 5);
     const g = sc.add.graphics();
     const title = sc.add.text(14, 10, `${s.name}`, textStyle(17));
-    const hint = sc.add.text(TIP_W - 14, 13, `key ${i + 1}${s.type === 'feast' ? ' / F' : s.type === 'encore' ? ' / G' : ''}`, bodyStyle(12, '#d9d4c8', { fontStyle: 'bold' })).setOrigin(1, 0);
+    const hint = sc.add.text(TIP_W - 14, 13, `key ${i + 1}${s.type === 'feast' ? ' / F' : s.type === 'encore' ? ' / G' : s.type === 'aegis' ? ' / H' : ''}`, bodyStyle(12, '#d9d4c8', { fontStyle: 'bold' })).setOrigin(1, 0);
     const desc = sc.add.text(14, 38, s.desc || '', bodyStyle(13, COLORS.ink, { wordWrap: { width: TIP_W - 28 }, lineSpacing: 2 }));
     const st = sc.add.text(14, desc.y + desc.height + 6, status, bodyStyle(13, s.ready || aiming ? COLORS.inkGood : COLORS.inkBad, { fontStyle: 'bold', wordWrap: { width: TIP_W - 28 } }));
     const h = st.y + st.height + 12;

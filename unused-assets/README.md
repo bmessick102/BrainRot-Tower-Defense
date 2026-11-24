@@ -31,6 +31,14 @@ the three art zips (`merged cannon_sprites.zip`, `Spear_Thrower.zip`, `Spear_Thr
 `iBTD_40x40_grid.zip` (v0.9.0: another agent's 40 x 40 grid fit, its gridded map exports and screenshots; superseded by
 the maps with the tiles drawn on, `art-source/map/`).
 
+v0.12 drops (the Locklair Mage; kept here as the originals):
+
+| Dropped file | Installed as |
+| --- | --- |
+| `Locklair Mage Level 1.png` ... `Locklair Mage Level 5.png` (Level 3 as `level 3`) | `art-source/buildings/bld_mageAltar_lv1.png` ... `lv5.png` (the same files) |
+| `Locklair Mage Attack Sound Effect.mp3` | `art-source/audio/sfx_mage_attack.mp3` (his staff zap) |
+| `Merged FLOCK tower attack sound.mp3` | not installed: byte-for-byte the same file as `sfx_spell_lightning.mp3`, which the Mothership already plays |
+
 v0.11 drops (Village Halls 16-20 and 10 wall levels; kept here as the originals):
 
 | Dropped file | Installed as |

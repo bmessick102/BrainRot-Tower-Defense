@@ -6,6 +6,7 @@ import { towerFireInterval } from '../src/logic/abilities.js';
 import { enrageFactor } from '../src/logic/enrage.js';
 import { damageEnemy } from '../src/logic/combat.js';
 import { serializeGame, parseSave } from '../src/logic/save.js';
+import { checkWaveCleared } from '../src/logic/waves.js';
 import { GameState } from '../src/state/GameState.js';
 import { makeStateWithTownHall, addBuilding, addEnemy } from './helpers.js';
 
@@ -83,20 +84,24 @@ describe('DJ Babyface', () => {
     expect(inRange.calmed).toBe(false);
   });
 
-  it('the meter keeps its charge in saves', () => {
+  it('the meter empties when a wave is beaten, and a saved charge (older saves) loads empty (v0.11.1)', () => {
+    const { s, dj } = village();
+    s.wave.phase = 'active';
+    dj.hype = 17;
+    expect(checkWaveCleared(s)).toBe(true); // (no enemies left)
+    expect(dj.hype).toBe(0);
     const gs = new GameState({ storage: { getItem: () => null, setItem: () => {}, removeItem: () => {} } });
     gs.startNew();
     gs.buildings[0].level = 6; gs.tutorialDone = true; gs.tutorialStep = 10;
-    const { s, dj } = village();
     gs.buildings.push(...s.buildings.filter((b) => b.type === 'dj'));
-    dj.hype = 17;
     const saved = serializeGame(gs);
-    expect(saved.buildings.find((b) => b.type === 'dj').hype).toBe(17);
+    expect(saved.buildings.find((b) => b.type === 'dj').hype).toBeUndefined();
+    saved.buildings.find((b) => b.type === 'dj').hype = 17; // a save from before v0.11.1
     const parsed = parseSave(JSON.stringify(saved));
     expect(parsed.status).toBe('ok');
     const back = new GameState({ storage: { getItem: () => null, setItem: () => {}, removeItem: () => {} } });
     back.loadFromSave(parsed.data);
-    expect(back.buildings.find((b) => b.type === 'dj').hype).toBe(17);
+    expect(back.buildings.find((b) => b.type === 'dj').hype).toBe(0);
   });
 
   it('knows which buildings it reaches (for the purple highlight): in range, not walls, not itself', () => {

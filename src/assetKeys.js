@@ -122,6 +122,7 @@ export const SFX = {
   heroFeast: 'sfx_hero_feast',           // Brisket Feast goes off
   heroSnore: 'sfx_hero_snore',           // looping softly while the Brisket King is asleep (HeroView's SnoreLoop)
   queenSelect: 'sfx_queen_select',       // clicking the Hatsune Queen or her altar (her voice; never talks over itself)
+  mageAttack: 'sfx_mage_attack',         // the Locklair Mage's staff zap (v0.12; one at a time)
   invalid: 'sfx_invalid',               // placing/dropping a building on an invalid spot
   hit: 'sfx_hit',
   buildingDestroyed: 'sfx_building_destroyed',

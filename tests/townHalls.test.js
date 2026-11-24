@@ -75,7 +75,8 @@ describe('Village Halls 1-20: caps', () => {
       house: [5, 6, 6, 6, 6, 7, 7, 7, 8, 8, 9],
       wall: [132, 144, 156, 168, 180, 192, 204, 216, 228, 240, 252],
       townHall: one, rvlab: one, dj: one, fuelStation: one, altar: one,
-      queenAltar: one // the Hatsune Queen (from VH8)
+      queenAltar: one, // the Hatsune Queen (from VH8)
+      mageAltar: one   // the Locklair Mage (from VH10, v0.12)
     };
     expect(Object.keys(expected).sort()).toEqual([...BUILDING_TYPES].sort());
     for (const [t, caps] of Object.entries(expected)) expect([10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20].map((th) => limitFor(t, th)), t).toEqual(caps);

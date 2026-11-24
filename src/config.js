@@ -358,6 +358,53 @@ export const CONFIG = {
       { cost: 10000, costCurrency: 'rp', townHall: 20, hp: 34155, heroHp: 9487, heroDamage: 550 }
     ]
   },
+  // The Locklair Mage (src/logic/mage.js, v0.12, the user's design): the third hero, unlocked at Village Hall 10. Unlike the
+  // other two he never moves: the hero and his pedestal are one building and one picture (bld_mageAltar_lv1-5, a picture
+  // per 4 levels), and the building's health is his (shown on a hero crown bar). His level is the building's.
+  //   - Staff zap: every attackInterval s his staff zaps the nearest enemy within attackRange tiles (ground or air) for
+  //     heroDamage, a single target (a purple bolt from the staff's crystal).
+  //   - Sanctuary Aura (passive): every building and hero (the Brisket King, the Hatsune Queen) within auraRadius tiles,
+  //     but not his own building, heals `heal` HP per second while he's awake in a wave.
+  //   - Arcane Aegis (from the hotbar, once per wave): every building inside his aura, his own too, can't be damaged
+  //     for aegis.seconds.
+  //   - He naps after every raid (at least minSleepSeconds, more the lower his health got: share lost x
+  //     maxSleepSeconds); asleep he doesn't zap, heal or cast. Destroyed in a raid he's knocked out: his statue stays on
+  //     its tile (not rubble) with knocked-out stars, enemies ignore it, and after the raid he's rebuilt and naps.
+  // Level 1 costs gold (fits a Village Hall 10's storage); Levels 2-20 cost Burgers and, like the other heroes, Level N
+  // needs Village Hall N (Levels 1-10 at VH10). Per level: hp x1.08, damage x1.06, heal x1.07.
+  mageAltar: {
+    name: "Locklair Mage",
+    heroName: "Locklair Mage",
+    size: 2,
+    unlockTownHall: 10,
+    hero: {
+      attackInterval: 1.6, attackRange: 6, auraRadius: 4.5, maxSleepSeconds: 120, minSleepSeconds: 20, wakeSeconds: 1.5,
+      healTick: 0.5,
+      aegis: { seconds: 4 }
+    },
+    levels: [
+      { cost: 120000, townHall: 10, hp: 4200, heroDamage: 420, heal: 30 },
+      { cost: 2000, costCurrency: 'rp', townHall: 10, hp: 4536, heroDamage: 445, heal: 32 },
+      { cost: 2500, costCurrency: 'rp', townHall: 10, hp: 4899, heroDamage: 472, heal: 34 },
+      { cost: 3000, costCurrency: 'rp', townHall: 10, hp: 5291, heroDamage: 500, heal: 36 },
+      { cost: 3500, costCurrency: 'rp', townHall: 10, hp: 5714, heroDamage: 530, heal: 39 },
+      { cost: 4000, costCurrency: 'rp', townHall: 10, hp: 6171, heroDamage: 562, heal: 42 },
+      { cost: 4500, costCurrency: 'rp', townHall: 10, hp: 6665, heroDamage: 596, heal: 45 },
+      { cost: 5000, costCurrency: 'rp', townHall: 10, hp: 7198, heroDamage: 632, heal: 48 },
+      { cost: 5500, costCurrency: 'rp', townHall: 10, hp: 7774, heroDamage: 670, heal: 51 },
+      { cost: 6000, costCurrency: 'rp', townHall: 10, hp: 8396, heroDamage: 710, heal: 55 },
+      { cost: 6500, costCurrency: 'rp', townHall: 11, hp: 9068, heroDamage: 753, heal: 59 },
+      { cost: 7000, costCurrency: 'rp', townHall: 12, hp: 9793, heroDamage: 798, heal: 63 },
+      { cost: 7500, costCurrency: 'rp', townHall: 13, hp: 10576, heroDamage: 846, heal: 67 },
+      { cost: 8000, costCurrency: 'rp', townHall: 14, hp: 11422, heroDamage: 897, heal: 72 },
+      { cost: 8500, costCurrency: 'rp', townHall: 15, hp: 12336, heroDamage: 951, heal: 77 },
+      { cost: 9000, costCurrency: 'rp', townHall: 16, hp: 13323, heroDamage: 1008, heal: 82 },
+      { cost: 9500, costCurrency: 'rp', townHall: 17, hp: 14389, heroDamage: 1068, heal: 88 },
+      { cost: 10000, costCurrency: 'rp', townHall: 18, hp: 15540, heroDamage: 1132, heal: 94 },
+      { cost: 10000, costCurrency: 'rp', townHall: 19, hp: 16783, heroDamage: 1200, heal: 101 },
+      { cost: 10000, costCurrency: 'rp', townHall: 20, hp: 18126, heroDamage: 1272, heal: 108 }
+    ]
+  },
   // Gnome villagers all live in Villager Houses (house.levels[].gnomes; their stats come from the same
   // table). By day each works a mine (up to maxPerMine per mine), mining its own gold into a sack for
   // storage; during an attack they repair damaged buildings (up to maxRepairersPerBuilding each). A gnome
@@ -1000,7 +1047,8 @@ export const CONFIG = {
     dj: [0, 0, 0, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1],
     fuelStation: [0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1],
     altar: [0, 0, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1],
-    queenAltar: [0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1] // the Hatsune Queen: from Village Hall 8
+    queenAltar: [0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1], // the Hatsune Queen: from Village Hall 8
+    mageAltar: [0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1] // the Locklair Mage: from Village Hall 10 (v0.12)
   },
   // radius (tiles): body size; enemies push apart so they never stack on top of each other.
   // name: shown to players; role: the enemy's job, shown as subtext under the name.

@@ -43,6 +43,8 @@ import { SPELL_KINDS, spellConfig, spellFullName, spellSlots, brewedSpells } fro
 import { rpCap, rpText } from '../logic/researchPoints.js';
 import { heroStats, getAltar } from '../logic/hero.js';
 import { getQueenAltar } from '../logic/queen.js';
+import { getMageAltar } from '../logic/mage.js';
+import { ensureAegisTexture, AEGIS_COLOR } from '../objects/AegisIcon.js';
 import { heroStatsFor, heroOfAltar } from '../logic/heroes.js';
 import { ensureEncoreTextures, ENCORE_COLOR } from '../objects/EncoreIcon.js';
 import { djStats, hypeNeeded } from '../logic/dj.js';
@@ -1051,6 +1053,7 @@ export class UIScene extends Phaser.Scene {
     if (type === 'fuelStation') return narrow ? 'Spells' : 'Brews spells (Burgers)';
     if (type === 'altar') return narrow ? 'Hero' : 'Hero: the Brisket King';
     if (type === 'queenAltar') return narrow ? 'Hero' : 'Hero: the Hatsune Queen';
+    if (type === 'mageAltar') return narrow ? 'Hero' : 'Hero: the Locklair Mage';
     return '';
   }
 
@@ -1181,7 +1184,7 @@ New walls are built at your wall level (${wallLevel(this.gs)}), so one costs wha
     const col = PIC.x + PIC.w + 16;
     const preview = { type, level: lvl, hp: levelStats(type, lvl).hp, destroyed: false, stock: 0, ...footprintDims(type) };
     let y = Math.max(this.drawStats(c, preview, col, top, W - col - 18, true), top + PIC.h) + 14;
-    const altar = type === 'altar' ? getAltar(this.gs) : type === 'queenAltar' ? getQueenAltar(this.gs) : null;
+    const altar = type === 'altar' ? getAltar(this.gs) : type === 'queenAltar' ? getQueenAltar(this.gs) : type === 'mageAltar' ? getMageAltar(this.gs) : null;
     if (altar) {   // a hero's altar: a shortcut to the hero page, a full-width button under the card
       const bw = W - 36, bh = 46;
       const open = new Button(this, W / 2, y + bh / 2, bw, bh, `Open ${typeConfig(type).heroName}`, () => {
@@ -1239,6 +1242,7 @@ New walls are built at your wall level (${wallLevel(this.gs)}), so one costs wha
     // The Brisket King's portrait on his altar's picture (not on the Hero tab, which shows the king himself).
     this.infoHeroBadge = addHeroBadge(this, PIC.x + PIC.w - 24, INFO_PIC_Y + 24, 36).setVisible(false);
     this.infoQueenBadge = addHeroBadge(this, PIC.x + PIC.w - 24, INFO_PIC_Y + 24, 36, 'queen').setVisible(false); // ...the Hatsune Queen's on hers
+    this.infoMageBadge = addHeroBadge(this, PIC.x + PIC.w - 24, INFO_PIC_Y + 24, 36, 'mage').setVisible(false); // ...and the Locklair Mage's on his
     // A merged defense: the gear in the picture's corner, and a gold "MERGED" tag after its name.
     this.infoGear = this.add.image(PIC.x + PIC.w - 22, INFO_PIC_Y + 22, this.textures.exists(MERGE_GEAR) ? MERGE_GEAR : TEX.coin).setVisible(false);
     fitIcon(this.infoGear, 34);
@@ -1271,7 +1275,7 @@ New walls are built at your wall level (${wallLevel(this.gs)}), so one costs wha
       mastery: new Button(this, INFO_W / 2, 0, bw, INFO_BTN_H, 'Mastery', () => this.openAbilities(true), { color: MERGE_COLOR, fontSize: 19 })
     };
     const close = new Button(this, INFO_W - 12, 12, 42, 40, '', () => this.world.select(null), { color: COLORS.buttonDanger, icon: 'x', radius: 9 });
-    c.add([this.infoBg, this.infoBlocker, this.infoName, this.infoLevel, this.infoPicBg, this.infoPic, this.infoHeroBadge, this.infoQueenBadge, this.infoGear, this.infoTagBg, this.infoTagText, this.infoContent,
+    c.add([this.infoBg, this.infoBlocker, this.infoName, this.infoLevel, this.infoPicBg, this.infoPic, this.infoHeroBadge, this.infoQueenBadge, this.infoMageBadge, this.infoGear, this.infoTagBg, this.infoTagText, this.infoContent,
       ...Object.values(this.infoTabs), ...Object.values(this.infoButtons), close]);
     this.infoPanel = c;
     this.hideInfo();
@@ -1305,6 +1309,7 @@ New walls are built at your wall level (${wallLevel(this.gs)}), so one costs wha
     }
     this.infoHeroBadge.setVisible(b.type === 'altar' && this.infoTab !== 'hero');
     this.infoQueenBadge.setVisible(b.type === 'queenAltar' && this.infoTab !== 'hero');
+    this.infoMageBadge.setVisible(b.type === 'mageAltar' && this.infoTab !== 'hero');
     if (picKey === this.infoPicKey) return;
     this.infoPicKey = picKey;
     this.infoPicBg.clear();
@@ -1483,6 +1488,12 @@ New walls are built at your wall level (${wallLevel(this.gs)}), so one costs wha
       return [`Hatsune Queen Lv ${b.level}: ${formatGold(st.maxHp)} HP, ${formatGold(Math.round(st.damage))} per bolt${preview ? '' : ` · ${status}`}`,
         `Shoots ground & air ${st.attackRange} tiles · guards ${st.guardRange} · Encore Cloak ${st.encoreCharges}x per wave`];
     }
+    if (b.type === 'mageAltar') {
+      const st = heroStatsFor(b), h = this.gs.mage;
+      const status = !h ? '' : b.destroyed || h.status === 'down' ? 'knocked out' : h.status === 'asleep' ? `asleep (${Math.floor(Math.ceil(h.sleepT) / 60)}:${String(Math.ceil(h.sleepT) % 60).padStart(2, '0')})` : h.status === 'waking' ? 'waking up' : h.resting ? 'sleeping (night)' : 'ready';
+      return [`Locklair Mage Lv ${b.level}: ${formatGold(Math.round(st.damage))} per zap, ground & air ${st.attackRange} tiles${preview ? '' : ` · ${status}`}`,
+        `Heals buildings and heroes ${Math.round(st.heal)} HP/s within ${st.auraRadius} tiles · Arcane Aegis ${st.aegisCharges}x per wave`];
+    }
     if (b.type === 'dj') {
       const s = djStats(b);
       return [`Gnomes in range work +${s.gnomeBoostPct}% faster · range ${s.range} tiles`,
@@ -1533,6 +1544,7 @@ New walls are built at your wall level (${wallLevel(this.gs)}), so one costs wha
    * his ability's card (drawFeastCard). Returns the y below.
    */
   drawHeroInfo(box, b, y) {
+    if (b.type === 'mageAltar') return this.drawMageInfo(box, b, y);
     const queen = b.type === 'queenAltar';
     const st = heroStatsFor(b), h = heroOfAltar(this.gs, b);
     const nxt = b.level < maxLevel(b.type) ? heroStatsFor({ ...b, level: b.level + 1 }) : null;
@@ -1626,6 +1638,72 @@ New walls are built at your wall level (${wallLevel(this.gs)}), so one costs wha
     drawGlossy(g, x + 10, sy, slot, slot, ENCORE_COLOR, { radius: 12, lip: 4 });
     box.add(g);
     box.add(fitIcon(this.add.image(x + 10 + slot / 2, sy + slot / 2 - 2, ensureEncoreTextures(this)), slot - 14));
+    box.add([title, kind, charges, text]);
+    return y + hgt;
+  }
+
+  /**
+   * The Locklair Mage's Hero tab (v0.12): like the others' (status, health, damage, attack speed, range, targets) plus
+   * his Sanctuary Aura, then Arcane Aegis's card. His health is his building's. Returns the y below.
+   */
+  drawMageInfo(box, b, y) {
+    const st = heroStatsFor(b), h = this.gs.mage;
+    const nxt = b.level < maxLevel(b.type) ? heroStatsFor({ ...b, level: b.level + 1 }) : null;
+    const name = this.add.text(INFO_COL, y, `${typeConfig(b.type).heroName}`, textStyle(19));
+    box.add(name);
+    box.add(this.add.text(name.x + name.width + 8, y + 4, `Lv ${b.level}`, textStyle(15, COLORS.textGold)));
+    y += 32;
+    const fmt = (n) => formatGold(Math.round(n));
+    const left = h ? Math.ceil(h.sleepT) : 0;
+    const down = b.destroyed || (h && h.status === 'down');
+    const status = !h ? '-' : down ? 'Knocked out' : h.status === 'asleep' ? `Asleep · ${Math.floor(left / 60)}:${String(left % 60).padStart(2, '0')}`
+      : h.status === 'waking' ? 'Waking up' : h.resting ? 'Sleeping (night) · wakes for a raid' : h.aegisT > 0 ? `Arcane Aegis · ${Math.ceil(h.aegisT)} s` : 'Ready';
+    const perSec = Math.round((1 / st.attackInterval) * 100) / 100;
+    const rows = [
+      ['Status', status, '', h && (down || h.status === 'asleep') ? COLORS.inkBad : COLORS.inkGood],
+      ['Health', `${fmt(b.destroyed ? 0 : b.hp)} / ${fmt(st.maxHp)}`, nxt ? `+${fmt(nxt.maxHp - st.maxHp)}` : ''],
+      ['Damage', `${fmt(st.damage)} per zap`, nxt ? `+${fmt(nxt.damage - st.damage)}` : ''],
+      ['Attack speed', `${perSec} zaps / s`, ''],
+      ['Range', `${st.attackRange} tiles · ground & air`, ''],
+      ['Sanctuary Aura', `${fmt(st.heal)} HP/s · ${st.auraRadius} tiles`, nxt ? `+${fmt(nxt.heal - st.heal)}` : '']
+    ];
+    const g = this.add.graphics();
+    box.add(g);
+    for (const [i, [label, value, gain, ink]] of rows.entries()) {
+      if (i > 0) g.fillStyle(COLORS.frame, 0.12).fillRect(INFO_COL, y - 3, INFO_COL_W, 1);
+      box.add(this.add.text(INFO_COL, y, label, bodyStyle(14, COLORS.inkDim)));
+      const v = this.add.text(INFO_COL + INFO_COL_W, y, value, bodyStyle(14, ink || COLORS.ink, ink ? { fontStyle: 'bold' } : {})).setOrigin(1, 0);
+      box.add(v);
+      if (gain) box.add(this.add.text(v.x - v.width - 4, y + 1, gain, bodyStyle(12, COLORS.inkGood)).setOrigin(1, 0));
+      y += 21;
+    }
+    y = this.drawAegisCard(box, st, Math.max(y + 4, INFO_PIC_Y + PIC.h + 12));
+    const tip = this.add.text(INFO_W / 2, y + 8, 'He never leaves his pedestal. Sanctuary Aura heals the buildings and heroes around him in a raid. He naps after every raid; destroyed in one, he stays knocked out until it ends.',
+      bodyStyle(13, COLORS.inkDim, { align: 'center', wordWrap: { width: INFO_W - PIC.x * 2 - 16 } })).setOrigin(0.5, 0);
+    box.add(tip);
+    return tip.y + tip.height + 10;
+  }
+
+  /** Arcane Aegis's card on the Locklair Mage's Hero tab, like Encore Cloak's. Returns the y below. */
+  drawAegisCard(box, st, y) {
+    const h = this.gs.mage;
+    const x = PIC.x, w = INFO_W - PIC.x * 2, slot = 64;
+    const tx = x + 10 + slot + 12, tw = x + w - 12 - tx;
+    const title = this.add.text(tx, y + 10, 'Arcane Aegis', textStyle(19));
+    const kind = this.add.text(title.x + title.width + 8, y + 14, 'Ability', textStyle(14, COLORS.textGold));
+    const used = h && isWaveActive(this.gs) ? h.aegisUsed : 0;
+    const charges = this.add.text(x + w - 12, y + 12, isWaveActive(this.gs) ? `${Math.max(0, st.aegisCharges - used)} / ${st.aegisCharges} left` : `${st.aegisCharges}x per wave`,
+      textStyle(16, COLORS.textGold)).setOrigin(1, 0);
+    const text = this.add.text(tx, y + 40, `Every building inside his aura (${st.auraRadius} tiles), his own too, can't be damaged for ${st.aegisSeconds} s. In a wave, ${IS_TOUCH ? 'tap its hotbar slot' : 'use its hotbar slot or the H key'}.`,
+      bodyStyle(13, COLORS.ink, { wordWrap: { width: tw }, lineSpacing: 2 }));
+    const hgt = Math.max(slot + 16, text.height + 50);
+    const g = this.add.graphics();
+    g.fillStyle(COLORS.frame, 0.25).fillRoundedRect(x, y, w, hgt, 12);
+    g.fillStyle(COLORS.tray, 1).fillRoundedRect(x + 2, y + 3, w - 4, hgt - 5, 11);
+    const sy = y + (hgt - slot) / 2;
+    drawGlossy(g, x + 10, sy, slot, slot, AEGIS_COLOR, { radius: 12, lip: 4 });
+    box.add(g);
+    box.add(fitIcon(this.add.image(x + 10 + slot / 2, sy + slot / 2 - 2, ensureAegisTexture(this)), slot - 14));
     box.add([title, kind, charges, text]);
     return y + hgt;
   }

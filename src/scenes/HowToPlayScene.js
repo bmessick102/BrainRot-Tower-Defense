@@ -85,7 +85,7 @@ const ENEMY_LAYOUT = {
 const CATEGORY_COLORS = { ground: COLORS.button, air: COLORS.buttonBlue, tanks: 0xb03a2e, special: 0x9b59d0, summoned: 0x23a99a };
 
 // Buildings in the order a player meets them: the base, economy, walls, then defenses and traps.
-const BUILDING_ORDER = ['townHall', 'mine', 'storage', 'house', 'rvlab', 'dj', 'fuelStation', 'wall', 'cannon', 'archer', 'mortar', 'wizard', 'firework', 'spear', 'ksi', 'flock', 'ra', 'catapult', 'mousetrap', 'altar', 'queenAltar'];
+const BUILDING_ORDER = ['townHall', 'mine', 'storage', 'house', 'rvlab', 'dj', 'fuelStation', 'wall', 'cannon', 'archer', 'mortar', 'wizard', 'firework', 'spear', 'ksi', 'flock', 'ra', 'catapult', 'mousetrap', 'altar', 'queenAltar', 'mageAltar'];
 
 const categoryOf = (kind) => ENEMY_CATEGORIES.find((c) => c.kinds.includes(kind));
 // The category tabs share the chip row: tabs on the left, the shown category's chips on the right.
@@ -206,6 +206,13 @@ function buildingStats(type) {
     out.push(fixed('Range / guard range', `${Q.attackRange} / ${Q.guardRange} tiles`, Q.guardRange / 10, 0x3cb8ff));
     out.push(fixed('Longest nap', `${Q.maxSleepSeconds} s`, 0.6, 0x9b59d0));
     out.push(fixed('Upgrades cost', `${formatGold(levelStats(type, 2).cost)} → ${rpText(levelStats(type, top).cost)}`, 0.5, RP_COLOR));
+  } else if (type === 'mageAltar') {
+    const M = CONFIG.mageAltar.hero;
+    out.push(grow(type, 'Hero health', 'hp', 0x4cd137));
+    out.push(grow(type, 'Damage per zap', 'heroDamage', 0xff6b3d));
+    out.push(grow(type, 'Sanctuary Aura heal', 'heal', 0x9b4dff, ' HP/s'));
+    out.push(fixed('Zap range / aura', `${M.attackRange} / ${M.auraRadius} tiles`, M.attackRange / 10, 0x3cb8ff));
+    out.push(fixed('Upgrades cost', `${formatGold(levelStats(type, 2).cost)} → ${rpText(levelStats(type, top).cost)}`, 0.5, RP_COLOR));
   } else if (type === 'dj') {
     out.push(grow(type, 'Range', 'range', 0x4cd6ff, ' tiles'));
     out.push(grow(type, 'Gnome work speed', 'gnomeBoostPct', 0xffc93c, '%'));
@@ -269,6 +276,7 @@ function buildingTags(type) {
   else if (type === 'fuelStation') tags.push(['Spells', 0x9b59d0], ['Brewed with Burgers', RP_COLOR], ['Cast from the hotbar', 0xc070ff]);
   else if (type === 'altar') tags.push(['Hero', 0xc98a12], ['Melee', 0xd0583c], ['Sleeps to heal', 0x6c7a89]);
   else if (type === 'queenAltar') tags.push(['Hero', 0xc98a12], ['Ranged', 0x23a99a], ['Ground & air', 0x3c8ad0], ['Sleeps to heal', 0x6c7a89]);
+  else if (type === 'mageAltar') tags.push(['Hero', 0xc98a12], ['Never moves', 0x6c7a89], ['Ground & air', 0x3c8ad0], ['Heals', 0x9b4dff]);
   else if (!isDefense(type)) tags.push(['Economy', COLORS.buttonGood]);
   else if (cfg.trap) tags.push(['Hidden trap', 0x6c7a89]);
   else if (isSupport(type)) tags.push(['Support', 0x23a99a]);
@@ -717,7 +725,7 @@ export class HowToPlayScene extends Phaser.Scene {
     this.wantedArt = buildingLevelKey(type, artTier(level, type));
     const strip = type === 'townHall' ? 'Your base' : formatGold(buildCost(type));
     this.pictureCard(g, buildingTextureKey(this, type, level), index, BUILDING_ORDER.length, strip, type !== 'townHall', animate);
-    if (type === 'altar' || type === 'queenAltar') this.detail.add(addHeroBadge(this, CARD.x + CARD.w - 30, CARD.y + 32, 42, heroKindOf(type))); // the hero's portrait
+    if (type === 'altar' || type === 'queenAltar' || type === 'mageAltar') this.detail.add(addHeroBadge(this, CARD.x + CARD.w - 30, CARD.y + 32, 42, heroKindOf(type))); // the hero's portrait
     // Level 1 / Max level picture toggle under the card.
     const p = this.detail;
     const tw = (CARD.w - 8) / 2, ty = CARD.y + CARD.h + 26;
@@ -728,7 +736,7 @@ export class HowToPlayScene extends Phaser.Scene {
     });
 
     const cfg = typeConfig(type);
-    const sub = type === 'townHall' ? 'The heart of your village' : isDefense(type) ? (cfg.trap ? 'Trap' : isSupport(type) ? 'Support tower' : 'Defense') : type === 'wall' ? 'Wall' : type === 'rvlab' ? 'Research' : type === 'altar' || type === 'queenAltar' ? 'Hero' : type === 'dj' ? 'Utility' : type === 'fuelStation' ? 'Spells' : 'Economy';
+    const sub = type === 'townHall' ? 'The heart of your village' : isDefense(type) ? (cfg.trap ? 'Trap' : isSupport(type) ? 'Support tower' : 'Defense') : type === 'wall' ? 'Wall' : type === 'rvlab' ? 'Research' : type === 'altar' || type === 'queenAltar' || type === 'mageAltar' ? 'Hero' : type === 'dj' ? 'Utility' : type === 'fuelStation' ? 'Spells' : 'Economy';
     let y = this.nameBlock(buildingName(type), sub);
     y = this.tagRow(p, RX, y + 6, buildingTags(type));
     y = this.description(BUILDING_DESCRIPTIONS[type], y + 4) + 10;

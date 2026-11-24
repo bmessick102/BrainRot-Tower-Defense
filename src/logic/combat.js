@@ -682,6 +682,7 @@ export function damageBuilding(state, b, amount, attacker = null) {
   if (b.destroyed || state.gameOver) return;
   if (CONFIG.defenses[b.type]?.trap) return; // hidden traps can't be hit
   if (b.spellInvisT > 0) return;             // nor can buildings under an Invisibility spell (spells.js)
+  if (b._mageAegis) { emit(state, 'aegisBlocked', { id: b.id }); return; } // the Locklair Mage's Arcane Aegis (mage.js)
   const fx = abilityFx(b);
   // Firework Counter-Flare: a free rocket back at whoever hit it (if it can hit them).
   if (fx.counterFire && attacker && attacker.alive && !(b.counterT > 0)) {
@@ -694,6 +695,7 @@ export function damageBuilding(state, b, amount, attacker = null) {
   if (fx.thiefResistPct && attacker && attacker.kind === 'thief') amount *= 1 - fx.thiefResistPct / 100;
   if (fx.lowHpArmor && b.hp < maxHp(b) * 0.3) amount *= 1 - fx.lowHpArmor;
   if (b._repairArmor) amount *= 1 - b._repairArmor / 100;
+  if (b._mageWard) amount *= 1 - b._mageWard; // the Locklair Mage's Warding Light (mage.js)
   if (fx.thiefSlow && attacker && attacker.kind === 'thief' && attacker.alive) applySlow(attacker, fx.thiefSlow, 4);
   let dmg = Math.min(amount, b.hp);
   // Cannon Last Stand: the hit that takes it under 30% (even a fatal one) starts it, once per night;

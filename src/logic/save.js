@@ -72,7 +72,6 @@ export function serializeGame(state, now = new Date()) {
     buildings: state.buildings.map((b) => {
       const out = { id: b.id, type: b.type, level: b.level, col: b.col, row: b.row };
       if (b.type === 'mine') out.stock = Math.round((b.stock || 0) * 100) / 100;
-      if (b.type === 'dj' && b.hype) out.hype = Math.floor(b.hype); // DJ Babyface's meter keeps its charge
       if (HERO_TYPES.includes(b.type) && b.heroSleep > 0) out.heroSleep = Math.round(b.heroSleep * 10) / 10; // a hero's nap (the Brisket King's, the Hatsune Queen's)
       if (b.type === 'wall') out.orient = b.orient || 'x';
       if (b.merged) out.merged = true; // a merged defense (merge.js): its Mastery comes from `mastery`, by type
@@ -316,7 +315,7 @@ export function deserializeGame(obj) {
     if (s.type === 'wall') b.orient = s.orient;
     else b.size = buildingSize(s.type);
     if (s.type === 'mine') b.stock = s.stock || 0; // clamped below, once its perks (Deep Vault) are known
-    if (s.type === 'dj') b.hype = s.hype || 0;
+    if (s.type === 'dj') b.hype = 0; // (a saved charge from before v0.11.1 is dropped: the meter empties between waves)
     if (HERO_TYPES.includes(s.type)) b.heroSleep = s.heroSleep || 0;
     if (isDefense(s.type)) { b.cooldown = 0; b.targetId = null; }
     if (hasAbilities(s.type)) b.picks = picksFor(research, s.type);

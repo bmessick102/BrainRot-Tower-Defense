@@ -42,7 +42,7 @@ const BUILDING_LIT_TOP = 0xe2e6f8;
 const BUILDING_LIT_WARMTH = 0.2;
 const LIGHT_COLORS = {
   townHall: 0xffa23c, mine: 0xffa23c, storage: 0xffb43c, house: 0xffc86b, cannon: 0xff8a3c,
-  archer: 0xff9a3c, mortar: 0xff7a3c, wizard: 0xb066ff, firework: 0xff4d6d, catapult: 0xff5fa8, spear: 0xc98a4a, ksi: 0x6cc8ff, flock: 0x4cd6ff, mousetrap: 0xffc24a, ra: 0xff7a2a, rvlab: 0xffd27a, dj: 0xc070ff, altar: 0xffb04a, queenAltar: 0x7ff0e8, fuelStation: 0xffc24a
+  archer: 0xff9a3c, mortar: 0xff7a3c, wizard: 0xb066ff, firework: 0xff4d6d, catapult: 0xff5fa8, spear: 0xc98a4a, ksi: 0x6cc8ff, flock: 0x4cd6ff, mousetrap: 0xffc24a, ra: 0xff7a2a, rvlab: 0xffd27a, dj: 0xc070ff, altar: 0xffb04a, queenAltar: 0x7ff0e8, mageAltar: 0xc070ff, fuelStation: 0xffc24a
 };
 
 // Shared rubble art for any building without its own bld_<type>_destroyed picture. Every variant that
@@ -77,7 +77,7 @@ export const LEVELS_PER_ART = 2;
 // Babyface: a picture per level, and a level without one yet shows the closest lower picture).
 // Catapult: 5 levels, a picture each. (The Spear Thrower, 10 levels / 5 pictures, and the Fuel Station, 8 levels /
 // 4 pictures, use the usual picture per 2 levels and grow on the levels in between, like the Cannon.)
-const LEVELS_PER_ART_BY_TYPE = { rvlab: 1, wall: 1, dj: 1, catapult: 1, altar: 4, queenAltar: 4 }; // (the heroes' altars: 20 levels, a picture every 4: v0.11; every 3 for 15 levels in v0.10.1)
+const LEVELS_PER_ART_BY_TYPE = { rvlab: 1, wall: 1, dj: 1, catapult: 1, altar: 4, queenAltar: 4, mageAltar: 4 }; // (the heroes' altars: 20 levels, a picture every 4: v0.11; every 3 for 15 levels in v0.10.1)
 
 /** Which picture (1-based) a building level shows. */
 export function artTier(level, type = null) {
@@ -133,8 +133,12 @@ export function isMergedStandIn(scene, b) {
 }
 
 /** The picture a building shows: a merged one's own art, else its level's (buildingTextureKey). Never a missing texture. */
+// Buildings that stay standing when destroyed (no rubble): the Locklair Mage's statue, knocked out (v0.12, the user's call;
+// greyed with knocked-out stars, MageFx.js).
+export const STANDS_WHEN_DESTROYED = new Set(['mageAltar']);
+
 export function buildingPictureKey(scene, b, rubbleRoll = 0) {
-  return mergedArtKey(scene, b) || buildingTextureKey(scene, b.type, b.level, b.destroyed, rubbleRoll);
+  return mergedArtKey(scene, b) || buildingTextureKey(scene, b.type, b.level, b.destroyed && !STANDS_WHEN_DESTROYED.has(b.type), rubbleRoll);
 }
 
 /** How much bigger a merged building is drawn than its max-level picture (1 when not merged). */
@@ -161,7 +165,10 @@ export const MERGED_MUZZLE = {
   bld_spear_merged_dl: { x: 0.16, y: 0.72 }, bld_spear_merged_dr: { x: 0.85, y: 0.72 },
   bld_spear_merged_ul: { x: 0.10, y: 0.89 }, bld_spear_merged_ur: { x: 0.93, y: 0.92 },
   bld_ksi_merged: { x: 0.68, y: 0.84 }, // the KSI Frost Fortress's right-hand Prime bottle (v0.8.11; the left one is at 0.33, 0.84)
-  bld_ra_merged: { x: 0.5, y: 0.845 } // the Great Pyramid of Rah's third eye: where its beam / Solar Lance leaves (GameScene.drawBeams)
+  bld_ra_merged: { x: 0.5, y: 0.845 }, // the Great Pyramid of Rah's third eye: where its beam / Solar Lance leaves (GameScene.drawBeams)
+  // The Locklair Mage's staff crystal (v0.12): where his zap leaves and his staff glows (MageFx.js), on each of his 5 pictures.
+  bld_mageAltar_lv1: { x: 0.708, y: 0.916 }, bld_mageAltar_lv2: { x: 0.712, y: 0.913 }, bld_mageAltar_lv3: { x: 0.71, y: 0.907 },
+  bld_mageAltar_lv4: { x: 0.677, y: 0.904 }, bld_mageAltar_lv5: { x: 0.67, y: 0.904 }
 };
 
 /** The gear that marks merged buildings (ui_merge_gear; nothing is drawn when its art is missing). */
@@ -187,7 +194,7 @@ const DEFAULT_SPRITE_SCALE = 0.75;
 // KSI Tower: a tall, slim tower like the Locklair's, a little narrower than the default. (The merged KSI Frost Fortress
 // stands further back on its plot instead, CONFIG.merges.ksi.art.ground, so it fits the tile's outline at this size.)
 // Mortar: 0.585 (was 0.65, v0.8: 10% smaller at every level so the 25% bigger merged Triple Mortar stands out).
-const SPRITE_SCALE = { mortar: 0.585, cannon: 0.63, firework: 0.52, catapult: 0.66, spear: 0.66, ksi: 0.62, flock: 0.9, mousetrap: 1.1, ra: 0.40, rvlab: 0.77, dj: 0.77, altar: 0.66, queenAltar: 0.66, fuelStation: 0.8 };
+const SPRITE_SCALE = { mortar: 0.585, cannon: 0.63, firework: 0.52, catapult: 0.66, spear: 0.66, ksi: 0.62, flock: 0.9, mousetrap: 1.1, ra: 0.40, rvlab: 0.77, dj: 0.77, altar: 0.66, queenAltar: 0.66, mageAltar: 0.78, fuelStation: 0.8 };
 
 // Buildings grow as they level up: this share of their normal size at Level 1, up to LEVEL_SIZE.max at
 // their top level (Level 10, or the type's own top level). They only grow on upgrades that keep the same
@@ -235,7 +242,7 @@ function topLevelOf(type) {
 // Flat pads whose picture shows thick sides: the share of the picture's height (from its bottom) where its
 // side corners meet the ground. That point goes on the footprint's center, so the pad sits flush with its
 // tiles instead of floating above them. (The Brisket King's altar: about 0.44 in all 5 pictures.)
-const GROUND_SHARE = { altar: 0.44, queenAltar: 0.45 }; // (the Hatsune Queen's: about 0.45)
+const GROUND_SHARE = { altar: 0.44, queenAltar: 0.45, mageAltar: 0.21 }; // (the Hatsune Queen's: about 0.45; the Locklair Mage's pedestal meets the ground about 21% up his pictures)
 
 export function spriteScale(type) {
   return SPRITE_SCALE[type] ?? DEFAULT_SPRITE_SCALE;
@@ -322,7 +329,7 @@ export class BuildingView {
     this.chipText = scene.add.text(0, 0, '', textStyle(13)).setOrigin(0.5);
     this.badge = scene.add.container(0, 0, [this.chipGfx, this.chipText]).setDepth(OVERLAY_DEPTH);
     this.chipKey = '';
-    this.hpBar = new HealthBar(scene, { width: Math.max(48, b.size * 24), height: 12, depth: OVERLAY_DEPTH, color: HP_TEAM.player, badge: true });
+    this.hpBar = new HealthBar(scene, { width: Math.max(48, b.size * 24), height: 12, depth: OVERLAY_DEPTH, color: HP_TEAM.player, badge: true, badgeStyle: b.type === 'mageAltar' ? 'crown' : 'circle' }); // (the Locklair Mage: a hero's crown with his level)
     this.coin = b.type === 'mine' ? scene.add.image(0, 0, TEX.coin).setDepth(OVERLAY_DEPTH + 1).setVisible(false) : null;
     // DJ Babyface: its hype meter (during waves, or while charged) and a bobbing "DROP!" once it's full.
     this.hypeGfx = b.type === 'dj' ? scene.add.graphics().setDepth(OVERLAY_DEPTH) : null;
@@ -387,7 +394,7 @@ export class BuildingView {
     // Rubble is a low pile that enemies, gnomes and the hero walk across (a destroyed building is open ground):
     // drawn from its footprint's back corner, so anyone standing on it or in front of it draws on top (v0.6.3;
     // at the standing building's front-corner depth, enemies crossing it vanished under the picture).
-    if (b.destroyed) this.sprite.setDepth(b.col + b.row - 0.01);
+    if (b.destroyed && !STANDS_WHEN_DESTROYED.has(b.type)) this.sprite.setDepth(b.col + b.row - 0.01);
     const top = front.y - this.sprite.displayHeight;
     // Click bounce (bottom origin, so it squashes into the ground and springs up).
     if (this.bx !== 1 || this.by !== 1) this.sprite.setScale(this.sprite.scaleX * this.bx, this.sprite.scaleY * this.by);
@@ -396,7 +403,8 @@ export class BuildingView {
     // Labels only when they're wanted (hovered, selected, or edit mode), so a full village stays readable. The
     // health bar shows whenever the building is damaged (with the level on its left end).
     const labels = this.scene.showLabels ? this.scene.showLabels(b.id) : true;
-    const damaged = !b.destroyed && b.hp < max;
+    // (The Locklair Mage is a hero: his crown health bar always shows, like the other heroes'.)
+    const damaged = !b.destroyed && (b.hp < max || b.type === 'mageAltar');
     const picks = b.destroyed ? [] : picksOf(b);
     // Every building with a perk tree shows its 5-slot perk bar (empty until perks are researched), except where the
     // scene hides it (GameScene.showPips: not in edit mode). Then pipsW is 0 and the chip is sized as the badge alone.
@@ -467,6 +475,7 @@ export class BuildingView {
     if (!this.flashUntil) {
       const moon = this.scene.ambientTint ?? 0xffffff;
       if (b.sprung) this.sprite.setTint(0x7a7a7a); // a sprung trap looks spent until it resets
+      else if (b.destroyed && STANDS_WHEN_DESTROYED.has(b.type)) this.sprite.setTint(0x7c7c8e); // the Locklair Mage knocked out: a grey statue
       // A copy you can merge with (picking the second building, GameScene.beginMergePick): a pulsing gold glow.
       else if (this.scene.mergeTargets && this.scene.mergeTargets.has(b.id)) this.sprite.setTint(lerpColor(0xffc040, 0xfff6d0, 0.5 + 0.5 * Math.sin(time * 0.008)));
       else if (b.silencedT > 0 && !b.destroyed) this.sprite.setTint(0x8a8a8a); // silenced by John Pork: switched off, grey

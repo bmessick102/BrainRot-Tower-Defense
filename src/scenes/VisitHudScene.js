@@ -116,7 +116,7 @@ export class VisitHudScene extends Phaser.Scene {
       fitIcon(pic, PIC.w - 20, PIC.h - 40);
       c.add(pic);
     }
-    if (b.type === 'altar' || b.type === 'queenAltar') c.add(addHeroBadge(this, pad + PIC.w - 22, top + 22, 32, heroKindOf(b.type))); // the hero's portrait
+    if (b.type === 'altar' || b.type === 'queenAltar' || b.type === 'mageAltar') c.add(addHeroBadge(this, pad + PIC.w - 22, top + 22, 32, heroKindOf(b.type))); // the hero's portrait
     if (merge && this.textures.exists(MERGE_GEAR)) c.add(fitIcon(this.add.image(pad + PIC.w - 20, top + 20, MERGE_GEAR), 32)); // merged: the gear
     const col = pad + PIC.w + 16, colW = W - col - pad;
     let sy = top + 2;

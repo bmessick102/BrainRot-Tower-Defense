@@ -3,7 +3,8 @@
 //   - Work playlist: gnomes mining or repairing a building in range work gnomeBoostPct% faster.
 //   - Drop the Beat: every enemy defeated (anywhere, during a wave) fills its hype meter (a packed enemy fills
 //     it as many times as it stands for). Full (hypeNeeded), the player clicks the booth during a wave and every
-//     defense in range fires beatPct% faster for beatSeconds. The meter keeps its charge between waves.
+//     defense in range fires beatPct% faster for beatSeconds. The meter empties when a wave is beaten (v0.11.1; it
+//     used to keep its charge between waves), so every wave starts from zero.
 //   - Light show: while it's dark, enemies in range aren't restless (no night damage or speed bonus; the night
 //     loot bonus still applies). See enrage.js.
 import { levelStats, maxHp } from './buildings.js';

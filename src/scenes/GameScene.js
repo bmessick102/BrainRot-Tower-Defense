@@ -51,7 +51,9 @@ import { checkMerge } from '../logic/merge.js';
 import { NetFx } from '../objects/NetFx.js';
 import { WallFx } from '../objects/WallFx.js';
 import { HarpoonFx } from '../objects/HarpoonFx.js';
-import { ZapFx } from '../objects/ZapFx.js';
+import { ZapFx, MAGE_ZAP_COLORS } from '../objects/ZapFx.js';
+import { MageFx } from '../objects/MageFx.js';
+import { mageStats } from '../logic/mage.js';
 import { zoomLimit, dragThreshold, renderScale, toView } from '../renderScale.js';
 import { MapDetail } from '../objects/MapDetail.js';
 
@@ -90,6 +92,8 @@ const FADE_ALPHA = 0.35;
 const FADE_OVERLAP = 0.12;
 // Ground plots under buildings.
 // KSI Frost Fortress: at most one "SHATTER!" tag this often (a chain can burst many enemies in a moment).
+// The Locklair Mage's Arcane Aegis: at most one "blocked" ring this often (many hits land on covered buildings).
+const AEGIS_SPARK_MS = 150;
 const SHATTER_TAG_MS = 350;
 
 // A level-up that reaches a new ability tier: the unlock sound starts this long before the upgrade sound ends.
@@ -145,6 +149,8 @@ export class GameScene extends Phaser.Scene {
     this.wallFx = new WallFx(this); // Gandolf the Grand's walls (wizardWall.js)
     this.harpoonFx = new HarpoonFx(this); // Harpoon Ballista's Reel In chains (harpoon.js)
     this.zapFx = new ZapFx(this); // F.L.O.C.K Mothership's Triple Zap beams (flockZap.js)
+    this.mageZapFx = new ZapFx(this, { colors: MAGE_ZAP_COLORS }); // the Locklair Mage's staff zaps (mage.js), purple
+    this.mageFx = new MageFx(this); // ...and his staff glow, aura, Arcane Aegis dome, Zzz and knocked-out stars
     // The next wave's arrow + enemy counts at each entrance it attacks from (UIScene feeds the counts).
     this.waveMarkers = new WaveMarkers(this);
     // Fog over the back end of all four paths, where enemies come onto the map: always on, under those markers.
@@ -448,6 +454,8 @@ export class GameScene extends Phaser.Scene {
     this.wallFx.update(time);
     this.harpoonFx.update(time);
     this.zapFx.update(time);
+    this.mageZapFx.update(time);
+    this.mageFx.update(time);
     this.waveMarkers.update();
     this.spawnFog.update();
   }
@@ -973,7 +981,7 @@ export class GameScene extends Phaser.Scene {
     if (collected || canSelect) this.views.buildings.get(b.id)?.pop(); // click feedback
     if (canSelect) {
       // Either hero's altar makes the same altar sound (her own line plays only when you click her, above).
-      const isAltar = b.type === 'altar' || b.type === 'queenAltar';
+      const isAltar = b.type === 'altar' || b.type === 'queenAltar' || b.type === 'mageAltar';
       playSfx(this, isAltar && this.cache.audio.exists(SFX.altarSelect) ? SFX.altarSelect : SFX.buildingSelect);
       if (this.selectedId !== b.id) this.select(b.id); // already selected: stays as it is (Info opens the panel)
     }
@@ -1034,6 +1042,10 @@ export class GameScene extends Phaser.Scene {
       // The Hatsune Queen's guard range: she shoots enemies (ground and air) inside it.
       const c = footprintCenter(b);
       this.rangeCircle.show(c.x, c.y, queenStats(b).guardRange, 0);
+    } else if (b.type === 'mageAltar') {
+      // The Locklair Mage's zap range (his aura, a little smaller, shows on the ground in raids).
+      const c = footprintCenter(b);
+      this.rangeCircle.show(c.x, c.y, mageStats(b).attackRange, 0);
     } else if (isDefense(b.type)) {
       const cfg = typeConfig(b.type);
       const c = footprintCenter(b);
@@ -1881,6 +1893,23 @@ export class GameScene extends Phaser.Scene {
     on('flockZap', (d) => {
       this.zapFx.add(d, this.time.now);
       playSfxCapped(this, SPELL_SFX.lightning, 1, { volume: 0.3 });
+    });
+    // The Locklair Mage (v0.12): his staff zap (a purple bolt from the crystal, his own sound, one at a time), Arcane
+    // Aegis going up (a flash over his aura), and hits it stops (a small violet ring, at most every AEGIS_SPARK_MS).
+    on('mageZap', (d) => {
+      this.mageZapFx.add(d, this.time.now);
+      playSfxCapped(this, SFX.mageAttack, 1, { volume: 0.45 });
+    });
+    on('mageAegis', (d) => {
+      const s = gridToScreen(d.x, d.y);
+      splashRing(this, s.x, s.y, d.radius, 0xffd98a, { duration: 650, depth: 2650 });
+      playSfxCapped(this, SPELL_SFX.invisibility, 1, { volume: 0.5 });
+    });
+    on('aegisBlocked', (d) => {
+      if (this.time.now - (this.lastAegisSpark || 0) < AEGIS_SPARK_MS) return;
+      this.lastAegisSpark = this.time.now;
+      const v = this.views.buildings.get(d.id);
+      if (v && v.sprite) splashRing(this, v.sprite.x, v.sprite.y - v.sprite.displayHeight * 0.5, 0.35, 0xe0b8ff, { duration: 260, depth: 2652 });
     });
     // KSI Frost Fortress: Shatter. A chilled enemy bursts: an icy ring over the shards' reach, shards flying out, an ice
     // crack, and "SHATTER!" (at most every SHATTER_TAG_MS, so a chain through a crowd isn't a wall of text).

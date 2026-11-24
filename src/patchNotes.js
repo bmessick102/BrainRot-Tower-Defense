@@ -2,7 +2,7 @@
 // once per `version` (the first time the title screen opens after an update; saved in ibtd.patchNotes), and its
 // "What's New" button opens it any time. Keep `version` equal to package.json's for the release it describes.
 //
-// One tab per minor update (v0.7.1): PATCH_NOTES is the newest (its tab is "v0.11 · Latest"), PATCH_HISTORY the older
+// One tab per minor update (v0.7.1): PATCH_NOTES is the newest (its tab is "v0.12 · Latest"), PATCH_HISTORY the older
 // ones, newest first. Each has `release` (the tab's name: '0.7'), `version` (its newest patch) and `sections`.
 // When a new minor update ships, the current PATCH_NOTES content moves to the front of PATCH_HISTORY.
 //
@@ -18,28 +18,20 @@
 const allEntries = (release) => release.sections.flatMap((s) => s.entries);
 
 export const PATCH_NOTES = {
-  release: '0.11',
-  version: '0.11.0',
-  title: "What's New in v0.11",
+  release: '0.12',
+  version: '0.12.0',
+  title: "What's New in v0.12",
   sections: [
     {
       type: 'feature',
       entries: [
         {
-          version: '0.11.0', icon: { building: 'townHall', level: 19 }, title: 'Village Halls 16 to 20',
-          text: 'Village Halls now go up to 20, with five new looks from Hall 11 (a new one every 2 levels). Each new hall allows another Cannon and Locklair Tower, more of other defenses in turn, and 12 more walls.'
+          version: '0.12.0', icon: { building: 'mageAltar', level: 20 }, title: 'New hero: the Locklair Mage (from Village Hall 10)',
+          text: 'A hero who never leaves his pedestal. His staff zaps one enemy at a time, ground or air, for heavy damage, and his Sanctuary Aura heals the buildings and heroes around him. Destroyed, he stays knocked out until the raid ends.'
         },
         {
-          version: '0.11.0', icon: { building: 'wall', level: 10 }, title: 'Two new wall levels',
-          text: 'Walls now have 10 levels: a dark stone tower at Level 6 and a red skull fortress at Level 10. The skull and lava walls moved up to Levels 7 to 9. Your walls keep their look and strength.'
-        },
-        {
-          version: '0.11.0', icon: { hero: true }, title: 'Both heroes go to Level 20',
-          text: 'The Brisket King and the Hatsune Queen now have 20 levels, one more per Village Hall from 16 to 20, paid in Burgers. Their altars change look every 4 levels.'
-        },
-        {
-          version: '0.11.0', icon: { texture: 'ui_achievement' }, title: 'New achievements: Village Halls 15 and 20',
-          text: 'Brainrot Empire (Village Hall 15) pays 60,000 gold and Eternal Brainrot (Village Hall 20) 150,000. Find them in the Builder tab.'
+          version: '0.12.0', icon: { building: 'mageAltar', level: 10 }, title: 'Arcane Aegis',
+          text: "The Locklair Mage's ability, on the hotbar (or the H key) once per wave: for 4 seconds nothing inside his aura can be damaged, his own pedestal included. He naps after every raid, so plan around it."
         }
       ]
     },
@@ -47,12 +39,12 @@ export const PATCH_NOTES = {
       type: 'change',
       entries: [
         {
-          version: '0.11.0', icon: { building: 'wall', level: 6 }, title: 'Walls upgrade every 2 Village Halls',
-          text: 'A new wall level opens at Village Halls 1, 3, 5 and so on, up to Level 10 at Hall 19. Walls already above what your hall allows stay as they are, and upgrade again once your hall catches up.'
+          version: '0.12.0', icon: { texture: 'bld_flock_merged' }, title: 'New lightning for the F.L.O.C.K Mothership',
+          text: 'Its Triple Zap now strikes as crackling, forking bolts of blue-white lightning instead of straight beams.'
         },
         {
-          version: '0.11.0', icon: { texture: 'hero_queen_select' }, title: 'The Hatsune Queen levels like the Brisket King',
-          text: 'Her top level now matches your Village Hall, the same as the Brisket King: Levels 1 to 8 all open at Village Hall 8, then one more per hall.'
+          version: '0.12.0', icon: { building: 'dj', level: 1 }, title: "DJ Babyface's hype meter empties after each wave",
+          text: 'Every wave now starts with an empty meter, so it no longer shows a half-full charge between waves.'
         }
       ]
     }
@@ -62,6 +54,47 @@ export const PATCH_NOTES = {
 
 /** Older updates, newest first: one What's New tab each (players can read them any time). */
 export const PATCH_HISTORY = [
+  {
+    release: '0.11',
+    version: '0.11.0',
+    sections: [
+      {
+        type: 'feature',
+        entries: [
+          {
+            version: '0.11.0', icon: { building: 'townHall', level: 19 }, title: 'Village Halls 16 to 20',
+            text: 'Village Halls now go up to 20, with five new looks from Hall 11 (a new one every 2 levels). Each new hall allows another Cannon and Locklair Tower, more of other defenses in turn, and 12 more walls.'
+          },
+          {
+            version: '0.11.0', icon: { building: 'wall', level: 10 }, title: 'Two new wall levels',
+            text: 'Walls now have 10 levels: a dark stone tower at Level 6 and a red skull fortress at Level 10. The skull and lava walls moved up to Levels 7 to 9. Your walls keep their look and strength.'
+          },
+          {
+            version: '0.11.0', icon: { hero: true }, title: 'Both heroes go to Level 20',
+            text: 'The Brisket King and the Hatsune Queen now have 20 levels, one more per Village Hall from 16 to 20, paid in Burgers. Their altars change look every 4 levels.'
+          },
+          {
+            version: '0.11.0', icon: { texture: 'ui_achievement' }, title: 'New achievements: Village Halls 15 and 20',
+            text: 'Brainrot Empire (Village Hall 15) pays 60,000 gold and Eternal Brainrot (Village Hall 20) 150,000. Find them in the Builder tab.'
+          }
+        ]
+      },
+      {
+        type: 'change',
+        entries: [
+          {
+            version: '0.11.0', icon: { building: 'wall', level: 6 }, title: 'Walls upgrade every 2 Village Halls',
+            text: 'A new wall level opens at Village Halls 1, 3, 5 and so on, up to Level 10 at Hall 19. Walls already above what your hall allows stay as they are, and upgrade again once your hall catches up.'
+          },
+          {
+            version: '0.11.0', icon: { texture: 'hero_queen_select' }, title: 'The Hatsune Queen levels like the Brisket King',
+            text: 'Her top level now matches your Village Hall, the same as the Brisket King: Levels 1 to 8 all open at Village Hall 8, then one more per hall.'
+          }
+        ]
+      }
+    ],
+    get entries() { return allEntries(this); }
+  },
   {
     release: '0.10',
     version: '0.10.3',

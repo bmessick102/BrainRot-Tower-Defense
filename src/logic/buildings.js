@@ -8,7 +8,7 @@ import { researchPoints, needRpReason } from './researchPoints.js';
 
 // Every building type (saves only accept these). New types must be added here too; a test checks that the
 // defense / economy / wall lists are all covered.
-export const BUILDING_TYPES = ['townHall', 'mine', 'storage', 'house', 'cannon', 'archer', 'mortar', 'wizard', 'firework', 'spear', 'ksi', 'mousetrap', 'flock', 'catapult', 'ra', 'rvlab', 'dj', 'altar', 'queenAltar', 'fuelStation', 'wall'];
+export const BUILDING_TYPES = ['townHall', 'mine', 'storage', 'house', 'cannon', 'archer', 'mortar', 'wizard', 'firework', 'spear', 'ksi', 'mousetrap', 'flock', 'catapult', 'ra', 'rvlab', 'dj', 'altar', 'queenAltar', 'mageAltar', 'fuelStation', 'wall'];
 // Shop order = unlock order; the Diddypult (Village Hall 10) is always last.
 export const DEFENSE_TYPES = ['cannon', 'archer', 'mortar', 'wizard', 'firework', 'spear', 'ksi', 'mousetrap', 'flock', 'ra', 'catapult'];
 export const ECONOMY_TYPES = ['mine', 'storage', 'house'];
@@ -19,9 +19,9 @@ export const RESEARCH_TYPES = ['rvlab'];
 export const UTILITY_TYPES = ['dj'];
 // Spell buildings (the Fuel Station: brews spells for the hotbar with RP, see spells.js). In the shop's Economy tab.
 export const SPELL_TYPES = ['fuelStation'];
-// Hero altars: the Brisket King's (hero.js) and, from Village Hall 8, the Hatsune Queen's (queen.js). Each hero guards
-// her or his altar and levels up with it.
-export const HERO_TYPES = ['altar', 'queenAltar'];
+// Hero altars: the Brisket King's (hero.js), from Village Hall 8 the Hatsune Queen's (queen.js) and from Village Hall 10
+// the Locklair Mage (mage.js; he and his pedestal are one building). Each hero levels up with his or her building.
+export const HERO_TYPES = ['altar', 'queenAltar', 'mageAltar'];
 /** Wall orientations: 'x' runs along columns (N wide, 1 tall), 'y' along rows (1 wide, N tall). */
 export const WALL_ORIENTS = ['x', 'y'];
 
@@ -51,6 +51,7 @@ export function typeConfig(type) {
   if (type === 'dj') return CONFIG.dj;
   if (type === 'altar') return CONFIG.altar;
   if (type === 'queenAltar') return CONFIG.queenAltar;
+  if (type === 'mageAltar') return CONFIG.mageAltar;
   if (type === 'fuelStation') return CONFIG.fuelStation;
   return CONFIG.defenses[type];
 }
