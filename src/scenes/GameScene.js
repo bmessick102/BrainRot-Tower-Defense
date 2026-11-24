@@ -71,6 +71,14 @@ const BEAM_STAGES = [
   { width: 5, color: 0xff4a1a, glow: 0xff2a00 },
   { width: 8, color: 0xfff0b0, glow: 0xff5a1a }
 ];
+// Great Pyramid of Rah: a beam at lance heat is drawn as a white-hot Solar Lance (white core, red body, crimson edge;
+// normal blending so it reads over the bright map) from the muzzle through its target to the end of its range, with
+// LANCE_PULSES bright pulses running along it. Past the target it runs at LANCE_END_LIFT px above the ground (a ground
+// enemy's middle). Lance hits: one number and a small spark per enemy every LANCE_TEXT_MS, at most LANCE_SPARK_MAX
+// sparks per LANCE_SPARK_MS across the map.
+const LANCE = { edge: 0x9e0b1f, body: 0xff2a2a, core: 0xffffff, glow: 0xff3a3a, width: 11 };
+const LANCE_PULSES = 3, LANCE_PULSE_SPEED = 0.0011, LANCE_END_LIFT = 18;
+const LANCE_TEXT_MS = 450, LANCE_SPARK_MS = 250, LANCE_SPARK_MAX = 8;
 const FLOCK_SCAN_MS = 2600;
 const FRIGO_SOUND_MS = 3500; // Frigo Camillo's footsteps: the Freeze spell's sound every this long while one walks
 const CHATTER_SECONDS = [6, 14]; // how often an enemy says its voice line while it's on the map // how often a F.L.O.C.K Tower pulses its scan ring during attacks
@@ -167,7 +175,7 @@ export class GameScene extends Phaser.Scene {
     this.endingGame = false;
     // The scene object is reused for every game: drop what the last one (maybe another village) left behind.
     // Its graphics were destroyed with it, and a cached key would skip the first redraw.
-    this.beamGfx = null; this.ringGfx = null; this.beamGlows = [];
+    this.beamGfx = null; this.ringGfx = null; this.beamGlows = []; this.lanceGfx = null; this.lanceFx = null;
     this.djGroundGfx = null; this.djGroundKey = null; this.djAffected = null;
     this.swapPreview = null; this.layout = null; this.layoutList = null;
     this.chatterIn = undefined; this.flockScanT = 0; this.breakerAnnounced = false; this.beamText = null;
@@ -280,10 +288,12 @@ export class GameScene extends Phaser.Scene {
     if (!this.beamGfx) {
       this.beamGfx = this.add.graphics().setDepth(2650).setBlendMode('ADD');
       this.ringGfx = this.add.graphics().setDepth(-4150).setBlendMode('ADD'); // Fire Rings: on the ground
+      this.lanceGfx = this.add.graphics().setDepth(2650); // Great Pyramid of Rah: every Solar Lance (one object for all)
       this.beamGlows = [];
     }
-    const g = this.beamGfx;
+    const g = this.beamGfx, lg = this.lanceGfx;
     g.clear();
+    lg.clear();
     this.ringGfx.clear();
     let n = 0;
     const bodyMid = (ev) => ({ x: ev.sprite.x, y: ev.sprite.y - ev.sprite.originY * ev.sprite.displayHeight + 0.5 * ev.sprite.displayHeight });
@@ -298,6 +308,29 @@ export class GameScene extends Phaser.Scene {
         glow.setVisible(true).setPosition(p.x, p.y).setTint(st.glow).setDisplaySize(w * 7 * k * flick, w * 7 * k * flick).setAlpha(0.9);
         n++;
       }
+    };
+    const glowAt = (p, size, tint) => {
+      const glow = this.beamGlows[n] || (this.beamGlows[n] = this.add.image(0, 0, TEX.light).setBlendMode('ADD').setDepth(2651));
+      glow.setVisible(true).setPosition(p.x, p.y).setTint(tint).setDisplaySize(size, size).setAlpha(0.9);
+      n++;
+    };
+    // Solar Lance: muzzle a -> target t -> e (the line's far end, LANCE_END_LIFT above the ground), pulses running out.
+    const lance = (a, t, e, flick, phase) => {
+      const pts = [a, t, e], w = LANCE.width * flick;
+      lg.lineStyle(w * 1.7, LANCE.edge, 0.6).strokePoints(pts, false);
+      lg.lineStyle(w, LANCE.body, 0.95).strokePoints(pts, false);
+      lg.lineStyle(Math.max(2, w * 0.42), LANCE.core, 1).strokePoints(pts, false);
+      const l1 = Math.hypot(t.x - a.x, t.y - a.y), l2 = Math.hypot(e.x - t.x, e.y - t.y), L = l1 + l2 || 1;
+      for (let i = 0; i < LANCE_PULSES; i++) {
+        const d = (((time * LANCE_PULSE_SPEED + phase + i / LANCE_PULSES) % 1) * L);
+        const p = d <= l1 ? { x: a.x + ((t.x - a.x) * d) / (l1 || 1), y: a.y + ((t.y - a.y) * d) / (l1 || 1) }
+          : { x: t.x + ((e.x - t.x) * (d - l1)) / (l2 || 1), y: t.y + ((e.y - t.y) * (d - l1)) / (l2 || 1) };
+        lg.fillStyle(LANCE.edge, 0.7).fillCircle(p.x, p.y, w * 0.95);
+        lg.fillStyle(LANCE.core, 1).fillCircle(p.x, p.y, w * 0.55);
+      }
+      glowAt(a, w * 4.5, LANCE.glow);
+      glowAt(t, w * 5.5, LANCE.glow);
+      glowAt(e, w * 3, LANCE.glow);
     };
     const waveOn = isWaveActive(this.gs);
     // Diddypult Oil Moat: a pink slick around the catapult during attacks.
@@ -328,13 +361,17 @@ export class GameScene extends Phaser.Scene {
         const c = footprintCenter(b), sc = gridToScreen(c.x, c.y);
         drawFireRing(this.ringGfx, sc.x, sc.y, fx.ringRadius, time, b.col);
       }
-      const a = { x: bv.sprite.x, y: bv.sprite.y - BEAM_MUZZLE * bv.sprite.displayHeight };
+      // (a merged Great Pyramid: from its picture's eye, MERGED_MUZZLE)
+      const a = bv.muzzlePoint() || { x: bv.sprite.x, y: bv.sprite.y - BEAM_MUZZLE * bv.sprite.displayHeight };
       const flick = 1 + 0.18 * Math.sin(time * 0.05 + b.col);
-      // Every beam (Prism: up to 3), then the chains jumping on from their targets (thinner).
-      for (const bm of b.beams || []) {
+      // Every beam (Prism: up to 3; a Great Pyramid's hot ones as Solar Lances), then the chains from their targets (thinner).
+      (b.beams || []).forEach((bm, i) => {
         const ev = this.views.enemies.get(bm.targetId);
-        if (ev && ev.sprite) beam(a, bodyMid(ev), bm.stage, flick);
-      }
+        if (!ev || !ev.sprite) return;
+        if (!bm.lance) { beam(a, bodyMid(ev), bm.stage, flick); return; }
+        const end = gridToScreen(bm.lance.x2, bm.lance.y2);
+        lance(a, bodyMid(ev), { x: end.x, y: end.y - LANCE_END_LIFT }, flick, i / 3 + b.col * 0.13);
+      });
       for (const ch of b.beamChains || []) {
         const from = this.views.enemies.get(ch.from), to = this.views.enemies.get(ch.to);
         if (from && from.sprite && to && to.sprite) beam(bodyMid(from), bodyMid(to), ch.stage, flick, 0.6);
@@ -1397,7 +1434,7 @@ export class GameScene extends Phaser.Scene {
 
     on('enemyHit', (d) => {
       const v = this.views.enemies.get(d.id);
-      const tick = d.source === 'pool' || d.source === 'beam' || d.source === 'burn' || d.source === 'ring' || d.source === 'poison' || d.source === 'bleed';
+      const tick = d.source === 'pool' || d.source === 'beam' || d.source === 'lance' || d.source === 'burn' || d.source === 'ring' || d.source === 'poison' || d.source === 'bleed';
       if (v && !tick) v.flash(this.time.now); // pool / beam / burn ticks would keep them white
       const s = enemyPos(d);
       if (d.source === 'beam') {
@@ -1408,6 +1445,19 @@ export class GameScene extends Phaser.Scene {
           const lift = v && v.sprite ? v.sprite.y - v.sprite.originY * v.sprite.displayHeight + 0.35 * v.sprite.displayHeight - s.y : -20;
           floatText(this, s.x + Phaser.Math.Between(-8, 8), s.y + lift, `${Math.round(d.amount * 5)}/s`, '#ffb36b', 13);
         }
+        return;
+      }
+      if (d.source === 'lance') {
+        // Great Pyramid of Rah's Solar Lance: a crimson "/s" number and a small white-red spark per enemy now and then
+        // (every enemy on the line is hit 5 times a second), with a cap on sparks across the map.
+        const fx = this.lanceFx || (this.lanceFx = { text: new Map(), windowAt: 0, sparks: 0 });
+        if (this.time.now - (fx.text.get(d.id) || 0) <= LANCE_TEXT_MS) return;
+        fx.text.set(d.id, this.time.now);
+        if (fx.text.size > 200) fx.text.clear();
+        const lift = v && v.sprite ? v.sprite.y - v.sprite.originY * v.sprite.displayHeight + 0.5 * v.sprite.displayHeight - s.y : -18;
+        floatText(this, s.x + Phaser.Math.Between(-8, 8), s.y + lift - 10, `${Math.round(d.amount * 5)}/s`, '#ff8a9a', 12);
+        if (this.time.now - fx.windowAt > LANCE_SPARK_MS) { fx.windowAt = this.time.now; fx.sparks = 0; }
+        if (fx.sparks++ < LANCE_SPARK_MAX) splashRing(this, s.x, s.y + lift, 0.22, 0xffd0d0, { duration: 220, depth: 2652 });
         return;
       }
       if (d.source === 'pool' || d.source === 'burn' || d.source === 'ring' || d.source === 'poison' || d.source === 'bleed' || d.source === 'shatter') {

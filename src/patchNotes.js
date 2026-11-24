@@ -19,9 +19,18 @@ const allEntries = (release) => release.sections.flatMap((s) => s.entries);
 
 export const PATCH_NOTES = {
   release: '0.10',
-  version: '0.10.1',
-  title: "What's New in v0.10.1",
+  version: '0.10.2',
+  title: "What's New in v0.10.2",
   sections: [
+    {
+      type: 'feature',
+      entries: [
+        {
+          version: '0.10.2', icon: { texture: 'bld_ra_merged' }, title: 'Towers of Rah can merge: the Great Pyramid of Rah',
+          text: "Two Level 8 Towers of Rah merge into the Great Pyramid of Rah, whose beam burns twice as hot. Solar Lance: at full heat the beam becomes a lance to the end of its range, burning every enemy in its path for half the beam's damage."
+        }
+      ]
+    },
     {
       type: 'change',
       entries: [
@@ -36,6 +45,10 @@ export const PATCH_NOTES = {
         {
           version: '0.10.1', icon: { hero: true }, title: 'Both heroes go to Level 15',
           text: 'The Brisket King and the Hatsune Queen now have 15 levels (paid in Burgers), and their altars change look every 3 levels. The Queen gets two levels per Village Hall from 8 to 14, and Level 15 at Village Hall 15.'
+        },
+        {
+          version: '0.10.2', icon: { building: 'ra', level: 5 }, title: 'Towers of Rah grow at every level',
+          text: 'Every Tower of Rah level now stands a little taller than the one before (Level 5 used to look smaller than Level 4). Low levels are drawn a bit smaller to make room, so the Great Pyramid fits its tile.'
         },
         {
           version: '0.10.0', icon: { texture: 'hero_queen_select' }, title: 'New Hatsune Queen poses',

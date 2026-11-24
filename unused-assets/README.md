@@ -31,6 +31,13 @@ the three art zips (`merged cannon_sprites.zip`, `Spear_Thrower.zip`, `Spear_Thr
 `iBTD_40x40_grid.zip` (v0.9.0: another agent's 40 x 40 grid fit, its gridded map exports and screenshots; superseded by
 the maps with the tiles drawn on, `art-source/map/`).
 
+v0.10.2 drops (the Great Pyramid of Rah, the merged Tower of Rah; both kept here as the originals):
+
+| Dropped file | Installed as |
+| --- | --- |
+| `Merged Tower of Rah Image.png` | `art-source/buildings/bld_ra_merged.png` (the same file) |
+| `ui_ability_solar_lance.png` | `art-source/ui/ui_ability_solar_lance.png` (dropped already named; the Solar Lance icon) |
+
 The drops as they were:
 
 | Dropped file | Installed as |

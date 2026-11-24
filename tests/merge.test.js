@@ -20,6 +20,8 @@ import { zapStats, zapTargets, zap, empPulse, stepFlockZaps } from '../src/logic
 import { harpoonStats, harpoonTargets, hookEnemy, stepHarpoons } from '../src/logic/harpoon.js';
 import { shatterStats, markShatter, stepShatters } from '../src/logic/shatter.js';
 import { barrelStats, jugSpots, stepJugs } from '../src/logic/barrelBurst.js';
+import { lanceStats, lanceLine } from '../src/logic/solarLance.js';
+import { stepBeams } from '../src/logic/beams.js';
 import { simulate } from '../src/logic/simulate.js';
 import { stepFlockTowers } from '../src/logic/flock.js';
 import { facingToward, mergedFacingKey } from '../src/logic/merge.js';
@@ -42,8 +44,8 @@ const volley = (s, b, seconds = 3) => {
 const tough = (s, kind, x, y, extra = {}) => addEnemy(s, kind, x, y, { hp: 1e7, maxHp: 1e7, ...extra });
 
 describe('merging: rules', () => {
-  it('Cannon, Locklair Tower, Litman Mortar, Firework Launcher, Gandolf Tower, F.L.O.C.K Tower, Spear Thrower, KSI Tower and Diddypult can merge, data-driven', () => {
-    expect(MERGE_TYPES).toEqual(['cannon', 'archer', 'mortar', 'firework', 'wizard', 'flock', 'spear', 'ksi', 'catapult']);
+  it('Cannon, Locklair Tower, Litman Mortar, Firework Launcher, Gandolf Tower, F.L.O.C.K Tower, Spear Thrower, KSI Tower, Diddypult and Tower of Rah can merge, data-driven', () => {
+    expect(MERGE_TYPES).toEqual(['cannon', 'archer', 'mortar', 'firework', 'wizard', 'flock', 'spear', 'ksi', 'catapult', 'ra']);
     for (const t of MERGE_TYPES) {
       const m = CONFIG.merges[t];
       expect(m.mastery.tiers).toHaveLength(3);
@@ -184,7 +186,7 @@ describe('merged stats', () => {
       expect(maxHp(a)).toBe(Math.round(before.hp * m.hpMult));
       expect(towerRange(a)).toBeCloseTo(before.range + m.rangeAdd);
       if (m.zap) { expect(preview.a.damage).toBe(0); expect(preview.merged.dps).toBe(m.zap.damage * m.zap.targets / m.zap.every); continue; } // the Mothership: zaps are new
-      expect(towerFireInterval(a)).toBeCloseTo(before.interval * m.fireIntervalMult);
+      if (!CONFIG.defenses[type].beam) expect(towerFireInterval(a)).toBeCloseTo(before.interval * m.fireIntervalMult); // (a beam has no shots)
       expect(towerDamageMult(a)).toBeCloseTo(before.dmg * m.damageMult / m.fireIntervalMult); // timed specials: the DPS gain
       expect(preview.merged.hp).toBe(maxHp(a));
       expect(preview.merged.dps).toBeGreaterThan(preview.a.dps);
@@ -519,8 +521,8 @@ describe('saves', () => {
     expect(bad((o) => { o.buildings.find((x) => x.type === 'archer').level = 9; o.buildings.find((x) => x.type === 'archer').merged = true; })).toBe('invalid');
     expect(bad((o) => { o.buildings.find((x) => x.type === 'rvlab').merged = true; })).toBe('invalid');
     expect(bad((o) => { o.mastery = { archer: 4 }; })).toBe('invalid');
-    expect(bad((o) => { o.mastery = { ra: 1 }; })).toBe('invalid');       // (the Tower of Rah doesn't merge)
-    expect(bad((o) => { o.freeRespecs = ['ra']; })).toBe('invalid');
+    expect(bad((o) => { o.mastery = { mousetrap: 1 }; })).toBe('invalid');       // (the Mousetrap doesn't merge)
+    expect(bad((o) => { o.freeRespecs = ['mousetrap']; })).toBe('invalid');
     expect(bad((o) => { o.buildings.find((x) => x.type === 'archer').merged = true; })).toBe('ok');
   });
 });
@@ -1020,7 +1022,7 @@ describe('merged balance (v0.8: counts as two buildings)', () => {
     expect(CONFIG.merges.firework.name).toBe('Missile Silo');
     expect(CONFIG.merges.firework.ability).toBe('Sky Net');
     expect(MERGE_TYPES.map((t) => CONFIG.merges[t].abilityIcon).sort()).toEqual(
-      ['ui_ability_ballista_bolt', 'ui_ability_barrel_burst', 'ui_ability_reel_in', 'ui_ability_rolling_thunder', 'ui_ability_shall_not_pass', 'ui_ability_shatter', 'ui_ability_sky_net', 'ui_ability_triple_strike', 'ui_ability_triple_zap']);
+      ['ui_ability_ballista_bolt', 'ui_ability_barrel_burst', 'ui_ability_reel_in', 'ui_ability_rolling_thunder', 'ui_ability_shall_not_pass', 'ui_ability_shatter', 'ui_ability_sky_net', 'ui_ability_solar_lance', 'ui_ability_triple_strike', 'ui_ability_triple_zap']);
     expect(CONFIG.merges.wizard).toMatchObject({ name: 'Gandolf the Grand', ability: 'You Shall Not Pass' });
   });
 
@@ -1160,5 +1162,184 @@ describe('Diddy Trebuchet: Barrel Burst', () => {
     expect(events(s, 'jugLanded').length).toBeGreaterThanOrEqual(4);
     expect(s.pools.filter((q) => q.kind === 'catapult').length).toBeGreaterThanOrEqual(5);
     expect(serializeGame(s).jugs).toBeUndefined(); // jugs in the air aren't saved
+  });
+});
+
+describe('Great Pyramid of Rah: Solar Lance', () => {
+  const L = CONFIG.merges.ra.lance;
+  const TICK = CONFIG.defenses.ra.tickInterval;
+  const setup = (research = {}, mastery = 0) => {
+    const s = village({ research });
+    const [a, b] = pair(s, 'ra');
+    mergeBuildings(s, a.id, b.id);
+    fight(s);
+    if (mastery) { s.mastery = { ra: mastery }; syncMastery(s); }
+    return { s, t: a, cx: a.col + a.size / 2, cy: a.row + a.size / 2 };
+  };
+  const burn = (s, seconds, dt = 0.05) => { for (let i = 0; i < Math.round(seconds / dt); i++) stepBeams(s, dt); };
+  const loss = (e, before) => before - e.hp;
+  // The beam's target (toughest in range) 3 tiles out on +x; weaker enemies on the line (past it, and a flyer before
+  // it), one 0.7 tiles off the line.
+  const scene = (s, cx, cy) => ({
+    target: tough(s, 'grunt', cx + 3, cy),
+    onLine: tough(s, 'grunt', cx + 5.5, cy + 0.3, { hp: 1e6, maxHp: 1e6 }),
+    flyer: tough(s, 'bomber', cx + 1.5, cy - 0.2, { hp: 1e6, maxHp: 1e6 }),
+    offLine: tough(s, 'grunt', cx + 4.5, cy + 0.7, { hp: 1e6, maxHp: 1e6 })
+  });
+
+  it('two Level 8 Towers of Rah merge into the Great Pyramid of Rah; a Level 7 one only shows the greyed Merge', () => {
+    const s = village();
+    const low = addBuilding(s, 'ra', 5, 5, 7);
+    expect(TOP('ra')).toBe(8);
+    expect(checkMerge(s, low)).toMatchObject({ show: false, preview: true, reason: 'Needs Level 8' });
+    const [a, b] = pair(s, 'ra');
+    expect(checkMerge(s, a)).toMatchObject({ show: true, ok: true });
+    mergeBuildings(s, a.id, b.id);
+    expect(a.merged).toBe(true);
+    expect(displayName(a)).toBe('Great Pyramid of Rah');
+    expect(maxHp(a)).toBe(levelStats('ra', 8).hp * 2);
+    expect(towerRange(a)).toBeCloseTo(CONFIG.defenses.ra.range + 0.5);
+    expect(towerDamageMult(a)).toBeCloseTo(2); // the beam's dps x2
+    // The merge window shows the beam's damage per second (it has no shots): 70/s -> 140/s.
+    const pv = mergePreview(s, a, a);
+    expect(pv.merged).toMatchObject({ perSecond: true });
+    expect(pv.merged.damage).toBeCloseTo(levelStats('ra', 8).dps * 2);
+  });
+
+  it('no lance below top heat; at top heat enemies on the line (ground and air) take 50% of the beam tick, off the line nothing', () => {
+    const { s, t, cx, cy } = setup();
+    const e = scene(s, cx, cy);
+    burn(s, 4.9);
+    expect(t.beams[0].targetId).toBe(e.target.id);
+    expect(t.beams[0].lance).toBeNull();
+    expect(e.onLine.hp).toBe(1e6);
+    expect(e.flyer.hp).toBe(1e6);
+    burn(s, 0.5); // past 5 s: x8, the lance stage
+    expect(t.beams[0].stage).toBe(L.stage);
+    expect(t.beams[0].lance).toMatchObject({ x1: cx, y1: cy });
+    expect(Math.hypot(t.beams[0].lance.x2 - cx, t.beams[0].lance.y2 - cy)).toBeCloseTo(towerRange(t)); // out to its range
+    const before = [e.target.hp, e.onLine.hp, e.flyer.hp];
+    burn(s, TICK * 5);
+    const tick = loss(e.target, before[0]);
+    expect(tick).toBeCloseTo(levelStats('ra', 8).dps * 2 * 8 * TICK * 5);
+    expect(loss(e.onLine, before[1])).toBeCloseTo(tick * L.mult);
+    expect(loss(e.flyer, before[2])).toBeCloseTo(tick * L.mult);
+    expect(e.offLine.hp).toBe(1e6); // 0.7 tiles off the line: beyond halfWidth 0.5
+    expect(events(s, 'enemyHit').some((ev) => ev.data.source === 'lance')).toBe(true);
+  });
+
+  it('the lance includes Hotter Peak (x10) and ends when the beam switches targets (it starts cold)', () => {
+    const { s, t, cx, cy } = setup({ ra: ['c', 'c', 'c', 'c'] }); // Hot Start ... Hotter Peak
+    const e = scene(s, cx, cy);
+    burn(s, 3.5); // Hot Start: x3 at once, top heat 3 s later
+    const before = [e.target.hp, e.onLine.hp];
+    burn(s, TICK * 5);
+    expect(loss(e.target, before[0])).toBeCloseTo(levelStats('ra', 8).dps * 2 * 10 * TICK * 5);
+    expect(loss(e.onLine, before[1])).toBeCloseTo(loss(e.target, before[0]) * L.mult);
+    damageEnemy(s, e.target, 1e9);
+    burn(s, 0.05);
+    expect(t.beams[0].targetId).not.toBe(e.target.id);
+    expect(t.beams[0].lance).toBeNull(); // the new target starts back at x3 (Hot Start), below the lance stage
+  });
+
+  it('Prism: every beam at top heat lances on its own, and two lances crossing an enemy hit it once per tick', () => {
+    const { s, t, cx, cy } = setup({ ra: ['b', 'b', 'b', 'b', 'b'] }); // ... Prism (3 beams)
+    const t1 = tough(s, 'grunt', cx + 4, cy), t2 = tough(s, 'grunt', cx + 4, cy + 0.6), t3 = tough(s, 'grunt', cx - 4, cy);
+    // On both of the first two lances, more than 2.5 tiles from every target (so no chain reaches it).
+    const shared = tough(s, 'grunt', cx + 1, cy + 0.1, { hp: 1e6, maxHp: 1e6 });
+    burn(s, 5.2);
+    expect(t.beams).toHaveLength(3);
+    expect(t.beams.every((bm) => bm.lance)).toBe(true);
+    expect(t.beamChains).toHaveLength(0);
+    const before = [t3.hp, shared.hp];
+    burn(s, TICK * 10);
+    expect(loss(shared, before[1])).toBeCloseTo(loss(t3, before[0]) * L.mult); // once per tick, not twice
+    expect([t1, t2].every((x) => x.hp < 1e7)).toBe(true);
+  });
+
+  it('chained beams never lance', () => {
+    const { s, t, cx, cy } = setup({ ra: ['b', 'b'] }); // Split Beam: 1 chain, 40%
+    const target = tough(s, 'grunt', cx + 3, cy);
+    const chained = tough(s, 'grunt', cx + 4.5, cy + 1.5, { hp: 1e6, maxHp: 1e6 });
+    const behind = tough(s, 'grunt', cx + 5.4, cy + 2.4, { hp: 1e6, maxHp: 1e6 }); // past the chain, along it
+    burn(s, 5.2);
+    expect(t.beamChains).toEqual([{ from: target.id, to: chained.id, stage: 0 }]);
+    const before = chained.hp;
+    burn(s, TICK * 5);
+    expect(loss(chained, before)).toBeCloseTo(levelStats('ra', 8).dps * 2 * 0.4 * TICK * 5); // its chain only
+    expect(behind.hp).toBe(1e6);
+  });
+
+  it("lance kills never set off Supernova, Cauterize or Afterburn (only the beam's own target does)", () => {
+    const { s, cx, cy } = setup({ ra: ['c', 'c', 'c', 'c', 'c'] }); // Hot Start, Afterburn, Cauterize, Hotter Peak, Supernova
+    const target = tough(s, 'grunt', cx + 3, cy);
+    burn(s, 3.2);
+    const victim = addEnemy(s, 'grunt', cx + 5, cy, { hp: 50, maxHp: 50 });
+    const near = tough(s, 'grunt', cx + 5, cy + 1.5, { hp: 1e6, maxHp: 1e6 }); // within Supernova's 2 tiles of the victim, off the lance
+    burn(s, TICK * 2);
+    expect(victim.alive).toBe(false);
+    expect(near.hp).toBe(1e6);
+    const novas = () => events(s, 'splash').filter((ev) => ev.data.kind === 'supernova');
+    expect(novas()).toHaveLength(0);
+    expect(events(s, 'cauterize')).toHaveLength(0);
+    expect(victim.burnTimer || 0).toBe(0);
+    expect(target.alive).toBe(true);
+    // The beam's own target still sets them off.
+    const bystander = tough(s, 'grunt', cx + 3, cy - 1.5, { hp: 1e6, maxHp: 1e6 }); // 1.5 tiles from the target, off the lance
+    damageEnemy(s, target, target.hp - 1);
+    burn(s, TICK * 2);
+    expect(events(s, 'cauterize')).toHaveLength(1);
+    expect(novas()).toHaveLength(1);
+    expect(bystander.hp).toBeLessThan(1e6);
+  });
+
+  it('Mastery: Early Lance (from x3), Wide Lance (1 tile either side, 75%), Blinding Light (30% slow, bosses 15%)', () => {
+    let { s, t, cx, cy } = setup({}, 1);
+    expect(lanceStats(t)).toMatchObject({ stage: 1, halfWidth: L.halfWidth, mult: L.mult, slow: 0 });
+    let e = scene(s, cx, cy);
+    burn(s, 2.1); // x3
+    expect(t.beams[0].lance).not.toBeNull();
+    let before = [e.target.hp, e.onLine.hp];
+    burn(s, TICK * 5);
+    expect(loss(e.onLine, before[1])).toBeCloseTo(loss(e.target, before[0]) * L.mult);
+
+    ({ s, t, cx, cy } = setup({}, 2));
+    expect(lanceStats(t)).toMatchObject({ stage: 1, halfWidth: 1, mult: 0.75 });
+    e = scene(s, cx, cy);
+    burn(s, 2.1);
+    before = [e.target.hp, e.offLine.hp];
+    burn(s, TICK * 5);
+    expect(loss(e.offLine, before[1])).toBeCloseTo(loss(e.target, before[0]) * 0.75); // 0.7 tiles off: inside 1 now
+
+    ({ s, t, cx, cy } = setup({}, 3));
+    expect(lanceStats(t).slow).toBe(0.3);
+    e = scene(s, cx, cy);
+    const boss = tough(s, 'babycar', cx + 6, cy, { hp: 1e6, maxHp: 1e6 });
+    burn(s, 1.9);
+    expect(e.onLine.slowTimer || 0).toBe(0); // not lancing yet
+    burn(s, 0.2);
+    expect(e.onLine.slow).toBeCloseTo(0.3);
+    expect(e.target.slow).toBeCloseTo(0.3);
+    expect(boss.slow).toBeCloseTo(0.15);
+    expect(e.onLine.slowTimer).toBeLessThanOrEqual(L.slowLinger);
+    expect(e.offLine.slow).toBeCloseTo(0.3); // 0.7 tiles off: inside Wide Lance's 1 tile
+    const far = tough(s, 'grunt', cx + 4, cy + 2, { hp: 1e6, maxHp: 1e6 });
+    burn(s, 0.05);
+    expect(far.slowTimer || 0).toBe(0);
+    expect(lanceLine(t, e.target)).toMatchObject({ x1: cx, y1: cy });
+  });
+
+  it('runs the same in the simulation as stepping the beams directly (simulate.js shares beams.js)', () => {
+    const run = (step) => {
+      const { s, cx, cy } = setup();
+      const e = scene(s, cx, cy);
+      for (const x of s.enemies) { x.speed = 0; x.held = 99; }
+      for (let i = 0; i < 140; i++) step(s, 0.05); // 7 s: heats up, then lances
+      return [e.target, e.onLine, e.flyer, e.offLine].map((x) => x.maxHp - x.hp);
+    };
+    const direct = run((s, dt) => stepBeams(s, dt));
+    const sim = run((s, dt) => simulate(s, dt));
+    expect(direct[1]).toBeGreaterThan(0);
+    sim.forEach((v, i) => expect(v).toBeCloseTo(direct[i], 3));
   });
 });

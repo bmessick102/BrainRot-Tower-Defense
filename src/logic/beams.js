@@ -10,8 +10,10 @@
 //     ringDps x the beam's base damage per second, ringSlow), and a Solar Flare pulse (flareEvery, flareMult).
 //   Prism: each beam chains to `chains` more enemies near its target for chainPct of its damage (with the
 //     heat bonus once chainHeat is owned), and `beams` separate beams each lock onto their own enemy.
-// Each tower keeps b.beams = [{ targetId, time, stage, tick }] and, for the view, b.beamChains =
+// Each tower keeps b.beams = [{ targetId, time, stage, tick, lance }] and, for the view, b.beamChains =
 // [{ from, to, stage }] (enemy ids). b.beamTargetId / b.beamStage mirror the first beam.
+// Great Pyramid of Rah (merged): a beam hot enough becomes a Solar Lance (solarLance.js): beam.lance is its line in
+// tiles ({ x1, y1, x2, y2 }, for the view too) or null; chains never lance.
 import { CONFIG } from '../config.js';
 import { ABILITY_RULES } from '../abilityConfig.js';
 import { isValidTarget, damageEnemy, areaDamage, findEnemy, applySlow, applySplash, burnEnemy } from './combat.js';
@@ -20,6 +22,7 @@ import { abilityFx, towerDamageMult } from './abilities.js';
 import { footprintCenter, distanceToFootprint } from './grid.js';
 import { distance } from './iso.js';
 import { emit, isWaveActive } from './util.js';
+import { lanceStats, lanceLine, lanceEnemies, blindEnemies, lanceHit, pruneLanceHits } from './solarLance.js';
 
 /** Is this a beam tower type? */
 export function isBeam(type) {
@@ -65,6 +68,8 @@ export function stepBeams(state, dt) {
     // (Frigo Camillo's cold aura burns it slower too.)
     const dps = levelStats(b.type, b.level).dps * towerDamageMult(b) * (1 - Math.max(0, Math.min(90, b.frigoSlow || 0)) / 100);
     const heat = 1 + (fx.heatPct || 0) / 100;
+    const lance = lanceStats(b); // Great Pyramid of Rah: Solar Lance (null for a plain Tower of Rah)
+    if (lance) b._lanceClock = (b._lanceClock || 0) + dt;
 
     // Keep beams whose targets are still valid; fill free beams with the toughest enemies left.
     if (b.heatMemoryT > 0) b.heatMemoryT -= dt;
@@ -102,6 +107,10 @@ export function stepBeams(state, dt) {
       beam.stage = stage.index;
       const chained = fx.chains ? chainTargets(state, target, fx.chains, taken) : [];
       for (const c of chained) b.beamChains.push({ from: target.id, to: c.id, stage: fx.chainHeat ? stage.index : 0 });
+      // Solar Lance: hot enough, the beam runs on through its target to the end of the range (Prism: each beam on its own).
+      beam.lance = lance && stage.index >= lance.stage ? lanceLine(b, target) : null;
+      const lanced = beam.lance ? lanceEnemies(state, beam.lance, lance.halfWidth, target.id) : [];
+      if (beam.lance) blindEnemies([target, ...lanced], lance); // Blinding Light (Mastery 3)
       beam.tick += dt;
       while (beam.tick >= cfg.tickInterval && target.alive) {
         beam.tick -= cfg.tickInterval;
@@ -110,6 +119,8 @@ export function stepBeams(state, dt) {
         for (const c of chained) {
           if (c.alive) damageEnemy(state, c, dps * (fx.chainHeat ? mult : 1) * fx.chainPct * cfg.tickInterval, 'beam');
         }
+        // (the tick's moment on the tower's clock: a tick left over from this step happened beam.tick s ago)
+        if (lanced.length) lanceHit(state, b, lanced, dps * mult * cfg.tickInterval * lance.mult, b._lanceClock - beam.tick, cfg.tickInterval);
         if (state.gameOver) return;
       }
       // Cauterize: a kill heals the buildings around it.
@@ -132,6 +143,7 @@ export function stepBeams(state, dt) {
     b.beamTargetId = first ? first.targetId : null;
     b.beamStage = b.beams.reduce((m, beam) => Math.max(m, beam.stage), 0);
     b.beamTime = first ? first.time : 0;
+    if (lance) pruneLanceHits(b, cfg.tickInterval);
 
     stepRing(state, b, fx, dt);
     if (state.gameOver) return;

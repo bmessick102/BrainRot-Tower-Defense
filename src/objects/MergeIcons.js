@@ -1,7 +1,7 @@
 // Ability icons of the merged defenses (CONFIG.merges[type].abilityIcon): a glossy gold box like the hero ability
 // slots on the hotbar (v0.8.2: it was a disc). The art is a texture (art-source/ui/<key>.png, e.g. ui_ability_sky_net)
 // drawn inside the box (the user's painted icons since v0.8.5); if one is missing, a simple symbol is drawn in code (a rolling ball, a bolt, three shells, a net,
-// a staff and a wall, a hook on a chain, a cracking ice crystal).
+// a staff and a wall, a hook on a chain, a cracking ice crystal, a sun's lance through two rings).
 import { fitIcon, drawGlossy } from './uiDraw.js';
 
 const GOLD = 0xffc83a, GOLD_DARK = 0xb87d0a, INK = 0x3a2406;
@@ -78,6 +78,17 @@ function drawSymbol(g, key, r) {
     for (const [x, y, s2] of [[0.62, -0.32, 1], [0.7, 0.2, -1], [-0.64, -0.26, -1], [-0.68, 0.28, 1]]) {
       g.fillTriangle(r * x, r * (y - 0.1), r * (x + 0.1 * s2), r * (y + 0.08), r * (x - 0.1 * s2), r * (y + 0.06));
     }
+  } else if (key === 'ui_ability_solar_lance') {
+    // A sun low on the left firing a lance up-right through two enemies (rings), with a star where it leaves.
+    g.fillCircle(-r * 0.46, r * 0.46, r * 0.22);
+    for (let i = 0; i < 8; i++) {
+      const a = (i / 8) * Math.PI * 2, c = Math.cos(a), s2 = Math.sin(a);
+      g.lineBetween(-r * 0.46 + c * r * 0.3, r * 0.46 + s2 * r * 0.3, -r * 0.46 + c * r * 0.4, r * 0.46 + s2 * r * 0.4);
+    }
+    g.lineStyle(Math.max(3, r * 0.16), INK, 1).lineBetween(-r * 0.3, r * 0.3, r * 0.62, -r * 0.62);
+    g.lineStyle(Math.max(1, r * 0.06), 0xfff0c0, 1).lineBetween(-r * 0.26, r * 0.26, r * 0.58, -r * 0.58);
+    g.lineStyle(Math.max(1.5, r * 0.08), INK, 1).strokeCircle(r * 0.06, -r * 0.06, r * 0.17).strokeCircle(r * 0.34, -r * 0.34, r * 0.17);
+    g.fillStyle(INK, 1).fillTriangle(r * 0.62, -r * 0.82, r * 0.54, -r * 0.62, r * 0.7, -r * 0.62).fillTriangle(r * 0.82, -r * 0.62, r * 0.62, -r * 0.54, r * 0.62, -r * 0.7);
   } else {
     // A net: a circle crossed by a few lines.
     g.strokeCircle(0, 0, r * 0.55);

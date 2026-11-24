@@ -148,8 +148,8 @@ export function mergedSizeFactor(scene, b) {
 // Where a merged defense's shots leave its picture (v0.8.6), measured on each picture (each facing of the turning ones):
 // x = share of its width from the left edge, y = share of its height from the bottom. The Mega Cannon's barrel mouth,
 // the Locklair Citadel's archers, the middle of the Triple Mortar's three barrels, Gandolf the Grand's staff, the Missile
-// Silo's rocket nose, the Harpoon Ballista's bolt tip and the KSI Frost Fortress's bottle. Used by ProjectileView (shots), HarpoonFx (the chain) and
-// NetFx (the Sky Net rocket); see BuildingView.muzzlePoint.
+// Silo's rocket nose, the Harpoon Ballista's bolt tip and the KSI Frost Fortress's bottle. Used by ProjectileView (shots), HarpoonFx (the chain),
+// NetFx (the Sky Net rocket) and GameScene.drawBeams (the Great Pyramid of Rah's beam); see BuildingView.muzzlePoint.
 export const MERGED_MUZZLE = {
   bld_catapult_merged: { x: 0.31, y: 0.8 }, // the Diddy Trebuchet's barrel, upper left in its arm
   bld_cannon_merged_dl: { x: 0.26, y: 0.65 }, bld_cannon_merged_dr: { x: 0.74, y: 0.65 },
@@ -160,7 +160,8 @@ export const MERGED_MUZZLE = {
   bld_firework_merged_left: { x: 0.18, y: 0.80 }, bld_firework_merged_right: { x: 0.82, y: 0.80 },
   bld_spear_merged_dl: { x: 0.16, y: 0.72 }, bld_spear_merged_dr: { x: 0.85, y: 0.72 },
   bld_spear_merged_ul: { x: 0.10, y: 0.89 }, bld_spear_merged_ur: { x: 0.93, y: 0.92 },
-  bld_ksi_merged: { x: 0.68, y: 0.84 } // the KSI Frost Fortress's right-hand Prime bottle (v0.8.11; the left one is at 0.33, 0.84)
+  bld_ksi_merged: { x: 0.68, y: 0.84 }, // the KSI Frost Fortress's right-hand Prime bottle (v0.8.11; the left one is at 0.33, 0.84)
+  bld_ra_merged: { x: 0.5, y: 0.845 } // the Great Pyramid of Rah's third eye: where its beam / Solar Lance leaves (GameScene.drawBeams)
 };
 
 /** The gear that marks merged buildings (ui_merge_gear; nothing is drawn when its art is missing). */
@@ -177,12 +178,15 @@ const DEFAULT_SPRITE_SCALE = 0.75;
 // F.L.O.C.K Tower: 1.15 of its single tile, so it stands a bit wider than the tile (v0.8.3: 10% smaller than the
 // earlier 1.28). The merged Mothership is drawn art.scale times this, so it shrank by the same 10%.
 // Mousetrap: a flat 1-tile trap, drawn a little wider than its tile.
-// Tower of Rah: a tall, slim tower, drawn narrower than its footprint (it starts small and grows a lot).
+// Tower of Rah: a tall, slim tower, drawn narrower than its footprint (it starts small and grows a lot). v0.10.2: 0.54 ->
+// 0.48 with TIER_GROWTH.ra 0.03, so every level stands 3-4% taller than the one before (its Level 5-6 picture is
+// squatter than Level 3-4's and drew shorter) and the merged Great Pyramid of Rah (CONFIG.merges.ra.art) fits its tile.
+// Measured at zoom 1 (visible pixels): Level 1 58 x 105 px (was 59 x 118), Level 8 66 x 133 (was 68 x 136).
 // RV Lab: a long RV on its own paved pad; 0.77 of its 2x2 footprint (10% bigger than the earlier 0.7).
 // KSI Tower: a tall, slim tower like the Locklair's, a little narrower than the default. (The merged KSI Frost Fortress
 // stands further back on its plot instead, CONFIG.merges.ksi.art.ground, so it fits the tile's outline at this size.)
 // Mortar: 0.585 (was 0.65, v0.8: 10% smaller at every level so the 25% bigger merged Triple Mortar stands out).
-const SPRITE_SCALE = { mortar: 0.585, cannon: 0.63, firework: 0.52, catapult: 0.66, spear: 0.66, ksi: 0.62, flock: 0.9, mousetrap: 1.1, ra: 0.54, rvlab: 0.77, dj: 0.77, altar: 0.66, queenAltar: 0.66, fuelStation: 0.8 };
+const SPRITE_SCALE = { mortar: 0.585, cannon: 0.63, firework: 0.52, catapult: 0.66, spear: 0.66, ksi: 0.62, flock: 0.9, mousetrap: 1.1, ra: 0.48, rvlab: 0.77, dj: 0.77, altar: 0.66, queenAltar: 0.66, fuelStation: 0.8 };
 
 // Buildings grow as they level up: this share of their normal size at Level 1, up to LEVEL_SIZE.max at
 // their top level (Level 10, or the type's own top level). They only grow on upgrades that keep the same
@@ -209,7 +213,7 @@ export function levelSizeFactor(level, topLevel = LEVEL_SIZE.maxLevel, type = nu
 // than the one before would make a higher level look smaller (the KSI Tower's Level 7-8 and 9-10 art are squatter
 // than its Level 5-6). For these types every picture is sized so the building stands TIER_GROWTH taller per picture
 // than Level 1's (on top of LEVEL_SIZE's growth between pictures).
-export const TIER_GROWTH = { ksi: 0.04 };
+export const TIER_GROWTH = { ksi: 0.04, ra: 0.03 }; // (Tower of Rah, v0.10.2: see SPRITE_SCALE.ra)
 
 /** Size multiplier for the picture a sprite shows (1 unless its type is in TIER_GROWTH and its art is loaded). */
 export function tierSizeFactor(sprite, type) {

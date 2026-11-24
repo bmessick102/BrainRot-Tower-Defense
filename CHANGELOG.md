@@ -2,6 +2,21 @@
 
 The version shows in the bottom-left corner of every screen (`package.json` `version` plus the commit). Details for everything below are in [README.md](README.md).
 
+## 0.10.2
+
+Towers of Rah merge into the Great Pyramid of Rah (Solar Lance), and every Tower of Rah level now draws bigger than the one before. No save or database changes (`merged` and `mastery.ra` use the existing save fields; older saves load as before).
+
+### New Features
+- **Great Pyramid of Rah** (`CONFIG.merges.ra`): two Level 8 Towers of Rah merge for 50,000 gold (Rah's own Level 8 upgrade, like every merge) + 3,000 Burgers; `hpMult` 2, `damageMult` 2 (the beam's dps, via `mergeDpsMult` in `towerDamageMult`; Sun Ring burns scale with it too), `fireIntervalMult` 1, `rangeAdd` 0.5 (6.5 tiles).
+  - **Solar Lance** (new `src/logic/solarLance.js`, called from `beams.js` `stepBeams`, so the game and `simulate.js` share it): a beam at heat stage `lance.stage` (2 = x8) or hotter becomes a lance from the tower's center through its target to its range (`beam.lance` = the line in tiles, read by the view). Every other enemy, ground and air, within `lance.halfWidth` (0.5) tiles of the line takes `lance.mult` (0.5) x the beam's current tick (heat, Hotter Peak, damage perks; the enemy's own mark via `damageEnemy`), source `'lance'`. At most one lance hit per enemy per beam tick per tower, even where Prism lances cross (`b._lanceHits` / `b._lanceClock`, not saved). Prism: each beam lances on its own; chained beams never lance; Afterburn, Cauterize and Supernova come only from the beam's own target.
+  - **Mastery** (1,200 / 2,000 / 3,000 Burgers, RV Lab 3 / 4 / 5): Early Lance (`lanceStage` 1: from x3), Wide Lance (`lanceHalfWidth` 1, `lanceMult` 0.75), Blinding Light (`lanceSlow` 0.3 on everything a lance touches, its target too, renewed each step for `slowLinger` 0.25 s; bosses take `bossShare` 0.5, so 15%).
+  - The user's picture (`art-source/buildings/bld_ra_merged.png`, `art.scale` 1.7) and ability icon (`ui_ability_solar_lance`); a drawn stand-in icon in `MergeIcons.js`. The beam leaves from its third eye (`MERGED_MUZZLE.bld_ra_merged` 0.5, 0.845; `GameScene.drawBeams` now uses `BuildingView.muzzlePoint` when a picture has one).
+  - The lance view (`GameScene.drawBeams`, `LANCE`): one shared normal-blend graphics object for every lance, white core / red body / crimson edge from the muzzle through the target to the end of range (past the target 18 px above the ground), 3 pulses running along it; lance hits show a crimson "/s" number and a small spark per enemy every 450 ms, at most 8 sparks per 250 ms.
+  - The merge window shows a beam's damage per second ("70/s -> 140/s": `fightStats` returns `perSecond` for beam types; it showed "-"). How to Play's merge line says "Towers of Rah Level 8" (its `plural` handles "X of Y" names).
+
+### Changes
+- **Tower of Rah sizes** (`BuildingView.js`): `SPRITE_SCALE.ra` 0.54 -> 0.48 and `TIER_GROWTH.ra` 0.03, so every level stands 3-4% taller than the one before (the Level 5-6 picture is squatter and drew 1.4% shorter than Level 4; Levels 3 and 7 were under 1% taller). Visible size at zoom 1: Level 1 58 x 105 px (was 59 x 118), Level 8 66 x 133 (was 68 x 136): low levels are drawn about 11% smaller, Level 8 about 2%. The Great Pyramid at `art.scale` 1.7 is 103 x 158 (1.55x wider, 1.19x taller than Level 8) with its base inside the plot rim (inset 0.08), 13 px clear of each side corner.
+
 ## 0.10.1
 
 Both heroes to Level 15, more Cannons and Locklair Towers past Village Hall 10, and the UI caught up with wave-based difficulty. No save or database changes (heroes keep their level).

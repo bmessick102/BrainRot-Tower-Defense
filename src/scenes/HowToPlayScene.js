@@ -40,7 +40,8 @@ import { abilityIcon } from '../objects/MergeIcons.js';
 import { VIEW } from '../renderScale.js';
 
 // "Cannons, Locklair Towers, Litman Mortars or Firework Launchers": the types that can merge (CONFIG.merges).
-const plural = (t) => `${CONFIG.defenses[t].name.replace(/^The /, '')}s`; // (The Diddypult: "Diddypults")
+// (The Diddypult: "Diddypults"; Tower of Rah: "Towers of Rah")
+const plural = (t) => { const n = CONFIG.defenses[t].name.replace(/^The /, ''); return / of /.test(n) ? n.replace(/^(\S+)/, '$1s') : `${n}s`; };
 const MERGE_NAMES = MERGE_TYPES.length > 1
   ? `${MERGE_TYPES.slice(0, -1).map(plural).join(', ')} or ${plural(MERGE_TYPES[MERGE_TYPES.length - 1])}` : plural(MERGE_TYPES[0]);
 // The top level they merge at: Level 10, except the types with fewer levels ("Diddypults Level 5").

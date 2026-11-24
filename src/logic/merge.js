@@ -126,6 +126,11 @@ export function fightStats(b) {
   const m = mergedConfigOf(b);
   // A F.L.O.C.K Mothership (flockZap.js) has no shots of its own: its zaps are its damage (`targets` at a time).
   if (m && m.zap) return { hp: maxHp(b), damage: m.zap.damage, shots: m.zap.targets, interval: m.zap.every, range: towerRange(b), dps: (m.zap.damage * m.zap.targets) / m.zap.every };
+  // A beam (Tower of Rah) has no shots: its damage is per second, before heat (perSecond: the window shows "70/s").
+  if (typeConfig(b.type).beam) {
+    const dps = (lvl.dps || 0) * towerDamageMult(b);
+    return { hp: maxHp(b), damage: dps, shots: 1, interval: 1, range: towerRange(b), dps, perSecond: true };
+  }
   const shots = m && m.triple ? m.triple.shells : 1;
   const perShot = (lvl.damage || 0) * towerDamageMult(b) * (m ? m.fireIntervalMult || 1 : 1) * (m && m.triple ? m.triple.shellMult : 1);
   const interval = towerFireInterval(b);

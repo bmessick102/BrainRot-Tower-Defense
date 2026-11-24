@@ -1932,7 +1932,8 @@ New walls are built at your wall level (${wallLevel(this.gs)}), so one costs wha
     // Stats: old -> new.
     const r1 = (v) => Math.round(v * 10) / 10;
     // (A F.L.O.C.K Tower does no damage before it merges: '-'; the Mothership's zaps show as "3 x 60".)
-    const dmg = (s) => (!(s.damage > 0) ? '-' : s.shots > 1 ? `${s.shots} x ${formatGold(Math.round(s.damage))}` : formatGold(Math.round(s.damage)));
+    // (A Tower of Rah's beam: damage per second, "70/s".)
+    const dmg = (s) => (!(s.damage > 0) ? '-' : s.shots > 1 ? `${s.shots} x ${formatGold(Math.round(s.damage))}` : `${formatGold(Math.round(s.damage))}${s.perSecond ? '/s' : ''}`);
     const rows = [['Damage', dmg(pv.a), dmg(pv.merged)], ['Health', formatGold(pv.a.hp), formatGold(pv.merged.hp)], ['Range', `${r1(pv.a.range)} tiles`, `${r1(pv.merged.range)} tiles`]];
     let y = top + ch + 20;
     const lx = md.x + 110, mid = md.cx + 40;

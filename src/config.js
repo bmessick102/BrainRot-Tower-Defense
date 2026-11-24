@@ -905,6 +905,39 @@ export const CONFIG = {
       // picture, so it stands by that line (`ground` 0.25 on the footprint's center). At 1.3 it's ~30% wider and ~20% taller
       // than a Level 5 Diddypult, and its widest row stays inside the 2 x 2 tile's outline (GameScene drawPlots).
       art: { key: 'bld_catapult_merged', scale: 1.3, standInScale: 1.15, ground: 0.25 }
+    },
+    // Great Pyramid of Rah (v0.10.2): two Level 8 Towers of Rah. Its beam burns at 2x dps (heat stages, perks and marks as
+    // usual). Solar Lance (solarLance.js, run by beams.js stepBeams): a beam at heat stage `lance.stage` or hotter (2 =
+    // x8, the top) becomes a lance from the tower's center through its target out to the tower's range; every other
+    // enemy (ground and air) whose center is within `halfWidth` tiles of that line takes `mult` x the beam's tick (heat,
+    // Hotter Peak, damage perks; the enemy's own mark in damageEnemy). Once per tick per enemy, even where two Prism
+    // lances cross. Chained beams never lance; Afterburn, Cauterize and Supernova come only from the beam's own target.
+    // Blinding Light slows what the lance touches (bossShare of it on bosses, like a KSI chill), renewed every step
+    // for slowLinger s.
+    ra: {
+      name: 'Great Pyramid of Rah',
+      ability: 'Solar Lance',
+      abilityIcon: 'ui_ability_solar_lance',
+      abilityShort: 'At full heat its beam becomes a lance that burns everything in its path.',
+      description: 'Two Towers of Rah raised into one great pyramid. Its beam burns twice as hot, and once it reaches full heat it becomes a solar lance that pierces through every enemy in a line.',
+      abilityText: "Once its beam reaches top heat, it becomes a lance to the end of its range: every other enemy along it (ground and air) takes 50% of the beam's damage, and the target still takes full. A new target starts the beam cold, so the lance ends until it heats up again.",
+      cost: { gold: 50000, rp: 3000 }, // gold: the Tower of Rah's own last upgrade (Level 8), like every merge
+      hpMult: 2, damageMult: 2, fireIntervalMult: 1, rangeAdd: 0.5,
+      lance: { stage: 2, halfWidth: 0.5, mult: 0.5, bossShare: 0.5, slowLinger: 0.25 },
+      mastery: {
+        costs: [1200, 2000, 3000], labLevel: [3, 4, 5],
+        tiers: [
+          { name: 'Early Lance', desc: 'The lance starts at x3 heat instead of full heat.', fx: { lanceStage: 1 } },
+          { name: 'Wide Lance', desc: "The lance is twice as wide and deals 75% of the beam's damage.", fx: { lanceHalfWidth: 1, lanceMult: 0.75 } },
+          { name: 'Blinding Light', desc: 'Enemies the lance touches are slowed 30% while it touches them (bosses 15%).', fx: { lanceSlow: 0.3 } }
+        ]
+      },
+      // The user's picture: a wide round base (widest 22% of the way up, 97% of the picture's width) under a short tower.
+      // At 1.7 x a Level 8 Tower of Rah's size (SPRITE_SCALE.ra 0.48 with TIER_GROWTH.ra, BuildingView.js) it's 103 x 158 px
+      // at zoom 1 against Level 8's 66 x 133 (1.55x wider, 1.19x taller), standing on Level 8's spot: its base stays
+      // inside the tile's outline (GameScene drawPlots, inset 0.08), 13 px short of each side corner and about 10% short
+      // of the front edges. At SPRITE_SCALE.ra's old 0.54 it couldn't be 15% taller than Level 8 and stay inside.
+      art: { key: 'bld_ra_merged', scale: 1.7, standInScale: 1.15 }
     }
   },
   // Per Village Hall level (1-15). Every hall from 11 adds 12 walls. v0.8 (user, 2026-11-22; replaced v0.6.1's Bonus
