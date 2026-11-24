@@ -28,21 +28,21 @@ const walls = (s) => s.buildings.filter((b) => b.type === 'wall');
 const prices = () => CONFIG.walls.levels.map((l) => l.cost);
 
 describe('wall prices', () => {
-  it('are cheap per level, and wall HP is unchanged', () => {
-    expect(prices()).toEqual([10, 20, 40, 80, 150, 300, 500, 800]);
-    expect(CONFIG.walls.levels.map((l) => l.hp)).toEqual([400, 550, 800, 1150, 1600, 2200, 2980, 3800]);
+  it('are cheap per level; the old levels keep their HP and price (v0.11: new Levels 6 and 10)', () => {
+    expect(prices()).toEqual([10, 20, 40, 80, 150, 220, 300, 500, 800, 1200]);
+    expect(CONFIG.walls.levels.map((l) => l.hp)).toEqual([400, 550, 800, 1150, 1600, 1900, 2200, 2980, 3800, 4800]);
   });
 
   it('a full set of walls upgrades to a newly unlocked level for well under the gold that hall can hold', () => {
     for (let level = 2; level <= maxLevel('wall'); level++) {
       const vh = CONFIG.walls.levels[level - 1].townHall;
       const full = limitFor('wall', vh) * upgradeCost('wall', level - 1);
-      const s = CONFIG.storage.levels[vh - 1].capacity;
+      const s = CONFIG.storage.levels[Math.min(vh, CONFIG.storage.levels.length) - 1].capacity; // (a Storage's top level is 10)
       const capacity = CONFIG.townHall.levels[vh - 1].capacity + limitFor('storage', vh) * s;
       expect(full).toBeLessThanOrEqual(capacity * 0.5);
     }
-    // The top level for all 132 walls at Village Hall 10.
-    expect(limitFor('wall', 10) * upgradeCost('wall', 7)).toBe(105600);
+    // The top level for all 240 walls at Village Hall 19.
+    expect(limitFor('wall', 19) * upgradeCost('wall', 9)).toBe(288000);
   });
 });
 
@@ -76,21 +76,23 @@ describe('Upgrade Walls (every wall at once)', () => {
     expect(gs.wallLevel).toBe(1);
   });
 
-  it('is gated by the Village Hall (levels unlock at VH 1, 2, 3, 5, 7, 8, 9, 10)', () => {
-    expect(CONFIG.walls.levels.map((l) => l.townHall)).toEqual([1, 2, 3, 5, 7, 8, 9, 10]);
-    expect(checkWallUpgrade(village(1, 2, 1e6))).toMatchObject({ ok: false, reason: 'Requires VH2' });
-    const vh4 = village(4, 2, 1e6);
-    vh4.wallLevel = 3;
-    expect(checkWallUpgrade(vh4)).toMatchObject({ ok: false, reason: 'Requires VH5' });
-    const vh5 = village(5, 2, 1e6);
-    vh5.wallLevel = 3;
-    expect(checkWallUpgrade(vh5)).toMatchObject({ ok: true, level: 4 });
-    const vh9 = village(9, 2, 1e6);
-    vh9.wallLevel = 7;
-    expect(checkWallUpgrade(vh9)).toMatchObject({ ok: false, reason: 'Requires VH10' });
-    const vh10 = village(10, 2, 1e6);
-    vh10.wallLevel = 8;
-    expect(checkWallUpgrade(vh10)).toMatchObject({ ok: false, reason: 'Max level', cost: null });
+  it('is gated by the Village Hall: one wall level every 2 halls (Level N at Hall 2N - 1, v0.11)', () => {
+    expect(CONFIG.walls.levels.map((l) => l.townHall)).toEqual([1, 3, 5, 7, 9, 11, 13, 15, 17, 19]);
+    expect(checkWallUpgrade(village(1, 2, 1e6))).toMatchObject({ ok: false, reason: 'Requires VH3' });
+    expect(checkWallUpgrade(village(2, 2, 1e6))).toMatchObject({ ok: false, reason: 'Requires VH3' });
+    expect(checkWallUpgrade(village(3, 2, 1e6))).toMatchObject({ ok: true, level: 2 });
+    const vh6 = village(6, 2, 1e6);
+    vh6.wallLevel = 3;
+    expect(checkWallUpgrade(vh6)).toMatchObject({ ok: false, reason: 'Requires VH7' });
+    const vh7 = village(7, 2, 1e6);
+    vh7.wallLevel = 3;
+    expect(checkWallUpgrade(vh7)).toMatchObject({ ok: true, level: 4 });
+    const vh18 = village(18, 2, 1e6);
+    vh18.wallLevel = 9;
+    expect(checkWallUpgrade(vh18)).toMatchObject({ ok: false, reason: 'Requires VH19' });
+    const vh20 = village(20, 2, 1e6);
+    vh20.wallLevel = 10;
+    expect(checkWallUpgrade(vh20)).toMatchObject({ ok: false, reason: 'Max level', cost: null });
   });
 
   it('not during a wave, and not with no walls', () => {
@@ -110,7 +112,7 @@ describe('Upgrade Walls (every wall at once)', () => {
 
 describe('new walls start at the village wall level', () => {
   it('a placed wall is at the current level and costs what one wall at that level has cost', () => {
-    const gs = village(5, 2, 1e6);
+    const gs = village(7, 2, 1e6);
     gs.upgradeWalls();
     gs.upgradeWalls();
     gs.upgradeWalls();
@@ -185,5 +187,34 @@ describe('saving the wall level', () => {
     expect(validateSave({ ...base, wallLevel: 1.5 })).toBe(false);
     expect(validateSave({ ...base, wallLevel: 4 })).toBe(false); // above the Village Hall (3)
     expect(validateSave({ ...base, wallLevel: maxLevel('wall') + 1 })).toBe(false);
+  });
+});
+
+describe('v0.11: 10 wall levels (save version 8)', () => {
+  // A version 7 save (8 wall levels) with its walls at `level`, at Village Hall `vh`.
+  const oldSave = (vh, level) => {
+    const gs = village(vh, 3, 1000);
+    gs.wallLevel = level;
+    for (const w of walls(gs)) w.level = level;
+    return { ...serializeGame(gs), version: 7 };
+  };
+
+  it('old Levels 6-8 become 7-9 (same picture and strength); Levels 1-5 stay; the save stays valid', () => {
+    for (const [vh, from, to] of [[10, 8, 9], [9, 7, 8], [8, 6, 7], [7, 5, 5], [2, 2, 2]]) {
+      const p = parseSave(JSON.stringify(oldSave(vh, from)));
+      expect(p.status, `VH${vh} L${from}`).toBe('ok');
+      expect(p.data.wallLevel).toBe(to);
+      expect(p.data.buildings.filter((b) => b.type === 'wall').every((b) => b.level === to)).toBe(true);
+      expect(CONFIG.walls.levels[to - 1].hp).toBe([400, 550, 800, 1150, 1600, 2200, 2980, 3800][from - 1]); // its old HP
+    }
+  });
+
+  it('walls above the new hall rule are kept, but can\'t upgrade until the hall catches up', () => {
+    const p = parseSave(JSON.stringify(oldSave(10, 8)));
+    const gs = new GameState({ storage: memoryStorage() });
+    gs.loadFromSave(p.data);
+    gs.gold = 1e6;
+    expect(gs.wallLevel).toBe(9); // above Level 5, what Village Hall 10 now allows
+    expect(checkWallUpgrade(gs)).toMatchObject({ ok: false, reason: 'Requires VH19' });
   });
 });

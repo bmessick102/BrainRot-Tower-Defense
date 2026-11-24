@@ -14,8 +14,11 @@ import { GameState } from '../src/state/GameState.js';
 import { MAP } from '../src/mapTiles.js';
 import { makeStateWithTownHall } from './helpers.js';
 
-const MAX = 15;
+const MAX = 20; // (v0.11: Village Halls 16-20)
 const halls = Array.from({ length: MAX }, (_, i) => i + 1);
+// Wave stages (rules.waveStages): 15, by wave number since v0.9.5 (they were the Village Halls before).
+const STAGES = 15;
+const stages = Array.from({ length: STAGES }, (_, i) => i + 1);
 
 /** Put `n` buildings of `type` on free grass around the Village Hall (each with a tile of space around it). */
 function place(s, type, n, level = 1) {
@@ -39,8 +42,8 @@ function memoryStorage() {
   return { getItem: (k) => (m.has(k) ? m.get(k) : null), setItem: (k, v) => m.set(k, String(v)), removeItem: (k) => m.delete(k) };
 }
 
-describe('Village Halls 1-15: caps', () => {
-  it('Village Hall 15 is the top level; every per-hall table has 15 entries', () => {
+describe('Village Halls 1-20: caps', () => {
+  it('Village Hall 20 is the top level; every per-hall table has 20 entries', () => {
     expect(CONFIG.rules.maxTownHallLevel).toBe(MAX);
     expect(maxLevel('townHall')).toBe(MAX);
     expect(CONFIG.townHall.levels).toHaveLength(MAX);
@@ -52,29 +55,30 @@ describe('Village Halls 1-15: caps', () => {
     expect(checkUpgrade(s, s.buildings[0])).toMatchObject({ ok: false, reason: 'Max level' });
   });
 
-  it('the caps per hall (Village Halls 10-15) are exactly the agreed ones', () => {
-    // [VH10, VH11, VH12, VH13, VH14, VH15]
+  it('the caps per hall (Village Halls 10-20) are exactly the agreed ones', () => {
+    // [VH10, VH11, ... VH20]
+    const one = Array(11).fill(1);
     const expected = {
-      ra: [2, 3, 4, 4, 5, 6],
-      wizard: [4, 5, 6, 6, 6, 6],
-      catapult: [1, 2, 2, 3, 3, 4],
-      ksi: [3, 4, 4, 5, 5, 6],
-      cannon: [6, 7, 8, 9, 10, 11], // (v0.10.1: one more Cannon and Locklair Tower per hall after 10)
-      archer: [5, 6, 7, 8, 9, 10],
-      mortar: [5, 5, 6, 6, 7, 8],
-      spear: [3, 4, 4, 4, 5, 6],
-      flock: [3, 3, 4, 4, 5, 6],
-      firework: [3, 3, 4, 4, 4, 4],
-      mousetrap: [5, 5, 5, 6, 6, 6],
-      mine: [6, 7, 7, 7, 7, 8],
-      storage: [5, 6, 6, 7, 7, 8],
-      house: [5, 6, 6, 6, 6, 7],
-      wall: [132, 144, 156, 168, 180, 192],
-      townHall: [1, 1, 1, 1, 1, 1], rvlab: [1, 1, 1, 1, 1, 1], dj: [1, 1, 1, 1, 1, 1], fuelStation: [1, 1, 1, 1, 1, 1], altar: [1, 1, 1, 1, 1, 1],
-      queenAltar: [1, 1, 1, 1, 1, 1] // the Hatsune Queen (from VH8)
+      ra: [2, 3, 4, 4, 5, 6, 7, 7, 7, 8, 8],
+      wizard: [4, 5, 6, 6, 6, 6, 6, 6, 6, 6, 6],
+      catapult: [1, 2, 2, 3, 3, 4, 4, 5, 5, 5, 6],
+      ksi: [3, 4, 4, 5, 5, 6, 6, 7, 7, 8, 8],
+      cannon: [6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16], // (v0.10.1: one more Cannon and Locklair Tower per hall after 10)
+      archer: [5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15],
+      mortar: [5, 5, 6, 6, 7, 8, 9, 9, 10, 10, 10],
+      spear: [3, 4, 4, 4, 5, 6, 6, 7, 7, 7, 8],
+      flock: [3, 3, 4, 4, 5, 6, 6, 6, 7, 7, 8],
+      firework: [3, 3, 4, 4, 4, 4, 4, 4, 4, 4, 4],
+      mousetrap: [5, 5, 5, 6, 6, 6, 6, 6, 6, 7, 7],
+      mine: [6, 7, 7, 7, 7, 8, 8, 9, 9, 9, 10],
+      storage: [5, 6, 6, 7, 7, 8, 8, 9, 9, 10, 10],
+      house: [5, 6, 6, 6, 6, 7, 7, 7, 8, 8, 9],
+      wall: [132, 144, 156, 168, 180, 192, 204, 216, 228, 240, 252],
+      townHall: one, rvlab: one, dj: one, fuelStation: one, altar: one,
+      queenAltar: one // the Hatsune Queen (from VH8)
     };
     expect(Object.keys(expected).sort()).toEqual([...BUILDING_TYPES].sort());
-    for (const [t, caps] of Object.entries(expected)) expect([10, 11, 12, 13, 14, 15].map((th) => limitFor(t, th)), t).toEqual(caps);
+    for (const [t, caps] of Object.entries(expected)) expect([10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20].map((th) => limitFor(t, th)), t).toEqual(caps);
   });
 
   it('what each new hall adds (hallUnlocks: the Village Hall panel lists it)', () => {
@@ -84,7 +88,13 @@ describe('Village Halls 1-15: caps', () => {
     expect(adds(13)).toEqual({ cannon: 1, archer: 1, ksi: 1, mousetrap: 1, catapult: 1, storage: 1, wall: 12 });
     expect(adds(14)).toEqual({ cannon: 1, archer: 1, mortar: 1, spear: 1, flock: 1, ra: 1, wall: 12 });
     expect(adds(15)).toEqual({ cannon: 1, archer: 1, mortar: 1, spear: 1, ksi: 1, flock: 1, ra: 1, catapult: 1, mine: 1, storage: 1, house: 1, wall: 12 });
-    expect(hallUnlocks(16)).toEqual([]);
+    // v0.11: Village Halls 16-20.
+    expect(adds(16)).toEqual({ cannon: 1, archer: 1, mortar: 1, ra: 1, wall: 12 });
+    expect(adds(17)).toEqual({ cannon: 1, archer: 1, ksi: 1, spear: 1, catapult: 1, mine: 1, storage: 1, wall: 12 });
+    expect(adds(18)).toEqual({ cannon: 1, archer: 1, mortar: 1, flock: 1, house: 1, wall: 12 });
+    expect(adds(19)).toEqual({ cannon: 1, archer: 1, ksi: 1, mousetrap: 1, ra: 1, storage: 1, wall: 12 });
+    expect(adds(20)).toEqual({ cannon: 1, archer: 1, spear: 1, flock: 1, catapult: 1, mine: 1, house: 1, wall: 12 });
+    expect(hallUnlocks(21)).toEqual([]);
     expect(hallUnlocks(1)).toEqual([]);
     // Defenses first (shop order), walls last.
     expect(hallUnlocks(11).map((u) => u.type)).toEqual(['cannon', 'archer', 'wizard', 'spear', 'ksi', 'ra', 'catapult', 'mine', 'storage', 'house', 'wall']);
@@ -94,12 +104,37 @@ describe('Village Halls 1-15: caps', () => {
     for (const t of BUILDING_TYPES) for (let th = 2; th <= MAX; th++) expect(limitFor(t, th), `${t} VH${th}`).toBeGreaterThanOrEqual(limitFor(t, th - 1));
   });
 
-  it('Village Halls 11-15 add 5 to 8 defenses each (v0.10.1); every mergeable defense ends even at Village Hall 15', () => {
+  it('Village Halls 11-20 add 4 to 8 defenses each; every mergeable defense ends even at Village Halls 15 and 20', () => {
     const defenses = (th) => DEFENSE_TYPES.reduce((n, t) => n + limitFor(t, th), 0);
     expect(defenses(10)).toBe(40);
     expect([11, 12, 13, 14, 15].map(defenses)).toEqual([47, 54, 59, 65, 73]);
+    expect([16, 17, 18, 19, 20].map(defenses)).toEqual([77, 82, 86, 91, 96]); // (v0.11)
     // (Cannon and Locklair Tower grow by one every hall, the user's call; every other mergeable defense ends even.)
-    for (const t of DEFENSE_TYPES) if (CONFIG.merges[t] && t !== 'cannon' && t !== 'archer') expect(limitFor(t, 15) % 2, t).toBe(0);
+    for (const th of [15, 20]) for (const t of DEFENSE_TYPES) if (CONFIG.merges[t] && t !== 'cannon' && t !== 'archer') expect(limitFor(t, th) % 2, `${t} VH${th}`).toBe(0);
+  });
+
+  it('a Village Hall 20 village with every building it allows fits on the map, with a tile of space between buildings', () => {
+    const s = makeStateWithTownHall({ gold: 1e9, tutorialDone: true }, MAX);
+    // Each building takes the first spot (row by row) whose footprint plus a one-tile margin is free grass.
+    const pack = (type, n) => {
+      const { w, h } = footprintDims(type);
+      for (let r = 0; r < 60 && n > 0; r++) for (let c = 0; c < 60 && n > 0; c++) {
+        if (canPlaceRect(s.buildings, c - 1, r - 1, w + 2, h + 2).ok) { s.buildings.push(createBuilding(s, type, c, r, 1)); n--; }
+      }
+      return n;
+    };
+    let tiles = 0;
+    for (const t of BUILDING_TYPES) {
+      if (t === 'townHall' || t === 'wall') continue;
+      expect(pack(t, limitFor(t, MAX)), `no room for ${t}`).toBe(0);
+      const { w, h } = footprintDims(t);
+      tiles += w * h * limitFor(t, MAX);
+    }
+    for (const t of BUILDING_TYPES) if (t !== 'wall') expect(countOwned(s.buildings, t), t).toBe(limitFor(t, MAX));
+    // ...and its 252 walls still have room on what's left.
+    let free = 0;
+    for (let c = 0; c < 60; c++) for (let r = 0; r < 60; r++) if (canPlaceRect(s.buildings, c, r, 1, 1).ok) free++;
+    expect(free).toBeGreaterThan(limitFor('wall', MAX) * 2);
   });
 
   it('the shop allows each type up to its cap at Village Hall 13, then "Limit reached"', () => {
@@ -125,12 +160,12 @@ describe('Village Hall upgrades: cost, health, capacity', () => {
       expect(L[th - 1].hp).toBeGreaterThan(L[th - 2].hp);
       expect(L[th - 1].capacity).toBeGreaterThan(L[th - 2].capacity);
     }
-    expect(L.slice(10).map((l) => l.upgradeCost)).toEqual([250000, 300000, 340000, 380000, 410000]);
-    expect(L.slice(10).map((l) => l.hp)).toEqual([11180, 13975, 17469, 21836, 27295]);
-    expect(L.slice(10).map((l) => l.capacity)).toEqual([5000, 5500, 6000, 6500, 7000]);
+    expect(L.slice(10).map((l) => l.upgradeCost)).toEqual([250000, 300000, 340000, 380000, 410000, 450000, 480000, 520000, 550000, 600000]);
+    expect(L.slice(10).map((l) => l.hp)).toEqual([11180, 13975, 17469, 21836, 27295, 34119, 42649, 53311, 66639, 83299]);
+    expect(L.slice(10).map((l) => l.capacity)).toEqual([5000, 5500, 6000, 6500, 7000, 7500, 8000, 8500, 9000, 9500]);
   });
 
-  it('each upgrade fits in the gold the hall before it can hold (Village Halls 11-15)', () => {
+  it('each upgrade fits in the gold the hall before it can hold (Village Halls 11-20)', () => {
     for (let th = 11; th <= MAX; th++) expect(L[th - 1].upgradeCost, `VH${th}`).toBeLessThanOrEqual(maxGold(th - 1));
   });
 });
@@ -201,7 +236,7 @@ describe('waves at Village Halls 12-15', () => {
   const strength = (c) => waveStrength(c) * c.hpMultiplier;
 
   it('every base wave is valid: whole counts, its entrances, a finite health multiplier', () => {
-    for (const th of halls) {
+    for (const th of stages) {
       const c = waveComposition(th);
       for (const k of ENEMY_KINDS) expect(Number.isInteger(c[k] || 0) && (c[k] || 0) >= 0, `${k} VH${th}`).toBe(true);
       expect(Number.isFinite(c.hpMultiplier) && c.hpMultiplier > 0).toBe(true);
@@ -210,10 +245,10 @@ describe('waves at Village Halls 12-15', () => {
   });
 
   it('each hall is tougher than the one before, gently past Village Hall 11 (topHallGrowth)', () => {
-    for (let th = 2; th <= MAX; th++) expect(strength(waveComposition(th)), `VH${th}`).toBeGreaterThan(strength(waveComposition(th - 1)));
+    for (let th = 2; th <= STAGES; th++) expect(strength(waveComposition(th)), `VH${th}`).toBeGreaterThan(strength(waveComposition(th - 1)));
     const G = CONFIG.rules.topHallGrowth;
     expect(G.from).toBe(12);
-    for (let th = 12; th <= MAX; th++) {
+    for (let th = 12; th <= STAGES; th++) {
       const ratio = strength(waveComposition(th)) / strength(waveComposition(th - 1));
       expect(ratio, `VH${th}`).toBeGreaterThan(1.02);
       expect(ratio, `VH${th}`).toBeLessThan(1.15); // well under the x1.35 of Village Halls 6-11
@@ -228,7 +263,7 @@ describe('waves at Village Halls 12-15', () => {
 
   it('no new enemies past wave stage 11 (wave 48): same themes and debut waves; higher stages are capped at 15', () => {
     const S = CONFIG.rules.waveStages;
-    for (let st = 12; st <= MAX; st++) {
+    for (let st = 12; st <= STAGES; st++) {
       expect(themesAt(st)).toEqual(themesAt(11));
       expect(debutKindsAt(S[st - 1])).toEqual(debutKindsAt(S[10]));
     }

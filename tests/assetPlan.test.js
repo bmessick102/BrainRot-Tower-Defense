@@ -1,4 +1,5 @@
 // v0.6.2: what loads up front and what streams in later (src/assetPlan.js).
+import { CONFIG } from '../src/config.js';
 import { describe, it, expect } from 'vitest';
 import fs from 'node:fs';
 import path from 'node:path';
@@ -64,7 +65,7 @@ describe('asset plan', () => {
     expect(vh3).toContain('bld_cannon_lv2');           // levels 3-4
     expect(vh3).not.toContain(levelArtKey('cannon', 9)); // not yet
     expect(vh3.every(isDeferredImage)).toBe(true);
-    // At the top hall it's every deferred picture (the heroes' altars reach their last picture at Level 13).
-    expect(new Set(reachableImageKeys(15))).toEqual(new Set(IMAGE_FILES.map((f) => f.key).filter(isDeferredImage)));
+    // At the top hall it's every deferred picture (the heroes' altars reach their last picture at Level 17, v0.11).
+    expect(new Set(reachableImageKeys(CONFIG.rules.maxTownHallLevel))).toEqual(new Set(IMAGE_FILES.map((f) => f.key).filter(isDeferredImage)));
   });
 });

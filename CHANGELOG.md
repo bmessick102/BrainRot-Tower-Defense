@@ -2,6 +2,22 @@
 
 The version shows in the bottom-left corner of every screen (`package.json` `version` plus the commit). Details for everything below are in [README.md](README.md).
 
+## 0.11.0
+
+Village Halls 16-20 with the user's five new hall pictures, walls to 10 levels (one every 2 halls), both heroes to Level 20, and two new achievements. **Database:** run `supabase/migration-2026-11-23-village-halls-20.sql` (raises the server's Village Hall cap from 15 to 20; without it a Hall 16-20 village shows as 15 on the leaderboard and in player search). **Save version 8:** walls at Level 6+ move up one level (same picture and HP).
+
+### New Features
+- **Village Halls 16-20** (`rules.maxTownHallLevel` 15 -> 20; `townHall.levels` 16-20: upgrade 450,000 / 480,000 / 520,000 / 550,000 / 600,000 gold, HP x1.25 per level to 83,299, capacity +500 to 9,500; each upgrade fits the gold the hall before can hold). Every per-hall table now has 20 entries (`limits.*`, `fuelStation.spellSlots` stays 5). Each hall adds +1 Cannon and +1 Locklair Tower plus 2-3 others in turn (VH16 Mortar, Rah; VH17 KSI, Spear, Diddypult, Mine, Storage; VH18 F.L.O.C.K, Mortar, House; VH19 Rah, KSI, Mousetrap, Storage; VH20 Spear, F.L.O.C.K, Diddypult, Mine, House) and +12 walls (252 at VH20). Defense totals VH16-20: 77, 82, 86, 91, 96; every mergeable defense except Cannon / Locklair is even at VH20. A full VH20 village fits the map with a tile between buildings (new test).
+- **Village Hall pictures** `bld_townHall_lv6`-`lv10` (the user's "Village Hall 11"-"15" drops): one per 2 levels, Halls 11-12 ... 19-20 (they reused the Level 10 picture before). Village Hall sizes now grow over 20 levels (`LEVEL_SIZE`), so Halls 1-10 draw up to 3% smaller.
+- **Walls: 10 levels** (`walls.levels`): a new Level 6 (the user's dark stone tower, 1,900 HP, 220 gold) and Level 10 (red skull fortress, 4,800 HP, 1,200 gold); the skull fortress / lava block / lava tower moved from 6-8 to 7-9 with their HP and price. Art: `art-source/buildings/bld_wall_lv7`-`lv9.png` are the old `lv6`-`lv8` (git mv); the two new pictures were scaled onto the shared 1024 canvas at the old pillars' width and baseline so the group crop and every old wall's size stay the same. `WALL_RUBBLE`: stone to Level 6, skull 7, lava 8-10. Pillar widths per level (`PILLAR_WIDTHS` in WallView.js): the moved pictures keep their old widths, Level 6 0.48, Level 10 0.62 (`PILLAR_WIDTH.maxLevel` 8 used to clamp anything higher). Wall Breakers one-shot Levels 1-7, Levels 8-10 take two.
+- **Both heroes to Level 20** (`altar.levels`, `queenAltar.levels` 16-20; 10,000 Burgers each, the top Burger cap; the King x1.15 altar HP / x1.12 health / x1.1 damage per level to 27,130 / 17,628 / 921, the Queen x1.15 / x1.075 / x1.067 to 34,155 / 9,487 / 550). Altar pictures every 4 levels (`LEVELS_PER_ART_BY_TYPE` / `ART_LEVELS` `altar: 4, queenAltar: 4`).
+- **Achievements** `hall15` "Brainrot Empire" (60,000 gold) and `hall20` "Eternal Brainrot" (150,000), in the Builder tab (a tab holds 10 cards; Village is full).
+
+### Changes
+- **Walls upgrade every 2 Village Halls** (`walls.levels[].townHall` 1, 3, 5 ... 19; was 1, 2, 3, 5, 7, 8, 9, 10). `migrateV7` (save version 7 -> 8) adds one to `wallLevel` and each wall's level when it's 6 or more, so a wall keeps its picture and HP; that stays within the save's Village Hall level, so old saves stay valid. Walls above the new rule are kept and upgrade again once the hall catches up.
+- **The Hatsune Queen's levels follow the hall like the Brisket King's** (`queenAltar.levels[].townHall`: 8 for Levels 1-8, then N for Level N; was two levels per hall from VH8): both heroes have the same top level at every hall from 8. Her stats per level are unchanged, so she's stronger than before at Halls 8-13 (at VH8 her Level 8 has 1.24x the King's dps and about his health) and the same from VH14.
+- Tests: wave stages are their own 15 (no longer tied to the hall count); the full-village map test packs buildings with a one-tile margin.
+
 ## 0.10.3
 
 The Great Pyramid of Rah stands centered on its tile, and every Tower of Rah is drawn smaller to keep it above a Level 8 one. No save or database changes.

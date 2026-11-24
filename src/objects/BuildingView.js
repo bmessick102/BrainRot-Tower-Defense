@@ -66,18 +66,18 @@ export function genericRubbleKeys(scene) {
 // Rubble art for destroyed walls, by level (the first entry whose maxLevel covers the wall's level).
 export const WALL_RUBBLE = [
   { maxLevel: 1, key: 'bld_wall_rubble_wood' },   // the wooden post
-  { maxLevel: 5, key: 'bld_wall_rubble_stone' },  // the steel-banded post on a stone base, and the stone blocks
-  { maxLevel: 6, key: 'bld_wall_rubble_skull' },  // the skull fortress block
-  { maxLevel: 8, key: 'bld_wall_rubble_lava' }    // the lava block and the lava tower
+  { maxLevel: 6, key: 'bld_wall_rubble_stone' },  // the steel-banded post on a stone base, the stone blocks, the dark stone tower (v0.11)
+  { maxLevel: 7, key: 'bld_wall_rubble_skull' },  // the skull fortress block
+  { maxLevel: 10, key: 'bld_wall_rubble_lava' }   // the lava block, the lava tower and the red skull fortress (v0.11)
 ];
 
 // Each picture covers this many building levels: levels 1-2 use bld_<type>_lv1, 3-4 use _lv2 ... 9-10 use _lv5.
 export const LEVELS_PER_ART = 2;
-// Types with a picture for every level (the RV Lab: 5 levels, 5 pictures; walls: 8 levels, 8 pictures; DJ
+// Types with a picture for every level (the RV Lab: 5 levels, 5 pictures; walls: 10 levels, 10 pictures since v0.11; DJ
 // Babyface: a picture per level, and a level without one yet shows the closest lower picture).
 // Catapult: 5 levels, a picture each. (The Spear Thrower, 10 levels / 5 pictures, and the Fuel Station, 8 levels /
 // 4 pictures, use the usual picture per 2 levels and grow on the levels in between, like the Cannon.)
-const LEVELS_PER_ART_BY_TYPE = { rvlab: 1, wall: 1, dj: 1, catapult: 1, altar: 3, queenAltar: 3 }; // (the heroes' altars: 15 levels, a picture every 3: v0.10.1)
+const LEVELS_PER_ART_BY_TYPE = { rvlab: 1, wall: 1, dj: 1, catapult: 1, altar: 4, queenAltar: 4 }; // (the heroes' altars: 20 levels, a picture every 4: v0.11; every 3 for 15 levels in v0.10.1)
 
 /** Which picture (1-based) a building level shows. */
 export function artTier(level, type = null) {

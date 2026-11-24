@@ -87,7 +87,7 @@ export const CONFIG = {
     // waves grow gentler than the endless formula above: x `count` enemies and x `hp` health per stage (x1.07
     // strength). Kinds that join later (fromWave) grow the same way past their stage.
     topHallGrowth: { from: 12, count: 1.04, hp: 1.03 },
-    maxTownHallLevel: 15,
+    maxTownHallLevel: 20, // (v0.11: 15 -> 20)
     // (v0.6.1-v0.7 had Bonus Slots at Village Hall 11: 5 extra defenses of any kind past their caps. v0.8 replaced
     // them with fixed caps per hall (limits). A village that built past a cap keeps those buildings, but can't build
     // another of that type until it's back under the cap: checkBuy in src/logic/buildings.js.)
@@ -138,7 +138,15 @@ export const CONFIG = {
       { upgradeCost: 300000, hp: 13975, capacity: 5500 },
       { upgradeCost: 340000, hp: 17469, capacity: 6000 },
       { upgradeCost: 380000, hp: 21836, capacity: 6500 },
-      { upgradeCost: 410000, hp: 27295, capacity: 7000 }
+      { upgradeCost: 410000, hp: 27295, capacity: 7000 },
+      // v0.11: Village Halls 16-20 (the user's new pictures; HP x1.25, capacity +500 per level). Each upgrade fits in the
+      // gold the hall before it can hold (top storages + the hall): 450,000 <= 495,000 (VH15: 8 storages), 480,000 <=
+      // 495,500 (VH16: 8), 520,000 <= 557,000 (VH17: 9), 550,000 <= 557,500 (VH18: 9), 600,000 <= 619,000 (VH19: 10).
+      { upgradeCost: 450000, hp: 34119, capacity: 7500 },
+      { upgradeCost: 480000, hp: 42649, capacity: 8000 },
+      { upgradeCost: 520000, hp: 53311, capacity: 8500 },
+      { upgradeCost: 550000, hp: 66639, capacity: 9000 },
+      { upgradeCost: 600000, hp: 83299, capacity: 9500 }
     ]
   },
   // v0.5: Levels 6-10 make 12-33% more (same fill time): late halls took 2-10 hours of full mines to max out.
@@ -223,7 +231,7 @@ export const CONFIG = {
     name: "Fuel Station",
     size: 2,
     unlockTownHall: 2,
-    spellSlots: [0, 1, 1, 2, 2, 3, 3, 4, 4, 5, 5, 5, 5, 5, 5],
+    spellSlots: [0, 1, 1, 2, 2, 3, 3, 4, 4, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5],
     powerPerLevel: 0.08,
     // 8 levels, a picture per 2; HP x1.25 per level; each level needs a Village Hall level (VH2 -> VH10).
     levels: [
@@ -279,10 +287,11 @@ export const CONFIG = {
     },
     levels: [
       { cost: 3000, hp: 900, heroHp: 1100, heroDamage: 80 },
-      // His upgrades (Levels 2-15; 15 levels since v0.10.1, the user's call) cost Burgers (RP), like the RV Lab and
-      // Fuel Station (user, 2026-11-20); each fits the Burger cap (rules.rpCaps) of the RV Lab a village can have at
-      // the Village Hall that level needs (Level N needs VH N; the lab reaches level VH - 3). Level 5+ needs an RV Lab
-      // (no lab: cap 400). Levels 11-15: x1.15 altar HP, x1.12 his health, x1.1 his damage per level.
+      // His upgrades (Levels 2-20; 15 levels since v0.10.1, 20 since v0.11, the user's calls) cost Burgers (RP), like the
+      // RV Lab and Fuel Station (user, 2026-11-20); each fits the Burger cap (rules.rpCaps) of the RV Lab a village can
+      // have at the Village Hall that level needs (Level N needs VH N; the lab reaches level VH - 3). Level 5+ needs an
+      // RV Lab (no lab: cap 400). Levels 11-20: x1.15 altar HP, x1.12 his health, x1.1 his damage per level; Levels
+      // 16-20 cost the top Burger cap (10,000), like Level 15.
       { cost: 150, costCurrency: 'rp', hp: 1125, heroHp: 1320, heroDamage: 94 },
       { cost: 250, costCurrency: 'rp', hp: 1406, heroHp: 1584, heroDamage: 111 },
       { cost: 400, costCurrency: 'rp', hp: 1758, heroHp: 1901, heroDamage: 131 },
@@ -296,7 +305,12 @@ export const CONFIG = {
       { cost: 7500, costCurrency: 'rp', hp: 8869, heroHp: 7120, heroDamage: 430 },
       { cost: 8500, costCurrency: 'rp', hp: 10199, heroHp: 7974, heroDamage: 473 },
       { cost: 9000, costCurrency: 'rp', hp: 11729, heroHp: 8931, heroDamage: 520 },
-      { cost: 10000, costCurrency: 'rp', hp: 13488, heroHp: 10003, heroDamage: 572 }
+      { cost: 10000, costCurrency: 'rp', hp: 13488, heroHp: 10003, heroDamage: 572 },
+      { cost: 10000, costCurrency: 'rp', hp: 15511, heroHp: 11203, heroDamage: 629 },
+      { cost: 10000, costCurrency: 'rp', hp: 17838, heroHp: 12547, heroDamage: 692 },
+      { cost: 10000, costCurrency: 'rp', hp: 20514, heroHp: 14053, heroDamage: 761 },
+      { cost: 10000, costCurrency: 'rp', hp: 23591, heroHp: 15739, heroDamage: 837 },
+      { cost: 10000, costCurrency: 'rp', hp: 27130, heroHp: 17628, heroDamage: 921 }
     ]
   },
   // The Hatsune Queen's altar (src/logic/queen.js, v0.8): the second hero, a crossbow sniper. Her level is the
@@ -305,10 +319,12 @@ export const CONFIG = {
   // closer than keepAway tiles makes her step away from it (inside her guard area). Sleep, knockouts and waking work
   // like the Brisket King's. Encore Cloak (encore): from the hotbar during a wave, once per wave: for `seconds` she
   // can't be targeted, her bolts deal +damagePct% and pierce `pierce` more enemies, and she heals healPct%.
-  // She comes at Village Hall 8 (limits.queenAltar). Level 1 costs gold; Levels 2-15 (15 since v0.10.1) cost Burgers
-  // and each needs the `townHall` on its level (two levels per hall from VH8, Level 15 at VH15). From VH8 a village can
-  // have a Level 5 RV Lab, so every price fits the top Burger cap (rules.rpCaps: 10,000). Levels 11-15: x1.15 altar
-  // HP, x1.075 her health, x1.067 her damage per level.
+  // She comes at Village Hall 8 (limits.queenAltar). Level 1 costs gold; Levels 2-20 (15 since v0.10.1, 20 since v0.11)
+  // cost Burgers and each needs the `townHall` on its level: like the Brisket King, Level N needs Village Hall N (v0.11,
+  // the user's call: both heroes reach the same level at every hall), so Levels 1-8 all open at VH8, where she comes.
+  // (v0.8-v0.10: two levels per hall from VH8.) From VH8 a village can have a Level 5 RV Lab, so every price fits the
+  // top Burger cap (rules.rpCaps: 10,000; Levels 15-20 cost exactly that). Levels 11-20: x1.15 altar HP, x1.075 her health,
+  // x1.067 her damage per level.
   queenAltar: {
     name: "Hatsune Queen Altar",
     heroName: "Hatsune Queen",
@@ -322,19 +338,24 @@ export const CONFIG = {
     levels: [
       { cost: 25000, townHall: 8, hp: 2400, heroHp: 2400, heroDamage: 160 },
       { cost: 1500, costCurrency: 'rp', townHall: 8, hp: 2760, heroHp: 2580, heroDamage: 171 },
-      { cost: 2000, costCurrency: 'rp', townHall: 9, hp: 3174, heroHp: 2774, heroDamage: 182 },
-      { cost: 2500, costCurrency: 'rp', townHall: 9, hp: 3650, heroHp: 2982, heroDamage: 195 },
-      { cost: 3000, costCurrency: 'rp', townHall: 10, hp: 4198, heroHp: 3205, heroDamage: 208 },
-      { cost: 3500, costCurrency: 'rp', townHall: 10, hp: 4827, heroHp: 3446, heroDamage: 222 },
-      { cost: 4000, costCurrency: 'rp', townHall: 11, hp: 5551, heroHp: 3704, heroDamage: 237 },
-      { cost: 4500, costCurrency: 'rp', townHall: 11, hp: 6384, heroHp: 3982, heroDamage: 253 },
-      { cost: 5000, costCurrency: 'rp', townHall: 12, hp: 7342, heroHp: 4281, heroDamage: 270 },
-      { cost: 5500, costCurrency: 'rp', townHall: 12, hp: 8443, heroHp: 4602, heroDamage: 288 },
-      { cost: 6000, costCurrency: 'rp', townHall: 13, hp: 9709, heroHp: 4947, heroDamage: 307 },
-      { cost: 7000, costCurrency: 'rp', townHall: 13, hp: 11165, heroHp: 5318, heroDamage: 328 },
-      { cost: 8000, costCurrency: 'rp', townHall: 14, hp: 12840, heroHp: 5717, heroDamage: 350 },
+      { cost: 2000, costCurrency: 'rp', townHall: 8, hp: 3174, heroHp: 2774, heroDamage: 182 },
+      { cost: 2500, costCurrency: 'rp', townHall: 8, hp: 3650, heroHp: 2982, heroDamage: 195 },
+      { cost: 3000, costCurrency: 'rp', townHall: 8, hp: 4198, heroHp: 3205, heroDamage: 208 },
+      { cost: 3500, costCurrency: 'rp', townHall: 8, hp: 4827, heroHp: 3446, heroDamage: 222 },
+      { cost: 4000, costCurrency: 'rp', townHall: 8, hp: 5551, heroHp: 3704, heroDamage: 237 },
+      { cost: 4500, costCurrency: 'rp', townHall: 8, hp: 6384, heroHp: 3982, heroDamage: 253 },
+      { cost: 5000, costCurrency: 'rp', townHall: 9, hp: 7342, heroHp: 4281, heroDamage: 270 },
+      { cost: 5500, costCurrency: 'rp', townHall: 10, hp: 8443, heroHp: 4602, heroDamage: 288 },
+      { cost: 6000, costCurrency: 'rp', townHall: 11, hp: 9709, heroHp: 4947, heroDamage: 307 },
+      { cost: 7000, costCurrency: 'rp', townHall: 12, hp: 11165, heroHp: 5318, heroDamage: 328 },
+      { cost: 8000, costCurrency: 'rp', townHall: 13, hp: 12840, heroHp: 5717, heroDamage: 350 },
       { cost: 9000, costCurrency: 'rp', townHall: 14, hp: 14766, heroHp: 6146, heroDamage: 373 },
-      { cost: 10000, costCurrency: 'rp', townHall: 15, hp: 16981, heroHp: 6607, heroDamage: 398 }
+      { cost: 10000, costCurrency: 'rp', townHall: 15, hp: 16981, heroHp: 6607, heroDamage: 398 },
+      { cost: 10000, costCurrency: 'rp', townHall: 16, hp: 19528, heroHp: 7103, heroDamage: 425 },
+      { cost: 10000, costCurrency: 'rp', townHall: 17, hp: 22457, heroHp: 7636, heroDamage: 453 },
+      { cost: 10000, costCurrency: 'rp', townHall: 18, hp: 25826, heroHp: 8209, heroDamage: 483 },
+      { cost: 10000, costCurrency: 'rp', townHall: 19, hp: 29700, heroHp: 8825, heroDamage: 515 },
+      { cost: 10000, costCurrency: 'rp', townHall: 20, hp: 34155, heroHp: 9487, heroDamage: 550 }
     ]
   },
   // Gnome villagers all live in Villager Houses (house.levels[].gnomes; their stats come from the same
@@ -353,28 +374,32 @@ export const CONFIG = {
   // Walls are single tiles (segmentLength 1) that join into a fence with every wall touching them. They
   // used to be 3-tile segments: per wall, the price is a third of a segment's (the same per tile), the HP is
   // a segment's, and 3x as many are allowed. (segmentLength > 1 brings back straight segments rotated with R.)
-  // Eight levels, one picture each (bld_wall_lv1..8, the lava tower on top). Wall levels unlock at Village
-  // Hall 1, 2, 3, 5, 7, 8, 9 and 10 (townHall). Cheap on purpose, so a broken village can wall up again fast.
-  // Levels 1-6 break in one Wall Breaker blast (2,400); Levels 7-8 take two.
+  // Ten levels, one picture each (bld_wall_lv1..10; v0.11, the user's call: a new Level 6 between the stone blocks and
+  // the skull fortress, the old Levels 6-8 moved up to 7-9 (save version 8 renumbers them), and a red skull fortress on
+  // top). One wall level every 2 Village Halls: Level N needs Hall 2N - 1 (1, 3, 5 ... 19; townHall). Cheap on purpose,
+  // so a broken village can wall up again fast. Levels 1-7 break in one Wall Breaker blast (2,400); Levels 8-10 take two.
   // Walls all share one level (state.wallLevel): "Upgrade Walls" raises every wall at once for walls placed x
   // the new level's cost, and a new wall costs the sum of the costs up to the current level (buildings.js).
-  // Upgrading a full set (limits.wall) when a level unlocks costs 720 (L2, VH2), 1,920 (L3, VH3), 5,760 (L4, VH5),
-  // 14,400 (L5, VH7), 32,400 (L6, VH8), 60,000 (L7, VH9) and 105,600 (L8, VH10): about 1.5-8 minutes of full
-  // mines, from VH7 on less than the hall upgrade that unlocked the level, and always well inside that hall's
-  // gold capacity. A full set of new Level 8 walls is 132 x 1,900.
+  // Upgrading a full set (limits.wall) when a level unlocks costs 720 (L2, VH3), 2,880 (L3, VH5), 7,680 (L4, VH7),
+  // 18,000 (L5, VH9), 31,680 (L6, VH11), 50,400 (L7, VH13), 96,000 (L8, VH15), 172,800 (L9, VH17) and 288,000 (L10,
+  // VH19): always well inside that hall's gold capacity (619,000 at VH19). A new Level 10 wall costs 3,320.
+  // (Before v0.11: eight levels at Halls 1, 2, 3, 5, 7, 8, 9, 10. A village whose walls are above the new rule keeps
+  // them; it just can't upgrade until its hall catches up.)
   walls: {
     name: "Wall",
     segmentLength: 1,
     unlockTownHall: 1,
     levels: [
       { cost: 10, hp: 400, townHall: 1 },
-      { cost: 20, hp: 550, townHall: 2 },
-      { cost: 40, hp: 800, townHall: 3 },
-      { cost: 80, hp: 1150, townHall: 5 },
-      { cost: 150, hp: 1600, townHall: 7 },
-      { cost: 300, hp: 2200, townHall: 8 },
-      { cost: 500, hp: 2980, townHall: 9 },
-      { cost: 800, hp: 3800, townHall: 10 }
+      { cost: 20, hp: 550, townHall: 3 },
+      { cost: 40, hp: 800, townHall: 5 },
+      { cost: 80, hp: 1150, townHall: 7 },
+      { cost: 150, hp: 1600, townHall: 9 },
+      { cost: 220, hp: 1900, townHall: 11 },  // (v0.11: the new dark stone tower)
+      { cost: 300, hp: 2200, townHall: 13 },  // the skull fortress (Level 6 before v0.11)
+      { cost: 500, hp: 2980, townHall: 15 },  // the lava block (Level 7 before)
+      { cost: 800, hp: 3800, townHall: 17 },  // the lava tower (Level 8 before)
+      { cost: 1200, hp: 4800, townHall: 19 }  // (v0.11: the red skull fortress, the top wall)
     ]
   },
   defenses: {
@@ -942,7 +967,7 @@ export const CONFIG = {
       art: { key: 'bld_ra_merged', scale: 1.52, standInScale: 1.15, ground: 0.175 }
     }
   },
-  // Per Village Hall level (1-15). Every hall from 11 adds 12 walls. v0.8 (user, 2026-11-22; replaced v0.6.1's Bonus
+  // Per Village Hall level (1-20; 16-20 since v0.11). Every hall from 11 adds 12 walls. v0.8 (user, 2026-11-22; replaced v0.6.1's Bonus
   // Slots): on top of the hall before it, Village Hall 11 adds a Tower of Rah, Gandolf, Diddypult, KSI Tower and Cannon
   // (and, since v0.6.3, a Mine, Storage and House); VH12 a Tower of Rah and Gandolf; VH13 a Diddypult, KSI Tower,
   // Locklair Tower and Storage (so the VH14 upgrade fits); VH14 a Cannon, Mortar, Spear Thrower and F.L.O.C.K Tower;
@@ -951,27 +976,31 @@ export const CONFIG = {
   limits: {
     // Village Halls 11-15 (v0.10.1): +1 Cannon and +1 Locklair Tower each, plus one more of about two other defenses
     // per hall, taking turns; every other mergeable defense ends even at VH15 so each one has a merge partner.
-    mine: [1, 2, 3, 3, 4, 4, 5, 5, 6, 6, 7, 7, 7, 7, 8],
-    storage: [1, 1, 2, 2, 3, 3, 4, 4, 5, 5, 6, 6, 7, 7, 8],
-    house: [1, 1, 2, 2, 3, 3, 4, 4, 5, 5, 6, 6, 6, 6, 7],
-    cannon: [1, 2, 2, 3, 3, 4, 4, 5, 5, 6, 7, 8, 9, 10, 11], // (v0.10.1: one more per Village Hall after 10)
-    archer: [0, 1, 2, 2, 3, 3, 4, 4, 5, 5, 6, 7, 8, 9, 10], // (v0.10.1: one more per Village Hall after 10)
-    mortar: [0, 1, 1, 2, 2, 3, 3, 4, 4, 5, 5, 6, 6, 7, 8],
-    wizard: [0, 0, 1, 1, 2, 2, 3, 3, 4, 4, 5, 6, 6, 6, 6], // (v0.8.2: back to 6 after v0.8.1's cap of 4; they can merge instead)
-    townHall: [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1],
-    wall: [24, 36, 48, 60, 72, 84, 96, 108, 120, 132, 144, 156, 168, 180, 192],
-    firework: [0, 0, 1, 1, 2, 2, 2, 3, 3, 3, 3, 4, 4, 4, 4],
-    catapult: [0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 2, 2, 3, 3, 4], // the final unlock: from Village Hall 10
-    spear: [0, 0, 1, 1, 2, 2, 2, 3, 3, 3, 4, 4, 4, 5, 6],
-    ksi: [0, 0, 0, 0, 1, 1, 2, 2, 3, 3, 4, 4, 5, 5, 6],
-    flock: [0, 0, 1, 1, 1, 2, 2, 2, 3, 3, 3, 4, 4, 5, 6],
-    mousetrap: [0, 1, 2, 2, 3, 3, 4, 4, 5, 5, 5, 5, 6, 6, 6],
-    ra: [0, 0, 0, 0, 0, 1, 1, 1, 2, 2, 3, 4, 4, 5, 6],
-    rvlab: [0, 0, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1],
-    dj: [0, 0, 0, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1],
-    fuelStation: [0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1],
-    altar: [0, 0, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1],
-    queenAltar: [0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 1, 1, 1, 1] // the Hatsune Queen: from Village Hall 8
+    // Village Halls 16-20 (v0.11, the same pattern): +1 Cannon and +1 Locklair Tower each, plus two or three others in
+    // turn (VH16 Mortar, Tower of Rah; VH17 KSI, Spear, Diddypult; VH18 F.L.O.C.K, Mortar; VH19 Tower of Rah, KSI,
+    // Mousetrap; VH20 Spear, F.L.O.C.K, Diddypult), every other mergeable defense even again at VH20; a Mine, Storage
+    // or House now and then (the Storages keep each hall upgrade affordable); +12 walls each.
+    mine: [1, 2, 3, 3, 4, 4, 5, 5, 6, 6, 7, 7, 7, 7, 8, 8, 9, 9, 9, 10],
+    storage: [1, 1, 2, 2, 3, 3, 4, 4, 5, 5, 6, 6, 7, 7, 8, 8, 9, 9, 10, 10],
+    house: [1, 1, 2, 2, 3, 3, 4, 4, 5, 5, 6, 6, 6, 6, 7, 7, 7, 8, 8, 9],
+    cannon: [1, 2, 2, 3, 3, 4, 4, 5, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16], // (v0.10.1: one more per Village Hall after 10)
+    archer: [0, 1, 2, 2, 3, 3, 4, 4, 5, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15], // (v0.10.1: one more per Village Hall after 10)
+    mortar: [0, 1, 1, 2, 2, 3, 3, 4, 4, 5, 5, 6, 6, 7, 8, 9, 9, 10, 10, 10],
+    wizard: [0, 0, 1, 1, 2, 2, 3, 3, 4, 4, 5, 6, 6, 6, 6, 6, 6, 6, 6, 6], // (v0.8.2: back to 6 after v0.8.1's cap of 4; they can merge instead)
+    townHall: [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1],
+    wall: [24, 36, 48, 60, 72, 84, 96, 108, 120, 132, 144, 156, 168, 180, 192, 204, 216, 228, 240, 252],
+    firework: [0, 0, 1, 1, 2, 2, 2, 3, 3, 3, 3, 4, 4, 4, 4, 4, 4, 4, 4, 4],
+    catapult: [0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 2, 2, 3, 3, 4, 4, 5, 5, 5, 6], // the final unlock: from Village Hall 10
+    spear: [0, 0, 1, 1, 2, 2, 2, 3, 3, 3, 4, 4, 4, 5, 6, 6, 7, 7, 7, 8],
+    ksi: [0, 0, 0, 0, 1, 1, 2, 2, 3, 3, 4, 4, 5, 5, 6, 6, 7, 7, 8, 8],
+    flock: [0, 0, 1, 1, 1, 2, 2, 2, 3, 3, 3, 4, 4, 5, 6, 6, 6, 7, 7, 8],
+    mousetrap: [0, 1, 2, 2, 3, 3, 4, 4, 5, 5, 5, 5, 6, 6, 6, 6, 6, 6, 7, 7],
+    ra: [0, 0, 0, 0, 0, 1, 1, 1, 2, 2, 3, 4, 4, 5, 6, 7, 7, 7, 8, 8],
+    rvlab: [0, 0, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1],
+    dj: [0, 0, 0, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1],
+    fuelStation: [0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1],
+    altar: [0, 0, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1],
+    queenAltar: [0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1] // the Hatsune Queen: from Village Hall 8
   },
   // radius (tiles): body size; enemies push apart so they never stack on top of each other.
   // name: shown to players; role: the enemy's job, shown as subtext under the name.

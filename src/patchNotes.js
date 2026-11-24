@@ -2,7 +2,7 @@
 // once per `version` (the first time the title screen opens after an update; saved in ibtd.patchNotes), and its
 // "What's New" button opens it any time. Keep `version` equal to package.json's for the release it describes.
 //
-// One tab per minor update (v0.7.1): PATCH_NOTES is the newest (its tab is "v0.10 · Latest"), PATCH_HISTORY the older
+// One tab per minor update (v0.7.1): PATCH_NOTES is the newest (its tab is "v0.11 · Latest"), PATCH_HISTORY the older
 // ones, newest first. Each has `release` (the tab's name: '0.7'), `version` (its newest patch) and `sections`.
 // When a new minor update ships, the current PATCH_NOTES content moves to the front of PATCH_HISTORY.
 //
@@ -18,16 +18,28 @@
 const allEntries = (release) => release.sections.flatMap((s) => s.entries);
 
 export const PATCH_NOTES = {
-  release: '0.10',
-  version: '0.10.3',
-  title: "What's New in v0.10.3",
+  release: '0.11',
+  version: '0.11.0',
+  title: "What's New in v0.11",
   sections: [
     {
       type: 'feature',
       entries: [
         {
-          version: '0.10.2', icon: { texture: 'bld_ra_merged' }, title: 'Towers of Rah can merge: the Great Pyramid of Rah',
-          text: "Two Level 8 Towers of Rah merge into the Great Pyramid of Rah, whose beam burns twice as hot. Solar Lance: at full heat the beam becomes a lance to the end of its range, burning every enemy in its path for half the beam's damage."
+          version: '0.11.0', icon: { building: 'townHall', level: 19 }, title: 'Village Halls 16 to 20',
+          text: 'Village Halls now go up to 20, with five new looks from Hall 11 (a new one every 2 levels). Each new hall allows another Cannon and Locklair Tower, more of other defenses in turn, and 12 more walls.'
+        },
+        {
+          version: '0.11.0', icon: { building: 'wall', level: 10 }, title: 'Two new wall levels',
+          text: 'Walls now have 10 levels: a dark stone tower at Level 6 and a red skull fortress at Level 10. The skull and lava walls moved up to Levels 7 to 9. Your walls keep their look and strength.'
+        },
+        {
+          version: '0.11.0', icon: { hero: true }, title: 'Both heroes go to Level 20',
+          text: 'The Brisket King and the Hatsune Queen now have 20 levels, one more per Village Hall from 16 to 20, paid in Burgers. Their altars change look every 4 levels.'
+        },
+        {
+          version: '0.11.0', icon: { texture: 'ui_achievement' }, title: 'New achievements: Village Halls 15 and 20',
+          text: 'Brainrot Empire (Village Hall 15) pays 60,000 gold and Eternal Brainrot (Village Hall 20) 150,000. Find them in the Builder tab.'
         }
       ]
     },
@@ -35,46 +47,12 @@ export const PATCH_NOTES = {
       type: 'change',
       entries: [
         {
-          version: '0.10.0', icon: { enemy: 'grunt' }, title: 'Waves get harder by wave, not by Village Hall',
-          text: 'How tough a wave is now depends only on its wave number, so upgrading your Village Hall no longer brings bigger waves: build up freely. More entrances open as the waves go on (all 8 from wave 65).'
+          version: '0.11.0', icon: { building: 'wall', level: 6 }, title: 'Walls upgrade every 2 Village Halls',
+          text: 'A new wall level opens at Village Halls 1, 3, 5 and so on, up to Level 10 at Hall 19. Walls already above what your hall allows stay as they are, and upgrade again once your hall catches up.'
         },
         {
-          version: '0.10.0', icon: { enemy: 'pork' }, title: 'New enemies join at set waves',
-          text: 'Each enemy type first shows up at its own wave, whatever your Village Hall: John Pork at wave 10, the Skibidi Toilet and Bri Bri Bicus Dicus at 14, up to the Grimace Golem at 48. Da Baby Car drives in from wave 18.'
-        },
-        {
-          version: '0.10.1', icon: { hero: true }, title: 'Both heroes go to Level 15',
-          text: 'The Brisket King and the Hatsune Queen now have 15 levels (paid in Burgers), and their altars change look every 3 levels. The Queen gets two levels per Village Hall from 8 to 14, and Level 15 at Village Hall 15.'
-        },
-        {
-          version: '0.10.3', icon: { building: 'ra', level: 8 }, title: 'Towers of Rah are drawn smaller',
-          text: 'Every Tower of Rah is drawn a little smaller, so the Great Pyramid of Rah can sit squarely on its tile and still stand above a Level 8 one. Each level still looks bigger than the one before.'
-        },
-        {
-          version: '0.10.2', icon: { building: 'ra', level: 5 }, title: 'Towers of Rah grow at every level',
-          text: 'Every Tower of Rah level now stands a little taller than the one before (Level 5 used to look smaller than Level 4). Low levels are drawn a bit smaller to make room, so the Great Pyramid fits its tile.'
-        },
-        {
-          version: '0.10.0', icon: { texture: 'hero_queen_select' }, title: 'New Hatsune Queen poses',
-          text: 'The Hatsune Queen has her own pictures now for being knocked out, waking up with a big stretch, and waving when you click on her.'
-        }
-      ]
-    },
-    {
-      type: 'balance',
-      entries: [
-        {
-          version: '0.10.1', icon: { building: 'cannon', level: 1 }, title: 'More defenses at Village Halls 11 to 15',
-          text: 'Every Village Hall after 10 adds a Cannon and a Locklair Tower, plus more of other defenses in turn. At Village Hall 15 every other defense that can merge comes in an even number, so none is left without a merge partner.'
-        }
-      ]
-    },
-    {
-      type: 'fix',
-      entries: [
-        {
-          version: '0.10.3', icon: { texture: 'bld_ra_merged' }, title: 'The Great Pyramid of Rah sits on its tile',
-          text: 'It stood too far back, so its round stone base hung over the back edges of its tile. Now its base sits in the middle of the tile, with the tile’s outline showing all the way around it.'
+          version: '0.11.0', icon: { texture: 'hero_queen_select' }, title: 'The Hatsune Queen levels like the Brisket King',
+          text: 'Her top level now matches your Village Hall, the same as the Brisket King: Levels 1 to 8 all open at Village Hall 8, then one more per hall.'
         }
       ]
     }
@@ -84,6 +62,69 @@ export const PATCH_NOTES = {
 
 /** Older updates, newest first: one What's New tab each (players can read them any time). */
 export const PATCH_HISTORY = [
+  {
+    release: '0.10',
+    version: '0.10.3',
+    sections: [
+      {
+        type: 'feature',
+        entries: [
+          {
+            version: '0.10.2', icon: { texture: 'bld_ra_merged' }, title: 'Towers of Rah can merge: the Great Pyramid of Rah',
+            text: "Two Level 8 Towers of Rah merge into the Great Pyramid of Rah, whose beam burns twice as hot. Solar Lance: at full heat the beam becomes a lance to the end of its range, burning every enemy in its path for half the beam's damage."
+          }
+        ]
+      },
+      {
+        type: 'change',
+        entries: [
+          {
+            version: '0.10.0', icon: { enemy: 'grunt' }, title: 'Waves get harder by wave, not by Village Hall',
+            text: 'How tough a wave is now depends only on its wave number, so upgrading your Village Hall no longer brings bigger waves: build up freely. More entrances open as the waves go on (all 8 from wave 65).'
+          },
+          {
+            version: '0.10.0', icon: { enemy: 'pork' }, title: 'New enemies join at set waves',
+            text: 'Each enemy type first shows up at its own wave, whatever your Village Hall: John Pork at wave 10, the Skibidi Toilet and Bri Bri Bicus Dicus at 14, up to the Grimace Golem at 48. Da Baby Car drives in from wave 18.'
+          },
+          {
+            version: '0.10.1', icon: { hero: true }, title: 'Both heroes go to Level 15',
+            text: 'The Brisket King and the Hatsune Queen now have 15 levels (paid in Burgers), and their altars change look every 3 levels. The Queen gets two levels per Village Hall from 8 to 14, and Level 15 at Village Hall 15.'
+          },
+          {
+            version: '0.10.3', icon: { building: 'ra', level: 8 }, title: 'Towers of Rah are drawn smaller',
+            text: 'Every Tower of Rah is drawn a little smaller, so the Great Pyramid of Rah can sit squarely on its tile and still stand above a Level 8 one. Each level still looks bigger than the one before.'
+          },
+          {
+            version: '0.10.2', icon: { building: 'ra', level: 5 }, title: 'Towers of Rah grow at every level',
+            text: 'Every Tower of Rah level now stands a little taller than the one before (Level 5 used to look smaller than Level 4). Low levels are drawn a bit smaller to make room, so the Great Pyramid fits its tile.'
+          },
+          {
+            version: '0.10.0', icon: { texture: 'hero_queen_select' }, title: 'New Hatsune Queen poses',
+            text: 'The Hatsune Queen has her own pictures now for being knocked out, waking up with a big stretch, and waving when you click on her.'
+          }
+        ]
+      },
+      {
+        type: 'balance',
+        entries: [
+          {
+            version: '0.10.1', icon: { building: 'cannon', level: 1 }, title: 'More defenses at Village Halls 11 to 15',
+            text: 'Every Village Hall after 10 adds a Cannon and a Locklair Tower, plus more of other defenses in turn. At Village Hall 15 every other defense that can merge comes in an even number, so none is left without a merge partner.'
+          }
+        ]
+      },
+      {
+        type: 'fix',
+        entries: [
+          {
+            version: '0.10.3', icon: { texture: 'bld_ra_merged' }, title: 'The Great Pyramid of Rah sits on its tile',
+            text: 'It stood too far back, so its round stone base hung over the back edges of its tile. Now its base sits in the middle of the tile, with the tile’s outline showing all the way around it.'
+          }
+        ]
+      }
+    ],
+    get entries() { return allEntries(this); }
+  },
   {
     release: '0.9',
     version: '0.9.4',

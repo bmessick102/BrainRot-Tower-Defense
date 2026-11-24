@@ -1,6 +1,7 @@
 // Draws one wall (a single tile).
-// Wall art is one pillar per level (bld_wall_lv1..8: wooden post, banded post, stone block, riveted block,
-// gold-trimmed block, skull fortress block, lava block, lava tower), all cropped to one shared box so every
+// Wall art is one pillar per level (bld_wall_lv1..10: wooden post, banded post, stone block, riveted block,
+// gold-trimmed block, dark stone tower (v0.11), skull fortress block, lava block, lava tower, red skull fortress
+// (v0.11)), all cropped to one shared box so every
 // level keeps the same scale and baseline.
 // Walls are drawn as one connected wall: every wall tile has a pillar standing on its center, and wherever
 // two walls are side by side (in any direction: lines, corners, T-junctions, walls running alongside each
@@ -25,16 +26,18 @@ export { WALL_RUBBLE };
 const FLASH_MIN_GAP_MS = 400;
 // On-screen width of the shared pillar box (the widest pillar, the stone blocks), as a share of a tile's
 // width. Walls start small and grow with each level (each level is a new picture), in equal steps from min
-// (Level 1, a thin post) to max (Level 8, a big tower), so a wall's level reads at a glance. About the same
+// (Level 1, a thin post) to max (the top level, a big tower), so a wall's level reads at a glance. About the same
 // average size as the earlier 0.396-0.54 range (10% under the original 0.44-0.6), spread wider. Pillars stand
 // half a tile apart along a wall, and wallLinksFor adds connectors so even the smallest form a solid wall.
-export const PILLAR_WIDTH = { min: 0.3, max: 0.58, maxLevel: 8 };
+// v0.11 (10 levels): one width per level, so every picture keeps the width it had at 8 levels (0.30 ... 0.58 in 0.04
+// steps; the skull and lava walls moved up a level with their widths), the new Level 6 sits between its neighbors (0.48)
+// and the new Level 10 tops them (0.62).
+export const PILLAR_WIDTHS = [0.3, 0.34, 0.38, 0.42, 0.46, 0.48, 0.5, 0.54, 0.58, 0.62];
+export const PILLAR_WIDTH = { min: PILLAR_WIDTHS[0], max: PILLAR_WIDTHS[PILLAR_WIDTHS.length - 1], maxLevel: PILLAR_WIDTHS.length };
 
 /** Pillar box width (share of a tile) for a wall level. */
 export function wallPillarWidth(level) {
-  const top = PILLAR_WIDTH.maxLevel;
-  const t = (Math.max(1, Math.min(top, level)) - 1) / (top - 1);
-  return PILLAR_WIDTH.min + (PILLAR_WIDTH.max - PILLAR_WIDTH.min) * t;
+  return PILLAR_WIDTHS[Math.max(1, Math.min(PILLAR_WIDTHS.length, Math.round(level) || 1)) - 1];
 }
 
 /** Stand a wall pillar sprite (of a wall at `level`) on grid point (x, y): a tile center, or halfway between two. */

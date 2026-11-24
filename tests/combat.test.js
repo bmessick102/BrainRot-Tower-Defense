@@ -143,9 +143,9 @@ describe('combat.js', () => {
     expect(fw.unlockTownHall).toBe(3);
     expect(Math.max(...CONFIG.limits.firework.slice(0, 11))).toBe(3); // (v0.10.1: a 4th from Village Hall 12)
     expect(limitFor('firework', 12)).toBe(4);
-    expect(limitFor('firework', 15)).toBe(4);
-    // Single-tile walls: 3x the old 3-tile segments; every hall from 11 adds 12.
-    expect(CONFIG.limits.wall).toEqual([24, 36, 48, 60, 72, 84, 96, 108, 120, 132, 144, 156, 168, 180, 192]);
+    expect(limitFor('firework', 20)).toBe(4);
+    // Single-tile walls: 3x the old 3-tile segments; every hall from 11 adds 12 (to Village Hall 20, v0.11).
+    expect(CONFIG.limits.wall).toEqual([24, 36, 48, 60, 72, 84, 96, 108, 120, 132, 144, 156, 168, 180, 192, 204, 216, 228, 240, 252]);
   });
 
   it('destroyed defenses never fire', () => {

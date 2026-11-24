@@ -51,7 +51,7 @@ describe('waves.js', () => {
   it('wave stages: rules.waveStages says where each starts; past the last, the last', () => {
     const S = CONFIG.rules.waveStages;
     expect(S[0]).toBe(1);
-    expect(S).toHaveLength(CONFIG.rules.maxTownHallLevel);
+    expect(S).toHaveLength(15); // (wave stages follow the wave number; they were the 15 Village Halls before v0.9.5)
     for (let i = 1; i < S.length; i++) expect(S[i]).toBeGreaterThan(S[i - 1]);
     expect(waveStage(1)).toBe(1);
     expect(waveStage(S[1] - 1)).toBe(1);

@@ -7,7 +7,7 @@ import { ensureHero, heroStats, getAltar, bedtime } from '../src/logic/hero.js';
 import { fightableHeroes, stepHeroes, heroesAfterWave, heroStatsFor, heroOfAltar } from '../src/logic/heroes.js';
 import { stepEnemy } from '../src/logic/enemies.js';
 import { towerFireInterval, towerDamageMult } from '../src/logic/abilities.js';
-import { limitFor, checkBuy, checkUpgrade, levelStats, buildCost, HERO_TYPES } from '../src/logic/buildings.js';
+import { limitFor, checkBuy, checkUpgrade, levelStats, buildCost, HERO_TYPES, maxLevel } from '../src/logic/buildings.js';
 import { rpCap } from '../src/logic/researchPoints.js';
 import { hotbarSlots } from '../src/logic/hotbar.js';
 import { footprintCenter } from '../src/logic/grid.js';
@@ -40,28 +40,34 @@ function oneShot(s, h) {
 }
 
 describe('the Hatsune Queen: her altar', () => {
-  it('1 allowed from Village Hall 8 (15 caps), a hero altar in the Defenses tab', () => {
-    expect(CONFIG.limits.queenAltar).toHaveLength(15);
-    expect([1, 7, 8, 15].map((th) => limitFor('queenAltar', th))).toEqual([0, 0, 1, 1]);
+  it('1 allowed from Village Hall 8 (20 caps), a hero altar in the Defenses tab', () => {
+    expect(CONFIG.limits.queenAltar).toHaveLength(20);
+    expect([1, 7, 8, 15, 20].map((th) => limitFor('queenAltar', th))).toEqual([0, 0, 1, 1, 1]);
     expect(checkBuy(makeStateWithTownHall({ gold: 1e6 }, 7), 'queenAltar').ok).toBe(false);
     expect(checkBuy(makeStateWithTownHall({ gold: 1e6 }, 8), 'queenAltar').ok).toBe(true);
     expect(HERO_TYPES).toContain('queenAltar');
   });
 
-  it('Level 1 costs gold; Levels 2-15 cost Burgers, each gated by its Village Hall (8 to 15, two levels per hall)', () => {
+  it('Level 1 costs gold; Levels 2-20 cost Burgers; like the Brisket King, Level N needs Village Hall N (Levels 1-8 at Hall 8)', () => {
     expect(buildCost('queenAltar')).toBe(25000);
     expect(levelStats('queenAltar', 1).costCurrency).toBeUndefined();
-    for (let l = 2; l <= 15; l++) expect(levelStats('queenAltar', l).costCurrency).toBe('rp');
-    expect(CONFIG.queenAltar.levels.map((l) => l.townHall)).toEqual([8, 8, 9, 9, 10, 10, 11, 11, 12, 12, 13, 13, 14, 14, 15]);
+    expect(maxLevel('queenAltar')).toBe(20);
+    for (let l = 2; l <= 20; l++) expect(levelStats('queenAltar', l).costCurrency).toBe('rp');
+    expect(CONFIG.queenAltar.levels.map((l) => l.townHall)).toEqual([8, 8, 8, 8, 8, 8, 8, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20]);
     const s = makeStateWithTownHall({ gold: 1e6, researchPoints: 1e4, tutorialDone: true }, 8);
     const altar = addBuilding(s, 'queenAltar', 10, 10, 1);
     expect(checkUpgrade(s, altar)).toMatchObject({ ok: true, currency: 'rp', cost: 1500 });
-    altar.level = 2;
+    altar.level = 8;
     expect(checkUpgrade(s, altar)).toMatchObject({ ok: false, currency: 'rp', reason: 'Requires VH9' });
+    // The same top level as the Brisket King at every hall from 8 (his Level N needs Hall N too).
+    for (let th = 8; th <= CONFIG.rules.maxTownHallLevel; th++) {
+      const top = (type) => CONFIG[type].levels.filter((l, i) => (l.townHall || i + 1) <= th).length;
+      expect(top('queenAltar'), `VH${th}`).toBe(Math.min(th, top('altar')));
+    }
   });
 
   it('every Burger price fits the Burger cap of the best RV Lab at the hall it needs', () => {
-    for (let l = 2; l <= 15; l++) {
+    for (let l = 2; l <= 20; l++) {
       const vh = levelStats('queenAltar', l).townHall;
       const s = makeStateWithTownHall({}, vh);
       addBuilding(s, 'rvlab', 20, 20, Math.min(5, vh - 3));
@@ -76,13 +82,15 @@ describe('the Hatsune Queen: her altar', () => {
     expect(st.damage).toBe(CONFIG.queenAltar.levels[2].heroDamage);
     expect(st.attackRange).toBe(5);
     expect(st.guardRange).toBe(8);
-    for (let l = 1; l <= 10; l++) { // against the Brisket King at the Village Hall her level needs
-      const q = queenStats({ type: 'queenAltar', level: l });
-      const b = heroStats({ type: 'altar', level: Math.min(10, levelStats('queenAltar', l).townHall) });
-      expect(q.maxHp).toBeLessThan(b.maxHp);
+    // Against the Brisket King at each Village Hall from 8, both at the top level that hall allows (the same level since
+    // v0.11): her health about his or less (a little more only at Hall 8), damage per second within 0.7-1.3x of his.
+    for (let th = 8; th <= CONFIG.rules.maxTownHallLevel; th++) {
+      const q = queenStats({ type: 'queenAltar', level: th });
+      const b = heroStats({ type: 'altar', level: th });
+      expect(q.maxHp, `VH${th}`).toBeLessThan(b.maxHp * 1.05);
       const ratio = (q.damage / q.attackInterval) / (b.damage / b.attackInterval);
-      expect(ratio).toBeGreaterThan(0.7);
-      expect(ratio).toBeLessThan(1.15);
+      expect(ratio, `VH${th}`).toBeGreaterThan(0.7);
+      expect(ratio, `VH${th}`).toBeLessThan(1.3);
     }
   });
 });

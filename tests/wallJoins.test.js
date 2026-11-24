@@ -16,7 +16,7 @@ describe('single-tile walls', () => {
     expect(CONFIG.walls.segmentLength).toBe(1);
     expect(footprintDims('wall', 'x')).toEqual({ w: 1, h: 1 });
     expect(footprintDims('wall', 'y')).toEqual({ w: 1, h: 1 });
-    expect(CONFIG.walls.levels.map((l) => l.cost)).toEqual([10, 20, 40, 80, 150, 300, 500, 800]);
+    expect(CONFIG.walls.levels.map((l) => l.cost)).toEqual([10, 20, 40, 80, 150, 220, 300, 500, 800, 1200]);
     expect(CONFIG.limits.wall[0]).toBe(24);
   });
 
@@ -93,15 +93,18 @@ describe('connected walls: pillars, with a connector between every two touching 
 
 describe('wall size grows like buildings', () => {
   it('starts small and grows a step with every level (each level is a new picture)', () => {
+    expect(PILLAR_WIDTH.maxLevel).toBe(CONFIG.walls.levels.length); // a width for every level (10 since v0.11)
     expect(wallPillarWidth(1)).toBe(PILLAR_WIDTH.min);
-    expect(wallPillarWidth(8)).toBeCloseTo(PILLAR_WIDTH.max);
+    expect(wallPillarWidth(10)).toBeCloseTo(PILLAR_WIDTH.max);
     expect(PILLAR_WIDTH.max / PILLAR_WIDTH.min).toBeGreaterThan(1.8); // clearly bigger at the top
-    for (let l = 2; l <= 8; l++) expect(wallPillarWidth(l)).toBeGreaterThan(wallPillarWidth(l - 1));
+    for (let l = 2; l <= 10; l++) expect(wallPillarWidth(l)).toBeGreaterThan(wallPillarWidth(l - 1));
+    // The pictures that moved up a level in v0.11 keep their old widths (old Levels 6-8 were 0.50, 0.54, 0.58).
+    expect([7, 8, 9].map(wallPillarWidth)).toEqual([0.5, 0.54, 0.58]);
   });
 
   it('every level stays gap-free: connecting pillars always stand closer than a pillar is wide', () => {
     const step = Math.hypot(MAP.tileWidth / 2, MAP.tileHeight / 2);
-    for (let level = 1; level <= 8; level++) {
+    for (let level = 1; level <= 10; level++) {
       const key = `bld_wall_lv${level}`;
       const m = WALL_ART_META[key];
       const visW = MAP.tileWidth * wallPillarWidth(level) * ((m.visX1 - m.visX0) / m.width);

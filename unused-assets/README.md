@@ -31,6 +31,14 @@ the three art zips (`merged cannon_sprites.zip`, `Spear_Thrower.zip`, `Spear_Thr
 `iBTD_40x40_grid.zip` (v0.9.0: another agent's 40 x 40 grid fit, its gridded map exports and screenshots; superseded by
 the maps with the tiles drawn on, `art-source/map/`).
 
+v0.11 drops (Village Halls 16-20 and 10 wall levels; kept here as the originals):
+
+| Dropped file | Installed as |
+| --- | --- |
+| `Village Hall 11 Image.png` ... `Village Hall 15 Image.png` | `art-source/buildings/bld_townHall_lv6.png` ... `lv10.png` (the same files; one picture per 2 halls: 11-12 ... 19-20) |
+| `Wall Level 5.png` | `art-source/buildings/bld_wall_lv6.png` (the new Level 6, scaled onto the 1024 wall canvas at the old pillars' width and baseline) |
+| `Wall level 10 image.png` | `art-source/buildings/bld_wall_lv10.png` (the new top wall, placed the same way) |
+
 v0.10.2 drops (the Great Pyramid of Rah, the merged Tower of Rah; both kept here as the originals):
 
 | Dropped file | Installed as |

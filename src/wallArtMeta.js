@@ -9,6 +9,13 @@ export const WALL_ART_META = {
     "visX1": 208,
     "bottom": 348
   },
+  "bld_wall_lv10": {
+    "width": 256,
+    "height": 349,
+    "visX0": 4,
+    "visX1": 251,
+    "bottom": 347
+  },
   "bld_wall_lv2": {
     "width": 256,
     "height": 349,
@@ -40,8 +47,8 @@ export const WALL_ART_META = {
   "bld_wall_lv6": {
     "width": 256,
     "height": 349,
-    "visX0": 3,
-    "visX1": 252,
+    "visX0": 9,
+    "visX1": 245,
     "bottom": 347
   },
   "bld_wall_lv7": {
@@ -52,6 +59,13 @@ export const WALL_ART_META = {
     "bottom": 347
   },
   "bld_wall_lv8": {
+    "width": 256,
+    "height": 349,
+    "visX0": 3,
+    "visX1": 252,
+    "bottom": 347
+  },
+  "bld_wall_lv9": {
     "width": 256,
     "height": 349,
     "visX0": 4,

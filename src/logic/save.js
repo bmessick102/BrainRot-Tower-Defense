@@ -23,7 +23,8 @@ import { isMergeable, serializeMastery, validMastery, validFreeRespecs } from '.
 // Version 5: the RV Lab's research applies to every building (one pick per tier per type); see migrateV4.
 // Version 6: a type's research is locked to one path (A, B or C); see migrateV5.
 // Version 7: the Spear Thrower (5 -> 10 levels) and Fuel Station (4 -> 8) got a picture per 2 levels; see migrateV6.
-export const SAVE_VERSION = 7;
+// Version 8 (v0.11): walls went from 8 levels to 10, with a new Level 6; see migrateV7.
+export const SAVE_VERSION = 8;
 // Wall segments were 3 tiles long up to save version 2.
 const V2_WALL_LENGTH = 3;
 export const SAVE_KEYS = {
@@ -182,6 +183,20 @@ export function migrateV6(obj) {
       ? { ...b, level: Math.max(1, Math.min(2 * b.level - 1, cap)) } : b))
     : obj.buildings;
   return { ...obj, version: 7, buildings };
+}
+
+/**
+ * Version 7 -> version 8 (v0.11): walls went from 8 levels to 10, with a new picture as Level 6, so the old Levels 6-8
+ * are now 7-9. A wall keeps its picture and strength: a saved wall level (wallLevel and each wall's own level) of 6 or
+ * more goes up by one. That stays within the Village Hall level (the old Levels 6-8 needed Halls 8-10), so the save
+ * stays valid; walls above the new hall rule (Level N at Hall 2N - 1) are kept, they just can't upgrade yet.
+ */
+export function migrateV7(obj) {
+  const up = (l) => (Number.isInteger(l) && l >= 6 ? l + 1 : l);
+  const buildings = Array.isArray(obj.buildings)
+    ? obj.buildings.map((b) => (b && b.type === 'wall' ? { ...b, level: up(b.level) } : b))
+    : obj.buildings;
+  return { ...obj, version: 8, buildings, ...(obj.wallLevel !== undefined ? { wallLevel: up(obj.wallLevel) } : {}) };
 }
 
 /**
@@ -346,6 +361,7 @@ export function parseSave(text) {
   if (obj && typeof obj === 'object' && obj.version === 4) obj = migrateV4(obj);
   if (obj && typeof obj === 'object' && obj.version === 5) obj = migrateV5(obj);
   if (obj && typeof obj === 'object' && obj.version === 6) obj = migrateV6(obj);
+  if (obj && typeof obj === 'object' && obj.version === 7) obj = migrateV7(obj);
   if (obj && typeof obj === 'object' && (obj.grid === undefined || obj.grid === GRID_40.size)) obj = migrateGrid(obj);
   // A planned wave from an entrance the map no longer has (v0.9.1 dropped the left waterfall): plan it again on load.
   if (obj && typeof obj === 'object' && obj.wavePlan && Array.isArray(obj.wavePlan.paths) && !obj.wavePlan.paths.every((x) => PATHS.includes(x))) obj = { ...obj, wavePlan: null };

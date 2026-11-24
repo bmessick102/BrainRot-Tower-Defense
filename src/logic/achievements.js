@@ -21,6 +21,9 @@ export const ACHIEVEMENTS = [
   { id: 'hall5', group: 'village', name: 'Brainrot Town', desc: 'Upgrade a Village Hall to level 5', stat: 'bestTownHall', goal: 5, reward: 3000 },
   { id: 'hall7', group: 'village', name: 'Brainrot City', desc: 'Upgrade a Village Hall to level 7', stat: 'bestTownHall', goal: 7, reward: 8000 },
   { id: 'hall10', group: 'village', name: 'Capital of Brainrot', desc: 'Upgrade a Village Hall to level 10', stat: 'bestTownHall', goal: 10, reward: 25000 },
+  // (v0.11: Village Halls 15 and 20, with the halls going to 20; in the Builder tab, since a tab shows at most 10 cards)
+  { id: 'hall15', group: 'builder', name: 'Brainrot Empire', desc: 'Upgrade a Village Hall to level 15', stat: 'bestTownHall', goal: 15, reward: 60000 },
+  { id: 'hall20', group: 'builder', name: 'Eternal Brainrot', desc: 'Upgrade a Village Hall to level 20', stat: 'bestTownHall', goal: 20, reward: 150000 },
   { id: 'wave1', group: 'village', name: 'First Wave', desc: 'Survive wave 1', stat: 'bestWave', goal: 1, reward: 100 },
   { id: 'wave5', group: 'village', name: 'Night Watch', desc: 'Survive wave 5', stat: 'bestWave', goal: 5, reward: 2000 },
   { id: 'wave10', group: 'village', name: 'Siege Survivor', desc: 'Survive wave 10', stat: 'bestWave', goal: 10, reward: 8000 },

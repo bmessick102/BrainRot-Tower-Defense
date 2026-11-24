@@ -203,18 +203,18 @@ describe('the v0.6 enemies', () => {
   it('Lirili Larila (Brr Brr Patapim before v0.7): its quake hits every building and wall within its radius (walls harder)', () => {
     const s = attack(9);
     const Q = CONFIG.enemies.lirili.quake;
-    const wall = addBuilding(s, 'wall', 12, 10, 8);
+    const wall = addBuilding(s, 'wall', 12, 10, 9); // the lava tower (Level 8 before v0.11)
     const store = addBuilding(s, 'storage', 12, 12, 10);
     const farStore = addBuilding(s, 'storage', 25, 25, 1);
     const pat = tough(s, 'lirili', 11, 11);
     pat.quakeT = Q.every; // ready
     run(s, 0.05);
     expect(s.events.some((e) => e.name === 'quake')).toBe(true);
-    const wallMax = CONFIG.walls.levels[7].hp, storeMax = CONFIG.storage.levels[9].hp;
+    const wallMax = CONFIG.walls.levels[8].hp, storeMax = CONFIG.storage.levels[9].hp;
     expect(wallMax - wall.hp).toBeCloseTo(Q.damage * Q.wallMult);
     expect(storeMax - store.hp).toBeCloseTo(Q.damage);
     expect(farStore.hp).toBe(CONFIG.storage.levels[0].hp);
-    expect(Math.ceil(wallMax / (Q.damage * Q.wallMult))).toBe(7); // a Level 8 wall takes 7 quakes
+    expect(Math.ceil(wallMax / (Q.damage * Q.wallMult))).toBe(7); // a Level 9 wall (the lava tower) takes 7 quakes
   });
 
   it('La Vaca Saturno: a ranged flyer whose boulder hits its target, then bounces 3 times for 70% less each', () => {

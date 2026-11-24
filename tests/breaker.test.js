@@ -38,12 +38,12 @@ describe('Wall Breaker', () => {
     expect(ensureTarget(s, e).id).toBe(mine.id);
   });
 
-  it('one blast destroys any wall up to Level 6; Levels 7 and 8 take two', () => {
+  it('one blast destroys any wall up to Level 7; Levels 8-10 take two (v0.11: 10 wall levels)', () => {
     const s = makeStateWithTownHall();
-    const w = wall(s, 5, 5, 'x', 6);
+    const w = wall(s, 5, 5, 'x', 7);
     expect(enemyDamageVs(cfg, w)).toBe(cfg.damage * 48);
-    expect(enemyDamageVs(cfg, w)).toBeGreaterThanOrEqual(CONFIG.walls.levels[5].hp);
-    expect(enemyDamageVs(cfg, w)).toBeLessThan(CONFIG.walls.levels[6].hp);
+    expect(enemyDamageVs(cfg, w)).toBeGreaterThanOrEqual(CONFIG.walls.levels[6].hp);
+    expect(enemyDamageVs(cfg, w)).toBeLessThan(CONFIG.walls.levels[7].hp);
     expect(cfg.blastRadius).toBe(1.75);
     const e = addEnemy(s, 'breaker', 6.5, 4.6);
     explode(s, e, cfg);
