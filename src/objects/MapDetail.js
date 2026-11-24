@@ -5,16 +5,19 @@
 // desktop at High graphics, the full-size pieces of the time of day showing are loaded for the part of the map in view
 // and drawn over it; once every piece in view is in, the soft picture under them is hidden (so a fading night map
 // isn't drawn twice). Pieces out of view, or of a map that has faded out, are dropped after a while (each is ~12 MB of
-// graphics memory), and never more than MAX_PIECES are kept. A piece that fails to load is simply left out.
+// graphics memory), and never more than MAX_PIECES are kept. A piece that fails to load is left out and asked for again
+// after RETRY_MS (e.g. a file that was being rewritten by prepare-art while it loaded).
 import { MAP } from '../mapTiles.js';
 import { MAP_DETAIL, detailPieces } from '../mapDetail.js';
 import { isLowQuality } from '../quality.js';
 import { IS_TOUCH } from '../device.js';
 
+const BASE = import.meta.env.BASE_URL; // the site's base path ('/BrainRot-Tower-Defense/')
 const ZOOM_IN_AT = 1.15;     // load pieces once a map picture pixel covers 1.15 screen pixels
 const DROP_AFTER_MS = 15000; // a piece unused this long is let go
 const MAX_PIECES = 20;       // at most this many in memory (the rest are dropped, least recently used first)
 const CHECK_MS = 200;        // how often to work out which pieces are wanted
+const RETRY_MS = 5000;       // a piece that failed to load is tried again after this long
 
 export class MapDetail {
   /**
@@ -62,6 +65,7 @@ export class MapDetail {
         const x = r.x * sx, y = r.y * sy, w = r.w * sx, h = r.h * sy;
         const inView = x < view.right && x + w > view.x && y < view.bottom && y + h > view.y;
         let p = this.pieces.get(key);
+        if (p && p.state === 'failed' && now - p.failedAt > RETRY_MS) { this.pieces.delete(key); p = null; } // try it again
         if (show && inView) {
           if (!p) p = this.load(key, layer, piece, { x, y, w, h });
           p.usedAt = now;
@@ -82,10 +86,12 @@ export class MapDetail {
     const scene = this.scene;
     if (scene.textures.exists(key)) { this.place(key, p); return p; }
     const done = () => { scene.load.off('loaderror', fail); this.place(key, p); };
-    const fail = (file) => { if (file.key !== key) return; scene.load.off(`filecomplete-image-${key}`, done); scene.load.off('loaderror', fail); p.state = 'failed'; };
+    const fail = (file) => { if (file.key !== key) return; scene.load.off(`filecomplete-image-${key}`, done); scene.load.off('loaderror', fail); p.state = 'failed'; p.failedAt = Date.now(); };
     scene.load.once(`filecomplete-image-${key}`, done);
     scene.load.on('loaderror', fail);
-    scene.load.image(key, `${MAP_DETAIL.dir}/${piece.file}`);
+    // (from the site's base path, like every other picture: a relative path broke when the page's address wasn't the
+    // game's root folder, and the server answered with its HTML page instead: "Failed to process file")
+    scene.load.image(key, `${BASE}${MAP_DETAIL.dir}/${piece.file}`);
     if (!scene.load.isLoading()) scene.load.start();
     return p;
   }

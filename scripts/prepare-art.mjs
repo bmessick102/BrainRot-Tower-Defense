@@ -18,6 +18,22 @@ import { fileURLToPath } from 'node:url';
 import sharp from 'sharp';
 import { MAP_DETAIL, detailPieces } from '../src/mapDetail.js';
 
+/**
+ * Write a prepared picture only if its bytes changed, and then through a temp file renamed into place, so a game open on
+ * the dev server never fetches a half-written file (Phaser: "Failed to process file", e.g. the map-detail pieces while a
+ * run rewrote all 32 of them) and unchanged pictures keep their files untouched.
+ */
+function writeIfChanged(file, buf) {
+  if (fs.existsSync(file)) {
+    const old = fs.readFileSync(file);
+    if (old.length === buf.length && old.equals(buf)) return false;
+  }
+  const tmp = `${file}.tmp`;
+  fs.writeFileSync(tmp, buf);
+  fs.renameSync(tmp, file);
+  return true;
+}
+
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const SRC = path.join(ROOT, 'art-source');
 const OUT_IMAGES = path.join(ROOT, 'public', 'assets', 'images');
@@ -358,7 +374,7 @@ for (const file of sources) {
   if (/^bld_wall_lv[0-9]+$/.test(key)) wallMeta[key] = measurePillar(img);
   fs.mkdirSync(path.dirname(outFile), { recursive: true });
   const webp = await encodeWebp(img, !target.needsAlpha);
-  fs.writeFileSync(outFile, webp);
+  writeIfChanged(outFile, webp);
   if (fs.existsSync(oldPng)) fs.rmSync(oldPng);
   console.log(`  ok     ${category}/${key}.webp  ${img.width}x${img.height}  ${Math.round(webp.length / 1024)} KB`);
   made++;
@@ -380,7 +396,7 @@ for (const file of sources.filter(isMapWebp)) {
   for (const piece of detailPieces(key)) {
     const { x, y, w, h } = piece.rect;
     const buf = await sharp(file).extract({ left: x, top: y, width: w, height: h }).removeAlpha().webp(WEBP).toBuffer();
-    fs.writeFileSync(path.join(OUT_DETAIL, piece.file), buf);
+    writeIfChanged(path.join(OUT_DETAIL, piece.file), buf);
     keepDetail.add(piece.file);
     bytes += buf.length;
   }
