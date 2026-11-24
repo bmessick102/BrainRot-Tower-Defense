@@ -2,6 +2,19 @@
 
 The version shows in the bottom-left corner of every screen (`package.json` `version` plus the commit). Details for everything below are in [README.md](README.md).
 
+## 0.12.1
+
+The Locklair Mage tidied up (hero plate, white ring, gold Arcane Aegis highlight, staff-tip fix, the user's ability icon) and a hero profile window in the shop for every hero. No database or save changes.
+
+### Changes
+- **Hero profile window** (new `src/objects/HeroWindow.js`, `openHeroWindow`): the shop info card of every hero (`HERO_TYPES`) has a "<hero>: stats & ability" button that opens it, built or not; it replaces "Open <hero>" (which closed the shop and selected the altar). Picture, role, stats at a level picked with ◀ ▶ (starts at your hero's level, else 1; includes your researched perks: `picksFor(research)`), that level's price and Village Hall, the ability card, the three perk paths.
+- **Locklair Mage hero plate** (`BuildingView.drawHeroPlate`, `PLATE`): one dark violet-rimmed plate with his crown health bar and, while hovered / selected, his 5 perk pips under the bar, lifted 18 px clear of his staff's gem (before: the bar on the left and a separate pip chip on the right, off-center).
+- **White ring** around his tile, always (MageFx, `HOME_RING` 1.35 tiles, pulsing), and with him selected his aura's outline in gold plus every building inside it (walls and himself too: what Arcane Aegis covers) tinted gold with a gold ground diamond (`GameScene.updateDjHighlight` now also does the Mage; `scene.affectedTint`).
+- **Arcane Aegis icon**: the user's picture (`art-source/ui/ui_aegis_ready.png`) replaces the drawn stand-in.
+
+### Bug Fixes
+- **The Mage's zap and staff glow sat left of his staff's gem** (`MERGED_MUZZLE.bld_mageAltar_lv1`-`lv5`): v0.12's points were the middle of all magenta pixels, pulled left by the purple smoke; now the middle of the gem's bright facets (x 0.713-0.724, y 0.913-0.918).
+
 ## 0.12.0
 
 The Locklair Mage (third hero, Village Hall 10), the F.L.O.C.K Mothership's new lightning, and DJ Babyface's hype meter emptying after each wave. No database changes; no save version change (`mageAltar` is a new building type; older saves load unchanged, a saved DJ charge is dropped).

@@ -53,7 +53,7 @@ import { WallFx } from '../objects/WallFx.js';
 import { HarpoonFx } from '../objects/HarpoonFx.js';
 import { ZapFx, MAGE_ZAP_COLORS } from '../objects/ZapFx.js';
 import { MageFx } from '../objects/MageFx.js';
-import { mageStats } from '../logic/mage.js';
+import { mageStats, inMageAura } from '../logic/mage.js';
 import { zoomLimit, dragThreshold, renderScale, toView } from '../renderScale.js';
 import { MapDetail } from '../objects/MapDetail.js';
 
@@ -568,15 +568,21 @@ export class GameScene extends Phaser.Scene {
   /**
    * With DJ Babyface selected, every building in its range is tinted purple (BuildingView reads
    * scene.djAffected), so it's obvious which ones it boosts. Worked out every frame (cheap), so it follows
-   * moves, upgrades and its range perks.
+   * moves, upgrades and its range perks. The Locklair Mage the same way (v0.12.1), in gold: every building inside his
+   * aura, walls and his own building too (what Arcane Aegis covers).
    */
   updateDjHighlight() {
     const list = this.layoutList || [];
     const sel = this.selectedId ? list.find((b) => b.id === this.selectedId) : null;
-    const affected = sel && sel.type === 'dj' && !sel.destroyed ? buildingsInDjRange(sel, list) : [];
+    const mage = sel && sel.type === 'mageAltar';
+    const affected = !sel || sel.destroyed ? []
+      : sel.type === 'dj' ? buildingsInDjRange(sel, list)
+        : mage ? (() => { const st = mageStats(sel); return list.filter((b) => inMageAura(sel, st, b)); })() : [];
     this.djAffected = affected.length ? new Set(affected.map((b) => b.id)) : null;
+    this.affectedTint = mage ? [0xffe27a, 0xffbf3a] : null; // (BuildingView: null = DJ Babyface's purple)
+    const fill = mage ? 0xffd25a : 0xb066ff, rim = mage ? 0xfff0b8 : 0xe2c2ff;
     // ...and a purple diamond on the ground under each one (clear even on dark pictures).
-    const key = affected.map((b) => `${b.id}:${b.col},${b.row}`).join('|');
+    const key = `${mage ? 'm' : 'd'}|` + affected.map((b) => `${b.id}:${b.col},${b.row}`).join('|');
     if (key === this.djGroundKey) return;
     this.djGroundKey = key;
     if (!this.djGroundGfx) this.djGroundGfx = this.add.graphics().setDepth(-8990); // over the dirt plots
@@ -585,8 +591,8 @@ export class GameScene extends Phaser.Scene {
     for (const b of affected) {
       const w = fpW(b), h = fpH(b);
       const pts = [gridToScreen(b.col, b.row), gridToScreen(b.col + w, b.row), gridToScreen(b.col + w, b.row + h), gridToScreen(b.col, b.row + h)];
-      g.fillStyle(0xb066ff, 0.32).fillPoints(pts, true);
-      g.lineStyle(2, 0xe2c2ff, 0.9).strokePoints(pts, true);
+      g.fillStyle(fill, 0.32).fillPoints(pts, true);
+      g.lineStyle(2, rim, 0.9).strokePoints(pts, true);
     }
   }
 

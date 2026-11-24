@@ -318,6 +318,7 @@ export const IMAGE_FILES = [
   { key: 'ui_ability_triple_strike', path: 'assets/images/ui/ui_ability_triple_strike.webp' },
   { key: 'ui_ability_triple_zap', path: 'assets/images/ui/ui_ability_triple_zap.webp' },
   { key: 'ui_achievement', path: 'assets/images/ui/ui_achievement.webp' },
+  { key: 'ui_aegis_ready', path: 'assets/images/ui/ui_aegis_ready.webp' },
   { key: 'ui_armor_shield', path: 'assets/images/ui/ui_armor_shield.webp' },
   { key: 'ui_beat_ready', path: 'assets/images/ui/ui_beat_ready.webp' },
   { key: 'ui_coin', path: 'assets/images/ui/ui_coin.webp' },

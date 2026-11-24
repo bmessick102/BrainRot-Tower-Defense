@@ -41,9 +41,8 @@ import { AbilityHotbar } from '../objects/AbilityHotbar.js';
 import { openFuelStationWindow } from '../objects/FuelStationWindow.js';
 import { SPELL_KINDS, spellConfig, spellFullName, spellSlots, brewedSpells } from '../logic/spells.js';
 import { rpCap, rpText } from '../logic/researchPoints.js';
-import { heroStats, getAltar } from '../logic/hero.js';
-import { getQueenAltar } from '../logic/queen.js';
-import { getMageAltar } from '../logic/mage.js';
+import { heroStats } from '../logic/hero.js';
+import { openHeroWindow } from '../objects/HeroWindow.js';
 import { ensureAegisTexture, AEGIS_COLOR } from '../objects/AegisIcon.js';
 import { heroStatsFor, heroOfAltar } from '../logic/heroes.js';
 import { ensureEncoreTextures, ENCORE_COLOR } from '../objects/EncoreIcon.js';
@@ -1184,15 +1183,10 @@ New walls are built at your wall level (${wallLevel(this.gs)}), so one costs wha
     const col = PIC.x + PIC.w + 16;
     const preview = { type, level: lvl, hp: levelStats(type, lvl).hp, destroyed: false, stock: 0, ...footprintDims(type) };
     let y = Math.max(this.drawStats(c, preview, col, top, W - col - 18, true), top + PIC.h) + 14;
-    const altar = type === 'altar' ? getAltar(this.gs) : type === 'queenAltar' ? getQueenAltar(this.gs) : type === 'mageAltar' ? getMageAltar(this.gs) : null;
-    if (altar) {   // a hero's altar: a shortcut to the hero page, a full-width button under the card
+    if (HERO_TYPES.includes(type)) {   // a hero: his or her profile (stats by level, ability, perks), built or not (v0.12.1)
       const bw = W - 36, bh = 46;
-      const open = new Button(this, W / 2, y + bh / 2, bw, bh, `Open ${typeConfig(type).heroName}`, () => {
-        this.hideShopInfo();
-        this.closeShop();
-        this.world.select(altar.id);
-        this.infoTab = 'hero';
-        this.openInfo();
+      const open = new Button(this, W / 2, y + bh / 2, bw, bh, `${typeConfig(type).heroName}: stats & ability`, () => {
+        openHeroWindow(this, this.gs, type);
       }, { color: COLORS.buttonBlue, fontSize: 19 });
       open.add(addHeroBadge(this, -bw / 2 + 28, -2, 32, heroKindOf(type))); // the portrait at the button's left end
       c.add(open);

@@ -37,6 +37,7 @@ v0.12 drops (the Locklair Mage; kept here as the originals):
 | --- | --- |
 | `Locklair Mage Level 1.png` ... `Locklair Mage Level 5.png` (Level 3 as `level 3`) | `art-source/buildings/bld_mageAltar_lv1.png` ... `lv5.png` (the same files) |
 | `Locklair Mage Attack Sound Effect.mp3` | `art-source/audio/sfx_mage_attack.mp3` (his staff zap) |
+| `Locklair Mage Ability Icon.png` | `art-source/ui/ui_aegis_ready.png` (v0.12.1, the Arcane Aegis icon) |
 | `Merged FLOCK tower attack sound.mp3` | not installed: byte-for-byte the same file as `sfx_spell_lightning.mp3`, which the Mothership already plays |
 
 v0.11 drops (Village Halls 16-20 and 10 wall levels; kept here as the originals):

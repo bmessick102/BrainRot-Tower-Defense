@@ -19,8 +19,8 @@ const allEntries = (release) => release.sections.flatMap((s) => s.entries);
 
 export const PATCH_NOTES = {
   release: '0.12',
-  version: '0.12.0',
-  title: "What's New in v0.12",
+  version: '0.12.1',
+  title: "What's New in v0.12.1",
   sections: [
     {
       type: 'feature',
@@ -39,12 +39,33 @@ export const PATCH_NOTES = {
       type: 'change',
       entries: [
         {
+          version: '0.12.1', icon: { hero: true }, title: 'Hero profiles in the shop',
+          text: "Every hero's card in the shop has a button that opens the hero's profile: picture, stats at any level (step through them with the arrows), ability and perk paths. It works before you build the hero, too."
+        },
+        {
+          version: '0.12.1', icon: { building: 'mageAltar', level: 1 }, title: 'A tidier Locklair Mage',
+          text: 'His health and perks share one plate over his head, a soft white ring always marks his tile, and selecting him lights up in gold every building his Arcane Aegis protects.'
+        },
+        {
+          version: '0.12.1', icon: { texture: 'ui_aegis_ready' }, title: 'Arcane Aegis has its own icon',
+          text: 'A golden shield under a glowing dome now marks his ability on the hotbar and in his profile.'
+        },
+        {
           version: '0.12.0', icon: { texture: 'bld_flock_merged' }, title: 'New lightning for the F.L.O.C.K Mothership',
           text: 'Its Triple Zap now strikes as crackling, forking bolts of blue-white lightning instead of straight beams.'
         },
         {
           version: '0.12.0', icon: { building: 'dj', level: 1 }, title: "DJ Babyface's hype meter empties after each wave",
           text: 'Every wave now starts with an empty meter, so it no longer shows a half-full charge between waves.'
+        }
+      ]
+    },
+    {
+      type: 'fix',
+      entries: [
+        {
+          version: '0.12.1', icon: { building: 'mageAltar', level: 10 }, title: "The Locklair Mage's zap leaves from his staff's gem",
+          text: 'His lightning and the glow on his staff sat a little to the side of the gem. Both now come from the middle of the gem at the top of his staff.'
         }
       ]
     }
