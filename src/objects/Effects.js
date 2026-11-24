@@ -43,16 +43,16 @@ export function floatText(scene, x, y, text, color = '#ffffff', size = 16) {
   return t;
 }
 
-/** "+3" Burgers (research points) rising beside a kill's gold, with a small burger icon after the number. */
-export function rpGainText(scene, x, y, n) {
-  const t = floatText(scene, x, y, `+${n}`, RP_TEXT_COLOR, 13);
+/** "+3" Shakes (research points) rising beside a kill's gold, with a small shake icon after the number. */
+export function rpGainText(scene, x, y, n, size = 13) {
+  const t = floatText(scene, x, y, `+${n}`, RP_TEXT_COLOR, size);
   if (!t || !scene.textures.exists(TEX.researchPoint)) return t;
   const pool = floatPool(scene);
   pool.icons = pool.icons || [];
   let img = pool.icons.pop();
   while (img && !img.scene) img = pool.icons.pop();
   if (!img) img = scene.add.image(0, 0, TEX.researchPoint).setOrigin(0, 1).setDepth(6000);
-  fitIcon(img, 15).setPosition(x + t.width / 2 + 2, y).setAlpha(1).setVisible(true);
+  fitIcon(img, Math.round(size * 1.15)).setPosition(x + t.width / 2 + 2, y).setAlpha(1).setVisible(true);
   scene.tweens.add({
     targets: img, y: y - 34, alpha: 0, duration: 800, ease: 'Cubic.easeOut',
     onComplete: () => {

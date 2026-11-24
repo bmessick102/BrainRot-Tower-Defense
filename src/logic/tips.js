@@ -11,10 +11,12 @@ const hallLevel = (state) => { const th = (state.buildings || []).find((b) => b.
 
 /** Every tip: key (saved) and text. The event that brings each one up is in tipsForEvent. */
 export const TIPS = {
-  rp: () => 'Burgers! The burger bar next to your gold. You get them for every enemy you defeat and every wave you beat, up to a cap that grows with your RV Lab level (extra is lost). Spend them in the RV Lab (from Village Hall 4) on perks: your first pick for a building type locks all of that type to one path, whatever their level.',
-  stars: () => `Wave stars: each wave is rated by how much of your village is still standing at the end (walls don't count). 3 stars pays +${pct(CONFIG.rules.waveStars.bonus[2])} gold and Burgers, 2 stars +${pct(CONFIG.rules.waveStars.bonus[1])}. The stars at the top show how you're doing.`,
+  rp: () => 'Shakes! The purple bar next to your gold. You get them for every enemy you defeat and every wave you beat, up to a cap set by your Village Hall and Shake Storages (extra is lost). Spend them in the RV Lab (from Village Hall 4) on perks, on hero levels and on spells.',
+  // v0.14: the first time a Shake Collector can be built (Village Hall 3).
+  shakeCollector: () => `Village Hall ${CONFIG.shakeCollector.unlockTownHall} unlocked the Shake Collector and the Shake Storage (Shop, Economy tab)! A Shake Collector makes Shakes over time: click it when its Shake shows, like a mine. A Shake Storage raises how many Shakes you can hold.`,
+  stars: () => `Wave stars: each wave is rated by how much of your village is still standing at the end (walls don't count). 3 stars pays +${pct(CONFIG.rules.waveStars.bonus[2])} gold and Shakes, 2 stars +${pct(CONFIG.rules.waveStars.bonus[1])}. The stars at the top show how you're doing.`,
   themes: () => `Every wave has a theme now, named in the top bar (Air Raid is flyers only, for example). Swarm, Heist, Siege and the other all-in themes pay bonus gold, and every ${CONFIG.waveThemes.boss.every}th wave is a Boss Wave.`,
-  restless: () => `Night attack! In the dark, enemies are restless: they hit harder and move faster, but pay +${pct(CONFIG.rules.night.lootBonus)} gold and Burgers. Start waves by day for an easier fight, or at night for more loot.`,
+  restless: () => `Night attack! In the dark, enemies are restless: they hit harder and move faster, but pay +${pct(CONFIG.rules.night.lootBonus)} gold and Shakes. Start waves by day for an easier fight, or at night for more loot.`,
   boss: () => `${CONFIG.enemies.babycar.name} comes next wave! This raid boss drives straight at your Village Hall and smashes through walls. Keep strong defenses near your hall, and be ready for the troops it bursts into.`,
   toilet: () => `${CONFIG.enemies.toilet.name}s come next wave! They tunnel under your walls to the nearest building and pop up to attack. Underground, only a F.L.O.C.K Tower's sight lets your defenses hit them.`,
   pork: () => `${CONFIG.enemies.pork.name} comes next wave! When a F.L.O.C.K Tower spots him he makes a call that silences every F.L.O.C.K Tower near him for ${CONFIG.enemies.pork.call.seconds} s. Keep other defenses covering your F.L.O.C.K Towers.`,
@@ -31,7 +33,7 @@ export const TIPS = {
   hero: () => 'The Brisket King guards his altar, clubbing ground enemies nearby. In a wave, use Brisket Feast on the hotbar at the bottom (or press its number key) to heal, boost and slam. He naps after waves to heal.',
   queen: () => 'The Hatsune Queen guards her altar, shooting ground and flying enemies from range with her crossbow. In a wave, use Encore Cloak on the hotbar at the bottom (or press G): she vanishes, hits harder with piercing bolts and heals. She naps after waves to heal.',
   dj: () => 'DJ Babyface\'s hype is full! In a wave, use Drop the Beat on the hotbar at the bottom (or press its number key): every defense in its range fires much faster for a few seconds. Defeating enemies fills it again.',
-  fuel: () => 'The Fuel Station (Shop, Economy tab) brews spells with Burgers: click it and press Brew. During waves, brewed spells sit on the hotbar at the bottom: click one (or press its number), then click the map to cast it. Each is used up when cast, and your Village Hall level sets how many you can carry.',
+  fuel: () => 'The Fuel Station (Shop, Economy tab) brews spells with Shakes: click it and press Brew. During waves, brewed spells sit on the hotbar at the bottom: click one (or press its number), then click the map to cast it. Each is used up when cast, and your Village Hall level sets how many you can carry.',
   // The Fuel Station guide (spells.js fuelGuide), one tip per step.
   fuelBuild: () => 'Village Hall 2 unlocked the Fuel Station! It brews spells you can cast in a wave. Build it from the Shop (Economy tab): your first spell is on the house.',
   fuelBrew: () => 'Your Fuel Station is up! Click it and press Brew, then brew a Karuba Coffee (Rage): the first one is free. It makes your defenses fire faster and hit harder for a few seconds.',
@@ -65,6 +67,9 @@ function tipsForEvent(state, name, data) {
   if (name === 'tipsChecked' && !guide && hallLevel(state) >= CONFIG.fuelStation.unlockTownHall
     && !(state.buildings || []).some((b) => b.type === 'fuelStation')) out.push('fuel');
   if (name === 'buildingPlaced' && data.type === 'wall') out.push('walls');
+  // The Shake Collector: once the hall allows one and none is built yet (checked when the hall levels up, and on load).
+  if (['townHallUpgraded', 'tipsChecked'].includes(name) && hallLevel(state) >= CONFIG.shakeCollector.unlockTownHall
+    && !(state.buildings || []).some((b) => b.type === 'shakeCollector')) out.push('shakeCollector');
   // What's coming next: checked whenever the next wave can change.
   if (['waveCleared', 'townHallUpgraded', 'baseReset', 'tipsChecked'].includes(name)) {
     const info = nextWaveInfo(state);

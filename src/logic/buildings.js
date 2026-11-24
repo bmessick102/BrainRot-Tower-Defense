@@ -8,10 +8,13 @@ import { researchPoints, needRpReason } from './researchPoints.js';
 
 // Every building type (saves only accept these). New types must be added here too; a test checks that the
 // defense / economy / wall lists are all covered.
-export const BUILDING_TYPES = ['townHall', 'mine', 'storage', 'house', 'cannon', 'archer', 'mortar', 'wizard', 'firework', 'spear', 'ksi', 'mousetrap', 'flock', 'catapult', 'ra', 'rvlab', 'dj', 'altar', 'queenAltar', 'mageAltar', 'fuelStation', 'wall'];
+export const BUILDING_TYPES = ['townHall', 'mine', 'storage', 'house', 'shakeCollector', 'shakeStorage', 'cannon', 'archer', 'mortar', 'wizard', 'firework', 'spear', 'ksi', 'mousetrap', 'flock', 'catapult', 'ra', 'rvlab', 'dj', 'altar', 'queenAltar', 'mageAltar', 'fuelStation', 'wall'];
 // Shop order = unlock order; the Diddypult (Village Hall 10) is always last.
 export const DEFENSE_TYPES = ['cannon', 'archer', 'mortar', 'wizard', 'firework', 'spear', 'ksi', 'mousetrap', 'flock', 'ra', 'catapult'];
-export const ECONOMY_TYPES = ['mine', 'storage', 'house'];
+// (v0.14: the Shake Collector and Shake Storage, Village Hall 3, after the gold buildings: see shakes.js.)
+export const ECONOMY_TYPES = ['mine', 'storage', 'house', 'shakeCollector', 'shakeStorage'];
+/** Buildings that fill a stock to be clicked and collected: the Bitcoin Mine (gold) and the Shake Collector (Shakes). */
+export const COLLECTOR_TYPES = ['mine', 'shakeCollector'];
 export const WALL_TYPES = ['wall'];
 // Research buildings (the RV Lab: researches the defenses' ability paths, see abilities.js).
 export const RESEARCH_TYPES = ['rvlab'];
@@ -46,6 +49,8 @@ export function typeConfig(type) {
   if (type === 'mine') return CONFIG.mine;
   if (type === 'storage') return CONFIG.storage;
   if (type === 'house') return CONFIG.house;
+  if (type === 'shakeCollector') return CONFIG.shakeCollector;
+  if (type === 'shakeStorage') return CONFIG.shakeStorage;
   if (type === 'wall') return CONFIG.walls;
   if (type === 'rvlab') return CONFIG.rvlab;
   if (type === 'dj') return CONFIG.dj;
@@ -292,7 +297,7 @@ export function checkUpgrade(state, b) {
   if (b.type === 'wall') return checkWallUpgrade(state);
   const cost = upgradeCost(b.type, b.level);
   if (cost === null) return { ok: false, reason: 'Max level', cost: null };
-  // Every answer names the currency, so a locked Burger-priced level still reads "600 Burgers", not "600".
+  // Every answer names the currency, so a locked Shake-priced level still reads "600 Shakes", not "600".
   const currency = upgradeCurrency(b.type, b.level);
   if (b.type !== 'townHall' && b.level >= townHallLevel(state)) {
     return { ok: false, reason: `Requires VH${b.level + 1}`, cost, currency };
@@ -327,7 +332,7 @@ export function createBuilding(state, type, col, row, level = 1, id = null, orie
   };
   if (type === 'wall') b.orient = orient;
   else b.size = buildingSize(type); // square buildings keep `size` too (w = h = size)
-  if (type === 'mine') b.stock = 0;
+  if (COLLECTOR_TYPES.includes(type)) b.stock = 0;
   if (isDefense(type)) { b.cooldown = 0; b.targetId = null; }
   // RV Lab perks: every building of a type gets its type's picks (its level plays no part).
   if (ABILITIES[type]) b.picks = picksFor(state && state.research, type);

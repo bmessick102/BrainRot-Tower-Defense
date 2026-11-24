@@ -172,7 +172,7 @@ export function sendMineToStorage(state, mine) {
 /** Rebuild price for a destroyed building: rules.rebuildCostShare of its current level's cost. */
 export function repairCost(b) {
   const stats = levelStats(b.type, b.level);
-  // A level paid for in Burgers (costCurrency 'rp') counts as rules.burgerGoldValue gold per Burger (never less
+  // A level paid for in Shakes (costCurrency 'rp') counts as rules.burgerGoldValue gold per Shake (never less
   // than the gold the building cost to build), so higher levels cost more to rebuild.
   const levelCost = b.type === 'townHall' ? stats.upgradeCost
     : stats.costCurrency === 'rp' ? Math.max(buildCost(b.type), stats.cost * CONFIG.rules.burgerGoldValue)

@@ -14,7 +14,7 @@ import { footprintCenter } from '../src/logic/grid.js';
 import { serializeGame, parseSave } from '../src/logic/save.js';
 import { ABILITIES } from '../src/abilityConfig.js';
 import { GameState } from '../src/state/GameState.js';
-import { makeStateWithTownHall, addBuilding, addEnemy } from './helpers.js';
+import { makeStateWithTownHall, addBuilding, addEnemy, shakeCapAt } from './helpers.js';
 
 const Q = CONFIG.queenAltar.hero;
 function village(level = 1, picks = null) {
@@ -48,7 +48,7 @@ describe('the Hatsune Queen: her altar', () => {
     expect(HERO_TYPES).toContain('queenAltar');
   });
 
-  it('Level 1 costs gold; Levels 2-20 cost Burgers; like the Brisket King, Level N needs Village Hall N (Levels 1-8 at Hall 8)', () => {
+  it('Level 1 costs gold; Levels 2-20 cost Shakes; like the Brisket King, Level N needs Village Hall N (Levels 1-8 at Hall 8)', () => {
     expect(buildCost('queenAltar')).toBe(25000);
     expect(levelStats('queenAltar', 1).costCurrency).toBeUndefined();
     expect(maxLevel('queenAltar')).toBe(20);
@@ -66,12 +66,10 @@ describe('the Hatsune Queen: her altar', () => {
     }
   });
 
-  it('every Burger price fits the Burger cap of the best RV Lab at the hall it needs', () => {
+  it('every Shake price fits the Shake cap (the hall plus its top Shake Storages) at the hall it needs', () => {
     for (let l = 2; l <= 20; l++) {
       const vh = levelStats('queenAltar', l).townHall;
-      const s = makeStateWithTownHall({}, vh);
-      addBuilding(s, 'rvlab', 20, 20, Math.min(5, vh - 3));
-      expect(levelStats('queenAltar', l).cost).toBeLessThanOrEqual(rpCap(s));
+      expect(levelStats('queenAltar', l).cost, `Lv${l}`).toBeLessThanOrEqual(shakeCapAt(vh)); // (v0.14: the hall plus its Shake Storages at their top level)
     }
   });
 

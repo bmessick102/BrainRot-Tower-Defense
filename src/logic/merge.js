@@ -4,14 +4,14 @@
 // towerRange, towerDamageMult / mergeShotMult, towerFireInterval read them) plus its own ability (combat.js:
 // Rolling Thunder, Ballista Bolt, Triple Strike).
 //
-// Cost: Burgers AND gold (cost.rp, cost.gold), between waves only.
+// Cost: Shakes AND gold (cost.rp, cost.gold), between waves only.
 // Perks: RV Lab perks belong to the building TYPE (research[type], abilities.js), so both copies already have the same
-// tiers and the merged building keeps them all; nothing per building is lost. Burgers spent on the removed copy's own
+// tiers and the merged building keeps them all; nothing per building is lost. Shakes spent on the removed copy's own
 // levels (a level with costCurrency 'rp'; none for the Cannon, Locklair Tower or Mortar) are refunded, allowed past the
-// Burger cap. Merging gives no free path reset (v0.8.3; before that each merge left one, state.freeRespecs): a reset
+// Shake cap. Merging gives no free path reset (v0.8.3; before that each merge left one, state.freeRespecs): a reset
 // always costs its normal price.
 // Mastery: a 3-tier track per mergeable type (state.mastery[type] = tiers researched), researched in the RV Lab with
-// Burgers, gated by RV Lab level; it only changes the merged ability and isn't part of the one-path lock. Every merged
+// Shakes, gated by RV Lab level; it only changes the merged ability and isn't part of the one-path lock. Every merged
 // building of the type has it (b.mastery, kept in step by syncMastery, read by masteryFxOf in buildings.js).
 // No Phaser here; GameState.mergeBuilding / researchMastery call these and save.
 import { CONFIG } from '../config.js';
@@ -59,7 +59,7 @@ export function mergeCandidates(state, b) {
 /**
  * Can `b` merge now (with `otherId`, or with any candidate when left out)? { ok, reason, cost, candidates, show }.
  * `show`: whether the panel shows a Merge button at all (a mergeable type at its top level, not merged yet).
- * Reasons are what the greyed button says: "Needs another Level 10 Cannon", "Not during a wave", the missing gold / Burgers.
+ * Reasons are what the greyed button says: "Needs another Level 10 Cannon", "Not during a wave", the missing gold / Shakes.
  */
 export function checkMerge(state, b, otherId = null) {
   const m = b && mergeConfig(b.type);
@@ -83,14 +83,14 @@ export function checkMerge(state, b, otherId = null) {
   return { ...out, ok: true, reason: '' };
 }
 
-/** Burgers spent on a building's own levels (levels priced in Burgers, costCurrency 'rp'): refunded when it's merged away. */
+/** Shakes spent on a building's own levels (levels priced in Shakes, costCurrency 'rp'): refunded when it's merged away. */
 export function burgersSpentOnLevels(b) {
   return typeConfig(b.type).levels.slice(0, b.level).reduce((sum, l) => sum + (l.costCurrency === 'rp' ? l.cost : 0), 0);
 }
 
 /**
- * Merge `otherId` into `keepId` (checkMerge must pass; this re-checks). Pays gold and Burgers, removes the other copy (no
- * rubble), makes the kept one merged at full health with its type's Mastery and refunds the other's level Burgers past the
+ * Merge `otherId` into `keepId` (checkMerge must pass; this re-checks). Pays gold and Shakes, removes the other copy (no
+ * rubble), makes the kept one merged at full health with its type's Mastery and refunds the other's level Shakes past the
  * cap. No free path reset (v0.8.3). Emits 'buildingsMerged'. Returns { ok, reason, refund, removedId }.
  */
 export function mergeBuildings(state, keepId, otherId) {
@@ -100,7 +100,7 @@ export function mergeBuildings(state, keepId, otherId) {
   const other = state.buildings.find((b) => b.id === otherId);
   state.gold -= check.cost.gold;
   state.researchPoints = researchPoints(state) - check.cost.rp;
-  const refund = burgersSpentOnLevels(other); // allowed past the Burger cap: nothing is lost
+  const refund = burgersSpentOnLevels(other); // allowed past the Shake cap: nothing is lost
   if (refund) state.researchPoints += refund;
   state.buildings = state.buildings.filter((b) => b.id !== otherId);
   keep.merged = true;
@@ -174,7 +174,7 @@ export const needsMergeReason = (type) => `Needs a ${mergeConfig(type).name}: me
 /**
  * Can the RV Lab research this type's next Mastery tier (or `tier`)? { ok, reason, cost, tier }. Needs a merged
  * building of the type (v0.9.3: the RV Lab shows the column greyed out until then), the previous tier, its RV Lab
- * level, Burgers, and no wave.
+ * level, Shakes, and no wave.
  */
 export function checkMastery(state, type, tier = masteryLevel(state, type) + 1) {
   const m = mergeConfig(type);

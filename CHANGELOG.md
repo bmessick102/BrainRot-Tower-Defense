@@ -2,6 +2,60 @@
 
 The version shows in the bottom-left corner of every screen (`package.json` `version` plus the commit). Details for everything below are in [README.md](README.md).
 
+## 0.14.0
+
+Shakes: Burgers become Grimace Shakes (still `rp` internally), with two new buildings that make and hold them, and the
+cap moves from the RV Lab to the Village Hall plus Shake Storages. Heroes get their own shop tab. No database migration
+and no save version change (new building types and the Collector's `stock` just save).
+
+### New Features
+- **Shake Collector** (`shakeCollector`, `CONFIG.shakeCollector`, `src/logic/shakes.js`): 10 levels from Village Hall 3,
+  gold-priced (1,000 ... 120,000), a picture per 2 levels (`bld_shakeCollector_lv1`-`lv5`, the user's drops). It fills
+  its own `stock` at `production` Shakes/s (0.02 ... 0.17, i.e. 1.2 ... 10.2 a minute) up to `stockCap` (60 ... 560,
+  about 50-55 minutes), and is clicked to collect like a Bitcoin Mine: the Shake (`ui_shake`) bobs over it from
+  `rules.mineCoinIconThreshold` and pulses when full; not during a wave (it keeps filling); only up to the room under
+  the cap ("Shakes full: build or upgrade a Shake Storage"). `GameState.collect` handles it; events `shakesCollected`
+  (purple "+n", `sfx_shake_collect`, the user's "Collect Shake Sound.mp3"), `shakesFull`, `collectorStockChanged`.
+  Count `limits.shakeCollector`: 1 at VH3, 2 at VH6, 3 at VH10, 4 at VH14. Its `stock` saves like a mine's (`save.js`,
+  `COLLECTOR_TYPES` in `buildings.js`); a `stock` on any other type is now an invalid save.
+- **Shake Storage** (`shakeStorage`, `CONFIG.shakeStorage`): 12 levels from Village Hall 3, gold (800 ... 140,000),
+  `capacity` 500 ... 4,800 Shakes. Count `limits.shakeStorage`: 1 at VH3, 2 at VH8. Six pictures, each in three fills
+  (`bld_shakeStorage_lvN_fill1-3`, plain = full), picked by the village's Shakes / cap like the gold Storage
+  (`shakeFill`, BuildingView `variantKey`). The user's 2172 x 724 sheets are cut by the new `scripts/cut-sheets.mjs`
+  (`node scripts/cut-sheets.mjs`, then `npm run prepare-art`): three 724 px frames per sheet, the fills lined up on their
+  plinth, each level scaled to its own height (600 ... 710 px) on one 740 x 740 canvas, bottom on row 726, so
+  prepare-art's `trim: 'group'` keeps one scale. A hit drains Shakes like a Storage drains gold
+  (`shakeStorageDrainAmount`, `rules.storageDrainOnDestroy`; event `shakesDrained`). Mr. Least's `prefers` now includes
+  both Shake buildings. Achievement **Shake Vault** (`shakeVault`, a Level 12 Shake Storage, 25,000 gold, Builder tab).
+- **The Village Hall makes Shakes** (`rules.hallShakeIncome` `{ base: 1/60, perLevel: 0.5/60, batch: 1 }`,
+  `produceHallShakes`): 1 a minute at VH1 up to 10.5 at VH20, straight into the balance like its gold (`hallShakes`
+  event, a small purple "+1"); it pauses at the cap (no "lost" note). It doesn't count toward a wave's Shakes or stars.
+  Its own store: `shakeCapacity` on every `CONFIG.townHall.levels` row (100 x the level; the ruin 100).
+- First-time tip `shakeCollector` once the hall allows one and none is built.
+
+### Changes
+- **Burgers are Shakes** for players: `RP_NAME` / `rpText` say Shake(s); every string in `src/` (shop, upgrade buttons,
+  hero window, RV Lab, Fuel Station, merge window, banners, tips, How to Play, perk text) was renamed.
+  `tests/burgerText.test.js` now also fails on "Burger" anywhere but `src/patchNotes.js` (live notes are never edited).
+  The HUD bar is Grimace purple: `RP_COLOR` 0x9b4dff, `RP_TEXT_COLOR` #d7a8ff, `RP_BAR_COLORS` (fill, lilac shine,
+  plum shade and rim) in `theme.js`, same size as before. Icon: `TEX.researchPoint` is now `ui_shake` (the user's
+  "Grimace Shake UI Icon.png", `art-source/ui/ui_shake.png`, fit by height); the burger (`ui_research_point`) moved to
+  `unused-assets/`. Internal names (`rp`, `researchPoints`, `costCurrency: 'rp'`, `burgerGoldValue`) are unchanged.
+- **The RV Lab no longer sets the cap.** `rules.rpCaps` is gone; `rpCap(state)` = the hall's `shakeCapacity` + every
+  Shake Storage's capacity (ruins count). Sized so the hall plus its allowed Shake Storages at their top level hold
+  the biggest Shake price open at every hall (`tests/shakes.test.js` with `shakePricesAt` / `shakeCapAt` in
+  `tests/helpers.js`): VH3 1,300 / VH7 3,300 (biggest price 2,000) / VH8 6,800 (4,500) / VH10 8,600 (6,000) / VH12
+  10,800 (7,500) / VH15 11,100 (10,000) / VH20 11,600. The hero, merge and Fuel Station tests check the same cap.
+  - **Older saves:** nothing is migrated or taken away. A village whose balance is over its new cap (a big RV Lab, no
+    Shake Storage yet) keeps every Shake and can spend them; kills, waves, Collectors and the hall just add nothing
+    until it drops below the cap (`addResearchPoints` only fills the room left, `rpRoom`).
+- **Heroes tab in the shop** (`SHOP_TABS` in `UIScene.js`): the three altars moved out of Defenses into a new Heroes
+  tab (Defenses, Traps, Economy, Heroes, Walls). Tab widths come from `shopTabLayout(n)` in `hudLayout.js` (130 px for
+  five, ending at x 848, clear of the page arrows at 862; tested in `tests/hudLayout.test.js`).
+- Shake Collector pictures are sized with `TIER_GROWTH` 0.04 and `SPRITE_SCALE` 0.58 (Level 1 about 50% of its plot
+  wide, Level 10 about 73%), the Shake Storage at 0.72 (Level 12 about 71%): both inside the plot rim (92%), both grow
+  every level.
+
 ## 0.13.1
 
 Fewer Storages late, and dearer Village Hall upgrades to match the bigger Storages. No database or save changes.

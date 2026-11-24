@@ -94,7 +94,7 @@ describe('RV Lab', () => {
     gs.buildings.push(lab);
     gs.gold = 50000; gs.researchPoints = 100;
     const cost = CONFIG.rvlab.levels[1].cost;
-    expect(checkUpgrade(gs, lab)).toMatchObject({ ok: false, currency: 'rp', reason: `Need ${cost - 100} more Burgers` });
+    expect(checkUpgrade(gs, lab)).toMatchObject({ ok: false, currency: 'rp', reason: `Need ${cost - 100} more Shakes` });
     gs.researchPoints = cost + 7;
     expect(gs.upgradeBuilding(lab.id).ok).toBe(true);
     expect(lab.level).toBe(2);
@@ -103,19 +103,21 @@ describe('RV Lab', () => {
     expect(checkUpgrade(gs, createBuilding(gs, 'cannon', 2, 2, 1)).currency).toBe('gold');
   });
 
-  it('RP is capped by RV Lab level: extra RP is lost and reported', () => {
+  it('RP (Shakes) is capped by the Village Hall and Shake Storages, not the RV Lab (v0.14): extra is lost and reported', () => {
     const s = makeStateWithTownHall({ researchPoints: 0 }, 10);
-    const caps = CONFIG.rules.rpCaps;
-    expect(rpCap(s)).toBe(caps[0]);
+    const hall = CONFIG.townHall.levels[9].shakeCapacity;
+    expect(rpCap(s)).toBe(hall);
     const lost = [];
     s.events = s.events || {};
     s.emit = (name, d) => { if (name === 'researchPointsChanged') lost.push(d.lost); };
-    expect(addResearchPoints(s, caps[0] + 50)).toBe(caps[0]);
-    expect(s.researchPoints).toBe(caps[0]);
+    expect(addResearchPoints(s, hall + 50)).toBe(hall);
+    expect(s.researchPoints).toBe(hall);
     expect(lost.at(-1)).toBe(50);
     expect(addResearchPoints(s, 10)).toBe(0);
     addBuilding(s, 'rvlab', 5, 5, 3);
-    expect(rpCap(s)).toBe(caps[3]);
+    expect(rpCap(s)).toBe(hall); // the lab no longer raises it
+    addBuilding(s, 'shakeStorage', 9, 5, 3);
+    expect(rpCap(s)).toBe(hall + CONFIG.shakeStorage.levels[2].capacity);
     expect(addResearchPoints(s, 10)).toBe(10);
   });
 
@@ -140,7 +142,7 @@ describe('RV Lab', () => {
     expect(ABILITY_COSTS.research).toEqual([80, 240, 600, 1400, 3000]);
     const s = makeStateWithTownHall({ gold: 1e6, researchPoints: 10 }, 10);
     addBuilding(s, 'rvlab', 5, 5, 1);
-    expect(checkResearch(s, 'cannon', 'a').reason).toBe(`Need ${ABILITY_COSTS.research[0] - 10} more Burgers`);
+    expect(checkResearch(s, 'cannon', 'a').reason).toBe(`Need ${ABILITY_COSTS.research[0] - 10} more Shakes`);
     s.researchPoints = ABILITY_COSTS.research[0];
     expect(checkResearch(s, 'cannon', 'a').ok).toBe(true);
   });

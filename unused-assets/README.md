@@ -13,6 +13,8 @@ run `npm run prepare-art` (an `art-source/` file also needs a matching rule in t
 | `art-source/ui/ui_title_background.png` | Its full-size original (the `prepare-art` source of the file above). |
 | `public/assets/images/ui/ui_research_point_flask_v1.png` | The old research point (RP) token: a gold hexagon with a book and flask. In 0.5.0 research points became **Burgers** and the burger picture took over the same key, `ui_research_point`. |
 | `art-source/ui/ui_research_point_flask_v1.png` | Its full-size original. |
+| `public/assets/images/ui/ui_research_point_burger_v1.webp` | The Burger icon (`ui_research_point`, 0.5.0-0.13). In v0.14 Burgers became **Shakes** and the Grimace Shake (`ui_shake`) took over (`TEX.researchPoint`). |
+| `art-source/ui/ui_research_point_burger_v1.png` | Its full-size original. |
 
 Older versions of the title picture (`ui_title_background_v1`-`v5`) are in `docs/archive/`.
 

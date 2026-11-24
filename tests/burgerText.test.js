@@ -1,5 +1,5 @@
-// Research points are called Burgers everywhere a player can read them (0.5.0). The code, config keys and saves
-// still say rp / researchPoints (so saves don't change); only display text does.
+// Research points are called Shakes everywhere a player can read them (v0.14; Burgers 0.5.0-0.13). The code, config keys
+// and saves still say rp / researchPoints (so saves don't change); only display text does.
 import { describe, it, expect } from 'vitest';
 import fs from 'node:fs';
 import path from 'node:path';
@@ -17,6 +17,10 @@ import { rpText, needRpReason, RP_NAME } from '../src/logic/researchPoints.js';
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 // "RP" in capitals is the old name; lowercase rp / researchPoints are internal keys and never match.
 const said = (s) => /\bRP\b/.test(s) || /research[ -]points?/i.test(s);
+// v0.14: "Burger(s)" is the old name too. The What's New history keeps it: notes of versions already live are never
+// edited (CLAUDE.md), so src/patchNotes.js is the one file allowed to say it.
+const saidBurger = (s) => /burger/i.test(s);
+const PATCH_NOTES_FILE = path.join('src', 'patchNotes.js');
 
 function walk(dir, out = []) {
   for (const f of fs.readdirSync(dir)) {
@@ -35,12 +39,14 @@ function strings(v, at = 'CONFIG', out = []) {
   return out;
 }
 
-describe('Burgers: no player-facing text says RP or research points', () => {
-  it('no string literal in src/ does (comments and internal keys aside)', () => {
+describe('Shakes: no player-facing text says RP, research points or Burgers', () => {
+  it('no string literal in src/ does (comments and internal keys aside; the What\'s New history may say Burgers)', () => {
     const hits = [];
     for (const f of walk(path.join(ROOT, 'src'))) {
+      const rel = path.relative(ROOT, f);
       for (const s of stringLiterals(fs.readFileSync(f, 'utf8'))) {
-        if (said(s.text)) hits.push(`${path.relative(ROOT, f)}:${s.line} ${s.text.slice(0, 80)}`);
+        if (said(s.text)) hits.push(`${rel}:${s.line} ${s.text.slice(0, 80)}`);
+        if (saidBurger(s.text) && rel !== PATCH_NOTES_FILE) hits.push(`${rel}:${s.line} (Burger) ${s.text.slice(0, 80)}`);
       }
     }
     expect(hits).toEqual([]);
@@ -63,16 +69,16 @@ describe('Burgers: no player-facing text says RP or research points', () => {
       ...strings(CONFIG)
     ];
     expect(texts.length).toBeGreaterThan(300);
-    expect(texts.filter(([, v]) => said(v))).toEqual([]);
+    expect(texts.filter(([, v]) => said(v) || saidBurger(v))).toEqual([]);
   });
 
-  it('amounts read as Burgers', () => {
-    expect(RP_NAME).toBe('Burgers');
-    expect(rpText(1)).toBe('1 Burger');
-    expect(rpText(40)).toBe('40 Burgers');
-    expect(rpText(1500)).toBe('1,500 Burgers');
-    expect(rpText(undefined)).toBe('0 Burgers');
-    expect(needRpReason(100, 60)).toBe('Need 40 more Burgers');
-    expect(needRpReason(100, 99)).toBe('Need 1 more Burger');
+  it('amounts read as Shakes', () => {
+    expect(RP_NAME).toBe('Shakes');
+    expect(rpText(1)).toBe('1 Shake');
+    expect(rpText(40)).toBe('40 Shakes');
+    expect(rpText(1500)).toBe('1,500 Shakes');
+    expect(rpText(undefined)).toBe('0 Shakes');
+    expect(needRpReason(100, 60)).toBe('Need 40 more Shakes');
+    expect(needRpReason(100, 99)).toBe('Need 1 more Shake');
   });
 });

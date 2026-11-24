@@ -109,3 +109,16 @@ export function fitPill(avail, textWidths, buttonsW, pad = 48, minScale = 0.55) 
 export function waveSpan(profileRight = 0) {
   return { lo: Math.max(16, profileRight + ROW_GAP), hi: barRect(RP_BAR).x - ROW_GAP };
 }
+
+// ---------- the shop's category tabs ----------
+// The shop panel (UIScene, 1100 wide) has its "Build" title on the left, then the tab buttons, then the page arrows
+// (left edge at SHOP_ARROWS_LEFT) and the close button. Tabs share the span between the title and the arrows: as wide
+// as SHOP_TAB.maxW, narrower when more tabs need the room (v0.14: five, with Heroes), so they never run into the arrows.
+export const SHOP_TAB = { x0: 150, maxW: 150, minW: 100, gap: 12, h: 40 };
+export const SHOP_ARROWS_LEFT = 862; // the "previous page" arrow: 884 - 44 / 2
+/** Each tab's { x (left), w } for `n` tabs, left to right, ending at least ROW_GAP before the page arrows. */
+export function shopTabLayout(n) {
+  const span = SHOP_ARROWS_LEFT - ROW_GAP - SHOP_TAB.x0;
+  const w = Math.max(SHOP_TAB.minW, Math.min(SHOP_TAB.maxW, Math.floor((span - SHOP_TAB.gap * (n - 1)) / Math.max(1, n))));
+  return Array.from({ length: n }, (_, i) => ({ x: SHOP_TAB.x0 + i * (w + SHOP_TAB.gap), w }));
+}

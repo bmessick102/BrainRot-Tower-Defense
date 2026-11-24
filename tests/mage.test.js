@@ -12,7 +12,7 @@ import { hotbarSlots } from '../src/logic/hotbar.js';
 import { serializeGame, parseSave } from '../src/logic/save.js';
 import { GameState } from '../src/state/GameState.js';
 import { footprintCenter } from '../src/logic/grid.js';
-import { makeStateWithTownHall, addBuilding, addEnemy } from './helpers.js';
+import { makeStateWithTownHall, addBuilding, addEnemy, shakeCapAt } from './helpers.js';
 
 const M = CONFIG.mageAltar.hero;
 function village(level = 10, research = {}) {
@@ -40,12 +40,10 @@ describe('the Locklair Mage: his building', () => {
     expect(checkUpgrade(s, altar)).toMatchObject({ ok: false, reason: 'Requires VH11' });
   });
 
-  it('every Burger price fits the Burger cap of the best RV Lab at the hall it needs; Level 1 fits the hall\'s gold', () => {
+  it('every Shake price fits the Shake cap (the hall plus its top Shake Storages) at the hall it needs; Level 1 fits the hall\'s gold', () => {
     for (let l = 2; l <= 20; l++) {
       const vh = levelStats('mageAltar', l).townHall;
-      const s = makeStateWithTownHall({}, vh);
-      addBuilding(s, 'rvlab', 20, 20, Math.min(5, vh - 3));
-      expect(levelStats('mageAltar', l).cost).toBeLessThanOrEqual(rpCap(s));
+      expect(levelStats('mageAltar', l).cost, `Lv${l}`).toBeLessThanOrEqual(shakeCapAt(vh)); // (v0.14: the hall plus its Shake Storages at their top level)
     }
     expect(levelStats('mageAltar', 1).costCurrency).toBeUndefined();
   });

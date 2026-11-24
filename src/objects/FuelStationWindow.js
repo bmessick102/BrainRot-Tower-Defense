@@ -44,7 +44,7 @@ export function openFuelStationWindow(scene, gs, { onClose = null, onPerks = nul
     m.setTitle(lvl ? `Fuel Station · Brew Spells (level ${lvl})` : 'Fuel Station · Brew Spells');
     drawTabs(scene, m, onPerks ? () => { m.close(); onPerks(); } : null);
     const tabsW = 2 * 96 + 6 + 16;
-    m.add(scene.add.text(m.x + 22 + tabsW, m.y + INFO_Y, 'Brew with Burgers. In a wave, click a spell on the hotbar (or press its number), then click the map.',
+    m.add(scene.add.text(m.x + 22 + tabsW, m.y + INFO_Y, 'Brew with Shakes. In a wave, click a spell on the hotbar (or press its number), then click the map.',
       bodyStyle(15, COLORS.inkDim, { wordWrap: { width: W - 44 - tabsW - 170 } })).setOrigin(0, 0.5));
     balance(scene, m, gs, true, m.x + W - 22, m.y + INFO_Y);
 
@@ -103,7 +103,7 @@ function drawNode(scene, m, gs, kind, x, y, isSel, onSelect) {
   m.add(scene.add.text(x + 86, y + 10, cfg.name, bodyStyle(16, open ? COLORS.ink : '#a89c88', { fontStyle: 'bold' })));
   const cost = brewCost(gs, kind);
   const line = !open ? `Locked · Fuel Station lv ${cfg.level}` : cost === 0 ? 'Brew · Free (first one)' : `Brew · ${rpText(cost)}`;
-  const short = open && /more Burgers?$/.test(c.reason || '');
+  const short = open && /more Shakes?$/.test(c.reason || '');
   const ink = !open ? '#b3a892' : c.ok ? COLORS.inkGood : short ? COLORS.inkBad : COLORS.inkDim;
   fitWidth(m.add(scene.add.text(x + 86, y + 33, line, bodyStyle(12.5, ink, { fontStyle: 'bold' }))), CARD_W - 96);
   const s = spellStats(gs, kind);
@@ -195,7 +195,7 @@ function drawSlotTray(scene, m, gs, x, y, w, h) {
       zone.on('pointerdown', () => {
         if (isWaveActive(gs)) return;
         confirmDialog(scene, {
-          title: 'Pour it out?', lines: [`Pour out a ${spellFullName(kind)}?`, 'Its slot frees up. The Burgers it cost are not refunded.'],
+          title: 'Pour it out?', lines: [`Pour out a ${spellFullName(kind)}?`, 'Its slot frees up. The Shakes it cost are not refunded.'],
           confirmLabel: 'Pour out', onConfirm: () => gs.discardSpell(kind)
         });
       });

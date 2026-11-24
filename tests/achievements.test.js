@@ -8,7 +8,7 @@ import { makeStateWithTownHall, addBuilding } from './helpers.js';
 describe('achievements', () => {
   it('every achievement is well formed: unique id, known group and stat, positive goal and reward', () => {
     const ids = new Set();
-    const stats = new Set(['bestTownHall', 'bestWave', 'defenseTypes', 'walls', 'maxed', ...COUNTERS]);
+    const stats = new Set(['bestTownHall', 'bestWave', 'defenseTypes', 'walls', 'maxed', 'shakeVault', ...COUNTERS]);
     for (const a of ACHIEVEMENTS) {
       expect(ids.has(a.id)).toBe(false);
       ids.add(a.id);

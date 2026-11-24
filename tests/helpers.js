@@ -61,3 +61,61 @@ export function addEnemy(state, kind, x, y, extra = {}) {
   state.enemies.push(e);
   return e;
 }
+
+// ---------- Shakes (v0.14): the cap a Village Hall can reach, and the biggest Shake price open there ----------
+// (Imported lazily inside the functions below would be nicer, but these modules are cheap and have no side effects.)
+import { CONFIG } from '../src/config.js';
+import { BUILDING_TYPES, typeConfig, maxLevel, levelStats, limitFor } from '../src/logic/buildings.js';
+import { ABILITY_COSTS } from '../src/abilityConfig.js';
+
+/** The lowest Village Hall at which a building can reach `level` (no higher than the hall, plus any level's own `townHall`). */
+export function firstHallFor(type, level) {
+  if (type === 'townHall') return Math.max(1, level - 1);
+  return Math.max(level, typeConfig(type).unlockTownHall || 1, levelStats(type, level).townHall || 0);
+}
+
+/** The highest level a type can be at Village Hall `vh` (0 before it unlocks). */
+export function topLevelAt(type, vh) {
+  let top = 0;
+  for (let l = 1; l <= maxLevel(type); l++) if (firstHallFor(type, l) <= vh) top = l;
+  return top;
+}
+
+/** The most Shakes a village can hold at Village Hall `vh`: the hall's own store plus every Shake Storage it may have, each at its top level. */
+export function shakeCapAt(vh) {
+  const hall = CONFIG.townHall.levels[vh - 1].shakeCapacity;
+  const n = limitFor('shakeStorage', vh), lvl = topLevelAt('shakeStorage', vh);
+  return hall + (n && lvl ? n * levelStats('shakeStorage', lvl).capacity : 0);
+}
+
+/**
+ * Every Shake price open at Village Hall `vh`, as [label, price]: building levels priced in Shakes (heroes, RV Lab,
+ * Fuel Station), RV Lab perks up to the lab's top tier there and the biggest path reset, merges and their Mastery tiers
+ * once the type can reach its top level, and spells the Fuel Station can brew.
+ */
+export function shakePricesAt(vh) {
+  const out = [];
+  for (const type of BUILDING_TYPES) {
+    for (let l = 2; l <= maxLevel(type); l++) {
+      const s = levelStats(type, l);
+      if (s.costCurrency === 'rp' && firstHallFor(type, l) <= vh) out.push([`${type} Lv${l}`, s.cost]);
+    }
+  }
+  const lab = topLevelAt('rvlab', vh);
+  const tiers = ABILITY_COSTS.research.slice(0, lab);
+  tiers.forEach((c, i) => out.push([`perk tier ${i + 1}`, c]));
+  if (tiers.length) out.push(['path reset', Math.round(tiers.reduce((a, b) => a + b, 0) * CONFIG.rules.respecShare)]);
+  for (const [type, m] of Object.entries(CONFIG.merges || {})) {
+    if (topLevelAt(type, vh) < maxLevel(type)) continue;
+    out.push([`merge ${type}`, m.cost.rp]);
+    m.mastery.costs.forEach((c, i) => { if (m.mastery.labLevel[i] <= lab) out.push([`${type} Mastery ${i + 1}`, c]); });
+  }
+  const fuel = topLevelAt('fuelStation', vh);
+  for (const [kind, sp] of Object.entries(CONFIG.fuelStation.spells)) if (sp.level <= fuel) out.push([`spell ${kind}`, sp.brewCost]);
+  return out;
+}
+
+/** The biggest Shake price open at Village Hall `vh` (0 when there's none). */
+export function maxShakePriceAt(vh) {
+  return Math.max(0, ...shakePricesAt(vh).map(([, c]) => c));
+}

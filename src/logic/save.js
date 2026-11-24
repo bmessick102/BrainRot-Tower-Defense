@@ -2,7 +2,8 @@
 // `storage` is passed in (window.localStorage in the game, a fake in tests). Every access is try/catch.
 import { validHeroSleep } from './hero.js';
 import { CONFIG } from '../config.js';
-import { BUILDING_TYPES, HERO_TYPES, WALL_ORIENTS, footprintDims, buildingSize, maxLevel, levelStats, isDefense, maxHp, wallLevel, commonWallLevel } from './buildings.js';
+import { collectorStockCap } from './shakes.js';
+import { BUILDING_TYPES, COLLECTOR_TYPES, HERO_TYPES, WALL_ORIENTS, footprintDims, buildingSize, maxLevel, levelStats, isDefense, maxHp, wallLevel, commonWallLevel } from './buildings.js';
 import { isRectOnGrass, footprintsOverlap } from './grid.js';
 import { MAP } from '../mapTiles.js';
 import { validDecorSeed } from './decor.js';
@@ -72,7 +73,7 @@ export function serializeGame(state, now = new Date()) {
     mastery: serializeMastery(state),           // merged defenses' Mastery tiers per type ({ cannon: 2 }, merge.js); missing in older saves
     buildings: state.buildings.map((b) => {
       const out = { id: b.id, type: b.type, level: b.level, col: b.col, row: b.row };
-      if (b.type === 'mine') out.stock = Math.round((b.stock || 0) * 100) / 100;
+      if (COLLECTOR_TYPES.includes(b.type)) out.stock = Math.round((b.stock || 0) * 100) / 100; // a mine's gold, a Shake Collector's Shakes (v0.14)
       if (HERO_TYPES.includes(b.type) && b.heroSleep > 0) out.heroSleep = Math.round(b.heroSleep * 10) / 10; // a hero's nap (the Brisket King's, the Hatsune Queen's)
       if (b.type === 'wall') out.orient = b.orient || 'x';
       if (b.merged) out.merged = true; // a merged defense (merge.js): its Mastery comes from `mastery`, by type
@@ -303,7 +304,7 @@ export function validateSave(obj) {
       townHalls++;
       if (b.level !== obj.townHallLevel) return false;
     }
-    if (b.type === 'mine' && b.stock !== undefined && (typeof b.stock !== 'number' || !Number.isFinite(b.stock) || b.stock < 0)) return false;
+    if (b.stock !== undefined && (!COLLECTOR_TYPES.includes(b.type) || typeof b.stock !== 'number' || !Number.isFinite(b.stock) || b.stock < 0)) return false;
     if (b.hype !== undefined && (b.type !== 'dj' || !validHype(b.hype))) return false;
     if (b.heroSleep !== undefined && (!HERO_TYPES.includes(b.type) || !validHeroSleep(b.heroSleep))) return false;
     if (b.destroyed !== undefined && (b.destroyed !== true || b.type === 'townHall')) return false;
@@ -331,7 +332,7 @@ export function deserializeGame(obj) {
     const b = { id: s.id, type: s.type, level, col: s.col, row: s.row, ...footprintDims(s.type, s.orient), hp: levelStats(s.type, level).hp, destroyed: false };
     if (s.type === 'wall') b.orient = s.orient;
     else b.size = buildingSize(s.type);
-    if (s.type === 'mine') b.stock = s.stock || 0; // clamped below, once its perks (Deep Vault) are known
+    if (COLLECTOR_TYPES.includes(s.type)) b.stock = s.stock || 0; // clamped below, once its perks (Deep Vault) are known
     if (s.type === 'dj') b.hype = 0; // (a saved charge from before v0.11.1 is dropped: the meter empties between waves)
     if (HERO_TYPES.includes(s.type)) b.heroSleep = s.heroSleep || 0;
     if (isDefense(s.type)) { b.cooldown = 0; b.targetId = null; }
@@ -339,6 +340,7 @@ export function deserializeGame(obj) {
     if (s.merged) { b.merged = true; if (mastery[s.type]) b.mastery = mastery[s.type]; } // a merged defense, with its type's Mastery
     b.hp = maxHp(b); // with any health tiers (and a merged one's extra health)
     if (s.type === 'mine') b.stock = Math.min(b.stock, mineStockCap(b));
+    if (s.type === 'shakeCollector') b.stock = Math.min(b.stock, collectorStockCap(b));
     if (s.destroyed) { b.destroyed = true; b.hp = 0; }
     return b;
   });

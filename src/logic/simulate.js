@@ -5,6 +5,7 @@ import { stepSpells } from './spells.js';
 import { stepEconomyPerks } from './econPerks.js';
 import { DEFENSE_TYPES } from './buildings.js';
 import { produceMines, produceHallIncome } from './economy.js';
+import { produceShakeCollectors, produceHallShakes } from './shakes.js';
 import { stepClock } from './dayNight.js';
 import { stepWaveSpawning, checkWaveCleared } from './waves.js';
 import { stepEnemies, removeDeadEnemies } from './enemies.js';
@@ -38,6 +39,8 @@ export function simulate(state, dt) {
   state._gnomes = gnomes;
   produceMines(state, dt);
   produceHallIncome(state, dt); // the Village Hall's own trickle of gold (safety net)
+  produceShakeCollectors(state, dt); // v0.14: Shake Collectors fill their stock (shakes.js)
+  produceHallShakes(state, dt); // ...and the Village Hall makes a trickle of Shakes
   stepGnomeMining(state, dt, gnomes);
   stepWaveSpawning(state, dt);
   stepEnemies(state, dt);

@@ -85,7 +85,7 @@ const ENEMY_LAYOUT = {
 const CATEGORY_COLORS = { ground: COLORS.button, air: COLORS.buttonBlue, tanks: 0xb03a2e, special: 0x9b59d0, summoned: 0x23a99a };
 
 // Buildings in the order a player meets them: the base, economy, walls, then defenses and traps.
-const BUILDING_ORDER = ['townHall', 'mine', 'storage', 'house', 'rvlab', 'dj', 'fuelStation', 'wall', 'cannon', 'archer', 'mortar', 'wizard', 'firework', 'spear', 'ksi', 'flock', 'ra', 'catapult', 'mousetrap', 'altar', 'queenAltar', 'mageAltar'];
+const BUILDING_ORDER = ['townHall', 'mine', 'storage', 'house', 'shakeCollector', 'shakeStorage', 'rvlab', 'dj', 'fuelStation', 'wall', 'cannon', 'archer', 'mortar', 'wizard', 'firework', 'spear', 'ksi', 'flock', 'ra', 'catapult', 'mousetrap', 'altar', 'queenAltar', 'mageAltar'];
 
 const categoryOf = (kind) => ENEMY_CATEGORIES.find((c) => c.kinds.includes(kind));
 // The category tabs share the chip row: tabs on the left, the shown category's chips on the right.
@@ -177,6 +177,16 @@ function grow(type, label, key, color, unit = '') {
 /** A stat that stays the same at every level. */
 const fixed = (label, value, frac, color) => ({ label, value, frac: Math.max(0.06, Math.min(1, frac)), color });
 
+/** The Village Halls where a type's count goes up: "3 · 6 · 10 · 14" (each hall that allows one more). */
+function moreAt(type) {
+  const steps = [];
+  for (let vh = 1; vh <= CONFIG.rules.maxTownHallLevel; vh++) {
+    const n = limitFor(type, vh);
+    if (n > limitFor(type, vh - 1)) steps.push(String(vh));
+  }
+  return steps.join(' · ');
+}
+
 /** Up to six stats for a building type (level 1 → max where they grow). */
 function buildingStats(type) {
   const cfg = typeConfig(type);
@@ -193,6 +203,15 @@ function buildingStats(type) {
     out.push(grow(type, 'Gold capacity', 'capacity', 0xffc93c));
   } else if (type === 'house') {
     out.push(grow(type, 'Gnome workers', 'gnomes', 0xe85d4a));
+  } else if (type === 'shakeCollector') {
+    // (v0.14) Shakes a minute: the config's per-second rate is tiny.
+    const perMin = (l) => Math.round(levelStats(type, l).production * 600) / 10;
+    out.push({ label: 'Shakes per minute', value: `${perMin(1)} → ${perMin(top)}`, frac: perMin(1) / perMin(top), growth: true, color: RP_COLOR });
+    out.push(grow(type, 'Holds before collecting', 'stockCap', 0x3cb8ff));
+    out.push(fixed('More at Village Hall', moreAt(type), 1, 0x9b59d0));
+  } else if (type === 'shakeStorage') {
+    out.push(grow(type, 'Shake capacity', 'capacity', RP_COLOR));
+    out.push(fixed('More at Village Hall', moreAt(type), 1, 0x9b59d0));
   } else if (type === 'altar') {
     out.push(grow(type, 'Hero health', 'heroHp', 0x4cd137));
     out.push(grow(type, 'Hero damage per hit', 'heroDamage', 0xff6b3d));
@@ -273,7 +292,7 @@ function buildingTags(type) {
   else if (type === 'wall') tags.push(['Wall', 0x8a6a46]);
   else if (type === 'rvlab') tags.push(['Research', 0x9b59d0]);
   else if (type === 'dj') tags.push(['Utility', 0x9b59d0], ['Drop the Beat on the hotbar', 0xc070ff]);
-  else if (type === 'fuelStation') tags.push(['Spells', 0x9b59d0], ['Brewed with Burgers', RP_COLOR], ['Cast from the hotbar', 0xc070ff]);
+  else if (type === 'fuelStation') tags.push(['Spells', 0x9b59d0], ['Brewed with Shakes', RP_COLOR], ['Cast from the hotbar', 0xc070ff]);
   else if (type === 'altar') tags.push(['Hero', 0xc98a12], ['Melee', 0xd0583c], ['Sleeps to heal', 0x6c7a89]);
   else if (type === 'queenAltar') tags.push(['Hero', 0xc98a12], ['Ranged', 0x23a99a], ['Ground & air', 0x3c8ad0], ['Sleeps to heal', 0x6c7a89]);
   else if (type === 'mageAltar') tags.push(['Hero', 0xc98a12], ['Never moves', 0x6c7a89], ['Ground & air', 0x3c8ad0], ['Heals', 0x9b4dff]);
@@ -465,18 +484,18 @@ export class HowToPlayScene extends Phaser.Scene {
       ]],
       ['Waves, day & night', [
         'Build as long as you like. Press Start Wave to get 30 seconds to get ready. A "!" shows where enemies will come from.',
-        `Day turns to night about every 8 minutes. At night, enemies hit ${Math.round((CONFIG.rules.night.damage - 1) * 100)}% harder and move faster, but you earn +${Math.round(CONFIG.rules.night.lootBonus * 100)}% gold and Burgers.`,
+        `Day turns to night about every 8 minutes. At night, enemies hit ${Math.round((CONFIG.rules.night.damage - 1) * 100)}% harder and move faster, but you earn +${Math.round(CONFIG.rules.night.lootBonus * 100)}% gold and Shakes.`,
         `Each wave is harder than the last and new enemies join at set waves; your Village Hall doesn't change that. Every ${CONFIG.waveThemes.boss.every}th wave is a Boss Wave, and special waves pay bonus gold.`,
         `The round "1x" button beside Start Wave${IS_TOUCH ? '' : ' (or press T)'} shows the wave's speed: press it for 2x, again for 4x, and again for 1x. It stays until you change it.`,
-        `You get 1 to 3 stars for how much of your village survives. 3 stars pays +${Math.round(CONFIG.rules.waveStars.bonus[2] * 100)}% gold and Burgers. After a wave, everything destroyed is rebuilt free.`,
+        `You get 1 to 3 stars for how much of your village survives. 3 stars pays +${Math.round(CONFIG.rules.waveStars.bonus[2] * 100)}% gold and Shakes. After a wave, everything destroyed is rebuilt free.`,
         'If your Village Hall falls, you can Retry the wave.'
       ]],
-      ['Gold & Burgers', [
+      ['Gold & Shakes', [
         'Bitcoin Mines make gold. Click a mine when its coin shows (not during a wave).',
-        'Your Village Hall and Storages decide how much gold you can hold.',
-        'Enemies that hit a Storage steal gold from it. Gnomes mine extra gold and repair buildings.',
-        'Defeated enemies and achievements pay gold.',
-        `Burgers pay for perks, path resets, spells and RV Lab upgrades. Defeated enemies give Burgers, and beating a wave gives ${CONFIG.rules.researchPointsPerWave} x the wave number. Your burger bar has a cap that grows with the RV Lab's level; Burgers beyond it are lost, so spend them.`
+        'Your Village Hall and Storages decide how much gold you can hold. Enemies that hit a Storage steal some.',
+        'Gnomes mine extra gold and repair buildings. Defeated enemies and achievements pay gold.',
+        `Shakes pay for perks, hero levels, spells and merges. Defeated enemies and beaten waves (${CONFIG.rules.researchPointsPerWave} x the wave number) give Shakes, and so do Shake Collectors (click them like mines) and your Village Hall.`,
+        'Your Village Hall and Shake Storages set how many Shakes you can hold; extra is lost, so spend them.'
       ]]
     ];
     cols.forEach(([title, lines], i) => {
@@ -500,16 +519,16 @@ export class HowToPlayScene extends Phaser.Scene {
       'Walls share one level: "Upgrade Walls" raises every wall at once, and new walls are built at that level.',
       `After you beat a wave, destroyed buildings are rebuilt free. During a wave you can Rebuild one early for ${Math.round(CONFIG.rules.rebuildCostShare * 100)}% of its cost.`,
       "Buildings can't be sold: each Village Hall allows a set number of every building, so rearrange your village by moving them in edit mode.",
-      `Merging: two ${MERGE_AT} ${MERGE_NAMES} can merge into one stronger building with its own ability (Merge button, between waves, gold + Burgers). It still counts as two toward the limit, so merging doesn't free a slot. Below the top level, a greyed Merge button shows which buildings can merge.`
+      `Merging: two ${MERGE_AT} ${MERGE_NAMES} can merge into one stronger building with its own ability (Merge button, between waves, gold + Shakes). It still counts as two toward the limit, so merging doesn't free a slot. Below the top level, a greyed Merge button shows which buildings can merge.`
     ]);
 
     // Right: the RV Lab and abilities, in three numbered steps plus an example.
     const rx = LEFT + lw + gap;
     y = this.card(rx, CONTENT_TOP, rw, h, 'Abilities (RV Lab)');
     const steps = [
-      ['Build the RV Lab', `You need Village Hall ${CONFIG.rvlab.unlockTownHall}. Find it in the Shop under Economy. Each RV Lab level opens the next tier, and upgrading it costs Burgers, not gold.`],
-      ['Pick a path, then climb it (costs Burgers)', 'Your first pick for a building type locks all of that type to Path A, B or C, and its next tiers are that path\'s. To switch, pay Burgers to reset the path (the old picks are not refunded).'],
-      ['Every building gets it', 'Each perk applies to every building of that type at once, whatever its level. Perks cost only Burgers and need only RV Lab level: tier N needs RV Lab level N.']
+      ['Build the RV Lab', `You need Village Hall ${CONFIG.rvlab.unlockTownHall}. Find it in the Shop under Economy. Each RV Lab level opens the next tier, and upgrading it costs Shakes, not gold.`],
+      ['Pick a path, then climb it (costs Shakes)', 'Your first pick for a building type locks all of that type to Path A, B or C, and its next tiers are that path\'s. To switch, pay Shakes to reset the path (the old picks are not refunded).'],
+      ['Every building gets it', 'Each perk applies to every building of that type at once, whatever its level. Perks cost only Shakes and need only RV Lab level: tier N needs RV Lab level N.']
     ];
     steps.forEach(([title, text], i) => {
       const g = this.add.graphics();
@@ -548,7 +567,7 @@ export class HowToPlayScene extends Phaser.Scene {
     this.page.add(this.add.text(px - 6, py + 46, 'Orange = Path A, blue = Path B, green = Path C, empty = not researched.', bodyStyle(13, COLORS.inkDim)));
     y += exH + 12;
     const c = (list) => list.map(formatGold).join(' / ');
-    this.page.add(this.add.text(rx + 20, y, `Research costs ${c(ABILITY_COSTS.research)} Burgers per tier.\nA book floats over the RV Lab when you can research.`, bodyStyle(13, COLORS.inkDim, { lineSpacing: 3 })));
+    this.page.add(this.add.text(rx + 20, y, `Research costs ${c(ABILITY_COSTS.research)} Shakes per tier.\nA book floats over the RV Lab when you can research.`, bodyStyle(13, COLORS.inkDim, { lineSpacing: 3 })));
   }
 
   // ---------- browsers (Buildings / Enemies) ----------

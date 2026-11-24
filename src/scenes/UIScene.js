@@ -26,21 +26,22 @@ import { ResourceBar, formatSpaced } from '../objects/ResourceBar.js';
 import { drawWindow, drawGlossy, drawHudPill, drawRibbon, drawBadge, drawShowcaseCard, drawCardStrip, drawAngledArrow, fitWidth, fitIcon, addHeroBadge, heroKindOf } from '../objects/uiDraw.js';
 import {
   TOP_ROW_CY, topRowY, GOLD_BAR, RP_BAR, CLOCK, clockRect, PROFILE, WAVE_CX, waveSpan,
-  fitInSpan, fitPill, liftClear, rectsOverlap, findOverlaps, SCREEN
+  fitInSpan, fitPill, liftClear, rectsOverlap, findOverlaps, SCREEN, SHOP_TAB, shopTabLayout
 } from '../logic/hudLayout.js';
 import { MAP } from '../mapTiles.js';
 import { BUILDING_DESCRIPTIONS } from '../buildingText.js';
 import { buildingTextureKey, buildingPictureKey, MERGE_GEAR } from '../objects/BuildingView.js';
 import { TEX, SFX } from '../assetKeys.js';
 import { playSfx } from '../audio.js';
-import { COLORS, bodyStyle, textStyle, RP_BAR_COLORS } from '../theme.js';
+import { COLORS, bodyStyle, textStyle, RP_BAR_COLORS, RP_TEXT_COLOR, RP_COLOR } from '../theme.js';
 import { achievementById } from '../logic/achievements.js';
 import { LEAGUES } from '../logic/leagues.js';
 import { RESEARCH_TYPES, UTILITY_TYPES, HERO_TYPES, SPELL_TYPES } from '../logic/buildings.js';
 import { AbilityHotbar } from '../objects/AbilityHotbar.js';
 import { openFuelStationWindow } from '../objects/FuelStationWindow.js';
 import { SPELL_KINDS, spellConfig, spellFullName, spellSlots, brewedSpells } from '../logic/spells.js';
-import { rpCap, rpText } from '../logic/researchPoints.js';
+import { rpCap, rpText, RP_NAME, hallShakeCapacity, shakeStorageCapacity } from '../logic/researchPoints.js';
+import { collectorStockCap, hallShakeRate } from '../logic/shakes.js';
 import { heroStats } from '../logic/hero.js';
 import { openHeroWindow } from '../objects/HeroWindow.js';
 import { ensureAegisTexture, AEGIS_COLOR } from '../objects/AegisIcon.js';
@@ -77,9 +78,10 @@ function shopCardGrid() {
 // Traps (hidden, like the Mousetrap) get their own tab; they're still defenses in the game rules.
 const TRAP_TYPES = DEFENSE_TYPES.filter((t) => CONFIG.defenses[t].trap);
 const SHOP_TABS = [
-  { key: 'defenses', label: 'Defenses', types: [...DEFENSE_TYPES.filter((t) => !TRAP_TYPES.includes(t)), ...HERO_TYPES] }, // the Brisket King's altar too
+  { key: 'defenses', label: 'Defenses', types: DEFENSE_TYPES.filter((t) => !TRAP_TYPES.includes(t)) },
   { key: 'traps', label: 'Traps', types: TRAP_TYPES },
   { key: 'economy', label: 'Economy', types: [...ECONOMY_TYPES, ...RESEARCH_TYPES, ...UTILITY_TYPES, ...SPELL_TYPES] }, // the RV Lab, DJ Babyface and Fuel Station sit with the economy buildings
+  { key: 'heroes', label: 'Heroes', types: HERO_TYPES }, // v0.14: the three heroes' altars (they were at the end of Defenses)
   { key: 'walls', label: 'Walls', types: WALL_TYPES }
 ];
 
@@ -219,25 +221,24 @@ export class UIScene extends Phaser.Scene {
     this.goldBar.setValue(this.gs.gold, this.gs.capacity);
   }
 
-  // ---------- Burgers (research points; the bar left of the gold bar) ----------
-  /** A small drawn burger for the Burgers icon, made once unless the real art (TEX.researchPoint) was loaded. */
+  // ---------- Shakes (research points; the bar left of the gold bar) ----------
+  /** A small drawn shake cup for the Shakes icon, made once unless the real art (TEX.researchPoint, ui_shake) was loaded. */
   ensureRpIcon() {
     if (this.textures.exists(TEX.researchPoint)) return;
     const g = this.make.graphics({ x: 0, y: 0, add: false });
-    g.fillStyle(0x2a160a, 1).fillRoundedRect(2, 4, 28, 25, 9);                          // outline
-    g.fillStyle(0xe0913a, 1).fillEllipse(16, 11, 24, 13).fillRoundedRect(5, 23, 22, 4, 2); // buns
-    g.fillStyle(0x7ac142, 1).fillRect(4, 15, 24, 2);                                    // lettuce
-    g.fillStyle(0xffc43a, 1).fillRect(4, 17, 24, 2);                                    // cheese
-    g.fillStyle(0x6b3418, 1).fillRoundedRect(5, 19, 22, 4, 2);                          // patty
-    g.fillStyle(0xfff1c4, 0.9).fillEllipse(11, 9, 3, 2).fillEllipse(17, 7, 3, 2).fillEllipse(21, 10, 3, 2); // seeds
+    g.fillStyle(0xd23a3a, 1).fillRect(18, 1, 4, 10);                                    // straw
+    g.fillStyle(0x14061f, 1).fillEllipse(16, 10, 24, 12).fillTriangle(5, 12, 27, 12, 16, 31); // outline
+    g.fillStyle(0xe9dcff, 1).fillEllipse(16, 9, 20, 8);                                 // whipped top
+    g.fillStyle(0x9b4dff, 1).fillTriangle(7, 13, 25, 13, 16, 29);                       // the purple cup
+    g.fillStyle(0xd2a6ff, 0.9).fillRect(10, 14, 3, 6);                                  // shine
     g.generateTexture(TEX.researchPoint, 32, 32);
     g.destroy();
   }
 
   /**
-   * The Burgers resource bar (research points; internally rp): same look as the gold bar, burger orange, in the
-   * top row just left of it. Its "Max" is the cap (grows with the RV Lab's level); any earned past it is lost
-   * (see showRpLost).
+   * The Shakes resource bar (research points; internally rp): same look and size as the gold bar's, Grimace purple
+   * (RP_BAR_COLORS), in the top row just left of it. Its "Max" is the cap (the Village Hall's Shake store plus every
+   * Shake Storage); any earned past it is lost (see showRpLost).
    */
   buildResearchPoints() {
     this.ensureRpIcon();
@@ -246,7 +247,7 @@ export class UIScene extends Phaser.Scene {
     const r = this.rpBar.bounds();
     this.add.zone(r.x, r.y, r.w, r.h).setOrigin(0).setInteractive();
     this.rpLostSum = 0;
-    // "Burgers full: n lost" takes the place of the bar's "Max" label for a moment (so it never lands on the wave
+    // "Shakes full: n lost" takes the place of the bar's "Max" label for a moment (so it never lands on the wave
     // banner or the info panel below the row).
     const mt = this.rpBar.maxText;
     this.rpLostText = this.add.text(mt.x, mt.y, '', { fontFamily: mt.style.fontFamily, fontSize: mt.style.fontSize, color: '#ffb0b0', stroke: '#000000', strokeThickness: 4 }).setOrigin(0, 1).setAlpha(0).setDepth(460);
@@ -258,13 +259,13 @@ export class UIScene extends Phaser.Scene {
     this.rpBar.setValue(this.gs.researchPoints || 0, rpCap(this.gs));
   }
 
-  /** "Burgers full: 12 lost" under the bar when Burgers are earned past the cap; adds up while kills keep coming. */
+  /** "Shakes full: 12 lost" under the bar when Shakes are earned past the cap; adds up while kills keep coming. */
   showRpLost(n) {
     if (!this.rpLostText) return;
     this.rpLostSum += n;
     const max = this.rpBar.maxText;
     this.tweens.killTweensOf([this.rpLostText, max]);
-    this.rpLostText.setText(`Burgers full: ${formatSpaced(this.rpLostSum)} lost`).setAlpha(1);
+    this.rpLostText.setText(`${RP_NAME} full: ${formatSpaced(this.rpLostSum)} lost`).setAlpha(1);
     // Kept left of the bar's icon (a long count shrinks).
     const room = this.rpBar.x + this.rpBar.w - this.rpBar.iconRadius - 4 - this.rpLostText.x;
     this.rpLostText.setScale(this.rpLostText.width > room ? room / this.rpLostText.width : 1);
@@ -881,9 +882,10 @@ export class UIScene extends Phaser.Scene {
     // Category tabs (green = selected) with a red count of what's still buildable in each.
     this.tabButtons = {};
     this.tabBadges = {};
-    const tabW = 150, tabH = 40, tabX0 = 150;
+    // (v0.14: five tabs with Heroes; shopTabLayout narrows them so they stay clear of the page arrows)
+    const tabH = SHOP_TAB.h, tabRects = shopTabLayout(SHOP_TABS.length);
     SHOP_TABS.forEach((tab, i) => {
-      const cx = tabX0 + tabW / 2 + i * (tabW + 16);
+      const tabW = tabRects[i].w, cx = tabRects[i].x + tabW / 2;
       const btn = new Button(this, cx, headerMid, tabW, tabH, tab.label, () => this.setShopTab(tab.key), { fontSize: 19, radius: 10 });
       const badge = this.add.container(cx + tabW / 2 - 6, headerMid - tabH / 2 + 4);
       const bgfx = this.add.graphics();
@@ -1024,10 +1026,12 @@ export class UIScene extends Phaser.Scene {
     if (type === 'mine') return `+${levelStats('mine', 1).production} / s`;
     if (type === 'storage') return `Holds ${formatGold(levelStats('storage', 1).capacity)}`;
     if (type === 'house') return `+${levelStats('house', 1).gnomes} gnome workers`;
+    if (type === 'shakeCollector') return narrow ? 'Makes Shakes' : `+${Math.round(levelStats('shakeCollector', 1).production * 60 * 10) / 10} Shakes / min`;
+    if (type === 'shakeStorage') return `Holds ${formatGold(levelStats('shakeStorage', 1).capacity)} Shakes`;
     if (type === 'wall') return CONFIG.walls.segmentLength > 1 ? `${CONFIG.walls.segmentLength}-tile segment` : 'Joins any wall';
     if (type === 'rvlab') return 'Defense abilities';
     if (type === 'dj') return 'Boosts gnomes and defenses';
-    if (type === 'fuelStation') return narrow ? 'Spells' : 'Brews spells (Burgers)';
+    if (type === 'fuelStation') return narrow ? 'Spells' : `Brews spells (${RP_NAME})`;
     if (type === 'altar') return narrow ? 'Hero' : 'Hero: the Brisket King';
     if (type === 'queenAltar') return narrow ? 'Hero' : 'Hero: the Hatsune Queen';
     if (type === 'mageAltar') return narrow ? 'Hero' : 'Hero: the Locklair Mage';
@@ -1385,6 +1389,13 @@ New walls are built at your wall level (${wallLevel(this.gs)}), so one costs wha
       rows.push(row('Stock capacity', 'stockCap', 0x3cb8ff));
     }
     if (b.type === 'storage' || b.type === 'townHall') rows.push(row('Gold capacity', 'capacity', 0xffc93c));
+    // v0.14: the Shake buildings, and the Village Hall's own Shake store (purple, like the Shakes bar).
+    if (b.type === 'townHall') rows.push(row('Shake capacity', 'shakeCapacity', RP_COLOR));
+    if (b.type === 'shakeCollector') {
+      rows.push(row('Production', 'production', RP_COLOR, { unit: ' / min', fmt: (v) => String(Math.round(v * 600) / 10) }));
+      rows.push(row('Stock capacity', 'stockCap', 0x3cb8ff));
+    }
+    if (b.type === 'shakeStorage') rows.push(row('Shake capacity', 'capacity', RP_COLOR));
     if (b.type === 'house') rows.push(row('Gnomes', 'gnomes', 0xe85d4a));
     // A merged defense: its own health and damage per shot (bars full: it's past the top level).
     const merge = mergedConfigOf(b);
@@ -1447,6 +1458,17 @@ New walls are built at your wall level (${wallLevel(this.gs)}), so one costs wha
       return [`Stock now ${formatGold(b.stock || 0)} / ${formatGold(Math.round(mineStockCap(b)))}`,
         `Gnome workers: ${crew.length} / ${V.maxPerMine} (+${pct(extra)} carried to storage)`];
     }
+    if (b.type === 'shakeCollector') {
+      const per = (n) => `${Math.round(n * 600) / 10} Shakes a minute`;
+      if (preview) return [`Makes ${per(levelStats(b.type, 1).production)}`, 'Click it when the Shake shows (not in a wave)'];
+      return [`Stock now ${formatGold(b.stock || 0)} / ${formatGold(collectorStockCap(b))} · ${per(levelStats(b.type, b.level).production)}`,
+        'Click it when the Shake shows (not in a wave). It stops when full.'];
+    }
+    if (b.type === 'shakeStorage') {
+      const cap = rpCap(this.gs), have = this.gs.researchPoints || 0;
+      return [`Holds ${rpText(shakeStorageCapacity(b.level))} of your cap`, preview ? 'Enemies that hit it spill some Shakes'
+        : `Your Shakes: ${formatGold(have)} / ${formatGold(cap)}${have > cap ? ' (over the cap: no more come in until you spend some)' : ''}`];
+    }
     if (b.type === 'wall') return [CONFIG.walls.segmentLength > 1 ? `Segment of ${CONFIG.walls.segmentLength} tiles` : 'Joins every wall it touches'];
     if (b.type === 'altar') {
       const st = heroStats(b), h = this.gs.hero;
@@ -1490,7 +1512,10 @@ New walls are built at your wall level (${wallLevel(this.gs)}), so one costs wha
       // What the next upgrade lets the village build (more of each type it raises the cap of).
       const adds = b.level >= 1 ? hallUnlocks(b.level + 1) : [];
       const nextText = adds.length ? [`Level ${b.level + 1} adds: ${adds.map((u) => (u.type === 'wall' ? `${u.add} walls` : `${u.add > 1 ? `${u.add} ` : ''}${buildingName(u.type)}`)).join(', ')}`] : [];
-      return [`Next attack: wave ${next.number}${next.specialInfo ? ` (${next.specialInfo.name})` : ''}`, ...(rate > 0 ? [`Makes ${rate} gold / s on its own`] : []), ...nextText];
+      // (v0.14: and a trickle of Shakes, a minute's worth, plus its own Shake store)
+      const shakes = Math.round(hallShakeRate(b.level) * 600) / 10;
+      const own = rate > 0 ? [`Makes ${rate} gold / s and ${shakes} Shakes / min · holds ${formatGold(hallShakeCapacity(b.level))} Shakes`] : [];
+      return [`Next attack: wave ${next.number}${next.specialInfo ? ` (${next.specialInfo.name})` : ''}`, ...own, ...nextText];
     }
     return [];
   }
@@ -1899,7 +1924,7 @@ New walls are built at your wall level (${wallLevel(this.gs)}), so one costs wha
 
   /**
    * The Merge button for a max-level Cannon / Locklair Tower / Litman Mortar that isn't merged yet: { show, label, sub, ok }.
-   * Greyed with the reason when it can't (no partner, a wave, gold or Burgers); otherwise its sub line is the price.
+   * Greyed with the reason when it can't (no partner, a wave, gold or Shakes); otherwise its sub line is the price.
    */
   mergeButtonState(b) {
     const c = checkMerge(this.gs, b);
@@ -1954,7 +1979,7 @@ New walls are built at your wall level (${wallLevel(this.gs)}), so one costs wha
 
   /**
    * The merge confirm window: [picture] + [picture] -> [merged picture], Damage / Health / Range old -> new, the ability
-   * in one line, the price (gold and Burgers), Cancel / Merge.
+   * in one line, the price (gold and Shakes), Cancel / Merge.
    */
   openMergeConfirm(keepId, otherId) {
     const gs = this.gs, a = gs.getBuilding(keepId), o = gs.getBuilding(otherId);
@@ -2002,9 +2027,9 @@ New walls are built at your wall level (${wallLevel(this.gs)}), so one costs wha
     md.add(abilityIcon(this, M.abilityIcon, abX + AB / 2, y + AB / 2, AB));
     ab.setX(abX + AB + 12);
     y += Math.max(AB + 8, ab.height + 8);
-    // The price: gold and Burgers, red when short.
+    // The price: gold and Shakes, red when short.
     const check = checkMerge(gs, a, o.id);
-    const items = [[TEX.coin, `${formatGold(M.cost.gold)}`, gs.gold >= M.cost.gold, COLORS.textGold], [TEX.researchPoint, rpText(M.cost.rp), (gs.researchPoints || 0) >= M.cost.rp, '#ffe2a0']];
+    const items = [[TEX.coin, `${formatGold(M.cost.gold)}`, gs.gold >= M.cost.gold, COLORS.textGold], [TEX.researchPoint, rpText(M.cost.rp), (gs.researchPoints || 0) >= M.cost.rp, RP_TEXT_COLOR]];
     const parts = items.map(([key, text, ok, color]) => ({ key, t: this.add.text(0, 0, text, textStyle(19, ok ? color : '#ff8a7a')).setOrigin(0, 0.5) }));
     const iconW = 28, partW = (p) => (this.textures.exists(p.key) ? iconW + 6 : 0) + p.t.width;
     const totalW = parts.reduce((s, p) => s + partW(p), 0) + 30;
@@ -2411,12 +2436,13 @@ New walls are built at your wall level (${wallLevel(this.gs)}), so one costs wha
     on(['goldChanged', 'buildingPlaced', 'buildingUpgraded', 'wallsUpgraded', 'baseReset', 'abilityResearched', 'abilitiesApplied'], () => {
       this.refreshShopBadge();
       this.refreshGold();
+      this.refreshResearchPoints(); // (the Shake cap grows with the Village Hall and every Shake Storage)
       if (this.shopOpen) this.refreshShop();
       this.refreshInfo();
       this.refreshGuide();
       this.refreshWave();
     });
-    on(['mineStockChanged', 'buildingDamaged', 'buildingDestroyed', 'buildingRepaired', 'buildingHealed', 'buildingMoved'], (d) => {
+    on(['mineStockChanged', 'collectorStockChanged', 'buildingDamaged', 'buildingDestroyed', 'buildingRepaired', 'buildingHealed', 'buildingMoved'], (d) => {
       if (isSelected(d)) this.refreshInfo();
     });
     on(['selectionChanged'], (d) => {
@@ -2455,6 +2481,13 @@ New walls are built at your wall level (${wallLevel(this.gs)}), so one costs wha
       this.showBanner('Storage full');
     });
     on(['goldChanged'], (d) => { if (d && d.gold < d.capacity) this.storageFullShown = false; });
+    // The same for Shakes (a Shake Collector clicked with no room under the cap).
+    on(['shakesFull'], () => {
+      if (this.shakesFullShown) return;
+      this.shakesFullShown = true;
+      this.showBanner(`${RP_NAME} full: build or upgrade a Shake Storage`);
+    });
+    on(['researchPointsChanged'], () => { if ((gs.researchPoints || 0) < rpCap(gs)) this.shakesFullShown = false; });
     on(['spellBrewed', 'spellDiscarded'], () => this.refreshInfo()); // the Fuel Station's Brew button counts them
     on(['mergePickChanged'], (d) => this.showMergePick(d));
     on(['buildingsMerged', 'masteryResearched'], () => { this.refreshShopBadge(); if (this.shopOpen) this.refreshShop(); this.refreshInfo(); });
@@ -2474,7 +2507,7 @@ New walls are built at your wall level (${wallLevel(this.gs)}), so one costs wha
     // Restless nights: a wave that's attacking when it gets dark (or that starts in the dark), and dawn after.
     on(['restlessChanged'], (d) => {
       const bonus = Math.round(CONFIG.rules.night.lootBonus * 100);
-      this.showBanner(d.restless ? `Night: the enemies are restless! +${bonus}% gold & Burgers` : 'Daylight: the enemies calm down');
+      this.showBanner(d.restless ? `Night: the enemies are restless! +${bonus}% gold & ${RP_NAME}` : 'Daylight: the enemies calm down');
       this.refreshWave();
     });
     on(['waveCalled'], (d) => {

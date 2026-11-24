@@ -73,6 +73,8 @@ describe('Village Halls 1-20: caps', () => {
       mine: [6, 7, 7, 7, 7, 8, 8, 9, 9, 9, 10],
       storage: [5, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6], // v0.13.1: stays at 6 from VH11 (Levels 12-20 hold far more)
       house: [5, 6, 6, 6, 6, 7, 7, 7, 8, 8, 9],
+      shakeCollector: [3, 3, 3, 3, 4, 4, 4, 4, 4, 4, 4], // v0.14
+      shakeStorage: [2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2],   // v0.14
       wall: [132, 144, 156, 168, 180, 192, 204, 216, 228, 240, 252],
       townHall: one, rvlab: one, dj: one, fuelStation: one, altar: one,
       queenAltar: one, // the Hatsune Queen (from VH8)
@@ -87,7 +89,7 @@ describe('Village Halls 1-20: caps', () => {
     expect(adds(11)).toEqual({ cannon: 1, archer: 1, wizard: 1, spear: 1, ksi: 1, ra: 1, catapult: 1, mine: 1, storage: 1, house: 1, wall: 12 });
     expect(adds(12)).toEqual({ cannon: 1, archer: 1, mortar: 1, wizard: 1, firework: 1, flock: 1, ra: 1, wall: 12 });
     expect(adds(13)).toEqual({ cannon: 1, archer: 1, ksi: 1, mousetrap: 1, catapult: 1, wall: 12 });
-    expect(adds(14)).toEqual({ cannon: 1, archer: 1, mortar: 1, spear: 1, flock: 1, ra: 1, wall: 12 });
+    expect(adds(14)).toEqual({ cannon: 1, archer: 1, mortar: 1, spear: 1, flock: 1, ra: 1, shakeCollector: 1, wall: 12 }); // (v0.14: the 4th Shake Collector)
     expect(adds(15)).toEqual({ cannon: 1, archer: 1, mortar: 1, spear: 1, ksi: 1, flock: 1, ra: 1, catapult: 1, mine: 1, house: 1, wall: 12 });
     // v0.11: Village Halls 16-20.
     expect(adds(16)).toEqual({ cannon: 1, archer: 1, mortar: 1, ra: 1, wall: 12 });

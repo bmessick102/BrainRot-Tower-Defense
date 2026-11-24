@@ -13,7 +13,7 @@ import { stepPools } from '../src/logic/combat.js';
 import { rpCap } from '../src/logic/researchPoints.js';
 import { serializeGame, parseSave, deserializeGame } from '../src/logic/save.js';
 import { GameState } from '../src/state/GameState.js';
-import { makeStateWithTownHall, addBuilding, addEnemy } from './helpers.js';
+import { makeStateWithTownHall, addBuilding, addEnemy, shakeCapAt } from './helpers.js';
 import { netSpots, netStats, fireNets, stepSkyNets } from '../src/logic/skyNet.js';
 import { wallStats, wallLines, raiseWalls, stepWizardWalls, distToSegment } from '../src/logic/wizardWall.js';
 import { zapStats, zapTargets, zap, empPulse, stepFlockZaps } from '../src/logic/flockZap.js';
@@ -55,16 +55,15 @@ describe('merging: rules', () => {
     }
   });
 
-  it('costs fit what a Village Hall 10 village can hold (Burger cap with its best RV Lab, gold capacity)', () => {
-    const maxLab = CONFIG.rvlab.levels.filter((l) => (l.townHall || 0) <= 10).length;
-    const burgerCap = CONFIG.rules.rpCaps[maxLab];
+  it('costs fit what a Village Hall 10 village can hold (Shake cap with two top Shake Storages, gold capacity)', () => {
+    const burgerCap = shakeCapAt(10); // (merging needs a top-level defense: Village Hall 10)
     const goldCap = CONFIG.townHall.levels[9].capacity + 5 * levelStats('storage', 10).capacity;
     for (const t of MERGE_TYPES) {
       const m = CONFIG.merges[t];
       expect(m.cost.rp).toBeLessThanOrEqual(burgerCap);
       expect(m.cost.gold).toBeLessThanOrEqual(goldCap);
       expect(m.cost.gold).toBe(levelStats(t, TOP(t)).cost); // about one top upgrade
-      m.mastery.costs.forEach((c, i) => expect(c).toBeLessThanOrEqual(CONFIG.rules.rpCaps[m.mastery.labLevel[i]]));
+      m.mastery.costs.forEach((c) => expect(c).toBeLessThanOrEqual(burgerCap));
     }
   });
 
@@ -100,7 +99,7 @@ describe('merging: rules', () => {
     expect(checkMerge(s, addBuilding(s, 'storage', 13, 11, 1)).show).toBe(false);
   });
 
-  it('only between waves, and only with the gold and the Burgers', () => {
+  it('only between waves, and only with the gold and the Shakes', () => {
     const s = village();
     const [a, b] = pair(s, 'cannon');
     s.wave.phase = 'active';
@@ -110,7 +109,7 @@ describe('merging: rules', () => {
     expect(checkMerge(s, a, b.id).reason).toMatch(/more gold/);
     s.gold = 400000;
     s.researchPoints = 10;
-    expect(checkMerge(s, a, b.id).reason).toMatch(/more Burgers/);
+    expect(checkMerge(s, a, b.id).reason).toMatch(/more Shakes/);
   });
 
   it('merging takes both costs, removes the other copy, keeps both slots (counts as 2)', () => {
@@ -137,12 +136,12 @@ describe('merging: rules', () => {
     expect(mergeCandidates(s, c).map((x) => x.id)).not.toContain(a.id);
   });
 
-  it('keeps every perk (perks are per type), refunds the other copy\'s level Burgers past the cap', () => {
+  it('keeps every perk (perks are per type), refunds the other copy\'s level Shakes past the cap', () => {
     const s = village({ research: { cannon: ['a', 'a', 'a'] } });
     const [a, b] = pair(s, 'cannon');
     mergeBuildings(s, a.id, b.id);
     expect(a.picks).toEqual(['a', 'a', 'a']);
-    // A type whose levels cost Burgers (none of the three today): the removed copy's Burgers come back, past the cap.
+    // A type whose levels cost Shakes (none of the three today): the removed copy's Shakes come back, past the cap.
     CONFIG.merges.altar = { ...CONFIG.merges.cannon, name: 'Test Altar' };
     try {
       const t = village({ researchPoints: 9000 });
@@ -430,7 +429,7 @@ describe('Litman Triple Mortar: Triple Strike', () => {
 });
 
 describe('Mastery research', () => {
-  it('tiers in order, Burgers each, gated by RV Lab level, not part of the path lock', () => {
+  it('tiers in order, Shakes each, gated by RV Lab level, not part of the path lock', () => {
     const s = village({ research: { cannon: ['b'] } });
     const lab = s.buildings.find((b) => b.type === 'rvlab');
     // No merged Cannon yet: the RV Lab shows the column greyed out and nothing can be researched.
@@ -449,7 +448,7 @@ describe('Mastery research', () => {
     expect(s.research.cannon).toEqual(['b']);
   });
 
-  it('GameState: researching spends Burgers and every merged building of the type gets it', () => {
+  it('GameState: researching spends Shakes and every merged building of the type gets it', () => {
     const gs = new GameState({ storage: null });
     Object.assign(gs, village(), { emit: GameState.prototype.emit, listeners: new Map() });
     const [a, b] = pair(gs, 'archer');

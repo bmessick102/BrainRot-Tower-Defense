@@ -258,7 +258,7 @@ const PATH_C = {
   ] },
   flock: { name: 'Hacker', tiers: [
     t('Jammer', 'Enemies in range deal 10% less damage.', { jam: 0.1 }),
-    t('Data Leech', 'Every enemy defeated in range gives +1 Burger.', { leechRp: 1 }),
+    t('Data Leech', 'Every enemy defeated in range gives +1 Shake.', { leechRp: 1 }),
     t('Frequency Jam', 'Bombers and Neegy Balloons in range can\'t drop bombs or troops.', { airJam: 1 }),
     t('Full Jam', 'Enemies in range deal 25% less damage.', { jam: 0.25 }),
     t('Override', 'Every 15 s, hacks the toughest enemy in range: for 5 s it stops attacking you and attacks enemies next to it.', { overrideEvery: 15, overrideSeconds: 5 })
@@ -472,11 +472,11 @@ registerPerkTree('fuelStation', {
     t('Blanket Coverage', 'Spells cover a 40% bigger radius.', { spellRadiusPct: 40 })
   ] },
   c: { name: 'Refinery', tiers: [
-    t('Bulk Discount', 'Brewing costs 15% fewer Burgers.', { brewCostPct: -15 }),
+    t('Bulk Discount', 'Brewing costs 15% fewer Shakes.', { brewCostPct: -15 }),
     t('Spare Tank', '+1 spell slot.', { spellSlotsAdd: 1 }),
-    t('Recycler', 'Casting a spell refunds 25% of its brewing cost in Burgers.', { spellRefundPct: 25 }),
-    t('Wholesale', 'Brewing costs 25% fewer Burgers.', { brewCostPct: -25 }),
-    t('Fuel Depot', '+1 spell slot, and brewing costs 10% fewer Burgers.', { spellSlotsAdd: 1, brewCostPct: -10 })
+    t('Recycler', 'Casting a spell refunds 25% of its brewing cost in Shakes.', { spellRefundPct: 25 }),
+    t('Wholesale', 'Brewing costs 25% fewer Shakes.', { brewCostPct: -25 }),
+    t('Fuel Depot', '+1 spell slot, and brewing costs 10% fewer Shakes.', { spellSlotsAdd: 1, brewCostPct: -10 })
   ] }
 }, 'economy');
 

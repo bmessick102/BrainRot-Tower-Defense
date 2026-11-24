@@ -21,7 +21,7 @@ export const TEX = {
   startButton: 'ui_start_button',
   titleBackground: 'title_bg', // the painted landscape with no characters (art-source/title); the animated title is TitleBackdropScene
   achievementIcon: 'ui_achievement',
-  researchPoint: 'ui_research_point', // the Burger (research points are shown as Burgers); UIScene draws a simple one without the art
+  researchPoint: 'ui_shake', // the Shake (research points are shown as Shakes since v0.14; the Burger, ui_research_point, before); UIScene draws a simple cup without the art
   researchReady: 'ui_research_ready', // the book bobbing over the RV Lab when research is ready (falls back to the RP token)
   beatReady: 'ui_beat_ready',        // over DJ Babyface when Drop the Beat is ready (falls back to a "DROP!" label)
   feastReady: 'ui_feast_ready',      // Brisket Feast's hotbar icon, and over him while it's ready (a gold crown)
@@ -78,6 +78,7 @@ export const SFX = {
   merge: 'sfx_merge',                    // two defenses merge into one (replaces the upgrade + unlock sounds)
   sell: 'sfx_sell',
   coinCollect: 'sfx_coin_collect',
+  shakeCollect: 'sfx_shake_collect', // collecting a Shake Collector (v0.14; the coin sound stands in if missing)
   cannonFire: 'sfx_cannon_fire',
   arrowFire: 'sfx_arrow_fire',
   mortarFire: 'sfx_mortar_fire',

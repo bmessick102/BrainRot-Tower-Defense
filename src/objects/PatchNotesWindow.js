@@ -81,6 +81,7 @@ export class PatchNotesWindow {
       const btn = new Button(s, m.x + 34 + w / 2 + i * (w + TAB_GAP), y, w, TAB_H, releaseLabel(rel, i),
         () => { if (i !== this.tab) this.showRelease(i); },
         { color: i === this.tab ? COLORS.buttonGood : COLORS.buttonDark, fontSize: 18, radius: 10 });
+      if (btn.label) fitWidth(btn.label, w - 14); // (v0.14: nine tabs, so "v0.14 · Latest" shrinks to fit its narrower tab)
       m.add(btn);
     });
   }

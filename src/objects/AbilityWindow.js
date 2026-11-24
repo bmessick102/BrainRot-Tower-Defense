@@ -57,8 +57,8 @@ function follow(scene, gs, refresh) {
   return () => handlers.forEach(([name, fn]) => gs.off(name, fn));
 }
 
-/** "123 Burgers" / "4,500 gold" with its icon in a dark pill, right-aligned at (x, y). */
-export function balance(scene, m, gs, rp, x, y) { // (also the Fuel Station window's Burgers pill)
+/** "123 Shakes" / "4,500 gold" with its icon in a dark pill, right-aligned at (x, y). */
+export function balance(scene, m, gs, rp, x, y) { // (also the Fuel Station window's Shakes pill)
   const pill = m.add(scene.add.graphics());
   const text = rp ? rpText(gs.researchPoints || 0) : `${formatGold(Math.floor(gs.gold))} gold`;
   const t = m.add(scene.add.text(x - 14, y, text, textStyle(18, rp ? RP_TEXT_COLOR : COLORS.textGold)).setOrigin(1, 0.5));
@@ -172,7 +172,7 @@ function drawTree(scene, m, x, y, colW, gap, type, nodeState, selected, onSelect
       fitWidth(name, colW - 42);
       const lineInk = col.gold ? (owned ? col.ink : dim ? MASTERY_INK.dim : MASTERY_INK.line)
         : owned ? col.ink : avail ? (st.short ? COLORS.inkBad : COLORS.inkGood) : dim ? '#b3a892' : COLORS.inkDim;
-      fitWidth(m.add(scene.add.text(cx + 36, cy + 33, st.line || '', bodyStyle(12.5, lineInk, { fontStyle: owned || avail ? 'bold' : 'normal' }))), colW - 42); // ("Research · 1,400 Burgers" fits)
+      fitWidth(m.add(scene.add.text(cx + 36, cy + 33, st.line || '', bodyStyle(12.5, lineInk, { fontStyle: owned || avail ? 'bold' : 'normal' }))), colW - 42); // ("Research · 1,400 Shakes" fits)
       if (isSel) {
         const sel = m.add(scene.add.graphics());
         sel.lineStyle(3, 0xffc83a, 1).strokeRoundedRect(cx - 2, cy - 2, colW + 4, NODE_H + 4, 13);

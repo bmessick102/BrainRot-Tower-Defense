@@ -88,3 +88,19 @@ describe('top row layout (1280 x 720, scaled to the window by Phaser FIT)', () =
     expect(fitPill(s.hi - s.lo, [380, 150, 40], 10 + 130 + 10 + 112).overflow).toBe(0);
   });
 });
+
+describe('shop tabs (v0.14: five, with Heroes)', () => {
+  it('never run into the page arrows, never overlap, and stay wide enough for their labels', async () => {
+    const { shopTabLayout, SHOP_ARROWS_LEFT, SHOP_TAB } = await import('../src/logic/hudLayout.js');
+    for (const n of [4, 5, 6]) {
+      const tabs = shopTabLayout(n);
+      expect(tabs).toHaveLength(n);
+      const last = tabs[n - 1];
+      expect(last.x + last.w).toBeLessThanOrEqual(SHOP_ARROWS_LEFT);
+      for (let i = 1; i < n; i++) expect(tabs[i].x).toBeGreaterThanOrEqual(tabs[i - 1].x + tabs[i - 1].w + 8);
+      expect(last.w).toBeGreaterThanOrEqual(SHOP_TAB.minW);
+    }
+    expect(shopTabLayout(4)[0].w).toBe(150); // four tabs keep their old width
+    expect(shopTabLayout(5)[0].w).toBeGreaterThanOrEqual(125); // "Defenses" / "Economy" at 19 px are about 85 px wide
+  });
+});

@@ -32,7 +32,7 @@ describe('Fuel Station (building)', () => {
     expect([1, 2, 10].map((th) => limitFor('fuelStation', th))).toEqual([0, 1, 1]);
     expect(levelStats('fuelStation', 1).cost).toBeLessThanOrEqual(500);
     expect(CONFIG.fuelStation.levels.slice(1).every((l) => l.costCurrency === 'rp')).toBe(true);
-    expect(levelStats('fuelStation', 2).cost).toBeLessThanOrEqual(CONFIG.rules.rpCaps[0]); // payable before an RV Lab
+    expect(levelStats('fuelStation', 2).cost).toBeLessThanOrEqual(CONFIG.townHall.levels[2].shakeCapacity); // payable at VH3 with no Shake Storage yet
     expect(maxLevel('fuelStation')).toBe(8);
     expect([1, 2, 3, 8].map((l) => artTier(l, 'fuelStation'))).toEqual([1, 1, 2, 4]);
     expect(CONFIG.fuelStation.levels.map((l) => l.townHall)).toEqual([2, 3, 4, 5, 6, 7, 8, 10]);
@@ -119,7 +119,7 @@ describe('spell slots and brewing', () => {
     s.wave.phase = 'idle';
     s.researchPoints = 10;
     expect(checkBrew(s, 'freeze').ok).toBe(false);
-    expect(checkBrew(s, 'freeze').reason).toMatch(/more Burgers/);
+    expect(checkBrew(s, 'freeze').reason).toMatch(/more Shakes/);
   });
 
   it('Refinery perks make brewing cheaper', () => {

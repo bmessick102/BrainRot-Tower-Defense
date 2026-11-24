@@ -24,6 +24,7 @@ import { dropTheBeat } from '../logic/dj.js';
 import { tipEvent, dismissTip, hideAllTips } from '../logic/tips.js';
 import { checkResearch, checkRespec, labPicks, syncAbilityPicks } from '../logic/abilities.js';
 import { spendResearchPoints } from '../logic/researchPoints.js';
+import { collectShakes } from '../logic/shakes.js';
 import { advanceLabGuide, startLabGuideIfDue, skipLabGuide } from '../logic/labGuide.js';
 import { brewSpell, discardSpell, castSpell, fuelGuideEvent } from '../logic/spells.js';
 import { mergeBuildings, checkMastery, syncMastery } from '../logic/merge.js';
@@ -407,6 +408,12 @@ export class GameState {
 
   collect(id) {
     const b = this.getBuilding(id);
+    if (b && b.type === 'shakeCollector' && !b.destroyed) {
+      // v0.14: a Shake Collector, collected like a mine (shakes.js).
+      const r = collectShakes(this, b);
+      const reason = r.waveActive ? 'Not during a wave' : r.full ? 'Shakes full' : '';
+      return { ok: r.collected > 0, reason, collected: r.collected };
+    }
     if (!b || b.type !== 'mine' || b.destroyed) return { ok: false, reason: '' };
     const r = collectMine(this, b);
     const reason = r.waveActive ? 'Not during a wave' : r.storageFull ? 'Storage full' : '';

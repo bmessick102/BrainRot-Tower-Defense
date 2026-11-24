@@ -15,6 +15,7 @@ import { createLayoutDraft, draftBuildings, layoutChanged, isStored, storeAll, s
 import { tutorialAllows } from '../logic/tutorial.js';
 import { isWaveActive, isWaveInProgress, clamp } from '../logic/util.js';
 import { mineShowsCoin } from '../logic/economy.js';
+import { collectorShowsIcon } from '../logic/shakes.js';
 import { MAX_STEP } from '../logic/simulate.js';
 import { stepsPerFrame } from '../logic/fastForward.js';
 import { BuildingView, buildingTextureKey, buildingPictureKey, mergedSizeFactor, placeBuildingSprite } from '../objects/BuildingView.js';
@@ -39,7 +40,7 @@ import { missileWarningFx, quakeFx, ICE_BLUE } from '../objects/EnemyFx.js';
 import { playSfxClip, playSfx, playSfxCapped, playSfxEndingIn, playVoiceLine, playMusic, pauseMusic, resumeMusic, stopMusic, crossfadeMusic, fadeOutMusic, hasAmbience, startAmbience, updateAmbience, stopAmbience, soundDuration, prefetchMusic, hasMusicFile, releaseMusic, keepAudioAlive } from '../audio.js';
 import { requestAudio, requestImages } from '../assetLoader.js';
 import { villageImageKeys, reachableImageKeys } from '../assetPlan.js';
-import { COLORS } from '../theme.js';
+import { COLORS, RP_TEXT_COLOR } from '../theme.js';
 import { abilityFx, towerRange, towerMinRange } from '../logic/abilities.js';
 import { chainLightningFx, arrowStormFx, meteorFx, solarFlareFx, sparklerFx, drawFireRing } from '../objects/AbilityFx.js';
 import { Modal, confirmDialog } from '../objects/Modal.js';
@@ -976,7 +977,8 @@ export class GameScene extends Phaser.Scene {
     // A mine showing its coin: this click just collects. Clicking it again (coin gone) opens its panel.
     // Mines: with the coin showing, a click only collects (coin sound). Otherwise (or if it couldn't
     // collect, e.g. storage full) it opens the panel with the info sound, like any building.
-    const coinShowing = b.type === 'mine' && mineShowsCoin(b) && !isWaveActive(this.gs);
+    // (v0.14: a Shake Collector showing its Shake works the same way.)
+    const coinShowing = (b.type === 'mine' ? mineShowsCoin(b) : b.type === 'shakeCollector' && collectorShowsIcon(b)) && !isWaveActive(this.gs);
     // RV Lab: a click opens its full info panel straight away (its Research button opens the research window).
     if (b.type === 'rvlab' && tutorialAllows(this.gs, 'select', b.type)) {
       this.views.buildings.get(b.id)?.pop();
@@ -1598,7 +1600,7 @@ export class GameScene extends Phaser.Scene {
         floatText(this, s.x, s.y - 34, `+${d.bounty}`, COLORS.textGold, 16);
       }
       if (d.rp > 0) {
-        // Burgers (research points): a small tag with the burger icon beside the gold.
+        // Shakes (research points): a small tag with the shake icon beside the gold.
         const s = enemyPos(d);
         rpGainText(this, s.x + 26, s.y - 30, d.rp);
       }
@@ -1614,6 +1616,10 @@ export class GameScene extends Phaser.Scene {
     on('storageDrained', (d) => {
       const v = this.views.buildings.get(d.id);
       if (v) { const top = v.topCenter(); floatText(this, top.x, top.y + 10, `-${d.amount}`, COLORS.textGold, 16); }
+    });
+    on('shakesDrained', (d) => { // v0.14: Shakes spilled from a Shake Storage
+      const v = this.views.buildings.get(d.id);
+      if (v) { const top = v.topCenter(); floatText(this, top.x, top.y + 10, `-${d.amount}`, RP_TEXT_COLOR, 16); }
     });
     on('buildingDestroyed', (d) => {
       playSfx(this, SFX.buildingDestroyed);
@@ -1838,6 +1844,13 @@ export class GameScene extends Phaser.Scene {
       if (!v || !d.added) return;
       const top = v.topCenter();
       floatText(this, top.x + Phaser.Math.Between(-10, 10), top.y - 6, `+${d.added}`, COLORS.textGold, 15);
+    });
+    // ...and its trickle of Shakes (v0.14): a small purple "+1" with the shake icon now and then.
+    on('hallShakes', (d) => {
+      const v = this.views.buildings.get(d.id);
+      if (!v || !d.added) return;
+      const top = v.topCenter();
+      rpGainText(this, top.x + Phaser.Math.Between(-14, 14), top.y + 6, d.added, 15);
     });
     // Neegy Balloon: a puff where it lets troops go, and a pop when it's done.
     on('balloonDrop', (d) => {
@@ -2116,6 +2129,12 @@ export class GameScene extends Phaser.Scene {
       const v = this.views.buildings.get(d.id);
       if (v) { const top = v.topCenter(); floatText(this, top.x, top.y - 20, `+${d.amount}`, COLORS.textGold, 22); }
       playSfx(this, SFX.coinCollect);
+    });
+    // v0.14: a Shake Collector collected: a purple "+n" with the shake icon, and its own slurp (the coin sound if missing).
+    on('shakesCollected', (d) => {
+      const v = this.views.buildings.get(d.id);
+      if (v && d.amount) { const top = v.topCenter(); rpGainText(this, top.x, top.y - 20, d.amount, 22); }
+      playSfx(this, this.cache.audio.exists(SFX.shakeCollect) ? SFX.shakeCollect : SFX.coinCollect);
     });
     on('buildingUpgraded', (d) => {
       playSfx(this, SFX.upgrade);

@@ -13,6 +13,7 @@ import { enrageFactor, nightLootMult } from './enrage.js';
 import { addHype } from './dj.js';
 import { knockback, applySlow, applyStun } from './motion.js';
 import { addResearchPoints, killResearchPoints } from './researchPoints.js';
+import { shakeStorageDrainAmount, drainShakes } from './shakes.js';
 import { fireBoulderAt, fireMissileAt, stepEnemyShot, dropGoo } from './specialEnemies.js';
 import { harpoonDue, throwHarpoons, hookEnemy } from './harpoon.js';
 import { shatterFor, markShatter, queueShatter } from './shatter.js';
@@ -714,6 +715,10 @@ export function damageBuilding(state, b, amount, attacker = null) {
       if (fx.insurancePct && state.wave) state.wave.insured = (state.wave.insured || 0) + lost * fx.insurancePct / 100;
       emit(state, 'storageDrained', { id: b.id, amount: lost });
     }
+  } else if (b.type === 'shakeStorage') {
+    // v0.14: a Shake Storage loses Shakes the same way (shakes.js).
+    const lost = drainShakes(state, shakeStorageDrainAmount(state, b, dmg));
+    if (lost > 0) emit(state, 'shakesDrained', { id: b.id, amount: lost });
   }
   b.hp -= dmg;
   b.underFire = CONFIG.villagers.repairDelayAfterHit; // gnomes hold off repairing it for a moment

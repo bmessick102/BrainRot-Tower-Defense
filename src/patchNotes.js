@@ -2,7 +2,7 @@
 // once per `version` (the first time the title screen opens after an update; saved in ibtd.patchNotes), and its
 // "What's New" button opens it any time. Keep `version` equal to package.json's for the release it describes.
 //
-// One tab per minor update (v0.7.1): PATCH_NOTES is the newest (its tab is "v0.13 · Latest"), PATCH_HISTORY the older
+// One tab per minor update (v0.7.1): PATCH_NOTES is the newest (its tab is "v0.14 · Latest"), PATCH_HISTORY the older
 // ones, newest first. Each has `release` (the tab's name: '0.7'), `version` (its newest patch) and `sections`.
 // When a new minor update ships, the current PATCH_NOTES content moves to the front of PATCH_HISTORY.
 //
@@ -18,33 +18,41 @@
 const allEntries = (release) => release.sections.flatMap((s) => s.entries);
 
 export const PATCH_NOTES = {
-  release: '0.13',
-  version: '0.13.1',
-  title: "What's New in v0.13.1",
+  release: '0.14',
+  version: '0.14.0',
+  title: "What's New in v0.14",
   sections: [
     {
       type: 'feature',
       entries: [
         {
-          version: '0.13.0', icon: { building: 'storage', level: 15 }, title: 'Storages now go up to Level 20',
-          text: 'Bitcoin Storages have 20 levels, with a new Level 1 and four new looks at Levels 12 to 15. Every Storage you already had moved up one level, so it looks the same and holds more gold.'
+          version: '0.14.0', icon: { building: 'shakeCollector', level: 9 }, title: 'New building: Shake Collector (from Village Hall 3)',
+          text: 'It makes Grimace Shakes all the time. Click it when its Shake shows to collect, like a Bitcoin Mine (not during a wave). You can build 1 at Village Hall 3, up to 4 at Village Hall 14.'
+        },
+        {
+          version: '0.14.0', icon: { building: 'shakeStorage', level: 11 }, title: 'New building: Shake Storage (from Village Hall 3)',
+          text: 'A glass tank that raises how many Shakes you can hold, and fills up as your Shakes grow. Enemies that hit it spill some. You can build 1, and a second at Village Hall 8.'
+        },
+        {
+          version: '0.14.0', icon: { building: 'townHall', level: 10 }, title: 'Your Village Hall makes Shakes',
+          text: 'The Village Hall now makes a small trickle of Shakes on its own, like its gold, and holds a few Shakes too. Both grow with its level.'
         }
       ]
     },
     {
-      type: 'balance',
+      type: 'change',
       entries: [
         {
-          version: '0.13.1', icon: { building: 'townHall', level: 20 }, title: 'Village Halls 12-20 cost more',
-          text: 'The bigger Storages hold so much more gold that the Village Hall upgrades from Hall 12 up now cost more to match: 400,000 for Hall 12, rising to 920,000 for Hall 20.'
+          version: '0.14.0', icon: { texture: 'ui_shake' }, title: 'Burgers are now Shakes',
+          text: 'Burgers are now Grimace Shakes, with a purple bar and a new icon. You keep every one, and they still pay for perks, hero levels, spells and merges.'
         },
         {
-          version: '0.13.1', icon: { building: 'storage', level: 15 }, title: 'At most 6 Storages',
-          text: 'You can build up to 6 Storages from Village Hall 11 on (it used to keep going up to 10). Six high-level Storages hold more than enough. Storages you already built stay.'
+          version: '0.14.0', icon: { building: 'shakeStorage', level: 5 }, title: 'Shake Storages set how many Shakes you can hold',
+          text: 'The RV Lab no longer raises the limit: your Village Hall and Shake Storages do. If you had more Shakes than the new limit, you keep them all and can spend them; new ones come in once you are back under it.'
         },
         {
-          version: '0.13.0', icon: { building: 'storage', level: 10 }, title: 'Cheaper Storage upgrades',
-          text: 'Upgrading a Storage costs about half as much gold as before (Level 10 costs 24,000 instead of 51,200), so a village is quicker to build back up.'
+          version: '0.14.0', icon: { hero: true }, title: 'Heroes have their own shop tab',
+          text: 'The Brisket King, Hatsune Queen and Locklair Mage moved from the Defenses tab to a new Heroes tab in the shop.'
         }
       ]
     }
@@ -54,6 +62,39 @@ export const PATCH_NOTES = {
 
 /** Older updates, newest first: one What's New tab each (players can read them any time). */
 export const PATCH_HISTORY = [
+  {
+    release: '0.13',
+    version: '0.13.1',
+    sections: [
+      {
+        type: 'feature',
+        entries: [
+          {
+            version: '0.13.0', icon: { building: 'storage', level: 15 }, title: 'Storages now go up to Level 20',
+            text: 'Bitcoin Storages have 20 levels, with a new Level 1 and four new looks at Levels 12 to 15. Every Storage you already had moved up one level, so it looks the same and holds more gold.'
+          }
+        ]
+      },
+      {
+        type: 'balance',
+        entries: [
+          {
+            version: '0.13.1', icon: { building: 'townHall', level: 20 }, title: 'Village Halls 12-20 cost more',
+            text: 'The bigger Storages hold so much more gold that the Village Hall upgrades from Hall 12 up now cost more to match: 400,000 for Hall 12, rising to 920,000 for Hall 20.'
+          },
+          {
+            version: '0.13.1', icon: { building: 'storage', level: 15 }, title: 'At most 6 Storages',
+            text: 'You can build up to 6 Storages from Village Hall 11 on (it used to keep going up to 10). Six high-level Storages hold more than enough. Storages you already built stay.'
+          },
+          {
+            version: '0.13.0', icon: { building: 'storage', level: 10 }, title: 'Cheaper Storage upgrades',
+            text: 'Upgrading a Storage costs about half as much gold as before (Level 10 costs 24,000 instead of 51,200), so a village is quicker to build back up.'
+          }
+        ]
+      }
+    ],
+    get entries() { return allEntries(this); }
+  },
   {
     release: '0.12',
     version: '0.12.5',

@@ -4,6 +4,7 @@ import { gridToScreen } from '../logic/iso.js';
 import { fpW, fpH } from '../logic/grid.js';
 import { maxHp, maxLevel, BUILDING_TYPES, mergedConfigOf } from '../logic/buildings.js';
 import { mineShowsCoin, mineFill } from '../logic/economy.js';
+import { collectorShowsIcon, collectorFill, shakeFill } from '../logic/shakes.js';
 import { isWaveActive } from '../logic/util.js';
 import { buildingKey, buildingLevelKey, buildingDestroyedKey, TEX } from '../assetKeys.js';
 import { HealthBar, HP_TEAM } from './HealthBar.js';
@@ -41,7 +42,7 @@ const LIGHT_BLEND = 'SCREEN';
 const BUILDING_LIT_TOP = 0xe2e6f8;
 const BUILDING_LIT_WARMTH = 0.2;
 const LIGHT_COLORS = {
-  townHall: 0xffa23c, mine: 0xffa23c, storage: 0xffb43c, house: 0xffc86b, cannon: 0xff8a3c,
+  townHall: 0xffa23c, mine: 0xffa23c, storage: 0xffb43c, house: 0xffc86b, shakeCollector: 0xc070ff, shakeStorage: 0xb36bff, cannon: 0xff8a3c,
   archer: 0xff9a3c, mortar: 0xff7a3c, wizard: 0xb066ff, firework: 0xff4d6d, catapult: 0xff5fa8, spear: 0xc98a4a, ksi: 0x6cc8ff, flock: 0x4cd6ff, mousetrap: 0xffc24a, ra: 0xff7a2a, rvlab: 0xffd27a, dj: 0xc070ff, altar: 0xffb04a, queenAltar: 0x7ff0e8, mageAltar: 0xc070ff, fuelStation: 0xffc24a
 };
 
@@ -198,7 +199,9 @@ const DEFAULT_SPRITE_SCALE = 0.75;
 // KSI Tower: a tall, slim tower like the Locklair's, a little narrower than the default. (The merged KSI Frost Fortress
 // stands further back on its plot instead, CONFIG.merges.ksi.art.ground, so it fits the tile's outline at this size.)
 // Mortar: 0.585 (was 0.65, v0.8: 10% smaller at every level so the 25% bigger merged Triple Mortar stands out).
-const SPRITE_SCALE = { mortar: 0.585, cannon: 0.63, firework: 0.52, catapult: 0.66, spear: 0.66, ksi: 0.62, flock: 0.9, mousetrap: 1.1, ra: 0.40, rvlab: 0.77, dj: 0.77, altar: 0.66, queenAltar: 0.66, mageAltar: 0.78, fuelStation: 0.8 };
+// Shake Collector (v0.14): 0.58 with TIER_GROWTH 0.04, so Level 1 is small (about 50% of its plot wide) and Level 10
+// (about 73%) stays well inside the plot's rim (92% of the footprint). Shake Storage: 0.72 (its Level 11-12 tank about 71%).
+const SPRITE_SCALE = { shakeCollector: 0.58, shakeStorage: 0.72, mortar: 0.585, cannon: 0.63, firework: 0.52, catapult: 0.66, spear: 0.66, ksi: 0.62, flock: 0.9, mousetrap: 1.1, ra: 0.40, rvlab: 0.77, dj: 0.77, altar: 0.66, queenAltar: 0.66, mageAltar: 0.78, fuelStation: 0.8 };
 
 // Buildings grow as they level up: this share of their normal size at Level 1, up to LEVEL_SIZE.max at
 // their top level (Level 10, or the type's own top level). They only grow on upgrades that keep the same
@@ -225,7 +228,7 @@ export function levelSizeFactor(level, topLevel = LEVEL_SIZE.maxLevel, type = nu
 // than the one before would make a higher level look smaller (the KSI Tower's Level 7-8 and 9-10 art are squatter
 // than its Level 5-6). For these types every picture is sized so the building stands TIER_GROWTH taller per picture
 // than Level 1's (on top of LEVEL_SIZE's growth between pictures).
-export const TIER_GROWTH = { ksi: 0.04, ra: 0.03 }; // (Tower of Rah, v0.10.2: see SPRITE_SCALE.ra)
+export const TIER_GROWTH = { ksi: 0.04, ra: 0.03, shakeCollector: 0.04 }; // (Tower of Rah, v0.10.2: see SPRITE_SCALE.ra; v0.14: the Shake Collector's pictures get squatter, 1.18 -> 1.09 tall per wide)
 
 /** Size multiplier for the picture a sprite shows (1 unless its type is in TIER_GROWTH and its art is loaded). */
 export function tierSizeFactor(sprite, type) {
@@ -335,7 +338,9 @@ export class BuildingView {
     this.chipKey = '';
     this.hpBar = new HealthBar(scene, { width: Math.max(48, b.size * 24), height: 12, depth: OVERLAY_DEPTH, color: HP_TEAM.player, badge: true, badgeStyle: b.type === 'mageAltar' ? 'crown' : 'circle' }); // (the Locklair Mage: a hero's crown with his level)
 
-    this.coin = b.type === 'mine' ? scene.add.image(0, 0, TEX.coin).setDepth(OVERLAY_DEPTH + 1).setVisible(false) : null;
+    // A mine's coin, or (v0.14) a Shake Collector's Shake, bobbing over it once there's something to collect.
+    const readyIcon = b.type === 'mine' ? TEX.coin : b.type === 'shakeCollector' ? TEX.researchPoint : null;
+    this.coin = readyIcon && scene.textures.exists(readyIcon) ? scene.add.image(0, 0, readyIcon).setDepth(OVERLAY_DEPTH + 1).setVisible(false) : null;
     // DJ Babyface: its hype meter (during waves, or while charged) and a bobbing "DROP!" once it's full.
     this.hypeGfx = b.type === 'dj' ? scene.add.graphics().setDepth(OVERLAY_DEPTH) : null;
     // (the beat-ready icon, or a "DROP!" label if its art is missing)
@@ -465,11 +470,13 @@ export class BuildingView {
     if (b.stunT > 0 || this.stunGfx) this.drawStun(b, front.x, top + 24, time);
 
     if (this.coin) {
-      const show = mineShowsCoin(b) && !isWaveActive(this.scene.gs); // no collecting while a wave attacks
+      const shake = b.type === 'shakeCollector';
+      const ready = shake ? collectorShowsIcon(b) : mineShowsCoin(b);
+      const show = ready && !isWaveActive(this.scene.gs); // no collecting while a wave attacks
       this.coin.setVisible(show);
       if (show) {
-        const base = 28 / this.coin.frame.width;
-        const full = mineFill(b) >= 1;
+        const base = shake ? 34 / this.coin.frame.height : 28 / this.coin.frame.width; // (the Shake is a tall cup)
+        const full = (shake ? collectorFill(b) : mineFill(b)) >= 1; // full: it pulses
         const pulse = full ? 1.25 + 0.2 * Math.sin(time * 0.009) : 1;
         this.coin.setScale(base * pulse);
         this.coin.setPosition(front.x, top - 44 + Math.sin(time * 0.004) * 4);
@@ -670,6 +677,11 @@ export class BuildingView {
       const gs = this.scene.gs;
       const cap = gs ? gs.capacity : 0;
       const f = cap > 0 ? gs.gold / cap : 0;
+      variant = `${key}_fill${f >= 2 / 3 ? 3 : f >= 1 / 3 ? 2 : 1}`;
+    } else if (b.type === 'shakeStorage') {
+      // v0.14: the same three fills by how full your Shakes are (every Shake Storage shows the same; a balance over the
+      // cap, from an older save, shows full).
+      const f = this.scene.gs ? shakeFill(this.scene.gs) : 0;
       variant = `${key}_fill${f >= 2 / 3 ? 3 : f >= 1 / 3 ? 2 : 1}`;
     }
     return variant && this.scene.textures.exists(variant) ? variant : key;

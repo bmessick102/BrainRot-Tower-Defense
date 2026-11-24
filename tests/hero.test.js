@@ -9,7 +9,7 @@ import { rpCap } from '../src/logic/researchPoints.js';
 import { footprintCenter } from '../src/logic/grid.js';
 import { serializeGame, parseSave } from '../src/logic/save.js';
 import { GameState } from '../src/state/GameState.js';
-import { makeStateWithTownHall, addBuilding, addEnemy } from './helpers.js';
+import { makeStateWithTownHall, addBuilding, addEnemy, shakeCapAt } from './helpers.js';
 
 const HC = CONFIG.altar.hero;
 function village(level = 1) {
@@ -195,28 +195,24 @@ describe('the Brisket King', () => {
   });
 });
 
-describe('his upgrades cost Burgers (research points), building the altar costs gold', () => {
-  it('Level 1 is gold; Levels 2-10 are Burgers, and the upgrade button says so even when locked', () => {
+describe('his upgrades cost Shakes (research points), building the altar costs gold', () => {
+  it('Level 1 is gold; Levels 2-10 are Shakes, and the upgrade button says so even when locked', () => {
     expect(levelStats('altar', 1).costCurrency).toBeUndefined();
     expect(buildCost('altar')).toBe(3000);
     for (let l = 2; l <= 10; l++) expect(levelStats('altar', l).costCurrency).toBe('rp');
     const s = makeStateWithTownHall({ gold: 1e6, researchPoints: 100, tutorialDone: true }, 4);
     const altar = addBuilding(s, 'altar', 10, 10, 1);
-    expect(checkUpgrade(s, altar)).toMatchObject({ ok: false, currency: 'rp', cost: 150, reason: 'Need 50 more Burgers' });
+    expect(checkUpgrade(s, altar)).toMatchObject({ ok: false, currency: 'rp', cost: 150, reason: 'Need 50 more Shakes' });
     s.researchPoints = 150;
     expect(checkUpgrade(s, altar)).toMatchObject({ ok: true, currency: 'rp', cost: 150 });
-    altar.level = 4; // VH4: Level 5 needs VH5, and the locked button still names Burgers
+    altar.level = 4; // VH4: Level 5 needs VH5, and the locked button still names Shakes
     expect(checkUpgrade(s, altar)).toMatchObject({ ok: false, currency: 'rp', reason: 'Requires VH5' });
   });
 
-  it('every level fits the Burger cap of the best RV Lab at the Village Hall it needs', () => {
-    const labAt = (vh) => CONFIG.rvlab.levels.filter((l, i) => (l.townHall ?? CONFIG.rvlab.unlockTownHall) <= vh && i < 5).length;
-    for (let l = 2; l <= 10; l++) {
+  it('every level fits the Shake cap (the hall plus its Shake Storages at their top level) at the Village Hall it needs', () => {
+    for (let l = 2; l <= 20; l++) {
       const vh = Math.max(CONFIG.altar.unlockTownHall, l);
-      const s = makeStateWithTownHall({}, vh);
-      const lab = labAt(vh);
-      if (lab) addBuilding(s, 'rvlab', 20, 20, lab);
-      expect(levelStats('altar', l).cost).toBeLessThanOrEqual(rpCap(s));
+      expect(levelStats('altar', l).cost, `Lv${l}`).toBeLessThanOrEqual(shakeCapAt(vh));
     }
   });
 
@@ -225,7 +221,7 @@ describe('his upgrades cost Burgers (research points), building the altar costs 
     const burgers = levelStats('altar', 7).cost;
     expect(repairCost(altar)).toBe(Math.round(Math.max(3000, burgers * CONFIG.rules.burgerGoldValue) * CONFIG.rules.rebuildCostShare));
     expect(repairCost({ type: 'altar', level: 1 })).toBe(Math.round(3000 * CONFIG.rules.rebuildCostShare));
-    // Every Burger-priced building costs more to rebuild at a higher level (the Fuel Station used to be flat).
+    // Every Shake-priced building costs more to rebuild at a higher level (the Fuel Station used to be flat).
     for (const type of ['fuelStation', 'rvlab', 'altar']) {
       const n = CONFIG[type].levels.length;
       for (let l = 2; l <= n; l++) expect(repairCost({ type, level: l })).toBeGreaterThanOrEqual(repairCost({ type, level: l - 1 }));

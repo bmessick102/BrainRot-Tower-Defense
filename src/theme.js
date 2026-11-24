@@ -59,11 +59,12 @@ export const COLORS = {
   invalid: 0xff4d4d
 };
 
-// Burgers (research points, internally rp): a toasted-bun orange, warmer and redder than the gold bar's yellow.
-export const RP_COLOR = 0xe0782e;
-export const RP_TEXT_COLOR = '#ffb877';
-/** The Burgers resource bar (ResourceBar colors). */
-export const RP_BAR_COLORS = { fill: RP_COLOR, light: 0xffb878, dark: 0x9c4614, trough: 0x2e1a0e };
+// Shakes (research points, internally rp; Burgers and a toasted-bun orange before v0.14): the Grimace Shake's purple. A
+// bright grape violet that reads against the gold bar's yellow and the green map, with a lilac shine and a dark plum rim.
+export const RP_COLOR = 0x9b4dff;
+export const RP_TEXT_COLOR = '#d7a8ff';
+/** The Shakes resource bar (ResourceBar colors: fill, shine band, bottom shade, trough, rim). */
+export const RP_BAR_COLORS = { fill: RP_COLOR, light: 0xd2a6ff, dark: 0x6420b8, trough: 0x1f1030, edge: 0x14061f };
 
 /** Chunky white display text with a heavy black outline and a drop shadow. */
 export function textStyle(size = 18, color = COLORS.text, extra = {}) {

@@ -56,6 +56,8 @@ const TARGETS = [
   { match: /^bld_cannon_lv[0-9]+(_(dl|dr|ul|ur))?$/, width: 384, trim: 'group', needsAlpha: true },
   // Storage: each picture in 3 fills (_fill1..3, by how full your gold is; the plain one = full, for the shop), one box.
   { match: /^bld_storage_lv[0-9]+(_fill[0-9])?$/, width: 384, trim: 'group', needsAlpha: true },
+  // Shake Storage (v0.14): the same, 6 pictures x 3 fills, cut from the user's sheets by scripts/cut-sheets.mjs onto one canvas.
+  { match: /^bld_shakeStorage_lv[0-9]+(_fill[0-9])?$/, width: 384, trim: 'group', needsAlpha: true },
   { match: /^bld_catapult_lv[0-9]+$/, width: 384, trim: 'group', needsAlpha: true },
   // Spear Thrower: 5 levels x 4 facings (_dl/_dr/_ul/_ur, plus the plain one = down-left for the shop), one shared box.
   { match: /^bld_spear_lv[0-9]+(_(dl|dr|ul|ur))?$/, width: 384, trim: 'group', needsAlpha: true },
@@ -98,7 +100,7 @@ const TARGETS = [
   { match: /^proj_vaca$/, width: 72, trim: true, needsAlpha: true },
   { match: /^proj_(arrow|wizard|spear)$/, width: 96, trim: true, needsAlpha: true },
   { match: /^ui_coin$/, width: 96, trim: true, needsAlpha: true },
-  { match: /^ui_research_point$/, width: 128, trim: true, needsAlpha: true }, // the Burger (research points, shown as Burgers)
+  { match: /^ui_shake$/, width: 128, fit: 'box', trim: true, needsAlpha: true }, // v0.14: the Grimace Shake (research points, shown as Shakes; a tall cup, so fit by its height)
   { match: /^ui_research_ready$/, width: 128, trim: true, needsAlpha: true }, // book over the RV Lab: research ready
   { match: /^ui_beat_ready$/, width: 128, trim: true, needsAlpha: true },     // over DJ Babyface: Drop the Beat ready
   { match: /^ui_aegis_ready$/, width: 192, trim: true, needsAlpha: true },    // v0.12: the Locklair Mage's Arcane Aegis (AegisIcon.js draws a stand-in until it exists)

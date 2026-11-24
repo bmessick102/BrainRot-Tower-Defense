@@ -48,7 +48,9 @@ export const ACHIEVEMENTS = [
   { id: 'mined100k', group: 'builder', name: 'Bitcoin Baron', desc: 'Collect 100,000 gold from Bitcoin Mines', stat: 'mined', goal: 100000, reward: 6000 },
   { id: 'walls', group: 'builder', name: 'Great Wall', desc: 'Have 50 walls in one village', stat: 'walls', goal: 50, reward: 1500 },
   { id: 'arsenal', group: 'builder', name: 'Full Arsenal', desc: 'Have one of every defense and trap in one village', stat: 'defenseTypes', goal: DEFENSE_TYPES.length, reward: 6000 },
-  { id: 'maxed', group: 'builder', name: 'Maxed Out', desc: 'Upgrade a building (not a wall) to its top level', stat: 'maxed', goal: 1, reward: 3000 }
+  { id: 'maxed', group: 'builder', name: 'Maxed Out', desc: 'Upgrade a building (not a wall) to its top level', stat: 'maxed', goal: 1, reward: 3000 },
+  // (v0.14) a Shake Storage at its top level (12, from Village Hall 12)
+  { id: 'shakeVault', group: 'builder', name: 'Shake Vault', desc: 'Upgrade a Shake Storage to its top level', stat: 'shakeVault', goal: 1, reward: 25000 }
 ];
 
 /** The counters AchievementTracker bumps (all start at 0). */
@@ -60,13 +62,14 @@ export function achievementById(id) {
 
 /** Numbers read from the village being played (null state: all 0). */
 export function villageStats(state) {
-  const out = { defenseTypes: 0, walls: 0, maxed: 0 };
+  const out = { defenseTypes: 0, walls: 0, maxed: 0, shakeVault: 0 };
   if (!state || !Array.isArray(state.buildings)) return out;
   const types = new Set();
   for (const b of state.buildings) {
     if (b.type === 'wall') { out.walls++; continue; }
     if (DEFENSE_TYPES.includes(b.type)) types.add(b.type);
     if (b.type !== 'townHall' && b.level >= maxLevel(b.type)) out.maxed = 1;
+    if (b.type === 'shakeStorage' && b.level >= maxLevel(b.type)) out.shakeVault = 1;
   }
   out.defenseTypes = types.size;
   return out;

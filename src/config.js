@@ -48,9 +48,14 @@ export const CONFIG = {
     // Research points (RV Lab abilities): each enemy's own researchPoints when it's defeated, plus this
     // many x the wave number for surviving a night (src/logic/researchPoints.js).
     researchPointsPerWave: 15, // v0.5: was 10 (RV Lab and Fuel Station upgrades now cost RP too)
-    // RP is a capped resource: the most RP you can hold, by RV Lab level (index 0 = no RV Lab yet). RP earned
-    // beyond the cap is lost. Each cap covers that level's next upgrade (RP) and the tier it unlocks.
-    rpCaps: [400, 700, 1500, 3500, 6500, 10000],
+    // RP (shown as Shakes since v0.14) is a capped resource. The cap is the Village Hall's own Shake store (townHall
+    // levels' shakeCapacity) plus every Shake Storage's capacity (shakeStorage levels); the RV Lab no longer sets it
+    // (v0.5-v0.13: rpCaps [400, 700, 1500, 3500, 6500, 10000] by RV Lab level). Shakes earned beyond the cap are lost; a
+    // balance already over it (an older save) stays and can be spent. tests/shakes.test.js checks that the biggest Shake
+    // price open at every Village Hall fits the cap of that hall plus its allowed Shake Storages at their top level.
+    // The Village Hall's own trickle of Shakes, like its gold (hallIncome): base + perLevel per level above 1, in Shakes
+    // per second (1 a minute at Village Hall 1, 10.5 at 20), paid straight into the balance in batches of `batch`.
+    hallShakeIncome: { base: 1 / 60, perLevel: 0.5 / 60, batch: 1 },
     // Resetting a type's path costs this share of what its picks cost to research (no refund of the picks).
     respecShare: 0.5,
     spawnInterval: 0.8,
@@ -122,34 +127,36 @@ export const CONFIG = {
     name: "Village Hall",
     // Every game starts with the hall in ruins (level 0): nothing can be built, no gnomes live there,
     // and the day/night clock waits until it's rebuilt (levels[0].upgradeCost).
-    ruin: { hp: 600, capacity: 500 },
+    // shakeCapacity (v0.14): the hall's own small Shake store (100 x its level; the ruin 100), part of the Shake cap with
+    // every Shake Storage (researchPoints.js rpCap). The hall also makes a trickle of Shakes (rules.hallShakeIncome).
+    ruin: { hp: 600, capacity: 500, shakeCapacity: 100 },
     levels: [
-      { upgradeCost: 100, hp: 1200, capacity: 500 },
-      { upgradeCost: 300, hp: 1500, capacity: 750 },
-      { upgradeCost: 1000, hp: 1875, capacity: 1000 },
-      { upgradeCost: 2500, hp: 2344, capacity: 1500 },
-      { upgradeCost: 5000, hp: 2930, capacity: 2000 },
-      { upgradeCost: 10000, hp: 3663, capacity: 2500 },
-      { upgradeCost: 20000, hp: 4579, capacity: 3000 },
-      { upgradeCost: 40000, hp: 5724, capacity: 3500 },
-      { upgradeCost: 80000, hp: 7155, capacity: 4000 },
-      { upgradeCost: 160000, hp: 8944, capacity: 4500 },
+      { upgradeCost: 100, hp: 1200, capacity: 500, shakeCapacity: 100 },
+      { upgradeCost: 300, hp: 1500, capacity: 750, shakeCapacity: 200 },
+      { upgradeCost: 1000, hp: 1875, capacity: 1000, shakeCapacity: 300 },
+      { upgradeCost: 2500, hp: 2344, capacity: 1500, shakeCapacity: 400 },
+      { upgradeCost: 5000, hp: 2930, capacity: 2000, shakeCapacity: 500 },
+      { upgradeCost: 10000, hp: 3663, capacity: 2500, shakeCapacity: 600 },
+      { upgradeCost: 20000, hp: 4579, capacity: 3000, shakeCapacity: 700 },
+      { upgradeCost: 40000, hp: 5724, capacity: 3500, shakeCapacity: 800 },
+      { upgradeCost: 80000, hp: 7155, capacity: 4000, shakeCapacity: 900 },
+      { upgradeCost: 160000, hp: 8944, capacity: 4500, shakeCapacity: 1000 },
       // v0.6: Village Hall 11. 250,000 fits in 5 top storages + the hall (309,500).
-      { upgradeCost: 250000, hp: 11180, capacity: 5000 },
+      { upgradeCost: 250000, hp: 11180, capacity: 5000, shakeCapacity: 1100 },
       // v0.8: Village Halls 12-15 and v0.11: 16-20 (HP x1.25, capacity +500 per level). v0.13.1: upgrades cost more, to
       // match the bigger Storage Levels 11-20 (v0.13). Each one is about 89% of the gold the hall before it can hold with
       // its 6 Storages at its level, plus the hall: 400,000 of 443,000 (VH11), 460,000 / 515,500, 520,000 / 588,000,
       // 590,000 / 660,500, 650,000 / 733,000, 720,000 / 805,500, 780,000 / 878,000, 850,000 / 950,500, 920,000 / 1,023,000
       // (VH19). They were 300k, 340k, 380k, 410k, 450k, 480k, 520k, 550k, 600k.
-      { upgradeCost: 400000, hp: 13975, capacity: 5500 },
-      { upgradeCost: 460000, hp: 17469, capacity: 6000 },
-      { upgradeCost: 520000, hp: 21836, capacity: 6500 },
-      { upgradeCost: 590000, hp: 27295, capacity: 7000 },
-      { upgradeCost: 650000, hp: 34119, capacity: 7500 },
-      { upgradeCost: 720000, hp: 42649, capacity: 8000 },
-      { upgradeCost: 780000, hp: 53311, capacity: 8500 },
-      { upgradeCost: 850000, hp: 66639, capacity: 9000 },
-      { upgradeCost: 920000, hp: 83299, capacity: 9500 }
+      { upgradeCost: 400000, hp: 13975, capacity: 5500, shakeCapacity: 1200 },
+      { upgradeCost: 460000, hp: 17469, capacity: 6000, shakeCapacity: 1300 },
+      { upgradeCost: 520000, hp: 21836, capacity: 6500, shakeCapacity: 1400 },
+      { upgradeCost: 590000, hp: 27295, capacity: 7000, shakeCapacity: 1500 },
+      { upgradeCost: 650000, hp: 34119, capacity: 7500, shakeCapacity: 1600 },
+      { upgradeCost: 720000, hp: 42649, capacity: 8000, shakeCapacity: 1700 },
+      { upgradeCost: 780000, hp: 53311, capacity: 8500, shakeCapacity: 1800 },
+      { upgradeCost: 850000, hp: 66639, capacity: 9000, shakeCapacity: 1900 },
+      { upgradeCost: 920000, hp: 83299, capacity: 9500, shakeCapacity: 2000 }
     ]
   },
   // v0.5: Levels 6-10 make 12-33% more (same fill time): late halls took 2-10 hours of full mines to max out.
@@ -198,6 +205,50 @@ export const CONFIG = {
       { cost: 120000, hp: 22210, capacity: 157000 },
       { cost: 135000, hp: 27763, capacity: 169000 },
       { cost: 150000, hp: 34704, capacity: 181000 }
+    ]
+  },
+  // Shake Collector (v0.14, src/logic/shakes.js): makes Shakes over time into its own stock, collected by clicking it
+  // like a Bitcoin Mine (not during a wave; it keeps filling). production in Shakes per second (1.2 a minute at Level 1,
+  // 10.2 at Level 10); stockCap fills in about 50-55 minutes. Worth far less than a mine (rules.burgerGoldValue, 15 gold a
+  // Shake: a Level 10 Collector makes about 2.6 gold's worth a second, a Level 10 mine 48 gold). Each level needs the
+  // usual Village Hall (no higher than the hall). Count: limits.shakeCollector (1 at VH3, 2 at VH6, 3 at VH10, 4 at VH14).
+  shakeCollector: {
+    name: "Shake Collector",
+    unlockTownHall: 3,
+    levels: [
+      { cost: 1000, hp: 400, production: 0.02, stockCap: 60 },
+      { cost: 2000, hp: 500, production: 0.03, stockCap: 90 },
+      { cost: 4000, hp: 625, production: 0.04, stockCap: 120 },
+      { cost: 8000, hp: 781, production: 0.05, stockCap: 160 },
+      { cost: 15000, hp: 977, production: 0.065, stockCap: 210 },
+      { cost: 25000, hp: 1221, production: 0.08, stockCap: 260 },
+      { cost: 40000, hp: 1526, production: 0.1, stockCap: 320 },
+      { cost: 60000, hp: 1907, production: 0.12, stockCap: 390 },
+      { cost: 90000, hp: 2384, production: 0.145, stockCap: 470 },
+      { cost: 120000, hp: 2980, production: 0.17, stockCap: 560 }
+    ]
+  },
+  // Shake Storage (v0.14): raises the Shake cap by its capacity (researchPoints.js rpCap, with the Village Hall's own
+  // shakeCapacity). 12 levels, a picture per 2 (bld_shakeStorage_lv1-6, each in 3 fills). Count: limits.shakeStorage
+  // (1 at VH3, 2 at VH8). Sized so the hall plus its allowed Storages at their top level hold the biggest Shake price
+  // open at each Village Hall (tests/shakes.test.js): VH7 3,300 >= 2,000, VH8 6,800 >= 4,500, VH10 8,600 >= 6,000,
+  // VH12 10,800 >= 7,500, VH15 11,100 >= 10,000. Enemies that hit it drain Shakes, as a Storage drains gold.
+  shakeStorage: {
+    name: "Shake Storage",
+    unlockTownHall: 3,
+    levels: [
+      { cost: 800, hp: 600, capacity: 500 },
+      { cost: 1500, hp: 750, capacity: 700 },
+      { cost: 3000, hp: 940, capacity: 1000 },
+      { cost: 6000, hp: 1170, capacity: 1300 },
+      { cost: 10000, hp: 1460, capacity: 1700 },
+      { cost: 16000, hp: 1830, capacity: 2100 },
+      { cost: 25000, hp: 2290, capacity: 2600 },
+      { cost: 40000, hp: 2860, capacity: 3000 },
+      { cost: 60000, hp: 3570, capacity: 3400 },
+      { cost: 85000, hp: 4470, capacity: 3800 },
+      { cost: 110000, hp: 5580, capacity: 4200 },
+      { cost: 140000, hp: 6980, capacity: 4800 }
     ]
   },
   // Each house is home to `gnomes` villagers. By day every gnome works a mine (more gold); during attacks
@@ -306,10 +357,10 @@ export const CONFIG = {
     levels: [
       { cost: 3000, hp: 900, heroHp: 1100, heroDamage: 80 },
       // His upgrades (Levels 2-20; 15 levels since v0.10.1, 20 since v0.11, the user's calls) cost Burgers (RP), like the
-      // RV Lab and Fuel Station (user, 2026-11-20); each fits the Burger cap (rules.rpCaps) of the RV Lab a village can
-      // have at the Village Hall that level needs (Level N needs VH N; the lab reaches level VH - 3). Level 5+ needs an
-      // RV Lab (no lab: cap 400). Levels 11-20: x1.15 altar HP, x1.12 his health, x1.1 his damage per level; Levels
-      // 16-20 cost the top Burger cap (10,000), like Level 15.
+      // RV Lab and Fuel Station (user, 2026-11-20); each fits the Shake cap (v0.14: the Village Hall's store plus its
+      // allowed Shake Storages at their top level, tests/shakes.test.js) at the Village Hall that level needs (Level N
+      // needs VH N). Levels 11-20: x1.15 altar HP, x1.12 his health, x1.1 his damage per level; Levels 16-20 cost
+      // 10,000, like Level 15 (the old top Burger cap).
       { cost: 150, costCurrency: 'rp', hp: 1125, heroHp: 1320, heroDamage: 94 },
       { cost: 250, costCurrency: 'rp', hp: 1406, heroHp: 1584, heroDamage: 111 },
       { cost: 400, costCurrency: 'rp', hp: 1758, heroHp: 1901, heroDamage: 131 },
@@ -340,8 +391,8 @@ export const CONFIG = {
   // She comes at Village Hall 8 (limits.queenAltar). Level 1 costs gold; Levels 2-20 (15 since v0.10.1, 20 since v0.11)
   // cost Burgers and each needs the `townHall` on its level: like the Brisket King, Level N needs Village Hall N (v0.11,
   // the user's call: both heroes reach the same level at every hall), so Levels 1-8 all open at VH8, where she comes.
-  // (v0.8-v0.10: two levels per hall from VH8.) From VH8 a village can have a Level 5 RV Lab, so every price fits the
-  // top Burger cap (rules.rpCaps: 10,000; Levels 15-20 cost exactly that). Levels 11-20: x1.15 altar HP, x1.075 her health,
+  // (v0.8-v0.10: two levels per hall from VH8.) Every price fits the Shake cap at the hall it needs (tests/shakes.test.js;
+  // Levels 15-20 cost 10,000, the old top Burger cap). Levels 11-20: x1.15 altar HP, x1.075 her health,
   // x1.067 her damage per level.
   queenAltar: {
     name: "Hatsune Queen Altar",
@@ -748,7 +799,7 @@ export const CONFIG = {
   // 2 toward the type's limit (countOwned: merging frees no slot), so its stats are about two max-level copies'
   // worth (damage per second ~2x, health ~2x) plus its ability, and it can't merge again (one merge level).
   //   cost        Burgers (rp, about a top RV Lab perk: 3,000) AND gold (about the type's own last upgrade); between
-  //               waves only. Both fit a Village Hall 10 village (Burger cap 10,000 with RV Lab 5; ~309,500 gold).
+  //               waves only. Both fit a Village Hall 10 village (Shake cap 8,600 with two top Shake Storages; ~309,500 gold).
   //   hpMult / rangeAdd   health and range of the merged building.
   //   damageMult  damage of each regular shot; fireIntervalMult  time between shots. Timed perk specials (Flak,
   //               Broadside, Volley Lock, Earthquake...) get damageMult / fireIntervalMult, the shots' DPS gain, so
@@ -1054,6 +1105,8 @@ export const CONFIG = {
     // more keeps them (checkBuy just won't add another).
     storage: [1, 1, 2, 2, 3, 3, 4, 4, 5, 5, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6],
     house: [1, 1, 2, 2, 3, 3, 4, 4, 5, 5, 6, 6, 6, 6, 7, 7, 7, 8, 8, 9],
+    shakeCollector: [0, 0, 1, 1, 1, 2, 2, 2, 2, 3, 3, 3, 3, 4, 4, 4, 4, 4, 4, 4], // v0.14: 1 at VH3, 2 at VH6, 3 at VH10, 4 at VH14
+    shakeStorage: [0, 0, 1, 1, 1, 1, 1, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2],     // v0.14: 1 at VH3, 2 at VH8 (max 2)
     cannon: [1, 2, 2, 3, 3, 4, 4, 5, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16], // (v0.10.1: one more per Village Hall after 10)
     archer: [0, 1, 2, 2, 3, 3, 4, 4, 5, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15], // (v0.10.1: one more per Village Hall after 10)
     mortar: [0, 1, 1, 2, 2, 3, 3, 4, 4, 5, 5, 6, 6, 7, 8, 9, 9, 10, 10, 10],
@@ -1155,7 +1208,7 @@ export const CONFIG = {
       role: "Sneaky thief",
       radius: 0.22,
       type: "ground",
-      prefers: ["mine", "storage"],
+      prefers: ["mine", "storage", "shakeCollector", "shakeStorage"], // (v0.14: the Shake buildings too, like the gold ones)
       jumpsWalls: true, // hops over walls like the Sneaker Shark
       // Spawns invisible: defenses can't aim at it (splash and pools still hurt) until its first wall
       // jump or its first hit on a building reveals it.
