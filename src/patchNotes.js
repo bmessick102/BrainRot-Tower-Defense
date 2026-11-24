@@ -19,8 +19,8 @@ const allEntries = (release) => release.sections.flatMap((s) => s.entries);
 
 export const PATCH_NOTES = {
   release: '0.13',
-  version: '0.13.0',
-  title: "What's New in v0.13",
+  version: '0.13.1',
+  title: "What's New in v0.13.1",
   sections: [
     {
       type: 'feature',
@@ -34,6 +34,14 @@ export const PATCH_NOTES = {
     {
       type: 'balance',
       entries: [
+        {
+          version: '0.13.1', icon: { building: 'townHall', level: 20 }, title: 'Village Halls 12-20 cost more',
+          text: 'The bigger Storages hold so much more gold that the Village Hall upgrades from Hall 12 up now cost more to match: 400,000 for Hall 12, rising to 920,000 for Hall 20.'
+        },
+        {
+          version: '0.13.1', icon: { building: 'storage', level: 15 }, title: 'At most 6 Storages',
+          text: 'You can build up to 6 Storages from Village Hall 11 on (it used to keep going up to 10). Six high-level Storages hold more than enough. Storages you already built stay.'
+        },
         {
           version: '0.13.0', icon: { building: 'storage', level: 10 }, title: 'Cheaper Storage upgrades',
           text: 'Upgrading a Storage costs about half as much gold as before (Level 10 costs 24,000 instead of 51,200), so a village is quicker to build back up.'

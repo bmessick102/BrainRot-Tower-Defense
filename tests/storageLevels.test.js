@@ -1,7 +1,7 @@
 // v0.13: the Storage has 20 levels (was 10), 10 pictures, cheaper upgrades; older saves move every Storage up a level.
 import { describe, it, expect } from 'vitest';
 import { CONFIG } from '../src/config.js';
-import { createBuilding, checkUpgrade, maxLevel } from '../src/logic/buildings.js';
+import { createBuilding, checkUpgrade, maxLevel, limitFor, checkBuy } from '../src/logic/buildings.js';
 import { serializeGame, parseSave, migrateV8 } from '../src/logic/save.js';
 import { GameState } from '../src/state/GameState.js';
 import { artTier } from '../src/objects/BuildingView.js';
@@ -100,5 +100,19 @@ describe('v0.13: older saves (version 8) move every Storage up one level', () =>
     expect(parseSave(JSON.stringify(save)).status).toBe('invalid');
     storages(save)[0].level = 6;
     expect(parseSave(JSON.stringify(save)).status).toBe('ok');
+  });
+});
+
+describe('v0.13.1: at most 6 Storages from Village Hall 11', () => {
+  it('the cap stops at 6, and a village that already has more keeps them (and cannot build another)', () => {
+    for (let vh = 11; vh <= 20; vh++) expect(limitFor('storage', vh)).toBe(6);
+    const save = serializeGame(village(19, [19, 19, 19, 19, 19, 19, 19, 19, 19]));
+    const p = parseSave(JSON.stringify(save));
+    expect(p.status).toBe('ok');
+    const gs = new GameState({ storage: memoryStorage() });
+    gs.loadFromSave(p.data);
+    gs.gold = 1e6;
+    expect(storages(gs)).toHaveLength(9);
+    expect(checkBuy(gs, 'storage').ok).toBe(false);
   });
 });

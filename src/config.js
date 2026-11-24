@@ -136,21 +136,20 @@ export const CONFIG = {
       { upgradeCost: 160000, hp: 8944, capacity: 4500 },
       // v0.6: Village Hall 11. 250,000 fits in 5 top storages + the hall (309,500).
       { upgradeCost: 250000, hp: 11180, capacity: 5000 },
-      // v0.8: Village Halls 12-15 (HP x1.25, capacity +500 per level). Each upgrade fits in the gold the hall before it
-      // can hold (top storages + the hall): 300,000 <= 371,000 (VH11: 6 storages), 340,000 <= 371,500 (VH12: 6),
-      // 380,000 <= 433,000 (VH13: 7), 410,000 <= 433,500 (VH14: 7).
-      { upgradeCost: 300000, hp: 13975, capacity: 5500 },
-      { upgradeCost: 340000, hp: 17469, capacity: 6000 },
-      { upgradeCost: 380000, hp: 21836, capacity: 6500 },
-      { upgradeCost: 410000, hp: 27295, capacity: 7000 },
-      // v0.11: Village Halls 16-20 (the user's new pictures; HP x1.25, capacity +500 per level). Each upgrade fits in the
-      // gold the hall before it can hold (top storages + the hall): 450,000 <= 495,000 (VH15: 8 storages), 480,000 <=
-      // 495,500 (VH16: 8), 520,000 <= 557,000 (VH17: 9), 550,000 <= 557,500 (VH18: 9), 600,000 <= 619,000 (VH19: 10).
-      { upgradeCost: 450000, hp: 34119, capacity: 7500 },
-      { upgradeCost: 480000, hp: 42649, capacity: 8000 },
-      { upgradeCost: 520000, hp: 53311, capacity: 8500 },
-      { upgradeCost: 550000, hp: 66639, capacity: 9000 },
-      { upgradeCost: 600000, hp: 83299, capacity: 9500 }
+      // v0.8: Village Halls 12-15 and v0.11: 16-20 (HP x1.25, capacity +500 per level). v0.13.1: upgrades cost more, to
+      // match the bigger Storage Levels 11-20 (v0.13). Each one is about 89% of the gold the hall before it can hold with
+      // its 6 Storages at its level, plus the hall: 400,000 of 443,000 (VH11), 460,000 / 515,500, 520,000 / 588,000,
+      // 590,000 / 660,500, 650,000 / 733,000, 720,000 / 805,500, 780,000 / 878,000, 850,000 / 950,500, 920,000 / 1,023,000
+      // (VH19). They were 300k, 340k, 380k, 410k, 450k, 480k, 520k, 550k, 600k.
+      { upgradeCost: 400000, hp: 13975, capacity: 5500 },
+      { upgradeCost: 460000, hp: 17469, capacity: 6000 },
+      { upgradeCost: 520000, hp: 21836, capacity: 6500 },
+      { upgradeCost: 590000, hp: 27295, capacity: 7000 },
+      { upgradeCost: 650000, hp: 34119, capacity: 7500 },
+      { upgradeCost: 720000, hp: 42649, capacity: 8000 },
+      { upgradeCost: 780000, hp: 53311, capacity: 8500 },
+      { upgradeCost: 850000, hp: 66639, capacity: 9000 },
+      { upgradeCost: 920000, hp: 83299, capacity: 9500 }
     ]
   },
   // v0.5: Levels 6-10 make 12-33% more (same fill time): late halls took 2-10 hours of full mines to max out.
@@ -1038,7 +1037,8 @@ export const CONFIG = {
   // Slots): on top of the hall before it, Village Hall 11 adds a Tower of Rah, Gandolf, Diddypult, KSI Tower and Cannon
   // (and, since v0.6.3, a Mine, Storage and House); VH12 a Tower of Rah and Gandolf; VH13 a Diddypult, KSI Tower,
   // Locklair Tower and Storage (so the VH14 upgrade fits); VH14 a Cannon, Mortar, Spear Thrower and F.L.O.C.K Tower;
-  // VH15 a Tower of Rah, Firework Launcher, Mine, Storage and House. A village over a cap (built with Bonus Slots)
+  // VH15 a Tower of Rah, Firework Launcher, Mine, Storage and House (v0.13.1: no more Storages after VH11; see below).
+  // A village over a cap (built with Bonus Slots)
   // keeps those buildings (checkBuy just won't add more).
   limits: {
     // Village Halls 11-15 (v0.10.1): +1 Cannon and +1 Locklair Tower each, plus one more of about two other defenses
@@ -1048,7 +1048,11 @@ export const CONFIG = {
     // Mousetrap; VH20 Spear, F.L.O.C.K, Diddypult), every other mergeable defense even again at VH20; a Mine, Storage
     // or House now and then (the Storages keep each hall upgrade affordable); +12 walls each.
     mine: [1, 2, 3, 3, 4, 4, 5, 5, 6, 6, 7, 7, 7, 7, 8, 8, 9, 9, 9, 10],
-    storage: [1, 1, 2, 2, 3, 3, 4, 4, 5, 5, 6, 6, 7, 7, 8, 8, 9, 9, 10, 10],
+    // Storage (v0.13.1): stays at 6 from Village Hall 11 (it went on to 10 at VH19). Since v0.13 Storage Levels 11-20 hold
+    // far more (73,000 ... 181,000), so 6 hold every purchase (tests/costs.test.js), and the Village Hall upgrades were
+    // raised to match (VH12: 515,500 for the 460,000 upgrade; VH19: 1,023,000 for 920,000). A village that already has
+    // more keeps them (checkBuy just won't add another).
+    storage: [1, 1, 2, 2, 3, 3, 4, 4, 5, 5, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6],
     house: [1, 1, 2, 2, 3, 3, 4, 4, 5, 5, 6, 6, 6, 6, 7, 7, 7, 8, 8, 9],
     cannon: [1, 2, 2, 3, 3, 4, 4, 5, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16], // (v0.10.1: one more per Village Hall after 10)
     archer: [0, 1, 2, 2, 3, 3, 4, 4, 5, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15], // (v0.10.1: one more per Village Hall after 10)

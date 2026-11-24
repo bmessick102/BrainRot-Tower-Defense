@@ -71,7 +71,7 @@ describe('Village Halls 1-20: caps', () => {
       firework: [3, 3, 4, 4, 4, 4, 4, 4, 4, 4, 4],
       mousetrap: [5, 5, 5, 6, 6, 6, 6, 6, 6, 7, 7],
       mine: [6, 7, 7, 7, 7, 8, 8, 9, 9, 9, 10],
-      storage: [5, 6, 6, 7, 7, 8, 8, 9, 9, 10, 10],
+      storage: [5, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6], // v0.13.1: stays at 6 from VH11 (Levels 12-20 hold far more)
       house: [5, 6, 6, 6, 6, 7, 7, 7, 8, 8, 9],
       wall: [132, 144, 156, 168, 180, 192, 204, 216, 228, 240, 252],
       townHall: one, rvlab: one, dj: one, fuelStation: one, altar: one,
@@ -86,14 +86,14 @@ describe('Village Halls 1-20: caps', () => {
     const adds = (th) => Object.fromEntries(hallUnlocks(th).map((u) => [u.type, u.add]));
     expect(adds(11)).toEqual({ cannon: 1, archer: 1, wizard: 1, spear: 1, ksi: 1, ra: 1, catapult: 1, mine: 1, storage: 1, house: 1, wall: 12 });
     expect(adds(12)).toEqual({ cannon: 1, archer: 1, mortar: 1, wizard: 1, firework: 1, flock: 1, ra: 1, wall: 12 });
-    expect(adds(13)).toEqual({ cannon: 1, archer: 1, ksi: 1, mousetrap: 1, catapult: 1, storage: 1, wall: 12 });
+    expect(adds(13)).toEqual({ cannon: 1, archer: 1, ksi: 1, mousetrap: 1, catapult: 1, wall: 12 });
     expect(adds(14)).toEqual({ cannon: 1, archer: 1, mortar: 1, spear: 1, flock: 1, ra: 1, wall: 12 });
-    expect(adds(15)).toEqual({ cannon: 1, archer: 1, mortar: 1, spear: 1, ksi: 1, flock: 1, ra: 1, catapult: 1, mine: 1, storage: 1, house: 1, wall: 12 });
+    expect(adds(15)).toEqual({ cannon: 1, archer: 1, mortar: 1, spear: 1, ksi: 1, flock: 1, ra: 1, catapult: 1, mine: 1, house: 1, wall: 12 });
     // v0.11: Village Halls 16-20.
     expect(adds(16)).toEqual({ cannon: 1, archer: 1, mortar: 1, ra: 1, wall: 12 });
-    expect(adds(17)).toEqual({ cannon: 1, archer: 1, ksi: 1, spear: 1, catapult: 1, mine: 1, storage: 1, wall: 12 });
+    expect(adds(17)).toEqual({ cannon: 1, archer: 1, ksi: 1, spear: 1, catapult: 1, mine: 1, wall: 12 });
     expect(adds(18)).toEqual({ cannon: 1, archer: 1, mortar: 1, flock: 1, house: 1, wall: 12 });
-    expect(adds(19)).toEqual({ cannon: 1, archer: 1, ksi: 1, mousetrap: 1, ra: 1, storage: 1, wall: 12 });
+    expect(adds(19)).toEqual({ cannon: 1, archer: 1, ksi: 1, mousetrap: 1, ra: 1, wall: 12 });
     expect(adds(20)).toEqual({ cannon: 1, archer: 1, spear: 1, flock: 1, catapult: 1, mine: 1, house: 1, wall: 12 });
     expect(hallUnlocks(21)).toEqual([]);
     expect(hallUnlocks(1)).toEqual([]);
@@ -151,9 +151,10 @@ describe('Village Halls 1-20: caps', () => {
 
 describe('Village Hall upgrades: cost, health, capacity', () => {
   const L = CONFIG.townHall.levels;
-  const topStorage = CONFIG.storage.levels[CONFIG.storage.levels.length - 1].capacity;
-  // The most gold a village can hold at a hall (every storage it may build at its top level, plus the hall).
-  const maxGold = (th) => limitFor('storage', th) * topStorage + L[th - 1].capacity;
+  // The most gold a village can hold at a hall: every storage it may build at the hall's level (a building can't go above
+  // it; v0.13: Storages have 20 levels), plus the hall.
+  const storageAt = (th) => CONFIG.storage.levels[Math.min(th, CONFIG.storage.levels.length) - 1].capacity;
+  const maxGold = (th) => limitFor('storage', th) * storageAt(th) + L[th - 1].capacity;
 
   it('every level costs more, holds more and is tougher than the one before', () => {
     for (let th = 2; th <= MAX; th++) {
@@ -161,13 +162,15 @@ describe('Village Hall upgrades: cost, health, capacity', () => {
       expect(L[th - 1].hp).toBeGreaterThan(L[th - 2].hp);
       expect(L[th - 1].capacity).toBeGreaterThan(L[th - 2].capacity);
     }
-    expect(L.slice(10).map((l) => l.upgradeCost)).toEqual([250000, 300000, 340000, 380000, 410000, 450000, 480000, 520000, 550000, 600000]);
+    expect(L.slice(10).map((l) => l.upgradeCost)).toEqual([250000, 400000, 460000, 520000, 590000, 650000, 720000, 780000, 850000, 920000]);
     expect(L.slice(10).map((l) => l.hp)).toEqual([11180, 13975, 17469, 21836, 27295, 34119, 42649, 53311, 66639, 83299]);
     expect(L.slice(10).map((l) => l.capacity)).toEqual([5000, 5500, 6000, 6500, 7000, 7500, 8000, 8500, 9000, 9500]);
   });
 
   it('each upgrade fits in the gold the hall before it can hold (Village Halls 11-20)', () => {
     for (let th = 11; th <= MAX; th++) expect(L[th - 1].upgradeCost, `VH${th}`).toBeLessThanOrEqual(maxGold(th - 1));
+    // v0.13.1: and they keep up with the bigger Storages (at least 75% of that gold from Village Hall 12).
+    for (let th = 12; th <= MAX; th++) expect(L[th - 1].upgradeCost, `VH${th}`).toBeGreaterThanOrEqual(0.75 * maxGold(th - 1));
   });
 });
 

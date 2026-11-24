@@ -400,15 +400,17 @@ Most per-hit effects are in `landSplash` / `hitEffects` / `onTowerKill` in [src/
   | Hall | Upgrade cost | HP | Holds | Adds |
   | --- | --- | --- | --- | --- |
   | 11 | 250,000 | 11,180 | 5,000 | +1 Tower of Rah, Gandolf, Diddypult, KSI Tower, Cannon; +1 Mine, Storage, House; +12 walls |
-  | 12 | 300,000 | 13,975 | 5,500 | +1 Tower of Rah, Gandolf; +12 walls |
-  | 13 | 340,000 | 17,469 | 6,000 | +1 Diddypult, KSI Tower, Archer, Storage; +12 walls |
-  | 14 | 380,000 | 21,836 | 6,500 | +1 Cannon, Mortar, Spear Thrower, F.L.O.C.K Tower; +12 walls |
-  | 15 | 410,000 | 27,295 | 7,000 | +1 Tower of Rah, Firework; +1 Mine, Storage, House; +12 walls |
-  | 16 | 450,000 | 34,119 | 7,500 | +1 Cannon, Locklair, Mortar, Tower of Rah; +12 walls (v0.11) |
-  | 17 | 480,000 | 42,649 | 8,000 | +1 Cannon, Locklair, KSI Tower, Spear Thrower, Diddypult; +1 Mine, Storage; +12 walls |
-  | 18 | 520,000 | 53,311 | 8,500 | +1 Cannon, Locklair, F.L.O.C.K Tower, Mortar; +1 House; +12 walls |
-  | 19 | 550,000 | 66,639 | 9,000 | +1 Cannon, Locklair, Tower of Rah, KSI Tower, Mousetrap; +1 Storage; +12 walls |
-  | 20 | 600,000 | 83,299 | 9,500 | +1 Cannon, Locklair, Spear Thrower, F.L.O.C.K Tower, Diddypult; +1 Mine, House; +12 walls |
+  | 12 | 400,000 | 13,975 | 5,500 | +1 Tower of Rah, Gandolf; +12 walls |
+  | 13 | 460,000 | 17,469 | 6,000 | +1 Diddypult, KSI Tower, Archer; +12 walls |
+  | 14 | 520,000 | 21,836 | 6,500 | +1 Cannon, Mortar, Spear Thrower, F.L.O.C.K Tower; +12 walls |
+  | 15 | 590,000 | 27,295 | 7,000 | +1 Tower of Rah, Firework; +1 Mine, House; +12 walls |
+  | 16 | 650,000 | 34,119 | 7,500 | +1 Cannon, Locklair, Mortar, Tower of Rah; +12 walls (v0.11) |
+  | 17 | 720,000 | 42,649 | 8,000 | +1 Cannon, Locklair, KSI Tower, Spear Thrower, Diddypult; +1 Mine; +12 walls |
+  | 18 | 780,000 | 53,311 | 8,500 | +1 Cannon, Locklair, F.L.O.C.K Tower, Mortar; +1 House; +12 walls |
+  | 19 | 850,000 | 66,639 | 9,000 | +1 Cannon, Locklair, Tower of Rah, KSI Tower, Mousetrap; +12 walls |
+  | 20 | 920,000 | 83,299 | 9,500 | +1 Cannon, Locklair, Spear Thrower, F.L.O.C.K Tower, Diddypult; +1 Mine, House; +12 walls |
+
+  v0.13.1: Storages stop at 6 from Village Hall 11 (they went on to 10), and the upgrades to Halls 12-20 cost more (they were 300k, 340k, 380k, 410k, 450k, 480k, 520k, 550k, 600k), since Storage Levels 11-20 hold far more. Each upgrade is about 89% of the gold the hall before it can hold with 6 Storages at its level (tests/townHalls.test.js checks it fits and is at least 75%).
 
   Each upgrade fits in the gold the hall before can hold (the VH15 upgrade needs about 95% of a full VH14). The Village Hall's Stats tab says what the next level adds. Halls 11-15 use the top hall picture (lv5) until they get their own. Waves past VH11 grow by `rules.topHallGrowth` (x1.04 count, x1.03 health per hall, about x1.07 strength; `hallWaveGrowth` in enemies.js), much less than VH6-11's x1.35, since buildings get no new levels past 10; Grimace Golem is the last enemy to join (VH11). **Villages over the caps** (built with Bonus Slots before v0.8) keep every building: they work, upgrade and move as usual, the shop shows the count in gold ("7/3", "Over the limit"), and only building another of that type waits until the village is under its cap. The server only checks waves and the hall level (`check_base` allows halls up to 15 since the v0.8 migration).
 

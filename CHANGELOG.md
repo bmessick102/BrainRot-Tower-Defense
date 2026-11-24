@@ -2,6 +2,22 @@
 
 The version shows in the bottom-left corner of every screen (`package.json` `version` plus the commit). Details for everything below are in [README.md](README.md).
 
+## 0.13.1
+
+Fewer Storages late, and dearer Village Hall upgrades to match the bigger Storages. No database or save changes.
+
+### Balance
+- **Village Halls 12-20 cost more** (`CONFIG.townHall.levels[11..19].upgradeCost`): 400k / 460k / 520k / 590k / 650k /
+  720k / 780k / 850k / 920k (were 300k / 340k / 380k / 410k / 450k / 480k / 520k / 550k / 600k).
+  - Each is about 89% of what the hall before it can hold: 6 Storages at its level plus the hall (443,000 at VH11 ...
+    1,023,000 at VH19).
+  - `tests/townHalls.test.js` now measures `maxGold` with Storages at the hall's level (it used the top Storage level).
+    It checks each upgrade fits and is at least 75% of that.
+- **At most 6 Storages from Village Hall 11** (`CONFIG.limits.storage`, was 6 / 6 / 7 / 7 / 8 / 8 / 9 / 9 / 10 / 10 for
+  VH11-20). `hallUnlocks` no longer lists a Storage at VH13, 15, 17 or 19.
+  - A village that already has more keeps them, as with any over-cap village (`checkBuy` refuses another). Test in
+    `tests/storageLevels.test.js`.
+
 ## 0.13.0
 
 The Storage goes to Level 20 with the user's new pictures, and its upgrades cost about half. **Save format version 9**
