@@ -1843,7 +1843,7 @@ New walls are built at your wall level (${wallLevel(this.gs)}), so one costs wha
     const ok = up.ok && tutorialAllows(gs, 'upgrade', b.type);
     if (up.ok && !ok) sub = 'Follow the guide';
     else if (up.ok && ruin) sub = 'Unlocks building · waves begin';
-    else if (up.ok) sub = b.type === 'townHall' ? `Level ${b.level + 1} · tougher waves` : `To level ${b.level + 1}`;
+    else if (up.ok) sub = `To level ${b.level + 1}`;
     return { label, sub, ok };
   }
 

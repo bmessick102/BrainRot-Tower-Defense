@@ -48,11 +48,11 @@ describe('the Hatsune Queen: her altar', () => {
     expect(HERO_TYPES).toContain('queenAltar');
   });
 
-  it('Level 1 costs gold; Levels 2-10 cost Burgers, each gated by its Village Hall (8 to 15)', () => {
+  it('Level 1 costs gold; Levels 2-15 cost Burgers, each gated by its Village Hall (8 to 15, two levels per hall)', () => {
     expect(buildCost('queenAltar')).toBe(25000);
     expect(levelStats('queenAltar', 1).costCurrency).toBeUndefined();
-    for (let l = 2; l <= 10; l++) expect(levelStats('queenAltar', l).costCurrency).toBe('rp');
-    expect(CONFIG.queenAltar.levels.map((l) => l.townHall)).toEqual([8, 8, 9, 9, 10, 11, 12, 13, 14, 15]);
+    for (let l = 2; l <= 15; l++) expect(levelStats('queenAltar', l).costCurrency).toBe('rp');
+    expect(CONFIG.queenAltar.levels.map((l) => l.townHall)).toEqual([8, 8, 9, 9, 10, 10, 11, 11, 12, 12, 13, 13, 14, 14, 15]);
     const s = makeStateWithTownHall({ gold: 1e6, researchPoints: 1e4, tutorialDone: true }, 8);
     const altar = addBuilding(s, 'queenAltar', 10, 10, 1);
     expect(checkUpgrade(s, altar)).toMatchObject({ ok: true, currency: 'rp', cost: 1500 });
@@ -61,7 +61,7 @@ describe('the Hatsune Queen: her altar', () => {
   });
 
   it('every Burger price fits the Burger cap of the best RV Lab at the hall it needs', () => {
-    for (let l = 2; l <= 10; l++) {
+    for (let l = 2; l <= 15; l++) {
       const vh = levelStats('queenAltar', l).townHall;
       const s = makeStateWithTownHall({}, vh);
       addBuilding(s, 'rvlab', 20, 20, Math.min(5, vh - 3));

@@ -45,10 +45,10 @@ describe('buildings.js', () => {
     expect(checkUpgrade(state, cannon)).toMatchObject({ ok: false, reason: 'Requires VH3' });
   });
 
-  it('has 10 levels (the Catapult 5, walls 8, the Tower of Rah 8, the RV Lab and DJ Babyface 5, the Fuel Station 8) and blocks upgrades at the top level', () => {
+  it('has 10 levels (the Catapult 5, walls 8, the Tower of Rah 8, the RV Lab and DJ Babyface 5, the Fuel Station 8, both heroes 15) and blocks upgrades at the top level', () => {
     const max = CONFIG.rules.maxTownHallLevel;
     expect(max).toBe(15); // v0.8: Village Halls 12-15
-    for (const type of BUILDING_TYPES) expect(maxLevel(type)).toBe({ townHall: 15, catapult: 5, wall: 8, ra: 8, rvlab: 5, dj: 5, fuelStation: 8 }[type] ?? 10);
+    for (const type of BUILDING_TYPES) expect(maxLevel(type)).toBe({ townHall: 15, catapult: 5, wall: 8, ra: 8, rvlab: 5, dj: 5, fuelStation: 8, altar: 15, queenAltar: 15 }[type] ?? 10);
     const s6 = makeStateWithTownHall({ gold: 9999999 }, max);
     const cat = addBuilding(s6, 'catapult', 8, 8, 5);
     expect(checkUpgrade(s6, cat)).toMatchObject({ ok: false, reason: 'Max level' });

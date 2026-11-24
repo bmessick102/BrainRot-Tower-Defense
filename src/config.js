@@ -279,9 +279,10 @@ export const CONFIG = {
     },
     levels: [
       { cost: 3000, hp: 900, heroHp: 1100, heroDamage: 80 },
-      // His upgrades (Levels 2-10) cost Burgers (RP), like the RV Lab and Fuel Station (user, 2026-11-20); each fits
-      // the Burger cap (rules.rpCaps) of the RV Lab a village can have at the Village Hall that level needs
-      // (Level N needs VH N; the lab reaches level VH - 3). Level 5+ needs an RV Lab (no lab: cap 400).
+      // His upgrades (Levels 2-15; 15 levels since v0.10.1, the user's call) cost Burgers (RP), like the RV Lab and
+      // Fuel Station (user, 2026-11-20); each fits the Burger cap (rules.rpCaps) of the RV Lab a village can have at
+      // the Village Hall that level needs (Level N needs VH N; the lab reaches level VH - 3). Level 5+ needs an RV Lab
+      // (no lab: cap 400). Levels 11-15: x1.15 altar HP, x1.12 his health, x1.1 his damage per level.
       { cost: 150, costCurrency: 'rp', hp: 1125, heroHp: 1320, heroDamage: 94 },
       { cost: 250, costCurrency: 'rp', hp: 1406, heroHp: 1584, heroDamage: 111 },
       { cost: 400, costCurrency: 'rp', hp: 1758, heroHp: 1901, heroDamage: 131 },
@@ -290,7 +291,12 @@ export const CONFIG = {
       { cost: 1600, costCurrency: 'rp', hp: 3433, heroHp: 3285, heroDamage: 216 },
       { cost: 2500, costCurrency: 'rp', hp: 4292, heroHp: 3941, heroDamage: 255 },
       { cost: 4000, costCurrency: 'rp', hp: 5364, heroHp: 4730, heroDamage: 301 },
-      { cost: 6000, costCurrency: 'rp', hp: 6706, heroHp: 5676, heroDamage: 355 }
+      { cost: 6000, costCurrency: 'rp', hp: 6706, heroHp: 5676, heroDamage: 355 },
+      { cost: 7000, costCurrency: 'rp', hp: 7712, heroHp: 6357, heroDamage: 391 },
+      { cost: 7500, costCurrency: 'rp', hp: 8869, heroHp: 7120, heroDamage: 430 },
+      { cost: 8500, costCurrency: 'rp', hp: 10199, heroHp: 7974, heroDamage: 473 },
+      { cost: 9000, costCurrency: 'rp', hp: 11729, heroHp: 8931, heroDamage: 520 },
+      { cost: 10000, costCurrency: 'rp', hp: 13488, heroHp: 10003, heroDamage: 572 }
     ]
   },
   // The Hatsune Queen's altar (src/logic/queen.js, v0.8): the second hero, a crossbow sniper. Her level is the
@@ -299,9 +305,10 @@ export const CONFIG = {
   // closer than keepAway tiles makes her step away from it (inside her guard area). Sleep, knockouts and waking work
   // like the Brisket King's. Encore Cloak (encore): from the hotbar during a wave, once per wave: for `seconds` she
   // can't be targeted, her bolts deal +damagePct% and pierce `pierce` more enemies, and she heals healPct%.
-  // She comes at Village Hall 8 (limits.queenAltar). Level 1 costs gold; Levels 2-10 cost Burgers and each needs the
-  // `townHall` on its level (VH8-15). From VH8 a village can have a Level 5 RV Lab, so every price fits the top
-  // Burger cap (rules.rpCaps: 10,000).
+  // She comes at Village Hall 8 (limits.queenAltar). Level 1 costs gold; Levels 2-15 (15 since v0.10.1) cost Burgers
+  // and each needs the `townHall` on its level (two levels per hall from VH8, Level 15 at VH15). From VH8 a village can
+  // have a Level 5 RV Lab, so every price fits the top Burger cap (rules.rpCaps: 10,000). Levels 11-15: x1.15 altar
+  // HP, x1.075 her health, x1.067 her damage per level.
   queenAltar: {
     name: "Hatsune Queen Altar",
     heroName: "Hatsune Queen",
@@ -315,14 +322,19 @@ export const CONFIG = {
     levels: [
       { cost: 25000, townHall: 8, hp: 2400, heroHp: 2400, heroDamage: 160 },
       { cost: 1500, costCurrency: 'rp', townHall: 8, hp: 2760, heroHp: 2580, heroDamage: 171 },
-      { cost: 2200, costCurrency: 'rp', townHall: 9, hp: 3174, heroHp: 2774, heroDamage: 182 },
-      { cost: 3000, costCurrency: 'rp', townHall: 9, hp: 3650, heroHp: 2982, heroDamage: 195 },
-      { cost: 4000, costCurrency: 'rp', townHall: 10, hp: 4198, heroHp: 3205, heroDamage: 208 },
-      { cost: 5000, costCurrency: 'rp', townHall: 11, hp: 4827, heroHp: 3446, heroDamage: 222 },
-      { cost: 6000, costCurrency: 'rp', townHall: 12, hp: 5551, heroHp: 3704, heroDamage: 237 },
-      { cost: 7000, costCurrency: 'rp', townHall: 13, hp: 6384, heroHp: 3982, heroDamage: 253 },
-      { cost: 8000, costCurrency: 'rp', townHall: 14, hp: 7342, heroHp: 4281, heroDamage: 270 },
-      { cost: 9500, costCurrency: 'rp', townHall: 15, hp: 8443, heroHp: 4602, heroDamage: 288 }
+      { cost: 2000, costCurrency: 'rp', townHall: 9, hp: 3174, heroHp: 2774, heroDamage: 182 },
+      { cost: 2500, costCurrency: 'rp', townHall: 9, hp: 3650, heroHp: 2982, heroDamage: 195 },
+      { cost: 3000, costCurrency: 'rp', townHall: 10, hp: 4198, heroHp: 3205, heroDamage: 208 },
+      { cost: 3500, costCurrency: 'rp', townHall: 10, hp: 4827, heroHp: 3446, heroDamage: 222 },
+      { cost: 4000, costCurrency: 'rp', townHall: 11, hp: 5551, heroHp: 3704, heroDamage: 237 },
+      { cost: 4500, costCurrency: 'rp', townHall: 11, hp: 6384, heroHp: 3982, heroDamage: 253 },
+      { cost: 5000, costCurrency: 'rp', townHall: 12, hp: 7342, heroHp: 4281, heroDamage: 270 },
+      { cost: 5500, costCurrency: 'rp', townHall: 12, hp: 8443, heroHp: 4602, heroDamage: 288 },
+      { cost: 6000, costCurrency: 'rp', townHall: 13, hp: 9709, heroHp: 4947, heroDamage: 307 },
+      { cost: 7000, costCurrency: 'rp', townHall: 13, hp: 11165, heroHp: 5318, heroDamage: 328 },
+      { cost: 8000, costCurrency: 'rp', townHall: 14, hp: 12840, heroHp: 5717, heroDamage: 350 },
+      { cost: 9000, costCurrency: 'rp', townHall: 14, hp: 14766, heroHp: 6146, heroDamage: 373 },
+      { cost: 10000, costCurrency: 'rp', townHall: 15, hp: 16981, heroHp: 6607, heroDamage: 398 }
     ]
   },
   // Gnome villagers all live in Villager Houses (house.levels[].gnomes; their stats come from the same
@@ -902,22 +914,24 @@ export const CONFIG = {
   // VH15 a Tower of Rah, Firework Launcher, Mine, Storage and House. A village over a cap (built with Bonus Slots)
   // keeps those buildings (checkBuy just won't add more).
   limits: {
+    // Village Halls 11-15 (v0.10.1): +1 Cannon and +1 Locklair Tower each, plus one more of about two other defenses
+    // per hall, taking turns; every other mergeable defense ends even at VH15 so each one has a merge partner.
     mine: [1, 2, 3, 3, 4, 4, 5, 5, 6, 6, 7, 7, 7, 7, 8],
     storage: [1, 1, 2, 2, 3, 3, 4, 4, 5, 5, 6, 6, 7, 7, 8],
     house: [1, 1, 2, 2, 3, 3, 4, 4, 5, 5, 6, 6, 6, 6, 7],
-    cannon: [1, 2, 2, 3, 3, 4, 4, 5, 5, 6, 7, 7, 7, 8, 8],
-    archer: [0, 1, 2, 2, 3, 3, 4, 4, 5, 5, 5, 5, 6, 6, 6],
-    mortar: [0, 1, 1, 2, 2, 3, 3, 4, 4, 5, 5, 5, 5, 6, 6],
+    cannon: [1, 2, 2, 3, 3, 4, 4, 5, 5, 6, 7, 8, 9, 10, 11], // (v0.10.1: one more per Village Hall after 10)
+    archer: [0, 1, 2, 2, 3, 3, 4, 4, 5, 5, 6, 7, 8, 9, 10], // (v0.10.1: one more per Village Hall after 10)
+    mortar: [0, 1, 1, 2, 2, 3, 3, 4, 4, 5, 5, 6, 6, 7, 8],
     wizard: [0, 0, 1, 1, 2, 2, 3, 3, 4, 4, 5, 6, 6, 6, 6], // (v0.8.2: back to 6 after v0.8.1's cap of 4; they can merge instead)
     townHall: [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1],
     wall: [24, 36, 48, 60, 72, 84, 96, 108, 120, 132, 144, 156, 168, 180, 192],
-    firework: [0, 0, 1, 1, 2, 2, 2, 3, 3, 3, 3, 3, 3, 3, 4],
-    catapult: [0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 2, 2, 3, 3, 3], // the final unlock: from Village Hall 10
-    spear: [0, 0, 1, 1, 2, 2, 2, 3, 3, 3, 3, 3, 3, 4, 4],
-    ksi: [0, 0, 0, 0, 1, 1, 2, 2, 3, 3, 4, 4, 5, 5, 5],
-    flock: [0, 0, 1, 1, 1, 2, 2, 2, 3, 3, 3, 3, 3, 4, 4],
-    mousetrap: [0, 1, 2, 2, 3, 3, 4, 4, 5, 5, 5, 5, 5, 5, 5],
-    ra: [0, 0, 0, 0, 0, 1, 1, 1, 2, 2, 3, 4, 4, 4, 5],
+    firework: [0, 0, 1, 1, 2, 2, 2, 3, 3, 3, 3, 4, 4, 4, 4],
+    catapult: [0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 2, 2, 3, 3, 4], // the final unlock: from Village Hall 10
+    spear: [0, 0, 1, 1, 2, 2, 2, 3, 3, 3, 4, 4, 4, 5, 6],
+    ksi: [0, 0, 0, 0, 1, 1, 2, 2, 3, 3, 4, 4, 5, 5, 6],
+    flock: [0, 0, 1, 1, 1, 2, 2, 2, 3, 3, 3, 4, 4, 5, 6],
+    mousetrap: [0, 1, 2, 2, 3, 3, 4, 4, 5, 5, 5, 5, 6, 6, 6],
+    ra: [0, 0, 0, 0, 0, 1, 1, 1, 2, 2, 3, 4, 4, 5, 6],
     rvlab: [0, 0, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1],
     dj: [0, 0, 0, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1],
     fuelStation: [0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1],

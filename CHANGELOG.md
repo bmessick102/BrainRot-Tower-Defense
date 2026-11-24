@@ -2,6 +2,19 @@
 
 The version shows in the bottom-left corner of every screen (`package.json` `version` plus the commit). Details for everything below are in [README.md](README.md).
 
+## 0.10.1
+
+Both heroes to Level 15, more Cannons and Locklair Towers past Village Hall 10, and the UI caught up with wave-based difficulty. No save or database changes (heroes keep their level).
+
+### Changes
+- **Heroes have 15 levels** (config `altar.levels`, `queenAltar.levels`): Brisket King Levels 11-15 cost 7,000 / 7,500 / 8,500 / 9,000 / 10,000 Burgers (Level N needs VH N), x1.15 altar HP, x1.12 his health (to 10,003), x1.1 damage (to 572); Hatsune Queen Levels 2-15 re-priced 1,500 ... 10,000 Burgers and re-gated two per hall (`townHall` 8, 8, 9, 9, 10, 10, 11, 11, 12, 12, 13, 13, 14, 14, 15), Levels 1-10 keep their stats, 11-15 x1.15 altar HP, x1.075 health (to 6,607), x1.067 damage (to 398). Every price fits the top Burger cap (10,000).
+- **Altar pictures every 3 levels** (`LEVELS_PER_ART_BY_TYPE` / `ART_LEVELS` `altar: 3, queenAltar: 3`): the same 5 pictures over 15 levels (Levels 1-3, 4-6, 7-9, 10-12, 13-15).
+- **UI for wave-based difficulty**: the Village Hall's upgrade button no longer says "tougher waves" (UIScene: "To level N" like every building); How to Play's Waves and Upgrades text, the post-tutorial message and GameState's comment say the waves follow the wave number and the Village Hall only unlocks buildings (How to Play also drops the old "every 3rd wave is special": every 10th is a Boss Wave).
+- **Bought buildings land with the upgrade sound again** (GameScene.confirmPlacement, the user's call); moves and edit-mode placements keep the building placed sound.
+
+### Balance
+- **Defenses at Village Halls 11-15** (`limits`): one more Cannon and Locklair Tower per hall after 10 (Cannons 6, 7, 8, 9, 10, 11; Locklair Towers 5, 6, 7, 8, 9, 10 at VH10-15), plus one more of about two other defenses per hall, taking turns, every other mergeable one ending even at VH15: Mortar 5, 5, 6, 6, 7, 8; Gandolf 4, 5, 6, 6, 6, 6; Firework 3, 3, 4, 4, 4, 4; Spear 3, 4, 4, 4, 5, 6; KSI 3, 4, 4, 5, 5, 6; F.L.O.C.K 3, 3, 4, 4, 5, 6; Tower of Rah 2, 3, 4, 4, 5, 6; Diddypult 1, 2, 2, 3, 3, 4; Mousetrap 5, 5, 5, 6, 6, 6. Defense totals VH10-15: 40, 47, 54, 59, 65, 73 (were 40, 45, 47, 50, 54, 56).
+
 ## 0.10.0
 
 Wave difficulty by wave number instead of Village Hall, enemies joining at set waves, and the Hatsune Queen's new poses. No database changes; older saves keep their waves cleared (a high-hall village at a low wave now gets easier waves, a low-hall village at a high wave harder ones).

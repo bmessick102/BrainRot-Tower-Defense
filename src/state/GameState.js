@@ -306,7 +306,7 @@ export class GameState {
     return r;
   }
 
-  /** Upgrade (instant). A town hall upgrade unlocks buildings and makes the following nights tougher. */
+  /** Upgrade (instant). A town hall upgrade unlocks buildings (the waves follow the wave number, not the hall: v0.10). */
   upgradeBuilding(id) {
     const b = this.getBuilding(id);
     if (!b) return { ok: false, reason: 'Missing' };

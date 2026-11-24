@@ -55,17 +55,17 @@ describe('Village Halls 1-15: caps', () => {
   it('the caps per hall (Village Halls 10-15) are exactly the agreed ones', () => {
     // [VH10, VH11, VH12, VH13, VH14, VH15]
     const expected = {
-      ra: [2, 3, 4, 4, 4, 5],
+      ra: [2, 3, 4, 4, 5, 6],
       wizard: [4, 5, 6, 6, 6, 6],
-      catapult: [1, 2, 2, 3, 3, 3],
-      ksi: [3, 4, 4, 5, 5, 5],
-      cannon: [6, 7, 7, 7, 8, 8],
-      archer: [5, 5, 5, 6, 6, 6],
-      mortar: [5, 5, 5, 5, 6, 6],
-      spear: [3, 3, 3, 3, 4, 4],
-      flock: [3, 3, 3, 3, 4, 4],
-      firework: [3, 3, 3, 3, 3, 4],
-      mousetrap: [5, 5, 5, 5, 5, 5],
+      catapult: [1, 2, 2, 3, 3, 4],
+      ksi: [3, 4, 4, 5, 5, 6],
+      cannon: [6, 7, 8, 9, 10, 11], // (v0.10.1: one more Cannon and Locklair Tower per hall after 10)
+      archer: [5, 6, 7, 8, 9, 10],
+      mortar: [5, 5, 6, 6, 7, 8],
+      spear: [3, 4, 4, 4, 5, 6],
+      flock: [3, 3, 4, 4, 5, 6],
+      firework: [3, 3, 4, 4, 4, 4],
+      mousetrap: [5, 5, 5, 6, 6, 6],
       mine: [6, 7, 7, 7, 7, 8],
       storage: [5, 6, 6, 7, 7, 8],
       house: [5, 6, 6, 6, 6, 7],
@@ -79,26 +79,27 @@ describe('Village Halls 1-15: caps', () => {
 
   it('what each new hall adds (hallUnlocks: the Village Hall panel lists it)', () => {
     const adds = (th) => Object.fromEntries(hallUnlocks(th).map((u) => [u.type, u.add]));
-    expect(adds(11)).toEqual({ cannon: 1, wizard: 1, ksi: 1, ra: 1, catapult: 1, mine: 1, storage: 1, house: 1, wall: 12 });
-    expect(adds(12)).toEqual({ ra: 1, wizard: 1, wall: 12 });
-    expect(adds(13)).toEqual({ catapult: 1, ksi: 1, archer: 1, storage: 1, wall: 12 });
-    expect(adds(14)).toEqual({ cannon: 1, mortar: 1, spear: 1, flock: 1, wall: 12 });
-    expect(adds(15)).toEqual({ ra: 1, firework: 1, mine: 1, storage: 1, house: 1, wall: 12 });
+    expect(adds(11)).toEqual({ cannon: 1, archer: 1, wizard: 1, spear: 1, ksi: 1, ra: 1, catapult: 1, mine: 1, storage: 1, house: 1, wall: 12 });
+    expect(adds(12)).toEqual({ cannon: 1, archer: 1, mortar: 1, wizard: 1, firework: 1, flock: 1, ra: 1, wall: 12 });
+    expect(adds(13)).toEqual({ cannon: 1, archer: 1, ksi: 1, mousetrap: 1, catapult: 1, storage: 1, wall: 12 });
+    expect(adds(14)).toEqual({ cannon: 1, archer: 1, mortar: 1, spear: 1, flock: 1, ra: 1, wall: 12 });
+    expect(adds(15)).toEqual({ cannon: 1, archer: 1, mortar: 1, spear: 1, ksi: 1, flock: 1, ra: 1, catapult: 1, mine: 1, storage: 1, house: 1, wall: 12 });
     expect(hallUnlocks(16)).toEqual([]);
     expect(hallUnlocks(1)).toEqual([]);
     // Defenses first (shop order), walls last.
-    expect(hallUnlocks(11).map((u) => u.type)).toEqual(['cannon', 'wizard', 'ksi', 'ra', 'catapult', 'mine', 'storage', 'house', 'wall']);
+    expect(hallUnlocks(11).map((u) => u.type)).toEqual(['cannon', 'archer', 'wizard', 'spear', 'ksi', 'ra', 'catapult', 'mine', 'storage', 'house', 'wall']);
   });
 
   it('caps never go down from one hall to the next', () => {
     for (const t of BUILDING_TYPES) for (let th = 2; th <= MAX; th++) expect(limitFor(t, th), `${t} VH${th}`).toBeGreaterThanOrEqual(limitFor(t, th - 1));
   });
 
-  it('Village Hall 11 adds 5 defenses over Village Hall 10, as many as its 5 Bonus Slots gave', () => {
+  it('Village Halls 11-15 add 5 to 8 defenses each (v0.10.1); every mergeable defense ends even at Village Hall 15', () => {
     const defenses = (th) => DEFENSE_TYPES.reduce((n, t) => n + limitFor(t, th), 0);
     expect(defenses(10)).toBe(40);
-    expect(defenses(11) - defenses(10)).toBe(5);
-    expect([12, 13, 14, 15].map(defenses)).toEqual([47, 50, 54, 56]);
+    expect([11, 12, 13, 14, 15].map(defenses)).toEqual([47, 54, 59, 65, 73]);
+    // (Cannon and Locklair Tower grow by one every hall, the user's call; every other mergeable defense ends even.)
+    for (const t of DEFENSE_TYPES) if (CONFIG.merges[t] && t !== 'cannon' && t !== 'archer') expect(limitFor(t, 15) % 2, t).toBe(0);
   });
 
   it('the shop allows each type up to its cap at Village Hall 13, then "Limit reached"', () => {
@@ -187,10 +188,10 @@ describe('a village over its caps (built with Bonus Slots before v0.8)', () => {
     expect(checkBuy(gs, 'ra').ok).toBe(true);
   });
 
-  it('higher halls raise the cap: still over at Village Hall 15 (5), so no more Towers of Rah there either', () => {
+  it('higher halls raise the cap: still over at Village Hall 15 (6), so no more Towers of Rah there either', () => {
     const s = bonusVillage(15);
     expect(validateSave(serializeGame(s))).toBe(true);
-    expect(overCap(s, 'ra')).toBe(2);
+    expect(overCap(s, 'ra')).toBe(1);
     expect(checkBuy(s, 'ra').ok).toBe(false);
     expect(overCap(s, 'cannon')).toBe(0);
   });

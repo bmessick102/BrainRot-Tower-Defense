@@ -84,7 +84,7 @@ describe('Catapult', () => {
     expect(cfg.unlockTownHall).toBe(10);
     expect(limitFor('catapult', 9)).toBe(0);
     expect(limitFor('catapult', 10)).toBe(1);
-    expect([11, 12, 13, 14, 15].map((th) => limitFor('catapult', th))).toEqual([2, 2, 3, 3, 3]); // v0.8: +1 at VH11 and VH13
+    expect([11, 12, 13, 14, 15].map((th) => limitFor('catapult', th))).toEqual([2, 2, 3, 3, 4]); // v0.8: +1 at VH11 and VH13; v0.10.1: a 4th at VH15 (two Diddy Trebuchets)
     expect(maxLevel('catapult')).toBe(5);
     const s = makeStateWithTownHall({ gold: 9999999 }, 10);
     expect(checkBuy(s, 'catapult').ok).toBe(true);

@@ -19,8 +19,8 @@ const allEntries = (release) => release.sections.flatMap((s) => s.entries);
 
 export const PATCH_NOTES = {
   release: '0.10',
-  version: '0.10.0',
-  title: "What's New in v0.10",
+  version: '0.10.1',
+  title: "What's New in v0.10.1",
   sections: [
     {
       type: 'change',
@@ -34,8 +34,21 @@ export const PATCH_NOTES = {
           text: 'Each enemy type first shows up at its own wave, whatever your Village Hall: John Pork at wave 10, the Skibidi Toilet and Bri Bri Bicus Dicus at 14, up to the Grimace Golem at 48. Da Baby Car drives in from wave 18.'
         },
         {
+          version: '0.10.1', icon: { hero: true }, title: 'Both heroes go to Level 15',
+          text: 'The Brisket King and the Hatsune Queen now have 15 levels (paid in Burgers), and their altars change look every 3 levels. The Queen gets two levels per Village Hall from 8 to 14, and Level 15 at Village Hall 15.'
+        },
+        {
           version: '0.10.0', icon: { texture: 'hero_queen_select' }, title: 'New Hatsune Queen poses',
           text: 'The Hatsune Queen has her own pictures now for being knocked out, waking up with a big stretch, and waving when you click on her.'
+        }
+      ]
+    },
+    {
+      type: 'balance',
+      entries: [
+        {
+          version: '0.10.1', icon: { building: 'cannon', level: 1 }, title: 'More defenses at Village Halls 11 to 15',
+          text: 'Every Village Hall after 10 adds a Cannon and a Locklair Tower, plus more of other defenses in turn. At Village Hall 15 every other defense that can merge comes in an even number, so none is left without a merge partner.'
         }
       ]
     }

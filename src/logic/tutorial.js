@@ -50,7 +50,7 @@ export const TUTORIAL_STEPS = [
     advanceOn: 'waveStarted', focus: 'spawnMarker', allow: { ...NONE, select: ['mine'], collect: true }
   },
   {
-    text: `You beat the wave! From now on, press Start Wave when you're ready, day or night. Every wave is tougher than the last, and upgrading your Village Hall unlocks more buildings but brings bigger attacks.`,
+    text: `You beat the wave! From now on, press Start Wave when you're ready, day or night. Every wave is tougher than the last and new enemies join along the way. Upgrading your Village Hall unlocks more buildings.`,
     advanceOn: 'next', showNext: true, hiddenUntilWavesCleared: 1, allow: ALL
   }
 ];

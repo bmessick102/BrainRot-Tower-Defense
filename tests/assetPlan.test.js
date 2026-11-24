@@ -64,7 +64,7 @@ describe('asset plan', () => {
     expect(vh3).toContain('bld_cannon_lv2');           // levels 3-4
     expect(vh3).not.toContain(levelArtKey('cannon', 9)); // not yet
     expect(vh3.every(isDeferredImage)).toBe(true);
-    // At the top hall it's every deferred picture.
-    expect(new Set(reachableImageKeys(11))).toEqual(new Set(IMAGE_FILES.map((f) => f.key).filter(isDeferredImage)));
+    // At the top hall it's every deferred picture (the heroes' altars reach their last picture at Level 13).
+    expect(new Set(reachableImageKeys(15))).toEqual(new Set(IMAGE_FILES.map((f) => f.key).filter(isDeferredImage)));
   });
 });

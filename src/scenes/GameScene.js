@@ -1349,8 +1349,9 @@ export class GameScene extends Phaser.Scene {
       ? this.gs.placeNew(pl.type, pl.col, pl.row, pl.orient)
       : this.gs.moveBuilding(pl.id, pl.col, pl.row, pl.orient);
     if (!r.ok) { playSfx(this, SFX.invalid); return; }
-    // A building lands with the building-placed sound, bought or moved; walls keep theirs (upgrade when bought).
-    playSfx(this, this.placeSound(pl.type, pl.mode === 'buy' ? SFX.upgrade : SFX.place));
+    // A building bought from the shop lands with the upgrade sound (v0.10.1, the user's call); a moved one with the
+    // building-placed sound (walls keep theirs).
+    playSfx(this, pl.mode === 'buy' ? SFX.upgrade : this.placeSound(pl.type, SFX.place));
     this.endPlacement();
     this.syncViews(this.time.now);
     // Walls: keep laying segments in a row while you can afford them (Esc to stop).

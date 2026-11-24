@@ -457,7 +457,7 @@ export class HowToPlayScene extends Phaser.Scene {
       ['Waves, day & night', [
         'Build as long as you like. Press Start Wave to get 30 seconds to get ready. A "!" shows where enemies will come from.',
         `Day turns to night about every 8 minutes. At night, enemies hit ${Math.round((CONFIG.rules.night.damage - 1) * 100)}% harder and move faster, but you earn +${Math.round(CONFIG.rules.night.lootBonus * 100)}% gold and Burgers.`,
-        'Each wave is harder than the last. Every 3rd wave is special and pays bonus gold.',
+        `Each wave is harder than the last and new enemies join at set waves; your Village Hall doesn't change that. Every ${CONFIG.waveThemes.boss.every}th wave is a Boss Wave, and special waves pay bonus gold.`,
         `The round "2x" button beside Start Wave${IS_TOUCH ? '' : ' (or press T)'} speeds a wave up: press once for 2x, again for 4x, and again for normal speed. It stays until you change it.`,
         `You get 1 to 3 stars for how much of your village survives. 3 stars pays +${Math.round(CONFIG.rules.waveStars.bonus[2] * 100)}% gold and Burgers. After a wave, everything destroyed is rebuilt free.`,
         'If your Village Hall falls, you can Retry the wave.'
@@ -486,7 +486,7 @@ export class HowToPlayScene extends Phaser.Scene {
       'Select a building and press Upgrade. Upgrades are instant and only work by day.',
       'A building cannot be a higher level than your Village Hall.',
       'Each level adds health and power. Buildings get bigger and get new art every few levels.',
-      'Upgrading the Village Hall unlocks new buildings and lets you build more of each. But the attacks get harder too.',
+      'Upgrading the Village Hall unlocks new buildings and lets you build more of each. It never makes the waves harder: they grow with the wave number.',
       `Village Halls 11 to ${CONFIG.rules.maxTownHallLevel} bring no new building levels: each allows a few more defenses and 12 more walls. Your Village Hall's Stats tab shows what its next level adds.`,
       'Walls share one level: "Upgrade Walls" raises every wall at once, and new walls are built at that level.',
       `After you beat a wave, destroyed buildings are rebuilt free. During a wave you can Rebuild one early for ${Math.round(CONFIG.rules.rebuildCostShare * 100)}% of its cost.`,

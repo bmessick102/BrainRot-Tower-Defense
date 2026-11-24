@@ -17,7 +17,7 @@ import { PATCH_RELEASES } from './patchNotes.js';
 const LEVEL_ART = /^bld_([A-Za-z]+)_lv(\d+)(?:_[a-z0-9]+)?$/;
 // Levels per picture: a building gets new art every 2 levels (some every level). Kept equal to BuildingView's
 // LEVELS_PER_ART / LEVELS_PER_ART_BY_TYPE (a test checks), so this module stays free of view code.
-export const ART_LEVELS = { default: 2, rvlab: 1, wall: 1, dj: 1, catapult: 1 };
+export const ART_LEVELS = { default: 2, rvlab: 1, wall: 1, dj: 1, catapult: 1, altar: 3, queenAltar: 3 };
 export const artTierOf = (level, type) => Math.ceil(level / (ART_LEVELS[type] ?? ART_LEVELS.default));
 
 const IMAGE_PATH = new Map(IMAGE_FILES.map((f) => [f.key, f.path]));

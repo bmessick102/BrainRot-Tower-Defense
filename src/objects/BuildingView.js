@@ -77,7 +77,7 @@ export const LEVELS_PER_ART = 2;
 // Babyface: a picture per level, and a level without one yet shows the closest lower picture).
 // Catapult: 5 levels, a picture each. (The Spear Thrower, 10 levels / 5 pictures, and the Fuel Station, 8 levels /
 // 4 pictures, use the usual picture per 2 levels and grow on the levels in between, like the Cannon.)
-const LEVELS_PER_ART_BY_TYPE = { rvlab: 1, wall: 1, dj: 1, catapult: 1 };
+const LEVELS_PER_ART_BY_TYPE = { rvlab: 1, wall: 1, dj: 1, catapult: 1, altar: 3, queenAltar: 3 }; // (the heroes' altars: 15 levels, a picture every 3: v0.10.1)
 
 /** Which picture (1-based) a building level shows. */
 export function artTier(level, type = null) {
