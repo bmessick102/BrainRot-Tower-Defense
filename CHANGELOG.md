@@ -2,6 +2,17 @@
 
 The version shows in the bottom-left corner of every screen (`package.json` `version` plus the commit). Details for everything below are in [README.md](README.md).
 
+## 0.12.2
+
+The Locklair Mage has one range for everything, marked by his white ring. No database or save changes.
+
+### Changes
+- **His white ring marks his range** (MageFx): it runs at his range (`mageStats(...).auraRadius`) instead of 1.35 tiles around his tile, faint and pulsing as before; the gold aura outline shown when he's selected is removed (the buildings in range are still tinted gold), and the raid-time violet outline gives way to the white ring (the violet fill and ripple stay).
+- **His labels without the plate** (`BuildingView.drawHeroBar` replaces v0.12.1's `drawHeroPlate`, `PLATE` removed): the crown health bar where any building's bar goes (no dark box, not lifted), and while he's hovered or selected the normal perk bar (the dark pill with 5 pips, `drawChip`) centered right under it.
+
+### Balance
+- **One range for zap, Sanctuary Aura and Arcane Aegis** (`mageStats`; `hero.auraRadius` 4.5 removed from `CONFIG.mageAltar`): both reach `attackRange` 6 plus Long Staff (`mageRangeAdd` 1.5) and Wider Sanctuary (`auraRadiusAdd` 1), whichever path he's on; both perks' texts say so.
+
 ## 0.12.1
 
 The Locklair Mage tidied up (hero plate, white ring, gold Arcane Aegis highlight, staff-tip fix, the user's ability icon) and a hero profile window in the shop for every hero. No database or save changes.

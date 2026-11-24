@@ -59,7 +59,14 @@ describe('the Locklair Mage: his building', () => {
       expect(b.heal).toBeGreaterThan(a.heal);
       expect(b.maxHp).toBeGreaterThan(a.maxHp);
     }
-    expect(heroStatsFor(altar).auraRadius).toBe(M.auraRadius);
+    // One range for zap, aura and Aegis (v0.12.2); both range perks grow it.
+    expect(heroStatsFor(altar).auraRadius).toBe(M.attackRange);
+    expect(heroStatsFor(altar).attackRange).toBe(M.attackRange);
+    for (const [path, add] of [[['a', 'a'], 1.5], [['b', 'b'], 1]]) {
+      const st = mageStats({ type: 'mageAltar', level: 10, picks: path });
+      expect(st.attackRange).toBe(M.attackRange + add);
+      expect(st.auraRadius).toBe(st.attackRange);
+    }
   });
 });
 

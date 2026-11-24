@@ -363,7 +363,8 @@ export const CONFIG = {
   // per 4 levels), and the building's health is his (shown on a hero crown bar). His level is the building's.
   //   - Staff zap: every attackInterval s his staff zaps the nearest enemy within attackRange tiles (ground or air) for
   //     heroDamage, a single target (a purple bolt from the staff's crystal).
-  //   - Sanctuary Aura (passive): every building and hero (the Brisket King, the Hatsune Queen) within auraRadius tiles,
+  //   (v0.12.2, the user's call: one range for everything: his zap, Sanctuary Aura and Arcane Aegis all reach attackRange.)
+  //   - Sanctuary Aura (passive): every building and hero (the Brisket King, the Hatsune Queen) within his range,
   //     but not his own building, heals `heal` HP per second while he's awake in a wave.
   //   - Arcane Aegis (from the hotbar, once per wave): every building inside his aura, his own too, can't be damaged
   //     for aegis.seconds.
@@ -378,7 +379,7 @@ export const CONFIG = {
     size: 2,
     unlockTownHall: 10,
     hero: {
-      attackInterval: 1.6, attackRange: 6, auraRadius: 4.5, maxSleepSeconds: 120, minSleepSeconds: 20, wakeSeconds: 1.5,
+      attackInterval: 1.6, attackRange: 6, maxSleepSeconds: 120, minSleepSeconds: 20, wakeSeconds: 1.5,
       healTick: 0.5,
       aegis: { seconds: 4 }
     },

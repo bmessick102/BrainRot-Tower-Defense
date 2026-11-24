@@ -43,8 +43,9 @@ export function mageStats(altar) {
     maxHp: maxHp(altar),
     damage: l.heroDamage * (1 + (fx.mageDamagePct || 0) / 100),
     attackInterval: H.attackInterval / (1 + (fx.mageFasterPct || 0) / 100),
-    attackRange: H.attackRange + (fx.mageRangeAdd || 0),
-    auraRadius: H.auraRadius + (fx.auraRadiusAdd || 0),
+    // One range for his zap, Sanctuary Aura and Arcane Aegis (v0.12.2; the aura was 4.5 tiles); both range perks grow it.
+    attackRange: H.attackRange + (fx.mageRangeAdd || 0) + (fx.auraRadiusAdd || 0),
+    auraRadius: H.attackRange + (fx.mageRangeAdd || 0) + (fx.auraRadiusAdd || 0),
     heal: l.heal * (1 + (fx.mageHealPct || 0) / 100),
     chain: fx.mageChain || 0,
     chainPct: fx.mageChainPct || 0,

@@ -547,7 +547,7 @@ registerPerkTree('queenAltar', {
 // ---------- the Locklair Mage (his building's tree; read by src/logic/mage.js through mageStats) ----------
 // mageDamagePct / mageRangeAdd / mageFasterPct: his zap's damage, range and speed. mageChain / mageChainPct: each zap
 // jumps on to that many enemies near its target for that share. mageOverchargeEvery / mageOverchargeMult: every Nth zap
-// hits harder. mageHealPct / auraRadiusAdd: Sanctuary Aura's healing and reach. mageWard: buildings in his aura take that
+// hits harder. mageHealPct: Sanctuary Aura's healing. mageRangeAdd / auraRadiusAdd: his one range (zap, aura, Aegis; v0.12.2). mageWard: buildings in his aura take that
 // share less damage while he's awake (combat.js damageBuilding, b._mageWard). aegisCharges / aegisSecondsAdd /
 // aegisHealPct: Arcane Aegis per wave, longer, and healing the buildings it covers by that share at once.
 // hpPct: his health (his building's, through maxHp). mageSleepFasterPct: shorter naps. mageReviveSeconds /
@@ -555,14 +555,14 @@ registerPerkTree('queenAltar', {
 registerPerkTree('mageAltar', {
   a: { name: 'Archmage', tiers: [
     t('Arcane Focus', "The Locklair Mage's zaps deal 25% more damage.", { mageDamagePct: 25 }),
-    t('Long Staff', 'He zaps 1.5 tiles farther.', { mageRangeAdd: 1.5 }),
+    t('Long Staff', 'His range (zap, aura and Arcane Aegis) grows 1.5 tiles.', { mageRangeAdd: 1.5 }),
     t('Chain Spark', 'Each zap jumps on to 1 more enemy nearby for 50% damage.', { mageChain: 1, mageChainPct: 0.5 }),
     t('Quickened Staff', 'He zaps 25% faster.', { mageFasterPct: 25 }),
     t('Arcane Overload', 'Every 4th zap deals triple damage.', { mageOverchargeEvery: 4, mageOverchargeMult: 3 })
   ] },
   b: { name: 'Sanctuary', tiers: [
     t('Soothing Light', 'Sanctuary Aura heals 30% more.', { mageHealPct: 30 }),
-    t('Wider Sanctuary', 'His aura reaches 1 tile farther (Arcane Aegis too).', { auraRadiusAdd: 1 }),
+    t('Wider Sanctuary', 'His range (zap, aura and Arcane Aegis) grows 1 tile.', { auraRadiusAdd: 1 }),
     t('Warding Light', "While he's awake, buildings in his aura take 15% less damage.", { mageWard: 0.15 }),
     t('Restoration', 'Sanctuary Aura heals 80% more in all.', { mageHealPct: 50 }), // (Pct keys add up: 30 + 50)
     t('Twin Aegis', 'Arcane Aegis can be cast twice per wave.', { aegisCharges: 2 })

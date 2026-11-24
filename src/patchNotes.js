@@ -19,8 +19,8 @@ const allEntries = (release) => release.sections.flatMap((s) => s.entries);
 
 export const PATCH_NOTES = {
   release: '0.12',
-  version: '0.12.1',
-  title: "What's New in v0.12.1",
+  version: '0.12.2',
+  title: "What's New in v0.12.2",
   sections: [
     {
       type: 'feature',
@@ -43,6 +43,10 @@ export const PATCH_NOTES = {
           text: "Every hero's card in the shop has a button that opens the hero's profile: picture, stats at any level (step through them with the arrows), ability and perk paths. It works before you build the hero, too."
         },
         {
+          version: '0.12.2', icon: { building: 'mageAltar', level: 5 }, title: "The Locklair Mage's ring marks his range",
+          text: 'The faint white ring now runs around the edge of his range instead of his tile, and the gold outline when selecting him is gone. His health bar is back without the dark box, with the usual perk bar under it.'
+        },
+        {
           version: '0.12.1', icon: { building: 'mageAltar', level: 1 }, title: 'A tidier Locklair Mage',
           text: 'His health and perks share one plate over his head, a soft white ring always marks his tile, and selecting him lights up in gold every building his Arcane Aegis protects.'
         },
@@ -57,6 +61,15 @@ export const PATCH_NOTES = {
         {
           version: '0.12.0', icon: { building: 'dj', level: 1 }, title: "DJ Babyface's hype meter empties after each wave",
           text: 'Every wave now starts with an empty meter, so it no longer shows a half-full charge between waves.'
+        }
+      ]
+    },
+    {
+      type: 'balance',
+      entries: [
+        {
+          version: '0.12.2', icon: { building: 'mageAltar', level: 20 }, title: "The Locklair Mage's aura reaches as far as his zap",
+          text: 'Sanctuary Aura and Arcane Aegis now reach 6 tiles, the same as his staff (they reached 4.5). Long Staff and Wider Sanctuary each grow that one range.'
         }
       ]
     },

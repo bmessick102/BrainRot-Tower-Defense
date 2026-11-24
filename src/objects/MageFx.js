@@ -5,8 +5,9 @@
 //   - Arcane Aegis: while it lasts, a shimmering golden-violet dome over the aura;
 //   - asleep (a nap or the night): "Z" letters drifting up from his head; knocked out (his building destroyed): his
 //     statue stays (greyed by BuildingView) with three stars circling over it;
-//   - always (v0.12.1): a faint white ring on the ground around his tile, gently pulsing; selected: his aura's outline in
-//     gold (the buildings inside it are highlighted by GameScene.updateDjHighlight).
+//   - always: a faint white ring on the ground at the edge of his range (zap, aura and Aegis share it since v0.12.2),
+//     gently pulsing (v0.12.1 drew it around his tile). Selected, the buildings inside it are tinted gold by
+//     GameScene.updateDjHighlight (v0.12.1's gold outline of the aura is gone: the white ring marks it).
 // One ground graphics, one overlay graphics, one glow image and one text: cheap on phones. GameScene calls update().
 import { TEX } from '../assetKeys.js';
 import { gridToScreen, rangeEllipse } from '../logic/iso.js';
@@ -17,7 +18,6 @@ import { textStyle } from '../theme.js';
 
 const VIOLET = 0xb46bff, AEGIS_GOLD = 0xffd98a, STAFF_GLOW = 0xd36bff;
 const PULSE_MS = 1600;
-const HOME_RING = 1.35; // tiles: the white ring around his tile (his footprint is 2 x 2)
 const ZZZ_MS = 1800;
 
 export class MageFx {
@@ -39,16 +39,10 @@ export class MageFx {
     const st = mageStats(altar);
     const c = footprintCenter(altar), sc = gridToScreen(c.x, c.y), { rx, ry } = rangeEllipse(st.auraRadius, c.x, c.y);
     const down = altar.destroyed;
-    // The white ring around his tile, always.
+    // The white ring at the edge of his range, always, faint and gently pulsing.
     {
       const k = 0.5 + 0.5 * Math.sin(time * 0.0035);
-      const e = rangeEllipse(HOME_RING, c.x, c.y);
-      this.ground.fillStyle(0xffffff, 0.03 + 0.03 * k).fillEllipse(sc.x, sc.y, e.rx * 2, e.ry * 2);
-      this.ground.lineStyle(2.5, 0xffffff, 0.16 + 0.22 * k).strokeEllipse(sc.x, sc.y, e.rx * 2, e.ry * 2);
-    }
-    // Selected: his aura's outline (what Arcane Aegis covers), in gold.
-    if (this.scene.selectedId === altar.id) {
-      this.ground.lineStyle(2.5, 0xffd98a, 0.75).strokeEllipse(sc.x, sc.y, rx * 2, ry * 2);
+      this.ground.lineStyle(2.5, 0xffffff, 0.14 + 0.18 * k).strokeEllipse(sc.x, sc.y, rx * 2, ry * 2);
     }
     const asleep = !down && (h.status === 'asleep' || h.status === 'waking' || h.resting);
     // Staff glow (not while he's knocked out).
@@ -62,8 +56,7 @@ export class MageFx {
     // Sanctuary Aura (awake, in a raid).
     if (!down && !asleep && h.status === 'ready' && isWaveActive(gs)) {
       const k = 0.5 + 0.5 * Math.sin(time * 0.003);
-      this.ground.fillStyle(VIOLET, 0.07 + 0.03 * k).fillEllipse(sc.x, sc.y, rx * 2, ry * 2);
-      this.ground.lineStyle(2, VIOLET, 0.35 + 0.15 * k).strokeEllipse(sc.x, sc.y, rx * 2, ry * 2);
+      this.ground.fillStyle(VIOLET, 0.07 + 0.03 * k).fillEllipse(sc.x, sc.y, rx * 2, ry * 2); // (its edge: the white ring)
       const p = (time % PULSE_MS) / PULSE_MS;
       this.ground.lineStyle(3, 0xe8c8ff, 0.5 * (1 - p)).strokeEllipse(sc.x, sc.y, rx * 2 * p, ry * 2 * p);
     }

@@ -25,8 +25,6 @@ const HYPE_W = 40, HYPE_STACK = 20;
 const IDLE_TURN_MS = [2500, 7000];
 // The label chip: level badge radius, ability pip radius and spacing.
 const CHIP_R = 10, PIP_R = 5, PIP_GAP = 12;
-// The Locklair Mage's hero plate (drawHeroPlate): health bar length, inner padding, the pip row's height, pip size and spacing.
-const PLATE = { barW: 56, pad: 4, pipRow: 14, pipR: 4.5, pipGap: 12, lift: 18 }; // (lift: px above the usual label row, clear of his staff's glowing gem)
 // A merged defense's Mastery pips: gold stars after the five perk pips, past a small divider.
 const MASTERY_SEP = 8, STAR_GAP = 13;
 const FLASH_MIN_GAP_MS = 400;
@@ -332,10 +330,8 @@ export class BuildingView {
     this.chipText = scene.add.text(0, 0, '', textStyle(13)).setOrigin(0.5);
     this.badge = scene.add.container(0, 0, [this.chipGfx, this.chipText]).setDepth(OVERLAY_DEPTH);
     this.chipKey = '';
-    this.hpBar = new HealthBar(scene, { width: b.type === 'mageAltar' ? PLATE.barW : Math.max(48, b.size * 24), height: 12, depth: OVERLAY_DEPTH, color: HP_TEAM.player, badge: true, badgeStyle: b.type === 'mageAltar' ? 'crown' : 'circle' }); // (the Locklair Mage: a hero's crown with his level)
-    // The Locklair Mage's hero plate (v0.12.1): one dark plate behind his crown health bar, with his perk pips under the
-    // bar while he's hovered or selected (drawHeroPlate).
-    this.plateGfx = b.type === 'mageAltar' ? scene.add.graphics().setDepth(OVERLAY_DEPTH - 1) : null;
+    this.hpBar = new HealthBar(scene, { width: Math.max(48, b.size * 24), height: 12, depth: OVERLAY_DEPTH, color: HP_TEAM.player, badge: true, badgeStyle: b.type === 'mageAltar' ? 'crown' : 'circle' }); // (the Locklair Mage: a hero's crown with his level)
+
     this.coin = b.type === 'mine' ? scene.add.image(0, 0, TEX.coin).setDepth(OVERLAY_DEPTH + 1).setVisible(false) : null;
     // DJ Babyface: its hype meter (during waves, or while charged) and a bobbing "DROP!" once it's full.
     this.hypeGfx = b.type === 'dj' ? scene.add.graphics().setDepth(OVERLAY_DEPTH) : null;
@@ -425,9 +421,8 @@ export class BuildingView {
     // Merged: the gear sits left of the level badge, on the health bar or on the label chip, whichever shows.
     if (merged !== this.gearOn) { this.gearOn = merged; this.hpBar.setGear(merged ? MERGE_GEAR : null, GEAR_SIZE); this.chipKey = ''; }
     const gearW = merged && this.scene.textures.exists(MERGE_GEAR) ? GEAR_SIZE + GEAR_GAP : 0;
-    if (this.plateGfx) {
-      this.badge.setVisible(false);
-      this.drawHeroPlate(b, front.x, rowY, max, picks, labels && hasPips);
+    if (b.type === 'mageAltar') {
+      this.drawHeroBar(b, front.x, rowY, max, picks, labels && hasPips);
     } else if (damaged) {
       // [health bar][pips], centered together.
       const barW = this.hpBar.width, gap = labels && pipsW ? 6 : 0, shown = labels ? pipsW : 0;
@@ -529,31 +524,19 @@ export class BuildingView {
    * the level badge (buildings without a perk tree). Redrawn only on change.
    */
   /**
-   * The Locklair Mage's hero plate: a dark rounded plate centered at x, its health row on rowY: the crown with his level
-   * and his health bar; with `pips`, his 5 perk pips in a row under the bar inside the plate. Knocked out: hidden.
+   * The Locklair Mage's labels (v0.12.2): his crown health bar where any building's health bar goes (centered at x on
+   * rowY), and, while he's hovered or selected, the usual perk bar (the dark pill with its 5 pips) right under it.
+   * Knocked out: neither.
    */
-  drawHeroPlate(b, x, rowY, max, picks, pips) {
-    const g = this.plateGfx;
-    g.clear();
-    if (b.destroyed) { this.hpBar.draw(x, rowY, 0, false); return; }
-    rowY -= PLATE.lift + (pips ? PLATE.pipRow : 0);
-    const br = this.hpBar.badgeR || 10, barH = this.hpBar.height;
-    const barX = x + br * 0.45; // the bar's center, nudged right so the crown on its left end sits inside the plate
-    const left = barX - PLATE.barW / 2 - br * 1.25, right = barX + PLATE.barW / 2 + PLATE.pad;
-    const top = rowY - barH / 2 - PLATE.pad - 2, bottom = rowY + barH / 2 + PLATE.pad + (pips ? PLATE.pipRow : 0);
-    g.fillStyle(0x000000, 0.25).fillRoundedRect(left - 1, top + 2, right - left + 2, bottom - top, 10); // soft shadow
-    g.fillStyle(0x1c1426, 0.82).fillRoundedRect(left, top, right - left, bottom - top, 9);
-    g.lineStyle(1.5, 0xc9a2ff, 0.7).strokeRoundedRect(left, top, right - left, bottom - top, 9);
-    this.hpBar.draw(barX, rowY - barH / 2, b.hp / max, true, b.level);
-    if (!pips) return;
-    const py = rowY + barH / 2 + PLATE.pipRow / 2 + 1, r = PLATE.pipR, gap = PLATE.pipGap;
-    const x0 = barX - (gap * (MAX_TIER - 1)) / 2;
-    for (let k = 0; k < MAX_TIER; k++) {
-      const cx = x0 + k * gap;
-      const pts = [{ x: cx, y: py - r }, { x: cx + r, y: py }, { x: cx, y: py + r }, { x: cx - r, y: py }];
-      if (picks[k]) g.fillStyle(PATH_COLORS[picks[k]], 1).fillPoints(pts, true);
-      g.lineStyle(1.2, picks[k] ? 0xffffff : 0x8a8a8a, picks[k] ? 0.9 : 0.7).strokePoints(pts, true);
-    }
+  drawHeroBar(b, x, rowY, max, picks, pips) {
+    const barH = this.hpBar.height;
+    this.hpBar.draw(x, rowY - barH / 2, b.destroyed ? 0 : b.hp / max, !b.destroyed, b.level);
+    const show = pips && !b.destroyed;
+    this.badge.setVisible(show);
+    if (!show) return;
+    const w = PIP_GAP * MAX_TIER + 4;
+    this.badge.setPosition(x - w / 2, rowY + barH / 2 + PIP_R + 6);
+    this.drawChip(picks, null, true);
   }
 
   drawChip(picks, level, pips, gear = false, mastery = null) {
@@ -828,7 +811,6 @@ export class BuildingView {
     this.sprite.destroy();
     this.badge.destroy();
     this.hpBar.destroy();
-    if (this.plateGfx) this.plateGfx.destroy();
     this.light.destroy();
     if (this.coin) this.coin.destroy();
     if (this.hypeGfx) { this.hypeGfx.destroy(); this.hypeReady.destroy(); }

@@ -211,7 +211,7 @@ function buildingStats(type) {
     out.push(grow(type, 'Hero health', 'hp', 0x4cd137));
     out.push(grow(type, 'Damage per zap', 'heroDamage', 0xff6b3d));
     out.push(grow(type, 'Sanctuary Aura heal', 'heal', 0x9b4dff, ' HP/s'));
-    out.push(fixed('Zap range / aura', `${M.attackRange} / ${M.auraRadius} tiles`, M.attackRange / 10, 0x3cb8ff));
+    out.push(fixed('Range (zap, aura, Aegis)', `${M.attackRange} tiles`, M.attackRange / 10, 0x3cb8ff));
     out.push(fixed('Upgrades cost', `${formatGold(levelStats(type, 2).cost)} → ${rpText(levelStats(type, top).cost)}`, 0.5, RP_COLOR));
   } else if (type === 'dj') {
     out.push(grow(type, 'Range', 'range', 0x4cd6ff, ' tiles'));
