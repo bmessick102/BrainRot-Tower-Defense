@@ -19,8 +19,8 @@ const allEntries = (release) => release.sections.flatMap((s) => s.entries);
 
 export const PATCH_NOTES = {
   release: '0.12',
-  version: '0.12.2',
-  title: "What's New in v0.12.2",
+  version: '0.12.3',
+  title: "What's New in v0.12.3",
   sections: [
     {
       type: 'feature',
@@ -41,6 +41,10 @@ export const PATCH_NOTES = {
         {
           version: '0.12.1', icon: { hero: true }, title: 'Hero profiles in the shop',
           text: "Every hero's card in the shop has a button that opens the hero's profile: picture, stats at any level (step through them with the arrows), ability and perk paths. It works before you build the hero, too."
+        },
+        {
+          version: '0.12.3', icon: { texture: 'ui_encore_ready' }, title: 'New ability icons for the Brisket King and the Hatsune Queen',
+          text: 'Brisket Feast is now a crowned, sizzling brisket in a burst of flames, and Encore Cloak a teal cloak swirling away in music notes, on the hotbar and in their profiles.'
         },
         {
           version: '0.12.2', icon: { building: 'mageAltar', level: 5 }, title: "The Locklair Mage's ring marks his range",

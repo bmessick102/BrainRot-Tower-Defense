@@ -2,6 +2,13 @@
 
 The version shows in the bottom-left corner of every screen (`package.json` `version` plus the commit). Details for everything below are in [README.md](README.md).
 
+## 0.12.3
+
+New hero ability icons. No database or save changes.
+
+### Changes
+- **Brisket Feast and Encore Cloak icons** (`art-source/ui/ui_feast_ready.png`, `ui_encore_ready.png`): the user's v2 pictures (a crowned, sizzling brisket in flames; a teal cloak swirling away in music notes) replace the old crown and cloak. Same keys, so the hotbar, Hero tabs, hero profile window and the icon over a ready hero all pick them up.
+
 ## 0.12.2
 
 The Locklair Mage has one range for everything, marked by his white ring. No database or save changes.
