@@ -2,6 +2,33 @@
 
 The version shows in the bottom-left corner of every screen (`package.json` `version` plus the commit). Details for everything below are in [README.md](README.md).
 
+## 0.13.0
+
+The Storage goes to Level 20 with the user's new pictures, and its upgrades cost about half. **Save format version 9**
+(older saves convert on load); no database change.
+
+### New Features
+- **Storage Levels 1-20** (`CONFIG.storage.levels`, was 10): a new Level 1 picture, the five old pictures on Levels 2-3,
+  4-5, 6-7, 8-9 and 10-11, new pictures on Levels 12, 13, 14 and 15, and Levels 16-20 keep the Level 15 picture.
+  - Pictures: `ART_TIERS.storage` in `src/assetPlan.js` maps each level to its picture (1-10). `artTierOf` and
+    BuildingView `artTier` read it, so asset loading, `levelSizeFactor` growth and How to Play follow it.
+  - Art: `art-source/buildings/bld_storage_lv1..lv10` (+ `_fill1..3`). The old `lv1..lv5` were renamed `lv2..lv6`.
+    The user's 3-wide sheets were cut into fills on the shared 718 x 738 canvas, each scaled to stand taller than the
+    one before. The `trim: 'group'` box grew a little, so Levels 1-11 draw about 5% narrower than before.
+  - Stats: capacity and HP by level number are unchanged for Levels 1-10, so the `tests/costs.test.js` sums hold. Then
+    capacity is +12,000 a level (73,000 ... 181,000) and HP x1.25 a level (4,658 ... 34,704).
+- **Older saves** (`migrateV8`, `SAVE_VERSION` 9):
+  - Every Storage moves up one level (old Level N is Level N + 1). It keeps its picture and holds at least as much.
+  - A Storage that was at its hall's level ends one above it. `validateSave` allows that for Storages only (hall + 1).
+    It can't upgrade until the hall catches up.
+  - An old game version can't read a version 9 save, the same as earlier format changes.
+  - Test: `tests/storageLevels.test.js`.
+
+### Balance
+- **Cheaper Storage upgrades:** Levels 2-10 cost 100 / 200 / 400 / 800 / 1,500 / 3,000 / 6,000 / 12,000 / 24,000. They
+  were 200 doubling to 51,200, so getting one Storage to 61,000 capacity costs 48,000 gold instead of 102,200.
+  Levels 11-20 cost 36k / 48k / 60k / 72k / 84k / 96k / 108k / 120k / 135k / 150k. The shop price stays 100.
+
 ## 0.12.5
 
 Many-sided waves spread out, plus fixes for a stuck La Vaca Saturno, sound at 4x and black map edges. No database or save changes.

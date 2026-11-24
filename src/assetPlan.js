@@ -18,7 +18,15 @@ const LEVEL_ART = /^bld_([A-Za-z]+)_lv(\d+)(?:_[a-z0-9]+)?$/;
 // Levels per picture: a building gets new art every 2 levels (some every level). Kept equal to BuildingView's
 // LEVELS_PER_ART / LEVELS_PER_ART_BY_TYPE (a test checks), so this module stays free of view code.
 export const ART_LEVELS = { default: 2, rvlab: 1, wall: 1, dj: 1, catapult: 1, altar: 4, queenAltar: 4, mageAltar: 4 };
-export const artTierOf = (level, type) => Math.ceil(level / (ART_LEVELS[type] ?? ART_LEVELS.default));
+// Types whose pictures don't follow one step: the picture (1-based) each level shows, Level 1 first (past the end, the
+// last). The Storage (v0.13): a new Level 1 picture, the old five on Levels 2-3, 4-5, 6-7, 8-9 and 10-11, then a new
+// picture on each of Levels 12-15, which Levels 16-20 keep.
+export const ART_TIERS = { storage: [1, 2, 2, 3, 3, 4, 4, 5, 5, 6, 6, 7, 8, 9, 10, 10, 10, 10, 10, 10] };
+export function artTierOf(level, type) {
+  const t = ART_TIERS[type];
+  if (t) return t[Math.max(1, Math.min(t.length, level)) - 1];
+  return Math.ceil(level / (ART_LEVELS[type] ?? ART_LEVELS.default));
+}
 
 const IMAGE_PATH = new Map(IMAGE_FILES.map((f) => [f.key, f.path]));
 const AUDIO_PATH = new Map(AUDIO_FILES.map((f) => [f.key, f.path]));

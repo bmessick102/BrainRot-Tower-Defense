@@ -173,17 +173,32 @@ export const CONFIG = {
   storage: {
     name: "Bitcoin Storage",
     unlockTownHall: 1,
+    // v0.13: 20 levels (was 10), 10 pictures (BuildingView ART_TIERS.storage: a new Level 1, the old 5 pictures on
+    // Levels 2-3 ... 10-11, new pictures on 12, 13, 14 and 15, which 16-20 keep). Capacity and HP by level number are
+    // unchanged for Levels 1-10 (so every "cost fits in storage" sum still holds), then capacity +12,000 and HP x1.25 per
+    // level. Upgrades cost about half what they did (Level 10 was 51,200, now 24,000), so a village is quicker to
+    // rebuild. Older saves: every Storage moved up one level (migrateV8), so it keeps its picture and holds more.
     levels: [
       { cost: 100, hp: 500, capacity: 1000 },
-      { cost: 200, hp: 625, capacity: 2000 },
-      { cost: 400, hp: 781, capacity: 3500 },
-      { cost: 800, hp: 977, capacity: 5500 },
-      { cost: 1600, hp: 1221, capacity: 8000 },
-      { cost: 3200, hp: 1526, capacity: 12000 },
-      { cost: 6400, hp: 1908, capacity: 18000 },
-      { cost: 12800, hp: 2385, capacity: 27000 },
-      { cost: 25600, hp: 2981, capacity: 40500 },
-      { cost: 51200, hp: 3726, capacity: 61000 }
+      { cost: 100, hp: 625, capacity: 2000 },
+      { cost: 200, hp: 781, capacity: 3500 },
+      { cost: 400, hp: 977, capacity: 5500 },
+      { cost: 800, hp: 1221, capacity: 8000 },
+      { cost: 1500, hp: 1526, capacity: 12000 },
+      { cost: 3000, hp: 1908, capacity: 18000 },
+      { cost: 6000, hp: 2385, capacity: 27000 },
+      { cost: 12000, hp: 2981, capacity: 40500 },
+      { cost: 24000, hp: 3726, capacity: 61000 },
+      { cost: 36000, hp: 4658, capacity: 73000 },
+      { cost: 48000, hp: 5822, capacity: 85000 },
+      { cost: 60000, hp: 7278, capacity: 97000 },
+      { cost: 72000, hp: 9097, capacity: 109000 },
+      { cost: 84000, hp: 11372, capacity: 121000 },
+      { cost: 96000, hp: 14215, capacity: 133000 },
+      { cost: 108000, hp: 17768, capacity: 145000 },
+      { cost: 120000, hp: 22210, capacity: 157000 },
+      { cost: 135000, hp: 27763, capacity: 169000 },
+      { cost: 150000, hp: 34704, capacity: 181000 }
     ]
   },
   // Each house is home to `gnomes` villagers. By day every gnome works a mine (more gold); during attacks

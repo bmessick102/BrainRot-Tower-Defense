@@ -24,7 +24,8 @@ import { isMergeable, serializeMastery, validMastery, validFreeRespecs } from '.
 // Version 6: a type's research is locked to one path (A, B or C); see migrateV5.
 // Version 7: the Spear Thrower (5 -> 10 levels) and Fuel Station (4 -> 8) got a picture per 2 levels; see migrateV6.
 // Version 8 (v0.11): walls went from 8 levels to 10, with a new Level 6; see migrateV7.
-export const SAVE_VERSION = 8;
+// Version 9 (v0.13): the Storage went from 10 levels to 20, with a new Level 1; see migrateV8.
+export const SAVE_VERSION = 9;
 // Wall segments were 3 tiles long up to save version 2.
 const V2_WALL_LENGTH = 3;
 export const SAVE_KEYS = {
@@ -199,6 +200,21 @@ export function migrateV7(obj) {
 }
 
 /**
+ * Version 8 -> version 9 (v0.13): the Storage went from 10 levels to 20, with a new picture as Level 1, so every old
+ * level is now one higher (old Level 1 is Level 2 ... old Level 10 is Level 11). Each Storage moves up one level: it
+ * keeps its picture, and since capacity by level number didn't change for Levels 1-10, it now holds a little more. That
+ * can put a Storage one level above its Village Hall (an old Level 10 at Hall 10 is now Level 11), which validateSave
+ * allows for Storages only; it just can't upgrade until the hall catches up.
+ */
+export function migrateV8(obj) {
+  const buildings = Array.isArray(obj.buildings)
+    ? obj.buildings.map((b) => (b && b.type === 'storage' && Number.isInteger(b.level) && b.level >= 1 && b.level < maxLevel('storage')
+      ? { ...b, level: b.level + 1 } : b))
+    : obj.buildings;
+  return { ...obj, version: 9, buildings };
+}
+
+/**
  * Older grids. Saves from before v0.9.0 have no `grid` field: their buildings sit on the old 32 x 31 grid (Village Hall
  * at (17, 15)), and every building moves by the same shift, so the old hall lands on the new one's anchor (25, 25).
  * v0.9.0-0.9.1 saves say `grid: 40`: that grid is the middle of today's 52 x 52 one, so everything moves GRID_EXTEND (6)
@@ -295,8 +311,9 @@ export function validateSave(obj) {
     if (b.merged !== undefined && (b.merged !== true || !isMergeable(b.type) || b.level !== maxLevel(b.type))) return false;
   }
   if (townHalls !== 1) return false;
-  // Level 1 buildings are allowed beside the ruined level 0 hall (the skip-tutorial starter base).
-  return obj.buildings.every((b) => b.level <= Math.max(1, obj.townHallLevel));
+  // Level 1 buildings are allowed beside the ruined level 0 hall (the skip-tutorial starter base). A Storage may be one
+  // level above the hall: migrateV8 moved every Storage up one level (v0.13), even one already at its hall's level.
+  return obj.buildings.every((b) => b.level <= Math.max(1, obj.townHallLevel) + (b.type === 'storage' ? 1 : 0));
 }
 
 /** Save object -> fresh game data (buildings at full HP, ruins at 0). Assumes validateSave passed. */
@@ -361,6 +378,7 @@ export function parseSave(text) {
   if (obj && typeof obj === 'object' && obj.version === 5) obj = migrateV5(obj);
   if (obj && typeof obj === 'object' && obj.version === 6) obj = migrateV6(obj);
   if (obj && typeof obj === 'object' && obj.version === 7) obj = migrateV7(obj);
+  if (obj && typeof obj === 'object' && obj.version === 8) obj = migrateV8(obj);
   if (obj && typeof obj === 'object' && (obj.grid === undefined || obj.grid === GRID_40.size)) obj = migrateGrid(obj);
   // A planned wave from an entrance the map no longer has (v0.9.1 dropped the left waterfall): plan it again on load.
   if (obj && typeof obj === 'object' && obj.wavePlan && Array.isArray(obj.wavePlan.paths) && !obj.wavePlan.paths.every((x) => PATHS.includes(x))) obj = { ...obj, wavePlan: null };

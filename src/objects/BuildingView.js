@@ -16,7 +16,7 @@ import { hasAbilities, picksOf, MAX_TIER, canResearchSomething } from '../logic/
 import { PATH_COLORS } from '../abilityConfig.js';
 import { facingToward, masteryLevel, masteryTierCount } from '../logic/merge.js';
 import { requestImages, imageRequested } from '../assetLoader.js';
-import { artGroup, isDeferredImage } from '../assetPlan.js';
+import { artGroup, isDeferredImage, ART_TIERS } from '../assetPlan.js';
 
 const OVERLAY_DEPTH = 5000;
 // DJ Babyface's hype pill: width, and how far above the label row it sits when that row is showing.
@@ -81,6 +81,9 @@ const LEVELS_PER_ART_BY_TYPE = { rvlab: 1, wall: 1, dj: 1, catapult: 1, altar: 4
 
 /** Which picture (1-based) a building level shows. */
 export function artTier(level, type = null) {
+  // The Storage (v0.13) has its own table (assetPlan ART_TIERS: 20 levels, 10 pictures, not one per 2 levels).
+  const t = type && ART_TIERS[type];
+  if (t) return t[Math.max(1, Math.min(t.length, level)) - 1];
   return Math.ceil(level / (LEVELS_PER_ART_BY_TYPE[type] ?? LEVELS_PER_ART));
 }
 

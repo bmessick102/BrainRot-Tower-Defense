@@ -31,6 +31,18 @@ the three art zips (`merged cannon_sprites.zip`, `Spear_Thrower.zip`, `Spear_Thr
 `iBTD_40x40_grid.zip` (v0.9.0: another agent's 40 x 40 grid fit, its gridded map exports and screenshots; superseded by
 the maps with the tiles drawn on, `art-source/map/`).
 
+v0.13 drops (Storage Levels 1-20; kept here as the originals). Each is 3 storages side by side, emptiest on the left; each
+was cut into `_fill1` / `_fill2` / `_fill3` (the plain `bld_storage_lvN.png` is a copy of the full one) on the shared
+718 x 738 storage canvas. The five pre-0.13 pictures moved up one number (`lv1` -> `lv2` ... `lv5` -> `lv6`):
+
+| Dropped file | Installed as |
+| --- | --- |
+| `Bitcoin storage level 1 v2 Spritesheet.png` (found in Downloads, not the project folder) | `art-source/buildings/bld_storage_lv1*.png` (Level 1) |
+| `Gold Storage level 12 Spritesheet.png` | `art-source/buildings/bld_storage_lv7*.png` (Level 12) |
+| `Gold Storage level 13 Spritesheet.png` | `art-source/buildings/bld_storage_lv8*.png` (Level 13) |
+| `Gold Storage level 14 Spritesheet.png` | `art-source/buildings/bld_storage_lv9*.png` (Level 14) |
+| `Bitcoin storage level 15 spritesheet.png` | `art-source/buildings/bld_storage_lv10*.png` (Levels 15-20) |
+
 v0.12 drops (the Locklair Mage; kept here as the originals):
 
 | Dropped file | Installed as |
