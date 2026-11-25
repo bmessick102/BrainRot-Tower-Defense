@@ -87,7 +87,7 @@ const SHOP_TABS = [
 
 // Quick bar: a compact strip along the bottom, right-aligned just left of the Edit / Shop buttons.
 // Centered on the same line as the Edit button (y 650), about its height.
-const QB = { y: 650 - 40, h: 80, right: 1004, btnH: 52, upgradeW: 200, infoW: 74, abilityW: 132 };
+const QB = { y: 650 - 40, h: 80, right: 1004, btnH: 52, upgradeW: 200, infoW: 74, abilityW: 132, collectW: 178 };
 
 const INFO_W = 440;
 const INFO_X = 1280 - 16 - INFO_W;
@@ -1235,6 +1235,7 @@ New walls are built at your wall level (${wallLevel(this.gs)}), so one costs wha
     };
     const bw = INFO_W - 32;
     this.infoButtons = {
+      collect: this.makeCollectButton(INFO_W / 2, 0, bw, INFO_BTN_H),
       upgrade: new Button(this, INFO_W / 2, 0, bw, INFO_BTN_H, 'Upgrade', () => this.onUpgrade(), { color: COLORS.buttonGood, fontSize: 19 }),
       repair: new Button(this, INFO_W / 2, 0, bw, INFO_BTN_H, 'Repair', () => this.gs.repair(this.selectedId), { color: COLORS.buttonGood, fontSize: 19 }),
       // RV Lab abilities: a defense's own tiers, or the RV Lab's research.
@@ -1818,6 +1819,7 @@ New walls are built at your wall level (${wallLevel(this.gs)}), so one costs wha
     this.qbName = this.add.text(18, QB.h / 2 - 25, '', textStyle(19));
     this.qbLevel = this.add.text(18, QB.h / 2 + 2, '', textStyle(14, COLORS.textGold));
     this.qbButtons = {
+      collect: this.makeCollectButton(0, QB.h / 2, QB.collectW, QB.btnH),
       upgrade: new Button(this, 0, QB.h / 2, QB.upgradeW, QB.btnH, 'Upgrade', () => this.onUpgrade(), { color: COLORS.buttonGood, fontSize: 17 }),
       repair: new Button(this, 0, QB.h / 2, QB.upgradeW, QB.btnH, 'Rebuild', () => this.gs.repair(this.selectedId), { color: COLORS.buttonGood, fontSize: 17 }),
       abilities: new Button(this, 0, QB.h / 2, QB.abilityW, QB.btnH, 'Abilities', () => this.openAbilities(), { color: COLORS.button, fontSize: 17 }),
@@ -1840,6 +1842,23 @@ New walls are built at your wall level (${wallLevel(this.gs)}), so one costs wha
     if (this.quickBar) this.quickBar.setVisible(false).setY(2000);
   }
 
+  makeCollectButton(x, y, w, h) {
+    const button = new Button(this, x, y, w, h, 'Collect', () => this.gs.collect(this.selectedId), { color: COLORS.buttonGood, fontSize: 18 });
+    button.resourceIcon = fitIcon(this.add.image(-w / 2 + 22, -2, TEX.coin), 24);
+    button.add(button.resourceIcon);
+    return button;
+  }
+
+  refreshCollectButton(button, b) {
+    const status = this.gs.collectionStatus(b.id);
+    if (!status) return false;
+    const key = status.shakes ? TEX.researchPoint : TEX.coin;
+    if (button.resourceIcon.texture.key !== key) fitIcon(button.resourceIcon.setTexture(key), 24);
+    button.setLabel(`Collect ${formatGold(status.amount)}`, status.reason).setEnabled(!status.reason);
+    button.resourceIcon.setAlpha(status.reason ? 0.55 : 1);
+    return true;
+  }
+
   refreshQuickBar(b) {
     const gs = this.gs;
     const btn = this.qbButtons;
@@ -1847,6 +1866,7 @@ New walls are built at your wall level (${wallLevel(this.gs)}), so one costs wha
     this.qbName.setText(displayName(b));
     this.qbLevel.setText(`Level ${b.level} / ${maxLevel(b.type)}${b.destroyed ? '  ·  Destroyed' : ruin ? '  ·  In ruins' : b.merged ? '  ·  Merged' : ''}`);
     const shown = [];
+    if (this.refreshCollectButton(btn.collect, b)) shown.push(btn.collect);
     // Destroyed (not walls): Rebuild. Otherwise Upgrade (or Rebuild for the starting hall ruin).
     if (b.destroyed && b.type !== 'wall') {
       const rep = checkRepair(gs, b);
@@ -2091,6 +2111,7 @@ New walls are built at your wall level (${wallLevel(this.gs)}), so one costs wha
     const btn = this.infoButtons;
     const waveActive = isWaveActive(gs);
     const visible = [];
+    if (this.refreshCollectButton(btn.collect, b)) visible.push(btn.collect);
 
     // Max level and mergeable: Merge in the Upgrade button's place.
     const mg = b.destroyed ? { show: false } : this.mergeButtonState(b);
@@ -2431,7 +2452,7 @@ New walls are built at your wall level (${wallLevel(this.gs)}), so one costs wha
       this.refreshResearchPoints();
       if (d && d.lost > 0) this.showRpLost(d.lost);
       const sel = this.selectedId && gs.getBuilding(this.selectedId);
-      if (sel && (sel.type === 'rvlab' || sel.type === 'fuelStation')) this.refreshInfo(); // their upgrades are paid in RP
+      if (sel && ['rvlab', 'fuelStation', 'shakeCollector'].includes(sel.type)) this.refreshInfo();
     });
     on(['goldChanged', 'buildingPlaced', 'buildingUpgraded', 'wallsUpgraded', 'baseReset', 'abilityResearched', 'abilitiesApplied'], () => {
       this.refreshShopBadge();
@@ -2444,6 +2465,9 @@ New walls are built at your wall level (${wallLevel(this.gs)}), so one costs wha
     });
     on(['mineStockChanged', 'collectorStockChanged', 'buildingDamaged', 'buildingDestroyed', 'buildingRepaired', 'buildingHealed', 'buildingMoved'], (d) => {
       if (isSelected(d)) this.refreshInfo();
+    });
+    on(['waveStarted', 'waveCleared'], () => {
+      if (this.selectedId && gs.collectionStatus(this.selectedId)) this.refreshInfo();
     });
     on(['selectionChanged'], (d) => {
       if (d.id !== this.selectedId) this.infoOpen = false; // a new selection starts with the quick bar

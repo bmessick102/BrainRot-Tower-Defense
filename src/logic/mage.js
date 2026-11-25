@@ -112,18 +112,29 @@ function wakeUp(state, h) {
   emit(state, 'mageWaking', {});
 }
 
+function recoverFromKnockout(state, h) {
+  if (h.sleepT > 0) {
+    h.status = 'asleep';
+    h.knockedOut = false;
+  } else wakeUp(state, h);
+}
+
 /** Enemies he can zap: alive, seen, out of the ground, inside his attack range (from his building's center). */
 function validFoe(e, home, range) {
   return e.alive && !e.hidden && !isBurrowedUnseen(e) && !(e.landing > 0) && distance(home.x, home.y, e.x, e.y) <= range;
 }
 
 /** One step of the Locklair Mage (simulate.js, through heroes.js). */
-export function stepMage(state, dt) {
+export function stepMage(state, dt, recoveryDt = dt) {
   const h = ensureMage(state);
   if (!h) return;
   const altar = getMageAltar(state);
   const st = mageStats(altar);
   const wave = isWaveActive(state);
+  if (h.sleepT > 0) {
+    h.sleepT = Math.max(0, h.sleepT - recoveryDt);
+    altar.heroSleep = h.sleepT;
+  }
   if (h.aegisT > 0) { h.aegisT = Math.max(0, h.aegisT - dt); if (h.aegisT === 0) emit(state, 'mageAegisEnd', { id: altar.id }); }
   // His building destroyed in a raid: knocked out (the statue stays, with stars).
   if (altar.destroyed && h.status !== 'down') {
@@ -134,21 +145,19 @@ export function stepMage(state, dt) {
   markBuildings(state, h, st, altar);
   if (h.status === 'down') {
     h.downT += dt;
-    if (!altar.destroyed) { wakeUp(state, h); return; } // rebuilt in the raid (or after it): he gets up
+    if (!altar.destroyed) { recoverFromKnockout(state, h); return; }
     if (wave && st.reviveSeconds && !h.revived && h.downT >= st.reviveSeconds) { // Undying
       h.revived = true;
       altar.destroyed = false;
       altar.hp = Math.max(1, Math.round(st.maxHp * st.reviveHpPct));
       if (state._nav) state._nav = null; // it stands again: routes are worked out again
-      h.status = 'ready'; h.knockedOut = false;
+      h.status = h.sleepT > 0 ? 'asleep' : 'ready'; h.knockedOut = false;
       emit(state, 'mageRevived', { id: altar.id });
     }
     return;
   }
   if (h.status === 'asleep') {
-    h.sleepT = Math.max(0, h.sleepT - dt);
-    altar.heroSleep = h.sleepT;
-    if (h.sleepT <= 0) { altar.heroSleep = 0; wakeUp(state, h); }
+    if (h.sleepT <= 0) wakeUp(state, h);
     return;
   }
   if (h.status === 'waking') {
@@ -282,7 +291,7 @@ export function mageAfterWave(state) {
   const st = mageStats(altar);
   h.aegisT = 0;
   markBuildings(state, h, st, altar);
-  if (h.status === 'asleep') return;
+  if (h.sleepT > 0) { h.status = 'asleep'; h.knockedOut = false; return; }
   const lost = h.status === 'down' ? 1 : 1 - Math.max(0, Math.min(1, h.worstShare));
   h.status = 'asleep'; h.knockedOut = false; h.resting = false; h.targetId = null; h.attacking = false;
   h.sleepT = h.sleepTotal = Math.max(st.minSleep, lost * st.maxSleep, 0.1);

@@ -48,6 +48,16 @@ function place(state, type, level = 1) {
 const activeWave = (s) => { s.wave = { ...s.wave, phase: 'active', number: 3 }; };
 
 describe('Shakes: the name and the buildings', () => {
+  it('raises storage room at every level and fits more than two benchmark night raids at Hall 20', () => {
+    const before = [500, 700, 1000, 1300, 1700, 2100, 2600, 3000, 3400, 3800, 4200, 4800];
+    for (let i = 0; i < before.length; i++) {
+      expect(shakeStorageCapacity(i + 1)).toBeGreaterThan(before[i]);
+      if (i) expect(shakeStorageCapacity(i + 1)).toBeGreaterThan(shakeStorageCapacity(i));
+    }
+    expect(shakeCapAt(20)).toBe(19_400);
+    expect(shakeCapAt(20)).toBeGreaterThan(2 * 7_730); // Wave 60 night bounty, clear reward, and three-star bonus
+  });
+
   it('players read Shakes', () => {
     expect(RP_NAME).toBe('Shakes');
     expect(rpText(1)).toBe('1 Shake');
@@ -145,6 +155,28 @@ describe('Shake Collectors: production and collecting', () => {
     c.stock = 50;
     gs.researchPoints = rpCap(gs);
     expect(gs.collect(c.id)).toMatchObject({ ok: false, reason: 'Shakes full' });
+  });
+
+  it.each(['mine', 'shakeCollector'])('collects %s once, saves the transfer, and keeps partial stock', (type) => {
+    const gs = village(5);
+    const b = place(gs, type);
+    const shakes = type === 'shakeCollector';
+    if (shakes) gs.researchPoints = rpCap(gs) - 3;
+    else gs.gold = gs.capacity - 3;
+    b.stock = 9.5;
+    expect(gs.collectionStatus(b.id)).toEqual({ shakes, amount: 9, reason: '' });
+    expect(gs.collect(b.id)).toMatchObject({ ok: true, collected: 3 });
+    expect(gs.collectionStatus(b.id)).toEqual({ shakes, amount: 6, reason: 'Storage full' });
+    for (let i = 0; i < 5; i++) expect(gs.collect(b.id).ok).toBe(false);
+    expect(gs.collect('another-village-id').ok).toBe(false);
+    expect(b.stock).toBe(6.5);
+    const saved = parseSave(gs.storage.getItem('ibtd.save'));
+    expect(saved.status).toBe('ok');
+    expect(saved.data.buildings.find((x) => x.id === b.id).stock).toBe(6.5);
+    expect(shakes ? saved.data.researchPoints : saved.data.gold).toBe(shakes ? rpCap(gs) : gs.capacity);
+    activeWave(gs);
+    expect(gs.collectionStatus(b.id).reason).toBe('Not during a wave');
+    expect(gs.collect(b.id).ok).toBe(false);
   });
 
   it('its stock is saved and comes back (clamped to its cap)', () => {

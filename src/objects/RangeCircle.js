@@ -1,11 +1,34 @@
 // Range ellipse for a defense: white fill 15%, 2 px white outline 70%.
 // Mortar also gets its dead zone: red fill 30%.
 import { rangeEllipse, gridToScreen } from '../logic/iso.js';
+import { footprintCenter } from '../logic/grid.js';
+import { isDefense } from '../logic/buildings.js';
+import { towerRange, towerMinRange } from '../logic/abilities.js';
+import { djStats } from '../logic/dj.js';
+import { heroStats } from '../logic/hero.js';
+import { queenStats } from '../logic/queen.js';
+import { mageStats } from '../logic/mage.js';
+
+export function inspectionRange(b) {
+  if (!b) return 0;
+  if (b.type === 'dj') return djStats(b).range;
+  if (b.type === 'altar') return heroStats(b).guardRange;
+  if (b.type === 'queenAltar') return queenStats(b).guardRange;
+  if (b.type === 'mageAltar') return mageStats(b).attackRange;
+  return isDefense(b.type) ? towerRange(b) : 0;
+}
 
 export class RangeCircle {
   // Drawn above the buildings (but under their labels and health bars) so the range is always visible.
   constructor(scene, depth = 4900) {
     this.gfx = scene.add.graphics().setDepth(depth).setVisible(false);
+  }
+
+  showBuilding(b) {
+    const range = inspectionRange(b);
+    if (!(range > 0)) { this.hide(); return; }
+    const c = footprintCenter(b);
+    this.show(c.x, c.y, range, isDefense(b.type) ? towerMinRange(b) : 0);
   }
 
   /** Center in grid space (footprint center), radii in tiles. */

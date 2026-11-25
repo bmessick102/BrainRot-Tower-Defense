@@ -29,10 +29,11 @@ export const MAX_STEP = 0.1; // seconds; long frames are capped so nothing tunne
  * Order: day/night clock, gnome jobs, mine production, gnome mining + gold trips, wave spawning, enemies, towers,
  * F.L.O.C.K marks, projectiles/damage, pools, gnome repairs, cleanup, wave clear.
  */
-export function simulate(state, dt) {
+export function simulate(state, dt, recoveryDt = dt) {
   if (state.gameOver) return;
   // (A NaN step, e.g. a broken frame time, would turn every position and timer into NaN for good: skip it.)
   dt = Number.isFinite(dt) ? Math.min(Math.max(dt, 0), MAX_STEP) : dt > 0 ? MAX_STEP : 0;
+  recoveryDt = Number.isFinite(recoveryDt) ? Math.min(dt, Math.max(0, recoveryDt)) : dt;
   stepClock(state, dt);
   // Gnome jobs for this step (also read by the gnome sprites; not saved).
   const gnomes = assignGnomes(state);
@@ -44,7 +45,7 @@ export function simulate(state, dt) {
   stepGnomeMining(state, dt, gnomes);
   stepWaveSpawning(state, dt);
   stepEnemies(state, dt);
-  if (!state.gameOver) stepHeroes(state, dt); // the Brisket King and the Hatsune Queen guard their altars (heroes.js)
+  if (!state.gameOver) stepHeroes(state, dt, recoveryDt);
   if (!state.gameOver) stepTraps(state, dt); // ground enemies stepping onto set Mousetraps spring them (+ re-arm, lures)
   stepSpecialEnemies(state, dt); // F.L.O.C.K Towers silenced by John Pork's call count down
   stepFlockTowers(state); // mark + reveal enemies in F.L.O.C.K Tower range before the defenses fire

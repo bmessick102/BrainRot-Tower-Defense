@@ -14,6 +14,9 @@ import { fpW, fpH } from '../logic/grid.js';
 import { picksOf, hasAbilities } from '../logic/abilities.js';
 import { ABILITIES, PATH_COLORS } from '../abilityConfig.js';
 import { VIEW } from '../renderScale.js';
+import { inspectionRange } from '../objects/RangeCircle.js';
+import { masteryLevel, masteryTier } from '../logic/merge.js';
+import { abilityIcon } from '../objects/MergeIcons.js';
 
 export class VisitHudScene extends Phaser.Scene {
   constructor() {
@@ -87,7 +90,7 @@ export class VisitHudScene extends Phaser.Scene {
   showBuilding(b) {
     if (this.card) { this.card.destroy(true); this.card = null; }
     if (!b) return;
-    const W = 380, HEADER = 62, PIC = { w: 112, h: 132 }, pad = 18;
+    const W = 500, HEADER = 62, PIC = { w: 112, h: 122 }, pad = 18;
     const c = this.add.container(0, 0).setDepth(10);
     const bg = this.add.graphics();
     c.add(bg);
@@ -100,6 +103,7 @@ export class VisitHudScene extends Phaser.Scene {
     fitWidth(name, W - pad - 60);
     const ruin = b.type === 'townHall' && b.level === 0;
     const merge = mergedConfigOf(b);
+    const mastery = merge ? masteryLevel(this.visit.gs, b.type) : 0;
     const lv = this.add.text(pad, 37, ruin ? 'In ruins' : `Level ${b.level} / ${maxLevel(b.type)}${merge ? '  ·  Merged' : ''}`, textStyle(15, COLORS.textGold));
     c.add([name, lv]);
     c.add(new Button(this, W - 10, 10, 40, 40, '', () => this.visit.select(null), { color: COLORS.buttonDanger, icon: 'x', radius: 9 }));
@@ -122,17 +126,17 @@ export class VisitHudScene extends Phaser.Scene {
     let sy = top + 2;
     for (const [label, value] of this.statRows(b)) {
       const row = this.add.graphics();
-      row.fillStyle(0xe6e0d2, 1).fillRoundedRect(col, sy, colW, 28, 8);
-      const l = this.add.text(col + 10, sy + 14, label, bodyStyle(14, COLORS.inkDim, { fontStyle: 'bold' })).setOrigin(0, 0.5);
-      const v = this.add.text(col + colW - 10, sy + 14, value, bodyStyle(15, COLORS.ink, { fontStyle: 'bold' })).setOrigin(1, 0.5);
+      row.fillStyle(0xe6e0d2, 1).fillRoundedRect(col, sy, colW, 24, 8);
+      const l = this.add.text(col + 10, sy + 12, label, bodyStyle(14, COLORS.inkDim, { fontStyle: 'bold' })).setOrigin(0, 0.5);
+      const v = this.add.text(col + colW - 10, sy + 12, value, bodyStyle(15, COLORS.ink, { fontStyle: 'bold' })).setOrigin(1, 0.5);
       fitWidth(v, colW - l.width - 26);
       c.add([row, l, v]);
-      sy += 32;
+      sy += 27;
     }
     let y = Math.max(top + PIC.h, sy) + 14;
     // A merged defense: its ability in one line, in gold.
     if (merge) {
-      const ab = this.add.text(pad, y, `${merge.ability}: ${merge.abilityShort}`, bodyStyle(14, '#8a5a00', { fontStyle: 'bold', wordWrap: { width: W - pad * 2 } }));
+      const ab = this.add.text(pad, y, `${mastery ? 'Base ' : ''}${merge.ability} · ${merge.abilityShort}`, bodyStyle(14, '#8a5a00', { fontStyle: 'bold', wordWrap: { width: W - pad * 2 } }));
       c.add(ab);
       y += ab.height + 12;
     }
@@ -151,19 +155,41 @@ export class VisitHudScene extends Phaser.Scene {
         c.add(this.add.text(pad, y, 'No perks researched yet', bodyStyle(15, COLORS.inkDim, { fontStyle: 'bold' })));
         y += 26;
       }
-      for (const tier of tiers) {
+      const chipW = (W - pad * 2 - 8) / 2;
+      tiers.forEach((tier, i) => {
+        const x = pad + i % 2 * (chipW + 8), top = y + Math.floor(i / 2) * 34;
         const pg2 = this.add.graphics();
-        drawGlossy(pg2, pad, y, W - pad * 2, 34, tier.color, { radius: 10, lip: 3, shadow: false });
-        const tag = this.add.text(pad + 12, y + 15, `Tier ${tier.t + 1}`, textStyle(14)).setOrigin(0, 0.5);
-        const tn = this.add.text(pad + 80, y + 15, tier.name, textStyle(16)).setOrigin(0, 0.5);
-        fitWidth(tn, W - pad * 2 - 92);
+        drawGlossy(pg2, x, top, chipW, 30, tier.color, { radius: 9, lip: 3, shadow: false });
+        const tag = this.add.text(x + 10, top + 14, `Tier ${tier.t + 1}`, textStyle(13)).setOrigin(0, 0.5);
+        const tn = this.add.text(x + 59, top + 14, tier.name, textStyle(15)).setOrigin(0, 0.5);
+        fitWidth(tn, chipW - 68);
         c.add([pg2, tag, tn]);
-        y += 40;
+      });
+      y += Math.ceil(tiers.length / 2) * 34;
+    }
+
+    if (merge) {
+      c.add(this.add.text(pad, y, 'Mastery', textStyle(17)));
+      y += 25;
+      if (!mastery) {
+        c.add(this.add.text(pad, y, 'No mastery perks researched yet', bodyStyle(15, COLORS.inkDim, { fontStyle: 'bold' })));
+        y += 22;
+      }
+      for (let tier = 1; tier <= mastery; tier++) {
+        const info = masteryTier(b.type, tier);
+        const g = this.add.graphics();
+        const desc = this.add.text(pad + 56, y + 25, info.desc, bodyStyle(14, COLORS.ink, { wordWrap: { width: W - pad * 2 - 66 } }));
+        const h = Math.max(48, desc.height + 30);
+        g.fillStyle(0xf5e1af, 1).fillRoundedRect(pad, y, W - pad * 2, h, 8);
+        c.add([g, abilityIcon(this, merge.abilityIcon, pad + 27, y + h / 2, 34),
+          this.add.text(pad + 56, y + 5, `Tier ${tier} · ${info.name}`, bodyStyle(16, '#704900', { fontStyle: 'bold' })), desc]);
+        y += h + 4;
       }
     }
     y += 6;
     drawWindow(bg, 0, 0, W, y, { header: HEADER });
     blocker.setSize(W, y);
+    blocker.input.hitArea.setSize(W, y);
     c.setPosition(16, VIEW.height - 34 - y);
     c.cardW = W; c.cardH = y;
     this.card = c;
@@ -177,9 +203,10 @@ export class VisitHudScene extends Phaser.Scene {
       const cfg = typeConfig(b.type), st = levelStats(b.type, b.level) || {};
       const m = mergedConfigOf(b); // merged: its damage per shot (per shell) and its extra range
       if (st.damage) rows.push(['Damage', m && m.triple ? `${m.triple.shells} x ${formatGold(Math.round(st.damage * m.triple.shellMult))}` : formatGold(Math.round(st.damage * (m ? m.damageMult : 1)))]);
-      if (cfg.range) rows.push(['Range', `${Math.round((cfg.range + (m ? m.rangeAdd : 0)) * 10) / 10} tiles`]);
       if (cfg.hitsGround || cfg.hitsAir) rows.push(['Targets', cfg.hitsGround && cfg.hitsAir ? 'Ground & Air' : cfg.hitsAir ? 'Air' : 'Ground']);
     }
+    const range = inspectionRange(b);
+    if (range > 0) rows.push(['Range', `${Math.round(range * 10) / 10} tiles`]);
     return rows;
   }
 }

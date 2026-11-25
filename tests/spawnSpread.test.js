@@ -7,11 +7,11 @@ import { makeStateWithTownHall } from './helpers.js';
 const S = CONFIG.rules.spawnSpread;
 
 describe('spawn spread', () => {
-  it('each entrance spawns more slowly the more entrances are open', () => {
+  it('uses the midpoint in enemies per second between the last two releases', () => {
     expect(spawnGap(1)).toBeCloseTo(0.8);
-    expect(spawnGap(2)).toBeCloseTo(1.0);
-    expect(spawnGap(4)).toBeCloseTo(1.4);
-    expect(spawnGap(8)).toBeCloseTo(2.2);
+    for (const [open, previousGap] of [[2, 1], [4, 1.4], [8, 2.2]]) {
+      expect(1 / spawnGap(open)).toBeCloseTo((1 / 0.8 + 1 / previousGap) / 2);
+    }
   });
 
   it('a wave starts from one entrance (two from 5 or more)', () => {

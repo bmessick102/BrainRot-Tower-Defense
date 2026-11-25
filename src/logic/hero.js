@@ -243,7 +243,7 @@ function putToSleep(state, h, seconds, knockedOut = false) {
 }
 
 /** One step of the hero (simulate.js). */
-export function stepHero(state, dt) {
+export function stepHero(state, dt, recoveryDt = dt) {
   const h = ensureHero(state);
   if (!h) return;
   const altar = getAltar(state);
@@ -261,8 +261,8 @@ export function stepHero(state, dt) {
   }
   if (h.status === 'asleep') {
     // Heals evenly while he sleeps, so he's at full health as he wakes.
-    h.hp += (st.maxHp - h.hp) * Math.min(1, dt / Math.max(dt, h.sleepT));
-    h.sleepT = Math.max(0, h.sleepT - dt);
+    h.hp += (st.maxHp - h.hp) * Math.min(1, recoveryDt / Math.max(recoveryDt, h.sleepT));
+    h.sleepT = Math.max(0, h.sleepT - recoveryDt);
     altar.heroSleep = h.sleepT;
     if (h.sleepT <= 0) {
       h.hp = st.maxHp; h.knockedOut = false; altar.heroSleep = 0;

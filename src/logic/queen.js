@@ -119,7 +119,7 @@ function wakeUp(state, h) {
 }
 
 /** One step of the Hatsune Queen (simulate.js, through heroes.js). */
-export function stepQueen(state, dt) {
+export function stepQueen(state, dt, recoveryDt = dt) {
   const h = ensureQueen(state);
   if (!h) return;
   const altar = getQueenAltar(state);
@@ -134,8 +134,8 @@ export function stepQueen(state, dt) {
   markDefenses(state, h, st, home);
   if (h.status === 'asleep') {
     // Heals evenly while she sleeps, so she's at full health as she wakes.
-    h.hp += (st.maxHp - h.hp) * Math.min(1, dt / Math.max(dt, h.sleepT));
-    h.sleepT = Math.max(0, h.sleepT - dt);
+    h.hp += (st.maxHp - h.hp) * Math.min(1, recoveryDt / Math.max(recoveryDt, h.sleepT));
+    h.sleepT = Math.max(0, h.sleepT - recoveryDt);
     altar.heroSleep = h.sleepT;
     if (h.sleepT <= 0) {
       h.hp = st.maxHp; altar.heroSleep = 0;

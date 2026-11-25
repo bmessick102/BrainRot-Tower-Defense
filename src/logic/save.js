@@ -74,7 +74,7 @@ export function serializeGame(state, now = new Date()) {
     buildings: state.buildings.map((b) => {
       const out = { id: b.id, type: b.type, level: b.level, col: b.col, row: b.row };
       if (COLLECTOR_TYPES.includes(b.type)) out.stock = Math.round((b.stock || 0) * 100) / 100; // a mine's gold, a Shake Collector's Shakes (v0.14)
-      if (HERO_TYPES.includes(b.type) && b.heroSleep > 0) out.heroSleep = Math.round(b.heroSleep * 10) / 10; // a hero's nap (the Brisket King's, the Hatsune Queen's)
+      if (HERO_TYPES.includes(b.type) && b.heroSleep > 0) out.heroSleep = b.heroSleep;
       if (b.type === 'wall') out.orient = b.orient || 'x';
       if (b.merged) out.merged = true; // a merged defense (merge.js): its Mastery comes from `mastery`, by type
       // Ruins only exist mid-night (everything is rebuilt free when the wave is beaten).

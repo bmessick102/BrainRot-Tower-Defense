@@ -18,9 +18,11 @@ import { Button } from '../objects/Button.js';
 import { COLORS, textStyle } from '../theme.js';
 import { villageImageKeys } from '../assetPlan.js';
 import { session } from '../net/account.js';
-import { zoomLimit, dragThreshold } from '../renderScale.js';
+import { zoomLimit, dragThreshold, toView } from '../renderScale.js';
 import { MapDetail } from '../objects/MapDetail.js';
 import { DayNight } from '../objects/DayNight.js';
+import { RangeCircle } from '../objects/RangeCircle.js';
+import { stepFlockTowers } from '../logic/flock.js';
 import { hasAmbience, startAmbience, stopAmbience, updateAmbience, playMusic, stopMusic, keepAudioAlive, playBuildingSelect } from '../audio.js';
 
 const ZOOM_STEP = 1.15;
@@ -61,6 +63,7 @@ export class VisitScene extends Phaser.Scene {
 
   create() {
     this.cameras.main.setBackgroundColor('#10140f');
+    this.rangeCircle = new RangeCircle(this);
     stopMusic();
     const ambience = hasAmbience(this, MUSIC.ambientDay, MUSIC.ambientNight);
     this.events.once('shutdown', () => { this.loadToken = null; stopAmbience(); stopMusic(); });
@@ -143,6 +146,7 @@ Tap Back to return.`, textStyle(24)).setOrigin(0.5).setAlign('center').setScroll
     gs.townHall = data.buildings.find((b) => b.type === 'townHall') || null;
     gs.getBuilding = (id) => data.buildings.find((b) => b.id === id) || null;
     this.gs = gs;
+    stepFlockTowers(gs);
     this.dayNight?.update(gs.clock);
     // The ground (v0.9.1, as in your own village): solid grass under every building and wall, and the village's grass tufts.
     drawGroundPlots(this.add.graphics().setDepth(-9000), data.buildings, groundColor(null));
@@ -221,7 +225,8 @@ Tap Back to return.`, textStyle(24)).setOrigin(0.5).setAlign('center').setScroll
       }
       if (this.pinch) return;
       // A press on the HUD (Back, the switcher, the building card) is the HUD's, not the map's.
-      if (this.hudReady() && this.hud.covers(p.x, p.y)) { this.press = null; return; }
+      const view = toView(p.position);
+      if (this.hudReady() && this.hud.covers(view.x, view.y)) { this.press = null; return; }
       this.press = { x: p.x, y: p.y, sx: this.cameras.main.scrollX, sy: this.cameras.main.scrollY, moved: false };
     });
     this.input.on('pointermove', (p) => {
@@ -266,6 +271,7 @@ Tap Back to return.`, textStyle(24)).setOrigin(0.5).setAlign('center').setScroll
 
   select(b) {
     this.selectedId = b ? b.id : null;
+    this.rangeCircle.showBuilding(b);
     if (b) { const v = this.views.get(b.id); if (v && v.pop) v.pop(); }
     if (this.hudReady()) this.hud.showBuilding(b);
   }

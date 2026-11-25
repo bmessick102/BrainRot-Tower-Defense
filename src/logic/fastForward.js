@@ -2,9 +2,9 @@
 // Each press steps through WAVE_SPEEDS: off (1x) -> 2x -> 4x -> off (v0.8.9: 4x added; it was a 2x toggle).
 //
 // How it works: while a wave is counting down or running, GameScene.update runs the simulation `stepsPerFrame`
-// times per frame, each with the normal (capped) frame step, instead of one step with a multiplied dt. So every
-// timer, cooldown, spell, spawn, projectile and collision sees exactly the steps it would at 1x, just two or four
-// times as many per real second; nothing can tunnel or skip. Between waves the game always runs at 1x (the day/night
+// times per frame, each with the normal (capped) frame step, instead of one step with a multiplied dt. Combat timers,
+// spawns and projectiles see the same steps as at 1x, just two or four times as often. Hero recovery stays on the
+// unaccelerated frame clock so a new raid can't shorten an existing nap. Between waves the game runs at 1x (the day/night
 // clock, building time and gold income are not sped up), so the button only changes how fast a wave plays.
 // The choice is saved with the settings (`fast` in ibtd.settings: true for 2x, 4 for 4x) and stays for later waves.
 import { isWaveInProgress } from './util.js';

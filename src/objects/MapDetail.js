@@ -47,6 +47,7 @@ export class MapDetail {
    * Use the current camera transform. Phaser's worldView still has the previous frame's bounds here.
    */
   update(time) {
+    if (!this.enabled) return;
     for (const p of this.pieces.values()) if (p.image && p.layer.image.alpha < 1) p.image.setVisible(false);
     const cam = this.scene.cameras.main;
     const viewKey = `${Math.round(cam.scrollX)}|${Math.round(cam.scrollY)}|${cam.zoom.toFixed(4)}|${cam.width}|${cam.height}|${this.layers.map((l) => l.image.alpha >= 1).join()}`;

@@ -25,6 +25,24 @@ const wave = (s) => { s.wave = { ...s.wave, phase: 'active', number: 3, queues: 
 const run = (s, seconds, dt = 0.05) => { for (let t = 0; t < seconds - 1e-9; t += dt) stepMage(s, dt); };
 const tough = { hp: 1e7, maxHp: 1e7, speed: 0 };
 
+it('continues a nap after the Mage is knocked out and his altar is rebuilt during a raid', () => {
+  const { s, altar, h } = village();
+  mageAfterWave(s);
+  const left = h.sleepT;
+  wave(s);
+  altar.destroyed = true;
+  stepMage(s, 0.4, 0.1);
+  expect(h.status).toBe('down');
+  altar.destroyed = false;
+  altar.hp = mageStats(altar).maxHp;
+  stepMage(s, 0.4, 0.1);
+  expect(h.status).toBe('asleep');
+  expect(h.sleepT).toBeCloseTo(left - 0.2);
+  expect(checkAegis(s).ok).toBe(false);
+  mageAfterWave(s);
+  expect(altar.heroSleep).toBeCloseTo(left - 0.2);
+});
+
 describe('the Locklair Mage: his building', () => {
   it('1 allowed from Village Hall 10, a hero type; 20 levels, Level N needs Village Hall N (1-10 at Hall 10)', () => {
     expect(HERO_TYPES).toContain('mageAltar');

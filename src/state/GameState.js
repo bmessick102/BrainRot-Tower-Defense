@@ -13,7 +13,7 @@ import {
 } from '../logic/buildings.js';
 import { getCapacity, spendGold, addGold, setGold, collectMine, repairBuilding } from '../logic/economy.js';
 import { createIdleWave, skipCountdown, cancelCountdown, legacyDebuted } from '../logic/waves.js';
-import { advanceTutorial, applyStarterBase, canSkipTutorial, TUTORIAL_DONE_STEP, TUTORIAL_NIGHT_STEP } from '../logic/tutorial.js';
+import { advanceTutorial, applyStarterBase, canSkipTutorial, tutorialAllows, TUTORIAL_DONE_STEP, TUTORIAL_NIGHT_STEP } from '../logic/tutorial.js';
 import { createClock, startTutorialWave, resumeClockOnLoad, startGrace, startNextWave } from '../logic/dayNight.js';
 import { simulate } from '../logic/simulate.js';
 import { deserializeGame, writeGame, SAVE_KEYS } from '../logic/save.js';
@@ -23,7 +23,7 @@ import { applyLayout } from '../logic/layout.js';
 import { dropTheBeat } from '../logic/dj.js';
 import { tipEvent, dismissTip, hideAllTips } from '../logic/tips.js';
 import { checkResearch, checkRespec, labPicks, syncAbilityPicks } from '../logic/abilities.js';
-import { spendResearchPoints } from '../logic/researchPoints.js';
+import { rpRoom, spendResearchPoints } from '../logic/researchPoints.js';
 import { collectShakes } from '../logic/shakes.js';
 import { advanceLabGuide, startLabGuideIfDue, skipLabGuide } from '../logic/labGuide.js';
 import { brewSpell, discardSpell, castSpell, fuelGuideEvent } from '../logic/spells.js';
@@ -406,18 +406,27 @@ export class GameState {
     return { ok: true, reason: '', tier: check.tier };
   }
 
+  collectionStatus(id) {
+    const b = this.getBuilding(id);
+    if (!b || (b.type !== 'mine' && b.type !== 'shakeCollector')) return null;
+    const shakes = b.type === 'shakeCollector';
+    const amount = Math.floor(b.stock || 0);
+    const room = shakes ? rpRoom(this) : getCapacity(this) - this.gold;
+    const reason = b.destroyed ? 'Destroyed' : this.gameOver || isWaveActive(this) ? 'Not during a wave'
+      : !tutorialAllows(this, 'collect') ? 'Follow the guide' : !amount ? 'Empty' : room <= 0 ? 'Storage full' : '';
+    return { shakes, amount, reason };
+  }
+
   collect(id) {
     const b = this.getBuilding(id);
-    if (b && b.type === 'shakeCollector' && !b.destroyed) {
-      // v0.14: a Shake Collector, collected like a mine (shakes.js).
-      const r = collectShakes(this, b);
-      const reason = r.waveActive ? 'Not during a wave' : r.full ? 'Shakes full' : '';
-      return { ok: r.collected > 0, reason, collected: r.collected };
-    }
-    if (!b || b.type !== 'mine' || b.destroyed) return { ok: false, reason: '' };
-    const r = collectMine(this, b);
-    const reason = r.waveActive ? 'Not during a wave' : r.storageFull ? 'Storage full' : '';
-    return { ok: r.collected > 0, reason, collected: r.collected };
+    if (!b || b.destroyed || this.gameOver || !tutorialAllows(this, 'collect')) return { ok: false, reason: '' };
+    const shakes = b.type === 'shakeCollector';
+    if (!shakes && b.type !== 'mine') return { ok: false, reason: '' };
+    const r = shakes ? collectShakes(this, b) : collectMine(this, b);
+    const ok = r.collected > 0;
+    if (ok) this.save();
+    const reason = r.waveActive ? 'Not during a wave' : r.full ? 'Shakes full' : r.storageFull ? 'Storage full' : '';
+    return { ok, reason, collected: r.collected };
   }
 
   repair(id) {
@@ -460,8 +469,8 @@ export class GameState {
     return skipCountdown(this);
   }
 
-  update(dt) {
-    simulate(this, dt);
+  update(dt, recoveryDt = dt) {
+    simulate(this, dt, recoveryDt);
   }
 
   // ---------- saving ----------

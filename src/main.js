@@ -79,7 +79,7 @@ window.addEventListener('resize', rescale);
 window.addEventListener('orientationchange', rescale);
 window.addEventListener('pageshow', rescale);
 window.visualViewport?.addEventListener('resize', rescale);
-window.screen.orientation?.addEventListener('change', rescale);
+window.screen.orientation?.addEventListener?.('change', rescale);
 if (window.ResizeObserver) new ResizeObserver(rescale).observe(gameParent);
 onQualityChange(rescale);
 

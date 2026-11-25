@@ -59,9 +59,8 @@ export const CONFIG = {
     // Resetting a type's path costs this share of what its picks cost to research (no refund of the picks).
     respecShare: 0.5,
     spawnInterval: 0.8,
-    // v0.12.5 (players found many-sided waves too hard): each entrance spawns every spawnInterval + perEntrance x (open
-    // entrances - 1) s (1 entrance 0.8 s, 2 -> 1.0, 4 -> 1.4, 8 -> 2.2), and a wave's entrances open in turn: it starts
-    // from startingEntrances (2 when it has `startTwoFrom` or more, else 1) and the next one joins every `every` s.
+    // The v0.12.5 interval adds perEntrance seconds for each extra open entrance. spawnGap takes the midpoint of
+    // that rate and the earlier flat rate. Entrances still open one at a time every `every` seconds.
     spawnSpread: { perEntrance: 0.2, every: 8, startTwoFrom: 5 },
     // Anti-stall (src/logic/enrage.js): `after` s after a wave's last enemy spawns, enemies start to enrage.
     enrage: { after: 90, ramp: 30, maxDamage: 5, maxSpeed: 2 },
@@ -230,25 +229,25 @@ export const CONFIG = {
   },
   // Shake Storage (v0.14): raises the Shake cap by its capacity (researchPoints.js rpCap, with the Village Hall's own
   // shakeCapacity). 12 levels, a picture per 2 (bld_shakeStorage_lv1-6, each in 3 fills). Count: limits.shakeStorage
-  // (1 at VH3, 2 at VH8). Sized so the hall plus its allowed Storages at their top level hold the biggest Shake price
-  // open at each Village Hall (tests/shakes.test.js): VH7 3,300 >= 2,000, VH8 6,800 >= 4,500, VH10 8,600 >= 6,000,
-  // VH12 10,800 >= 7,500, VH15 11,100 >= 10,000. Enemies that hit it drain Shakes, as a Storage drains gold.
+  // (1 at VH3, 2 at VH8). Adds room above the original spending curve for one benchmark three-star night raid.
+  // Benchmark waves by level: 8, 10, 12, 15, 18, 21, 24, 40, 45, 48, 54, 60, split across two storages from L8.
+  // Enemies that hit it drain Shakes, as a Storage drains gold.
   shakeStorage: {
     name: "Shake Storage",
     unlockTownHall: 3,
     levels: [
-      { cost: 800, hp: 600, capacity: 500 },
-      { cost: 1500, hp: 750, capacity: 700 },
-      { cost: 3000, hp: 940, capacity: 1000 },
-      { cost: 6000, hp: 1170, capacity: 1300 },
-      { cost: 10000, hp: 1460, capacity: 1700 },
-      { cost: 16000, hp: 1830, capacity: 2100 },
-      { cost: 25000, hp: 2290, capacity: 2600 },
-      { cost: 40000, hp: 2860, capacity: 3000 },
-      { cost: 60000, hp: 3570, capacity: 3400 },
-      { cost: 85000, hp: 4470, capacity: 3800 },
-      { cost: 110000, hp: 5580, capacity: 4200 },
-      { cost: 140000, hp: 6980, capacity: 4800 }
+      { cost: 800, hp: 600, capacity: 800 },
+      { cost: 1500, hp: 750, capacity: 1300 },
+      { cost: 3000, hp: 940, capacity: 1600 },
+      { cost: 6000, hp: 1170, capacity: 2500 },
+      { cost: 10000, hp: 1460, capacity: 3400 },
+      { cost: 16000, hp: 1830, capacity: 3900 },
+      { cost: 25000, hp: 2290, capacity: 5000 },
+      { cost: 40000, hp: 2860, capacity: 5400 },
+      { cost: 60000, hp: 3570, capacity: 5900 },
+      { cost: 85000, hp: 4470, capacity: 7000 },
+      { cost: 110000, hp: 5580, capacity: 7700 },
+      { cost: 140000, hp: 6980, capacity: 8700 }
     ]
   },
   // Each house is home to `gnomes` villagers. By day every gnome works a mine (more gold); during attacks
@@ -1108,7 +1107,7 @@ export const CONFIG = {
     shakeCollector: [0, 0, 1, 1, 1, 2, 2, 2, 2, 3, 3, 3, 3, 4, 4, 4, 4, 4, 4, 4], // v0.14: 1 at VH3, 2 at VH6, 3 at VH10, 4 at VH14
     shakeStorage: [0, 0, 1, 1, 1, 1, 1, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2],     // v0.14: 1 at VH3, 2 at VH8 (max 2)
     cannon: [1, 2, 2, 3, 3, 4, 4, 5, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16], // (v0.10.1: one more per Village Hall after 10)
-    archer: [0, 1, 2, 2, 3, 3, 4, 4, 5, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15], // (v0.10.1: one more per Village Hall after 10)
+    archer: [0, 1, 2, 2, 3, 3, 4, 4, 5, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 14], // VH20 keeps seven merge pairs
     mortar: [0, 1, 1, 2, 2, 3, 3, 4, 4, 5, 5, 6, 6, 7, 8, 9, 9, 10, 10, 10],
     wizard: [0, 0, 1, 1, 2, 2, 3, 3, 4, 4, 5, 6, 6, 6, 6, 6, 6, 6, 6, 6], // (v0.8.2: back to 6 after v0.8.1's cap of 4; they can merge instead)
     townHall: [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1],

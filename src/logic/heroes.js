@@ -50,10 +50,10 @@ export function hitHero(state, h, amount, melee = false) {
 }
 
 /** One step of every hero (simulate.js). */
-export function stepHeroes(state, dt) {
-  stepHero(state, dt);
-  if (!state.gameOver) stepQueen(state, dt);
-  if (!state.gameOver) stepMage(state, dt);
+export function stepHeroes(state, dt, recoveryDt = dt) {
+  stepHero(state, dt, recoveryDt);
+  if (!state.gameOver) stepQueen(state, dt, recoveryDt);
+  if (!state.gameOver) stepMage(state, dt, recoveryDt);
 }
 
 /** A wave starts: each hero's ability charges come back. */

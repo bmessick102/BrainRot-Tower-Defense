@@ -22,8 +22,8 @@ import { BuildingView, buildingTextureKey, buildingPictureKey, mergedSizeFactor,
 import { EnemyView } from '../objects/EnemyView.js';
 import { djStats, buildingsInDjRange } from '../logic/dj.js';
 import { HeroView, QUEEN_VIEW } from '../objects/HeroView.js';
-import { getAltar, heroStats } from '../logic/hero.js';
-import { getQueenAltar, queenStats } from '../logic/queen.js';
+import { getAltar } from '../logic/hero.js';
+import { getQueenAltar } from '../logic/queen.js';
 import { WallView, placeWallTile } from '../objects/WallView.js';
 import { ProjectileView } from '../objects/ProjectileView.js';
 import { PoolView, POOL_COLOR } from '../objects/PoolView.js';
@@ -41,7 +41,7 @@ import { playSfxClip, playSfx, playSfxCapped, playSfxEndingIn, playVoiceLine, pl
 import { requestAudio, requestImages } from '../assetLoader.js';
 import { villageImageKeys, reachableImageKeys } from '../assetPlan.js';
 import { COLORS, RP_TEXT_COLOR } from '../theme.js';
-import { abilityFx, towerRange, towerMinRange } from '../logic/abilities.js';
+import { abilityFx, towerRange } from '../logic/abilities.js';
 import { chainLightningFx, arrowStormFx, meteorFx, solarFlareFx, sparklerFx, drawFireRing } from '../objects/AbilityFx.js';
 import { Modal, confirmDialog } from '../objects/Modal.js';
 import { SpellFx } from '../objects/SpellFx.js';
@@ -423,7 +423,8 @@ export class GameScene extends Phaser.Scene {
     if (!this.endingGame) {
       // 2x / 4x wave speed: the same capped step run 2 or 4 times (src/logic/fastForward.js), never one longer step.
       const step = Math.min(delta / 1000, MAX_STEP);
-      for (let i = stepsPerFrame(this.gs); i > 0; i--) this.gs.update(step);
+      const steps = stepsPerFrame(this.gs);
+      for (let i = 0; i < steps; i++) this.gs.update(step, step / steps);
     }
     this.dayNight.update(this.gs.clock);
     this.mapDetail.update(time);
@@ -701,7 +702,6 @@ export class GameScene extends Phaser.Scene {
   // ---------- camera ----------
   setupCamera() {
     const cam = this.cameras.main;
-    this.mapSize = { w: MAP.imageWidth, h: MAP.imageHeight };
     cam.setZoom(Math.max(zoomLimit(CONFIG.camera.startZoom), this.minZoom()));
     const th = this.gs.townHall;
     const c = footprintCenter(th);
@@ -716,7 +716,7 @@ export class GameScene extends Phaser.Scene {
    */
   minZoom() {
     const cam = this.cameras.main;
-    return Math.max(zoomLimit(CONFIG.camera.minZoom), cam.width / this.mapSize.w, cam.height / this.mapSize.h);
+    return Math.max(zoomLimit(CONFIG.camera.minZoom), cam.width / MAP.imageWidth, cam.height / MAP.imageHeight);
   }
 
   /** Keep the whole view inside the map so its edge is never visible. */
@@ -728,8 +728,8 @@ export class GameScene extends Phaser.Scene {
       if (viewSize >= mapSize) return mapSize / 2 - half; // view bigger than map: center it
       return clamp(scroll, viewSize / 2 - half, mapSize - viewSize / 2 - half);
     };
-    cam.scrollX = axis(cam.scrollX, cam.width / 2, viewW, this.mapSize.w);
-    cam.scrollY = axis(cam.scrollY, cam.height / 2, viewH, this.mapSize.h);
+    cam.scrollX = axis(cam.scrollX, cam.width / 2, viewW, MAP.imageWidth);
+    cam.scrollY = axis(cam.scrollY, cam.height / 2, viewH, MAP.imageHeight);
   }
 
   screenToWorld(px, py) {
@@ -1042,29 +1042,7 @@ export class GameScene extends Phaser.Scene {
       gridToScreen(b.col + fpW(b), b.row + fpH(b)), gridToScreen(b.col, b.row + fpH(b))
     ];
     this.selectionGfx.lineStyle(3, COLORS.panelEdge, 1).strokePoints(pts, true);
-    if (b.type === 'dj') {
-      // DJ Babyface: its range (work playlist, Drop the Beat, light show).
-      const c = footprintCenter(b);
-      this.rangeCircle.show(c.x, c.y, djStats(b).range, 0);
-    } else if (b.type === 'altar') {
-      // The Brisket King's guard range: he fights ground enemies inside it.
-      const c = footprintCenter(b);
-      this.rangeCircle.show(c.x, c.y, heroStats(b).guardRange, 0);
-    } else if (b.type === 'queenAltar') {
-      // The Hatsune Queen's guard range: she shoots enemies (ground and air) inside it.
-      const c = footprintCenter(b);
-      this.rangeCircle.show(c.x, c.y, queenStats(b).guardRange, 0);
-    } else if (b.type === 'mageAltar') {
-      // The Locklair Mage's zap range (his aura, a little smaller, shows on the ground in raids).
-      const c = footprintCenter(b);
-      this.rangeCircle.show(c.x, c.y, mageStats(b).attackRange, 0);
-    } else if (isDefense(b.type)) {
-      const cfg = typeConfig(b.type);
-      const c = footprintCenter(b);
-      this.rangeCircle.show(c.x, c.y, towerRange(b), cfg.minRange ? towerMinRange(b) : cfg.minRange); // with ability bonuses
-    } else {
-      this.rangeCircle.hide();
-    }
+    this.rangeCircle.showBuilding(b);
   }
 
   // ---------- edit mode: the layout editor (the only way to move buildings; src/logic/layout.js) ----------
