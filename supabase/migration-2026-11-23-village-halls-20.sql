@@ -1,11 +1,12 @@
--- Migration (2026-11-23, v0.11). Safe to run more than once; it only replaces two functions.
--- Run it in Supabase: Dashboard -> SQL Editor -> New query -> paste -> Run. (Running the whole schema.sql
--- again does the same thing.)
+-- Migration (2026-11-23, updated for v0.15). Safe to run more than once.
+-- Run it in Supabase: Dashboard -> SQL Editor -> New query -> paste -> Run.
 --
 -- v0.11 adds Village Halls 16-20. The server capped a village's Village Hall level (bases.town_hall, check_base) and a
 -- player's best Village Hall (player_stats.best_town_hall, keep_bests) at 15; now 20. Both functions are copied from
 -- schema.sql as they are today, with only that cap changed. Without this migration the game still works and saves
 -- normally: a Village Hall 16-20 village just shows as 15 on the leaderboard and in player search.
+-- Re-running also restores Hall 16–20 from already saved villages without changing save revisions or wave credit.
+begin;
 create or replace function public.check_base()
 returns trigger language plpgsql set search_path = '' as $$
 declare
@@ -50,6 +51,24 @@ begin
   return new;
 end $$;
 
+-- Update only the two derived Hall columns. Hold the table locks until both triggers are enabled again.
+alter table public.bases disable trigger bases_check;
+alter table public.player_stats disable trigger player_stats_bests;
+
+update public.bases
+set town_hall = (save ->> 'townHallLevel')::int
+where save ->> 'townHallLevel' in ('16', '17', '18', '19', '20')
+  and town_hall < case when save ->> 'townHallLevel' in ('16', '17', '18', '19', '20')
+                       then (save ->> 'townHallLevel')::int end;
+
+update public.player_stats s
+set best_town_hall = h.level
+from (select user_id, max(town_hall) as level from public.bases where town_hall between 16 and 20 group by user_id) h
+where s.user_id = h.user_id and s.best_town_hall < h.level;
+
+alter table public.player_stats enable trigger player_stats_bests;
+alter table public.bases enable trigger bases_check;
+
 create or replace function public.keep_bests()
 returns trigger language plpgsql set search_path = '' as $$
 declare
@@ -72,3 +91,5 @@ begin
   new.updated_at := now();
   return new;
 end $$;
+
+commit;

@@ -23,7 +23,7 @@ import { isLowQuality, qualityMode, setQualityMode, setAutoLow, LowFpsWatch, onQ
 import { loadGraphicsSetting } from './logic/save.js';
 import { webpSupported, showWebpMessage, installAssetNotice } from './assetNotice.js';
 import { setPicturesUnsupported } from './assetLoader.js';
-import { VIEW_W, VIEW_H, pickRenderScale, windowMetrics, initRenderScale, applyRenderScale, installViewCameras, installSharpText, renderScale } from './renderScale.js';
+import { VIEW_W, VIEW_H, pickRenderScale, windowMetrics, initRenderScale, syncViewport, installViewCameras, installSharpText, renderScale } from './renderScale.js';
 
 // Cheaper Graphics arcs (rounded buttons, circles), and fewer particles in low graphics quality: phaserPerf.js.
 installPhaserPerf(Phaser, isLowQuality);
@@ -38,8 +38,8 @@ export const GAME_HEIGHT = VIEW_H;
 
 // Sharp rendering (renderScale.js): the canvas is the view times the screen's real pixel density (capped), and every
 // scene's camera zooms by that, so nothing is a stretched 1280 x 720 picture on a big or high-DPI screen.
-const wantScale = () => pickRenderScale({ ...windowMetrics(), low: isLowQuality() });
-initRenderScale(wantScale());
+const gameParent = document.getElementById('game');
+initRenderScale(pickRenderScale({ ...windowMetrics(gameParent), low: isLowQuality() }));
 installViewCameras(Phaser);
 installSharpText(Phaser);
 
@@ -64,10 +64,23 @@ const game = new Phaser.Game({
 installAssetNotice();
 webpSupported().then((ok) => { if (!ok) { setPicturesUnsupported(); showWebpMessage(() => {}); } });
 
-// The window resized (or moved to another screen), or the graphics quality changed: redraw at the scale that fits.
-let rescaleTimer = null;
-const rescale = () => { clearTimeout(rescaleTimer); rescaleTimer = setTimeout(() => applyRenderScale(game, wantScale()), 250); };
-if (typeof window !== 'undefined') window.addEventListener('resize', rescale);
+// Mobile Safari can report the new orientation before the viewport and parent have finished resizing.
+const refreshViewport = () => syncViewport(game, isLowQuality());
+let viewportFrame = null, settleTimer = null;
+const rescale = () => {
+  if (viewportFrame === null) viewportFrame = requestAnimationFrame(() => { viewportFrame = null; refreshViewport(); });
+  clearTimeout(settleTimer);
+  settleTimer = setTimeout(refreshViewport, 300);
+};
+game.events.once(Phaser.Core.Events.READY, rescale);
+game.scale.on(Phaser.Scale.Events.ENTER_FULLSCREEN, rescale);
+game.scale.on(Phaser.Scale.Events.LEAVE_FULLSCREEN, rescale);
+window.addEventListener('resize', rescale);
+window.addEventListener('orientationchange', rescale);
+window.addEventListener('pageshow', rescale);
+window.visualViewport?.addEventListener('resize', rescale);
+window.screen.orientation?.addEventListener('change', rescale);
+if (window.ResizeObserver) new ResizeObserver(rescale).observe(gameParent);
 onQualityChange(rescale);
 
 // Graphics 'auto': a game that keeps running under 30 fps (not while loading) switches to low quality.
@@ -89,7 +102,9 @@ if (typeof window !== 'undefined' && window.matchMedia) {
     const world = game.scene.getScene('GameScene');
     if (world && world.openPause) world.openPause();
   };
-  if (upright.addEventListener) upright.addEventListener('change', onTurn);
+  const onOrientation = () => { rescale(); onTurn(); };
+  if (upright.addEventListener) upright.addEventListener('change', onOrientation);
+  else upright.addListener?.(onOrientation);
 }
 
 // A village this tab had open was opened in another tab (or saved newer elsewhere): this tab stopped saving

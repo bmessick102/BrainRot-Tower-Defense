@@ -38,10 +38,11 @@ export function pickRenderScale({ width, height, dpr = 1, touch = false, low = f
 }
 
 /** The browser window's numbers for pickRenderScale. */
-export function windowMetrics() {
+export function windowMetrics(parent) {
   if (typeof window === 'undefined') return { width: VIEW_W, height: VIEW_H, dpr: 1, touch: false };
   const touch = !!(window.matchMedia && window.matchMedia('(pointer: coarse)').matches);
-  return { width: window.innerWidth, height: window.innerHeight, dpr: window.devicePixelRatio || 1, touch };
+  const { width, height } = parent?.getBoundingClientRect() ?? { width: window.innerWidth, height: window.innerHeight };
+  return { width, height, dpr: window.devicePixelRatio || 1, touch };
 }
 
 /** Set the scale before the game is made (main.js sizes the canvas from it). */
@@ -73,16 +74,30 @@ export function applyRenderScale(game, s) {
   for (const sc of game.scene.getScenes(false)) {
     const cam = sc.cameras && sc.cameras.main;
     if (!cam || !isMapScene(sc.sys.settings.key)) continue;
-    keep.push({ sc, cam, zoom: cam.zoom / old, mid: cam.getWorldPoint(cam.width / 2, cam.height / 2) });
+    keep.push({ sc, cam, zoom: cam.zoom / old, midX: cam.scrollX + cam.width / 2, midY: cam.scrollY + cam.height / 2 });
   }
   scale = s;
   game.scale.setGameSize(Math.round(VIEW_W * s), Math.round(VIEW_H * s));
   for (const sc of game.scene.getScenes(false)) if (!isMapScene(sc.sys.settings.key)) fitViewCamera(sc);
-  for (const { sc, cam, zoom, mid } of keep) {
-    cam.setZoom(zoom * s);
-    cam.centerOn(mid.x, mid.y);
+  for (const { sc, cam, zoom, midX, midY } of keep) {
+    cam.setZoom(Math.max(zoom * s, sc.minZoom?.() ?? 0));
+    cam.centerOn(midX, midY);
+    sc.press = null;
+    sc.pinch = null;
     if (sc.clampCamera) sc.clampCamera();
   }
+}
+
+/** Refresh CSS fitting and Phaser's input transform even when the backing resolution stays the same. */
+export function syncViewport(game, low) {
+  const manager = game.scale;
+  if (!manager.canvas) return;
+  const metrics = windowMetrics(manager.parent);
+  if (!(metrics.width > 0 && metrics.height > 0)) return;
+  manager.getParentBounds();
+  const next = pickRenderScale({ ...metrics, low });
+  if (next === scale) manager.refresh();
+  else applyRenderScale(game, next);
 }
 
 /**

@@ -37,7 +37,7 @@ import { BeamHum } from '../objects/BeamHum.js';
 import { floatText, rpGainText, splashRing, fireballImpact, frostImpact, fireworkBurst, breakerExplosion, fireBreathFx } from '../objects/Effects.js';
 import { TEX, SFX, MUSIC, FIRE_SFX, ENEMY_ATTACK_SFX, ENEMY_VOICE, SPELL_SFX, PROJECTILE_KEYS } from '../assetKeys.js';
 import { missileWarningFx, quakeFx, ICE_BLUE } from '../objects/EnemyFx.js';
-import { playSfxClip, playSfx, playSfxCapped, playSfxEndingIn, playVoiceLine, playMusic, pauseMusic, resumeMusic, stopMusic, crossfadeMusic, fadeOutMusic, hasAmbience, startAmbience, updateAmbience, stopAmbience, soundDuration, prefetchMusic, hasMusicFile, releaseMusic, keepAudioAlive } from '../audio.js';
+import { playSfxClip, playSfx, playSfxCapped, playSfxEndingIn, playVoiceLine, playMusic, pauseMusic, resumeMusic, stopMusic, crossfadeMusic, fadeOutMusic, hasAmbience, startAmbience, updateAmbience, stopAmbience, soundDuration, prefetchMusic, hasMusicFile, releaseMusic, keepAudioAlive, playBuildingSelect } from '../audio.js';
 import { requestAudio, requestImages } from '../assetLoader.js';
 import { villageImageKeys, reachableImageKeys } from '../assetPlan.js';
 import { COLORS, RP_TEXT_COLOR } from '../theme.js';
@@ -994,8 +994,7 @@ export class GameScene extends Phaser.Scene {
     if (collected || canSelect) this.views.buildings.get(b.id)?.pop(); // click feedback
     if (canSelect) {
       // Either hero's altar makes the same altar sound (her own line plays only when you click her, above).
-      const isAltar = b.type === 'altar' || b.type === 'queenAltar' || b.type === 'mageAltar';
-      playSfx(this, isAltar && this.cache.audio.exists(SFX.altarSelect) ? SFX.altarSelect : SFX.buildingSelect);
+      playBuildingSelect(this, b.type);
       if (this.selectedId !== b.id) this.select(b.id); // already selected: stays as it is (Info opens the panel)
     }
   }

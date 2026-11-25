@@ -5,7 +5,7 @@
 import Phaser from 'phaser';
 import { CONFIG } from '../config.js';
 import { MAP } from '../mapTiles.js';
-import { TEX } from '../assetKeys.js';
+import { TEX, MUSIC } from '../assetKeys.js';
 import { gridToScreen, screenToGrid } from '../logic/iso.js';
 import { footprintCenter, fpW, fpH } from '../logic/grid.js';
 import { parseSave, deserializeGame } from '../logic/save.js';
@@ -20,6 +20,8 @@ import { villageImageKeys } from '../assetPlan.js';
 import { session } from '../net/account.js';
 import { zoomLimit, dragThreshold } from '../renderScale.js';
 import { MapDetail } from '../objects/MapDetail.js';
+import { DayNight } from '../objects/DayNight.js';
+import { hasAmbience, startAmbience, stopAmbience, updateAmbience, playMusic, stopMusic, keepAudioAlive, playBuildingSelect } from '../audio.js';
 
 const ZOOM_STEP = 1.15;
 // At most this long for the village's building pictures before it is drawn anyway (the views pick the pictures up as
@@ -44,6 +46,9 @@ export class VisitScene extends Phaser.Scene {
     this.bases = data.bases || [];
     this.from = data.from || null; // the title screen window the card was opened from ('leaderboard' / 'search')
     this.gs = null;
+    this.base = null;
+    this.loadToken = {};
+    this.audioCheckAt = 0;
     this.views = new Map();
     this.selectedId = null;
     this.press = null;
@@ -56,13 +61,23 @@ export class VisitScene extends Phaser.Scene {
 
   create() {
     this.cameras.main.setBackgroundColor('#10140f');
+    stopMusic();
+    const ambience = hasAmbience(this, MUSIC.ambientDay, MUSIC.ambientNight);
+    this.events.once('shutdown', () => { this.loadToken = null; stopAmbience(); stopMusic(); });
+    if (!ambience) playMusic(this, MUSIC.village);
     this.scene.launch('VisitHudScene', { visit: this });
     this.hud = this.scene.get('VisitHudScene');
     // The map shows at once (the village is drawn on it when it arrives), so the screen is never just a dark void.
     try {
       const map = this.add.image(0, 0, TEX.map).setOrigin(0, 0).setDisplaySize(MAP.imageWidth, MAP.imageHeight).setDepth(-10000);
-      this.mapDetail = new MapDetail(this, [{ key: 'game_map_grid', image: map, depth: -9999.5 }]); // full-size pieces when zoomed in (desktop)
-      this.setupCamera(true);
+      this.dayNight = new DayNight(this);
+      this.mapDetail = new MapDetail(this, [
+        { key: 'game_map_grid', image: map, depth: -9999.5 },
+        { key: 'game_map_grid_dawn', image: this.dayNight.dawnMap, depth: -9998.5 },
+        { key: 'game_map_grid_dusk', image: this.dayNight.duskMap, depth: -9997.5 },
+        { key: 'game_map_grid_night', image: this.dayNight.nightMap, depth: -9996.5 }
+      ]);
+      this.setupCamera();
     } catch (e) { console.error('VisitScene: map', e); }
     this.setStatus('Loading village…');
     this.loadVillage();
@@ -101,30 +116,34 @@ Tap Back to return.`, textStyle(24)).setOrigin(0.5).setAlign('center').setScroll
   }
 
   async loadVillage() {
+    const token = this.loadToken;
     try {
       const base = await session.backend.playerBase(this.baseId);
-      if (!this.sys.isActive()) return;
+      if (token !== this.loadToken || !this.sys.isActive()) return;
       const parsed = parseSave(JSON.stringify(base.save));
       if (parsed.status !== 'ok') throw new Error('That village can’t be shown.');
       this.base = base;
       // Its building pictures first (they stream in), for at most ART_WAIT_MS.
       await Promise.race([requestImages(villageImageKeys(parsed.data.buildings), { front: true }).catch(() => false), new Promise((r) => setTimeout(r, ART_WAIT_MS))]);
-      if (!this.sys.isActive()) return;
+      if (token !== this.loadToken || !this.sys.isActive()) return;
       this.build(deserializeGame(parsed.data)); // (validated save -> buildings with their footprints, perks...)
+      startAmbience(this, MUSIC.ambientDay, MUSIC.ambientNight);
       this.setStatus('');
       if (this.hudReady()) this.hud.showVillage(base); // (else the HUD shows it when it starts)
     } catch (e) {
-      if (this.sys.isActive()) this.fail(e);
+      if (token === this.loadToken && this.sys.isActive()) this.fail(e);
     }
   }
 
   /** A read-only stand-in for GameState: what the building views read (gold for the storages' fill, no enemies). */
   build(data) {
-    const gs = { buildings: data.buildings, gold: data.gold || 0, enemies: [], wave: { phase: 'idle' }, research: data.research, mastery: data.mastery || {} };
+    const gs = { buildings: data.buildings, gold: data.gold || 0, researchPoints: data.researchPoints,
+      clock: data.clock, enemies: [], wave: { phase: 'idle' }, research: data.research, mastery: data.mastery || {} };
     gs.capacity = getCapacity(gs);
     gs.townHall = data.buildings.find((b) => b.type === 'townHall') || null;
     gs.getBuilding = (id) => data.buildings.find((b) => b.id === id) || null;
     this.gs = gs;
+    this.dayNight?.update(gs.clock);
     // The ground (v0.9.1, as in your own village): solid grass under every building and wall, and the village's grass tufts.
     drawGroundPlots(this.add.graphics().setDepth(-9000), data.buildings, groundColor(null));
     new GrassTufts(this, data.decorSeed).layout(data.buildings);
@@ -138,9 +157,11 @@ Tap Back to return.`, textStyle(24)).setOrigin(0.5).setAlign('center').setScroll
   /** Building views ask which labels to show: only the tapped building's. */
   showLabels(id) { return id === this.selectedId; }
 
-  update(time) {
+  update(time, delta) {
     if (this.mapDetail) this.mapDetail.update(time);
+    if (time - this.audioCheckAt > 1000) { this.audioCheckAt = time; keepAudioAlive(this); }
     if (!this.gs) return;
+    updateAmbience(this.night || 0, true, Math.min(delta / 1000, 0.1));
     for (const b of this.gs.buildings) {
       const v = this.views.get(b.id);
       if (!v || this.brokenViews.has(b.id)) continue;
@@ -155,7 +176,7 @@ Tap Back to return.`, textStyle(24)).setOrigin(0.5).setAlign('center').setScroll
     return Math.max(zoomLimit(CONFIG.camera.minZoom), cam.width / MAP.imageWidth, cam.height / MAP.imageHeight);
   }
 
-  setupCamera(early = false) {
+  setupCamera() {
     const cam = this.cameras.main;
     cam.setZoom(Math.max(zoomLimit(CONFIG.camera.startZoom), this.minZoom()));
     const th = this.gs && this.gs.townHall;
@@ -227,7 +248,9 @@ Tap Back to return.`, textStyle(24)).setOrigin(0.5).setAlign('center').setScroll
       this.press = null;
       if (!press || press.moved) return;
       const w = this.screenToWorld(p.x, p.y);
-      this.select(this.pickBuilding(w.x, w.y));
+      const b = this.pickBuilding(w.x, w.y);
+      if (b) playBuildingSelect(this, b.type);
+      this.select(b);
     });
   }
 

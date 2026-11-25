@@ -3,8 +3,8 @@
 // The 2672 px map pictures are enough until the camera shows a map pixel bigger than a screen pixel; past that
 // (zoomed in, or a big / high-DPI screen drawn at its real resolution, src/renderScale.js) they'd look soft. Then, on a
 // desktop at High graphics, the full-size pieces of the time of day showing are loaded for the part of the map in view
-// and drawn over it; once every piece in view is in, the soft picture under them is hidden (so a fading night map
-// isn't drawn twice). Pieces out of view, or of a map that has faded out, are dropped after a while (each is ~12 MB of
+// and drawn over it. The normal map stays under the opaque detail pieces, including while pieces load or the camera
+// moves. Partly transparent layers use their normal map during a crossfade. Unused pieces are dropped after a while (each is ~12 MB of
 // graphics memory), and never more than MAX_PIECES are kept. A piece that fails to load is left out and asked for again
 // after RETRY_MS (e.g. a file that was being rewritten by prepare-art while it loaded).
 import { MAP } from '../mapTiles.js';
@@ -44,45 +44,40 @@ export class MapDetail {
   }
 
   /**
-   * Every frame: follow the layers' fades; every CHECK_MS, work out which pieces are wanted, and at once whenever the
-   * camera moved or zoomed (v0.12.5: zooming out fast showed black edges for up to CHECK_MS, where the soft picture
-   * was still hidden under pieces that no longer covered the view).
+   * Use the current camera transform. Phaser's worldView still has the previous frame's bounds here.
    */
   update(time) {
-    for (const p of this.pieces.values()) if (p.image) p.image.setAlpha(p.layer.image.alpha);
+    for (const p of this.pieces.values()) if (p.image && p.layer.image.alpha < 1) p.image.setVisible(false);
     const cam = this.scene.cameras.main;
-    const viewKey = `${Math.round(cam.scrollX)}|${Math.round(cam.scrollY)}|${cam.zoom.toFixed(4)}`;
+    const viewKey = `${Math.round(cam.scrollX)}|${Math.round(cam.scrollY)}|${cam.zoom.toFixed(4)}|${cam.width}|${cam.height}|${this.layers.map((l) => l.image.alpha >= 1).join()}`;
     if (viewKey !== this.lastView) { this.lastView = viewKey; this.nextCheck = 0; }
     if (time < this.nextCheck) return;
     this.nextCheck = time + CHECK_MS;
     const now = Date.now();
     const want = this.wanted();
-    const view = this.scene.cameras.main.worldView;
+    const halfW = cam.width / (2 * cam.zoom), halfH = cam.height / (2 * cam.zoom);
+    const cx = cam.scrollX + cam.width / 2, cy = cam.scrollY + cam.height / 2;
     const sx = MAP.imageWidth / MAP_DETAIL.sourceWidth, sy = MAP.imageHeight / MAP_DETAIL.sourceHeight;
     // From the top layer down: a layer fully hidden under an opaque one above needs no pieces.
     let covered = false;
     for (let i = this.layers.length - 1; i >= 0; i--) {
       const layer = this.layers[i];
       const a = layer.image.alpha;
-      const show = want && !covered && a > 0.01 && layer.image.texture && layer.image.texture.key !== '__MISSING';
-      let allReady = show;
+      const show = want && !covered && a >= 1 && layer.image.texture && layer.image.texture.key !== '__MISSING';
       for (const piece of detailPieces(layer.key)) {
         const key = `mapdetail_${this.scene.sys.settings.key}_${piece.file.replace(/\.webp$/, '')}`; // (per scene: a sleeping scene keeps its own)
         const r = piece.rect;
         const x = r.x * sx, y = r.y * sy, w = r.w * sx, h = r.h * sy;
-        const inView = x < view.right && x + w > view.x && y < view.bottom && y + h > view.y;
+        const inView = x < cx + halfW && x + w > cx - halfW && y < cy + halfH && y + h > cy - halfH;
         let p = this.pieces.get(key);
         if (p && p.state === 'failed' && now - p.failedAt > RETRY_MS) { this.pieces.delete(key); p = null; } // try it again
         if (show && inView) {
           if (!p) p = this.load(key, layer, piece, { x, y, w, h });
           p.usedAt = now;
-          if (p.state !== 'ready') allReady = false;
-          if (p.image) p.image.setVisible(true);
+          if (p.image) p.image.setAlpha(1).setVisible(true);
         } else if (p && p.image) p.image.setVisible(false);
       }
-      // The soft picture goes away only under a full set of pieces (it stays while any piece in view is loading).
-      layer.image.setVisible(!allReady);
-      if (a >= 0.99) covered = true;
+      if (a >= 1) covered = true;
     }
     this.evict(now);
   }
@@ -138,6 +133,5 @@ export class MapDetail {
 
   destroy() {
     for (const [key, p] of [...this.pieces.entries()]) this.drop(key, p); // (one still loading is freed when it lands)
-    for (const l of this.layers) if (l.image && l.image.active) l.image.setVisible(true);
   }
 }

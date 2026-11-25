@@ -1,5 +1,5 @@
-import { describe, it, expect } from 'vitest';
-import { pickRenderScale, RENDER_SCALE_CAP, VIEW } from '../src/renderScale.js';
+import { describe, it, expect, vi } from 'vitest';
+import { pickRenderScale, RENDER_SCALE_CAP, VIEW, syncViewport } from '../src/renderScale.js';
 import { MAP_DETAIL, detailPieceRect, detailPieces } from '../src/mapDetail.js';
 
 describe('sharp rendering (renderScale.js)', () => {
@@ -17,6 +17,22 @@ describe('sharp rendering (renderScale.js)', () => {
     expect(pickRenderScale({ width: 844, height: 390, dpr: 3, touch: true })).toBe(RENDER_SCALE_CAP.touch);
     expect(pickRenderScale({ width: 2560, height: 1440, dpr: 2, low: true })).toBe(1);
     expect(pickRenderScale({ width: 0, height: 0 })).toBe(1);
+  });
+
+  it('refreshes fitted canvas and input bounds after rotation even at the same render scale', () => {
+    const viewport = { width: 390, height: 844 };
+    const manager = { canvas: {}, parent: { getBoundingClientRect: () => viewport }, getParentBounds: vi.fn(), refresh: vi.fn() };
+    vi.stubGlobal('window', { devicePixelRatio: 3, matchMedia: () => ({ matches: true }) });
+    try {
+      syncViewport({ scale: manager }, true);
+      Object.assign(viewport, { width: 844, height: 390 });
+      syncViewport({ scale: manager }, true);
+      expect(manager.getParentBounds).toHaveBeenCalledTimes(2);
+      expect(manager.refresh).toHaveBeenCalledTimes(2);
+      expect(manager.getParentBounds.mock.invocationCallOrder[1]).toBeLessThan(manager.refresh.mock.invocationCallOrder[1]);
+    } finally {
+      vi.unstubAllGlobals();
+    }
   });
 });
 

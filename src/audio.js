@@ -5,6 +5,8 @@
 import { requestAudio } from './assetLoader.js';
 import { audioPath } from './assetPlan.js';
 import { clamp01, scaleVolume, musicTrackVolume, ambienceVolumes } from './logic/volume.js';
+import { SFX } from './assetKeys.js';
+import { HERO_TYPES } from './logic/buildings.js';
 
 // Music sits under sound effects so it never drowns them out.
 const MUSIC_MIX = 0.45;
@@ -25,18 +27,19 @@ let musicKey = null;
 // Music and ambience load when they first play (v0.6.2, src/assetPlan.js). A track asked for before its file is in
 // waits here and starts when it arrives, unless something else was asked for (or the music stopped) meanwhile.
 let pendingMusic = null;
-let ambiencePending = false;
+let ambiencePending = null;
 const sceneAlive = (scene) => !!scene && !!scene.sys && (scene.sys.isActive() || scene.sys.isPaused() || scene.sys.isSleeping());
 
 /** Is the track loaded? If not (and it has a file), fetch it and run `then` when it's in, if it's still wanted. */
 function whenLoaded(scene, key, then) {
   if (scene.cache.audio.exists(key)) return true;
   if (!audioPath(key)) return false; // no file: the caller's fallback applies
-  pendingMusic = key;
+  const request = {};
+  pendingMusic = request;
   requestAudio(key).then((ok) => {
-    if (!ok || pendingMusic !== key || !sceneAlive(scene)) return;
+    if (pendingMusic !== request) return;
     pendingMusic = null;
-    then();
+    if (ok && sceneAlive(scene)) then();
   });
   return false;
 }
@@ -103,6 +106,10 @@ export function keepAudioAlive(scene) {
   const ctx = mgr && mgr.context;
   if (!ctx || mgr.locked || ctx.state === 'running' || ctx.state === 'closed') return;
   try { const p = ctx.resume(); if (p && p.catch) p.catch(() => {}); } catch { /* not allowed yet */ }
+}
+
+export function playBuildingSelect(scene, type) {
+  playSfx(scene, HERO_TYPES.includes(type) && scene.cache.audio.exists(SFX.altarSelect) ? SFX.altarSelect : SFX.buildingSelect);
 }
 
 export function getMusicLevel() { return musicLevel; }
@@ -315,10 +322,11 @@ export function startAmbience(scene, dayKey, nightKey, { presence = 0 } = {}) {
   if (ambience || ambiencePending || !hasAmbience(scene, dayKey, nightKey)) return;
   if (!scene.cache.audio.exists(dayKey) || !scene.cache.audio.exists(nightKey)) {
     // Not loaded yet: fetch both, then start them (silent; they fade in), unless stopAmbience came first.
-    ambiencePending = true;
+    const request = {};
+    ambiencePending = request;
     Promise.all([requestAudio(dayKey), requestAudio(nightKey)]).then(([a, b]) => {
-      if (!ambiencePending) return;
-      ambiencePending = false;
+      if (ambiencePending !== request) return;
+      ambiencePending = null;
       if (a && b && sceneAlive(scene)) startAmbience(scene, dayKey, nightKey, { presence });
     });
     return;
@@ -356,7 +364,7 @@ function applyAmbience() {
 }
 
 export function stopAmbience() {
-  ambiencePending = false;
+  ambiencePending = null;
   if (!ambience) return;
   destroySound(ambience.day);
   destroySound(ambience.night);

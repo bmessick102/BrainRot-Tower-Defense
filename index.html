@@ -40,12 +40,25 @@
         font: bold 22px/1.35 "Trebuchet MS", system-ui, sans-serif; padding: 24px; box-sizing: border-box;
       }
       #rotate img { width: 140px; height: auto; border-radius: 24px; }
+      #rotate .rotate-badge {
+        display: grid; place-items: center; width: 120px; height: 108px; border-radius: 18px;
+        border: 3px solid #f2a227; background: linear-gradient(#425972, #253348);
+        box-shadow: 0 4px #0a1119, inset 0 2px #ffffff45;
+      }
       #rotate .phone {
-        width: 46px; height: 80px; border: 5px solid #f2a227; border-radius: 10px; box-sizing: border-box;
+        position: relative; width: 38px; height: 65px; box-sizing: border-box;
+        border: 4px solid #ffdc88; border-radius: 8px; background: linear-gradient(150deg, #71afcf, #325976);
+        box-shadow: 0 0 0 2px #182331, inset 0 0 0 2px #182331, 2px 3px #152130;
         animation: turn 2.2s ease-in-out infinite;
+      }
+      #rotate .phone::after {
+        content: ''; position: absolute; bottom: 3px; left: 9px; width: 12px; height: 3px;
+        border-radius: 2px; background: #ffdc88;
       }
       #rotate small { font-size: 16px; color: #c9bfa3; font-weight: normal; }
       @keyframes turn { 0%, 25% { transform: rotate(0); } 55%, 100% { transform: rotate(-90deg); } }
+      @media (prefers-reduced-motion: reduce) { #rotate .phone { animation: none; transform: rotate(-45deg); } }
+      @media (max-height: 440px) { #rotate { gap: 12px; } #rotate img { width: 100px; } }
       @media (orientation: portrait) and (pointer: coarse) { #rotate { display: flex; } }
     </style>
   </head>
@@ -53,7 +66,7 @@
     <div id="game"></div>
     <div id="rotate" aria-live="polite">
       <img src="apple-touch-icon.png" alt="" />
-      <div class="phone"></div>
+      <div class="rotate-badge" aria-hidden="true"><div class="phone"></div></div>
       <div>Turn your phone sideways to play</div>
       <small>Tip: Add to Home Screen to play full screen</small>
     </div>
