@@ -1,7 +1,7 @@
 // Crowded audio (v0.12.5, src/audio.js): at most MAX_LIVE_SFX (18) effects play at once (a big wave at 4x crackled, then
 // went silent), and keepAudioAlive wakes an audio context the browser suspended.
-import { describe, it, expect } from 'vitest';
-import { playSfx, liveSfxCount, keepAudioAlive } from '../src/audio.js';
+import { describe, it, expect, vi } from 'vitest';
+import { playSfx, liveSfxCount, keepAudioAlive, playMusic, stopMusic, releaseMusic } from '../src/audio.js';
 
 function fakeScene() {
   const sounds = [];
@@ -12,7 +12,7 @@ function fakeScene() {
       add: (key) => {
         const s = { key, manager: {}, pendingRemove: false, isPlaying: false, isPaused: false, handlers: {},
           once(ev, fn) { (this.handlers[ev] ||= []).push(fn); return this; }, play() { this.isPlaying = true; },
-          setVolume() {}, destroy() { this.pendingRemove = true; } };
+          setVolume() {}, stop() { this.isPlaying = false; }, destroy() { this.pendingRemove = true; } };
         sounds.push(s);
         return s;
       }
@@ -43,5 +43,22 @@ describe('crowded sound effects', () => {
     ctx.state = 'running';
     keepAudioAlive({ sound: { locked: false, context: ctx } });
     expect(resumed).toBe(1);
+  });
+
+  it('unlocks a streamed HTML5 track on the next gesture and keeps the audio tag for a return visit', () => {
+    const { scene, sounds } = fakeScene();
+    scene.cache.audio.get = () => [{ dataset: { locked: 'true' } }];
+    scene.cache.audio.remove = vi.fn();
+    scene.sound.unlock = vi.fn();
+    try {
+      playMusic(scene, 'music_title');
+      playMusic(scene, 'music_title');
+      expect(scene.sound.unlock).toHaveBeenCalledOnce();
+      expect(sounds).toHaveLength(1);
+    } finally {
+      stopMusic();
+    }
+    releaseMusic(scene, 'music_title');
+    expect(scene.cache.audio.remove).not.toHaveBeenCalled();
   });
 });

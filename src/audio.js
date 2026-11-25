@@ -32,7 +32,10 @@ const sceneAlive = (scene) => !!scene && !!scene.sys && (scene.sys.isActive() ||
 
 /** Is the track loaded? If not (and it has a file), fetch it and run `then` when it's in, if it's still wanted. */
 function whenLoaded(scene, key, then) {
-  if (scene.cache.audio.exists(key)) return true;
+  if (scene.cache.audio.exists(key)) {
+    unlockStreamedAudio(scene, key);
+    return true;
+  }
   if (!audioPath(key)) return false; // no file: the caller's fallback applies
   const request = {};
   pendingMusic = request;
@@ -42,6 +45,13 @@ function whenLoaded(scene, key, then) {
     if (ok && sceneAlive(scene)) then();
   });
   return false;
+}
+
+// Phaser marks streamed HTML5 audio tags as locked on touch devices, even after the first tap.
+function unlockStreamedAudio(scene, key) {
+  if (scene.sound.context || scene.sound.locked || typeof scene.sound.unlock !== 'function') return;
+  const tags = scene.cache.audio.get(key);
+  if (Array.isArray(tags) && tags.some((tag) => tag.dataset.locked === 'true')) scene.sound.unlock();
 }
 
 /** Fetch a track ahead of time (so it starts on cue), without playing it. */
@@ -60,6 +70,8 @@ export function hasMusicFile(key) {
  */
 export function releaseMusic(scene, key) {
   if (musicKey === key || !scene.cache.audio.exists(key)) return;
+  // Retain unlocked HTML5 tags. Only the Web Audio cache holds full decoded buffers.
+  if (Array.isArray(scene.cache.audio.get(key))) return;
   const sounds = scene.sound.getAll(key);
   if (sounds.some((s) => s.isPlaying)) return;
   for (const s of sounds) s.destroy();
@@ -233,7 +245,7 @@ export function playSfxEndingIn(scene, key, seconds) {
  * scenes; calling again with the same key does nothing.
  */
 export function playMusic(scene, key, { loop = true, seek = 0 } = {}) {
-  if (musicKey === key && music && music.isPlaying) return;
+  if (musicKey === key && music && (music.isPlaying || music.tags?.[0]?.dataset.locked === 'true')) return;
   stopMusic();
   if (!whenLoaded(scene, key, () => playMusic(scene, key, { loop, seek }))) return;
   music = scene.sound.add(key, { loop, volume: musicVolume(key) });
@@ -331,6 +343,8 @@ export function startAmbience(scene, dayKey, nightKey, { presence = 0 } = {}) {
     });
     return;
   }
+  unlockStreamedAudio(scene, dayKey);
+  unlockStreamedAudio(scene, nightKey);
   const day = scene.sound.add(dayKey, { loop: true, volume: 0 });
   const night = scene.sound.add(nightKey, { loop: true, volume: 0 });
   day.play();

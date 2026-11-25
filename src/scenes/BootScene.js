@@ -1,8 +1,8 @@
 // Loads the core art and sounds (src/assetPlan.js: the rest streams in later through AssetStreamScene), then draws a
 // placeholder for every texture key that wasn't loaded. Nothing else in the code cares which one it got.
 import Phaser from 'phaser';
-import { coreImages, coreAudio } from '../assetPlan.js';
-import { TEX, FILE_KEY_ALIASES, buildingKey, buildingDestroyedKey, enemyKey, PROJECTILE_KEYS } from '../assetKeys.js';
+import { coreImages, coreAudio, audioPath } from '../assetPlan.js';
+import { TEX, MUSIC, FILE_KEY_ALIASES, buildingKey, buildingDestroyedKey, enemyKey, PROJECTILE_KEYS } from '../assetKeys.js';
 import { BUILDING_TYPES, buildingSize } from '../logic/buildings.js';
 import { ENEMY_KINDS } from '../logic/enemies.js';
 import { MAP } from '../mapTiles.js';
@@ -80,6 +80,13 @@ export class BootScene extends Phaser.Scene {
       this.load.image(key, BASE + f.path);
     }
     for (const f of coreAudio()) this.load.audio(f.key, BASE + f.path);
+    // On touch browsers using HTML5 audio, register village tracks for the same first tap as the title track.
+    if (!this.sound.context && this.sound.locked) {
+      for (const key of [MUSIC.ambientDay, MUSIC.ambientNight, MUSIC.village]) {
+        const path = audioPath(key);
+        if (path) this.load.audio(key, BASE + path);
+      }
+    }
   }
 
   /**
@@ -153,6 +160,7 @@ export class BootScene extends Phaser.Scene {
     const settings = loadSettings(getStorage());
     setMusicLevel(settings.music);
     setSfxLevel(settings.sfx);
+    if (!this.sound.context && this.sound.locked) this.sound.unlock();
     this.scene.launch('AssetStreamScene'); // streams the rest in from now on (src/assetLoader.js)
     // Anything still missing (placeholder drawn) keeps being asked for, with retries; each picture swaps in when it
     // arrives, and a notice shows if several never do (src/assetNotice.js).
