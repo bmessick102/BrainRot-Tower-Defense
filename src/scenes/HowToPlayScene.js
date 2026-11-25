@@ -8,13 +8,13 @@
 //               Tanks & Bosses, Special) and the picked one on the right: picture, description, tags, which
 //               defenses can hit it, and stats.
 //   Leagues   - every league's badge and the wave it takes, with where you stand when logged in.
-// Arrow keys browse the Buildings / Enemies lists (up / down: the enemy categories); 1-5 switch tabs; Esc goes back.
+// Arrow keys browse the Buildings / Enemies lists (up / down: categories); 1–5 switch tabs; Esc goes back.
 import Phaser from 'phaser';
 import { CONFIG } from '../config.js';
 import { IS_TOUCH } from '../device.js';
 import {
   DEFENSE_TYPES, buildingName, typeConfig, maxLevel, levelStats, limitFor, unlockTownHall, footprintDims, buildCost,
-  totalSpent, isDefense, isSupport
+  totalSpent, isDefense, isSupport, ECONOMY_TYPES, RESEARCH_TYPES, UTILITY_TYPES, SPELL_TYPES, WALL_TYPES, HERO_TYPES
 } from '../logic/buildings.js';
 import { ENEMY_KINDS } from '../logic/enemies.js';
 import { formatGold } from '../logic/economy.js';
@@ -59,14 +59,14 @@ const TABS = [
 const TAB = { y: 134, w: 200, h: 44, gap: 14 };
 const LEFT = 76, RIGHT = 1204;                 // content edges
 const CONTENT_TOP = 174, CONTENT_BOTTOM = 600; // the Back button's top is ~609
-// Browsers (Buildings / Enemies): a row of chips, a picture card on the left, details on the right.
-const CHIP_Y = 200, CHIP_H = 50, CHIP_GAP = 8;
-const CARD = { x: 96, y: 246, w: 216, h: 248 };
-const RX = CARD.x + CARD.w + 40, RW = RIGHT - RX;
+// Both browsers place a roster beside a large picture and its details.
+const BUILDING_ROSTER = { x: LEFT, y: CONTENT_TOP, w: 392, h: CONTENT_BOTTOM - CONTENT_TOP, pad: 14, tileW: 82, tileH: 80, gap: 10 };
+const CARD = { x: 494, y: CONTENT_TOP + 4, w: 190, h: 214 };
+const RX = CARD.x + CARD.w + 30, RW = RIGHT - RX;
 const STAT_COLS = 3, STAT_ROW = 40;
 // Where a browser's parts go: the picture card, the text column right of it (name, tags, description: taller
 // descriptions than descMax drop to a smaller font) and the stat grid.
-const BUILDING_LAYOUT = { card: CARD, rx: RX, rw: RW, descMax: 66, statX: RX, statW: RW };
+const BUILDING_LAYOUT = { card: CARD, rx: RX, rw: RW, descMax: 128, statX: CARD.x, statW: RIGHT - CARD.x };
 // Enemies: the roster panel on the left; the picked enemy's card and text right of it, its "hit by" row and stats
 // across the whole detail area under them. The roster is as wide as its biggest category's row of tiles.
 // Tiles shrink to fit every category's row in the panel's height (v0.7: five categories).
@@ -87,8 +87,12 @@ const CATEGORY_COLORS = { ground: COLORS.button, air: COLORS.buttonBlue, tanks: 
 // Buildings in the order a player meets them: the base, economy, walls, then defenses and traps.
 const BUILDING_ORDER = ['townHall', 'mine', 'storage', 'house', 'shakeCollector', 'shakeStorage', 'rvlab', 'dj', 'fuelStation', 'wall', 'cannon', 'archer', 'mortar', 'wizard', 'firework', 'spear', 'ksi', 'flock', 'ra', 'catapult', 'mousetrap', 'altar', 'queenAltar', 'mageAltar'];
 
-const categoryOf = (kind) => ENEMY_CATEGORIES.find((c) => c.kinds.includes(kind));
-// The category tabs share the chip row: tabs on the left, the shown category's chips on the right.
+const BUILDING_CATEGORIES = [
+  { label: 'Economy', kinds: ['townHall', ...ECONOMY_TYPES, ...RESEARCH_TYPES, ...UTILITY_TYPES, ...SPELL_TYPES] },
+  { label: 'Defenses', kinds: DEFENSE_TYPES },
+  { label: 'Walls', kinds: WALL_TYPES },
+  { label: 'Heroes', kinds: HERO_TYPES }
+];
 
 // Defenses that attack (support towers like the F.L.O.C.K Tower never hit anything).
 const ATTACKERS = DEFENSE_TYPES.filter((t) => !typeConfig(t).support);
@@ -357,8 +361,8 @@ export class HowToPlayScene extends Phaser.Scene {
     };
     this.input.keyboard.on('keydown-LEFT', () => step(-1));
     this.input.keyboard.on('keydown-RIGHT', () => step(1));
-    this.input.keyboard.on('keydown-UP', () => { if (this.tab === 'enemies') this.stepCategory(-1); });
-    this.input.keyboard.on('keydown-DOWN', () => { if (this.tab === 'enemies') this.stepCategory(1); });
+    this.input.keyboard.on('keydown-UP', () => this.stepCategory(-1));
+    this.input.keyboard.on('keydown-DOWN', () => this.stepCategory(1));
     ['ONE', 'TWO', 'THREE', 'FOUR', 'FIVE'].forEach((k, i) => this.input.keyboard.on(`keydown-${k}`, () => this.showTab(TABS[i].key)));
 
     this.showTab('basics');
@@ -484,6 +488,7 @@ export class HowToPlayScene extends Phaser.Scene {
       ]],
       ['Waves, day & night', [
         'Build as long as you like. Press Start Wave to get 30 seconds to get ready. A "!" shows where enemies will come from.',
+        'You can start a raid while heroes recover. Each hero joins after their timer ends and they wake up, even at 2x or 4x speed.',
         `Day turns to night about every 8 minutes. At night, enemies hit ${Math.round((CONFIG.rules.night.damage - 1) * 100)}% harder and move faster, but you earn +${Math.round(CONFIG.rules.night.lootBonus * 100)}% gold and Shakes.`,
         `Each wave is harder than the last and new enemies join at set waves; your Village Hall doesn't change that. Every ${CONFIG.waveThemes.boss.every}th wave is a Boss Wave, and special waves pay bonus gold.`,
         `The round "1x" button beside Start Wave${IS_TOUCH ? '' : ' (or press T)'} shows the wave's speed: press it for 2x, again for 4x, and again for 1x. It stays until you change it.`,
@@ -491,7 +496,7 @@ export class HowToPlayScene extends Phaser.Scene {
         'If your Village Hall falls, you can Retry the wave.'
       ]],
       ['Gold & Shakes', [
-        'Bitcoin Mines make gold. Click a mine when its coin shows (not during a wave).',
+        'Bitcoin Mines make gold. Select a mine or Shake Collector and press Collect, or tap it when its resource icon floats above it.',
         'Your Village Hall and Storages decide how much gold you can hold. Enemies that hit a Storage steal some.',
         'Gnomes mine extra gold and repair buildings. Defeated enemies and achievements pay gold.',
         `Shakes pay for perks, hero levels, spells and merges. Defeated enemies and beaten waves (${CONFIG.rules.researchPointsPerWave} x the wave number) give Shakes, and so do Shake Collectors (click them like mines) and your Village Hall.`,
@@ -575,14 +580,13 @@ export class HowToPlayScene extends Phaser.Scene {
     const isB = key === 'buildings';
     const list = isB ? BUILDING_ORDER : ENEMY_ORDER;
     this.lay = isB ? BUILDING_LAYOUT : ENEMY_LAYOUT;
-    this.chips = [];
     this.rosterTiles = [];
     if (isB) {
-      this.page.add(this.add.text(LEFT + 4, CONTENT_BOTTOM - 8, 'Click a building above, or use the arrow keys', bodyStyle(13, COLORS.inkDim)).setOrigin(0, 1));
-      // One chip per building (green = shown).
-      this.chipLayer = this.add.container(0, 0);
-      this.page.add(this.chipLayer);
-      this.layChips(list.map((item, i) => ({ item, i })), LEFT, RIGHT);
+      const r = BUILDING_ROSTER;
+      this.card(r.x, r.y, r.w, r.h);
+      this.buildingRoster = this.add.container(0, 0);
+      this.buildingCategory = null;
+      this.page.add(this.buildingRoster);
     } else this.buildRoster();
     // The picture card's arrows; the card and details are rebuilt per entry in this.detail.
     this.detail = this.add.container(0, 0);
@@ -597,19 +601,21 @@ export class HowToPlayScene extends Phaser.Scene {
     b.show(b.index, false);
   }
 
-  /** A row of building chips for `entries` ({ item, i }: i = the entry's index in its browser) from x0 to x1. */
-  layChips(entries, x0, x1) {
-    this.chipLayer.removeAll(true);
-    const n = entries.length;
-    const chipW = Math.floor((x1 - x0 - CHIP_GAP * (n - 1)) / n);
-    this.chips = entries.map(({ item, i }, k) => {
-      const chip = new Button(this, x0 + chipW / 2 + k * (chipW + CHIP_GAP), CHIP_Y, chipW, CHIP_H, '', () => this.browsers.buildings.show(i), { radius: 10 });
-      const img = this.add.image(0, -2, buildingTextureKey(this, item, 1));
-      fitIcon(img, chipW - 14, CHIP_H - 14);
-      chip.add(img);
-      chip.itemIndex = i;
-      this.chipLayer.add(chip);
-      return chip;
+  showBuildingRoster(type) {
+    const active = BUILDING_CATEGORIES.find((c) => c.kinds.includes(type));
+    if (active === this.buildingCategory) return;
+    this.buildingCategory = active;
+    const r = BUILDING_ROSTER, x = r.x + r.pad;
+    this.buildingRoster.removeAll(true);
+    this.rosterTiles = [];
+    const w = (r.w - r.pad * 2 - r.gap) / 2;
+    BUILDING_CATEGORIES.forEach((cat, i) => {
+      this.buildingRoster.add(new Button(this, x + w / 2 + (i % 2) * (w + r.gap), r.y + 42 + Math.floor(i / 2) * 66,
+        w, 56, cat.label, () => this.showBuilding(BUILDING_ORDER.indexOf(cat.kinds[0])),
+        { color: cat === active ? COLORS.buttonGood : COLORS.buttonDark, fontSize: 20 }));
+    });
+    active.kinds.forEach((kind, i) => {
+      this.rosterTile(kind, x + (i % 4) * (r.tileW + r.gap), r.y + 151 + Math.floor(i / 4) * (r.tileH + r.gap), true);
     });
   }
 
@@ -639,12 +645,14 @@ export class HowToPlayScene extends Phaser.Scene {
   }
 
   /** One roster entry at (x, y): mini card + picture; click shows it, hover lifts it. */
-  rosterTile(kind, x, y) {
-    const R = ROSTER, index = ENEMY_ORDER.indexOf(kind);
+  rosterTile(kind, x, y, building = false) {
+    const R = building ? BUILDING_ROSTER : ROSTER;
+    const key = building ? 'buildings' : 'enemies';
+    const index = (building ? BUILDING_ORDER : ENEMY_ORDER).indexOf(kind);
     const tile = this.add.container(x + R.tileW / 2, y + R.tileH / 2);
     const g = this.add.graphics();
-    drawShowcaseCard(g, -R.tileW / 2, -R.tileH / 2, R.tileW, R.tileH, { tileY: R.tileH / 2 - 12, tileW: 18 });
-    const img = this.add.image(0, R.tileH / 2 - 8, enemyKey(kind)).setOrigin(0.5, 1);
+    drawShowcaseCard(g, -R.tileW / 2, -R.tileH / 2, R.tileW, R.tileH, { tileY: R.tileH / 2 - 12, tileW: building ? 32 : 18 });
+    const img = this.add.image(0, R.tileH / 2 - 8, building ? buildingTextureKey(this, kind, 1) : enemyKey(kind)).setOrigin(0.5, 1);
     fitIcon(img, R.tileW - 10, R.tileH - 12);
     // The shown enemy's frame: gold, a little outside the card.
     const ring = this.add.graphics();
@@ -655,24 +663,26 @@ export class HowToPlayScene extends Phaser.Scene {
     tile.setSize(R.tileW, R.tileH + 4).setInteractive({ useHandCursor: true });
     tile.on('pointerover', () => this.tweens.add({ targets: tile, scale: 1.08, duration: 90 }));
     tile.on('pointerout', () => this.tweens.add({ targets: tile, scale: 1, duration: 90 }));
-    tile.on('pointerup', () => this.browsers.enemies.show(index));
+    tile.on('pointerup', () => this.browsers[key].show(index));
     tile.itemIndex = index;
     tile.ring = ring;
-    this.page.add(tile);
+    (building ? this.buildingRoster : this.page).add(tile);
     this.rosterTiles.push(tile);
   }
 
-  /** Up / down in the Enemies tab: the first enemy of the next / previous category. */
+  /** Up / down selects the first entry of the next or previous category. */
   stepCategory(d) {
-    const b = this.browsers.enemies;
-    const at = ENEMY_CATEGORIES.indexOf(categoryOf(ENEMY_ORDER[b.index]));
-    const cat = ENEMY_CATEGORIES[(at + d + ENEMY_CATEGORIES.length) % ENEMY_CATEGORIES.length];
-    b.show(ENEMY_ORDER.indexOf(cat.kinds[0]));
+    const b = this.browsers[this.tab];
+    if (!b) return;
+    const building = this.tab === 'buildings';
+    const cats = building ? BUILDING_CATEGORIES : ENEMY_CATEGORIES;
+    const order = building ? BUILDING_ORDER : ENEMY_ORDER;
+    const at = cats.findIndex((c) => c.kinds.includes(order[b.index]));
+    b.show(order.indexOf(cats[(at + d + cats.length) % cats.length].kinds[0]));
   }
 
-  /** Highlight the shown chip and start a fresh detail view. Returns its graphics. */
+  /** Highlight the selected card and start a fresh detail view. */
   beginDetail(index) {
-    this.chips.forEach((chip) => { chip.color = chip.itemIndex === index ? COLORS.buttonGood : COLORS.buttonDark; chip.redraw(); });
     this.rosterTiles.forEach((t) => t.ring.setVisible(t.itemIndex === index));
     const p = this.detail;
     p.removeAll(true);
@@ -738,6 +748,7 @@ export class HowToPlayScene extends Phaser.Scene {
     const b = this.browsers.buildings;
     b.index = index;
     const type = BUILDING_ORDER[index];
+    this.showBuildingRoster(type);
     const g = this.beginDetail(index);
     const top = maxLevel(type);
     const level = b.artMax ? top : 1;
@@ -749,7 +760,7 @@ export class HowToPlayScene extends Phaser.Scene {
     const p = this.detail;
     const tw = (CARD.w - 8) / 2, ty = CARD.y + CARD.h + 26;
     [['Level 1', false], [`Level ${top}`, true]].forEach(([label, max], i) => {
-      const btn = new Button(this, CARD.x + tw / 2 + i * (tw + 8), ty, tw, 36, label, () => { b.artMax = max; this.showBuilding(index, false); },
+      const btn = new Button(this, CARD.x + tw / 2 + i * (tw + 8), ty, tw, 50, label, () => { b.artMax = max; this.showBuilding(index, false); },
         { fontSize: 15, radius: 9, color: b.artMax === max ? COLORS.buttonGood : COLORS.buttonDark });
       p.add(btn);
     });
@@ -759,35 +770,37 @@ export class HowToPlayScene extends Phaser.Scene {
     let y = this.nameBlock(buildingName(type), sub);
     y = this.tagRow(p, RX, y + 6, buildingTags(type));
     y = this.description(BUILDING_DESCRIPTIONS[type], y + 4) + 10;
+    const detailX = CARD.x, detailW = RIGHT - detailX;
+    y = Math.max(y, ty + 27);
 
     // Defenses: their two RV Lab ability paths.
     if (ABILITIES[type]) {
-      const label = this.add.text(RX, y + 5, 'Ability paths (RV Lab):', bodyStyle(14, COLORS.inkDim, { fontStyle: 'bold' }));
+      const label = this.add.text(detailX, y + 5, 'Ability paths (RV Lab)', bodyStyle(14, COLORS.inkDim, { fontStyle: 'bold' }));
       p.add(label);
-      let tx = RX + label.width + 10;
+      let tx = detailX + label.width + 10;
       for (const path of PATH_KEYS) {
         tx += drawTag(this, p, tx, y, `${path.toUpperCase()} · ${ABILITIES[type][path].name}`, PATH_COLORS[path], textStyle(14)) + 8;
       }
-      y += 36;
+      y += 32;
     }
     // Mergeable defenses: what two top-level ones become (the gear, its name, its ability in one line).
     const merge = CONFIG.merges && CONFIG.merges[type];
     if (merge) {
-      let mx = RX;
-      if (this.textures.exists(MERGE_GEAR)) { p.add(fitIcon(this.add.image(RX + 13, y + 14, MERGE_GEAR), 26)); mx += 32; }
+      let mx = detailX;
+      if (this.textures.exists(MERGE_GEAR)) { p.add(fitIcon(this.add.image(detailX + 13, y + 14, MERGE_GEAR), 26)); mx += 32; }
       mx += drawTag(this, p, mx, y, `Merge 2 x Level ${top}: ${merge.name}`, 0xd9a21b, textStyle(14)) + 10;
       p.add(abilityIcon(this, merge.abilityIcon, mx + 20, y + 14, 40));
       mx += 46;
       const line = this.add.text(mx, y + 14, `${merge.ability}: ${merge.abilityShort}`, bodyStyle(14, COLORS.ink, { fontStyle: 'bold' })).setOrigin(0, 0.5);
       fitWidth(line, RX + RW - mx);
       p.add(line);
-      y += 36;
+      y += 32;
     }
     if (type === 'fuelStation') {
       // Its six spells, in even columns: the item's picture, its name and (under it) its effect.
-      const colW = RW / SPELL_KINDS.length, textW = colW - 44;
+      const colW = detailW / SPELL_KINDS.length, textW = colW - 44;
       SPELL_KINDS.forEach((k, i) => {
-        const sx = RX + i * colW;
+        const sx = detailX + i * colW;
         const icon = addSpellIcon(this, sx + 17, y + 17, k, 36);
         const name = this.add.text(sx + 40, y + 9, spellName(k), bodyStyle(13, COLORS.ink, { fontStyle: 'bold' })).setOrigin(0, 0.5);
         const eff = this.add.text(sx + 40, y + 26, spellEffect(k), bodyStyle(11.5, COLORS.inkDim, { fontStyle: 'bold' })).setOrigin(0, 0.5);
@@ -796,11 +809,11 @@ export class HowToPlayScene extends Phaser.Scene {
       });
       y += 42;
     } else if (type === 'rvlab') {
-      p.add(this.add.text(RX, y, `Researches the ability paths of all ${Object.keys(ABILITIES).length} defenses (see the Upgrades tab).`, bodyStyle(14, COLORS.inkDim, { fontStyle: 'bold' })));
+      p.add(this.add.text(detailX, y, `Researches the ability paths of all ${Object.keys(ABILITIES).length} defenses (see the Upgrades tab).`, bodyStyle(14, COLORS.inkDim, { fontStyle: 'bold' })));
       y += 26;
     }
-    p.add(this.add.text(RX, y, `Stats: level 1 → level ${top}`, bodyStyle(13, COLORS.inkDim)));
-    this.statGrid(g, p, buildingStats(type), Math.min(y + 22, CONTENT_BOTTOM - STAT_ROW * 2 + 6));
+    p.add(this.add.text(detailX, y, `Stats · Level 1 → Level ${top}`, bodyStyle(14, COLORS.inkDim)));
+    this.statGrid(g, p, buildingStats(type), y + 20);
   }
 
   // ---------- Enemies ----------

@@ -2,6 +2,33 @@
 
 The version shows in the bottom-left corner of every screen (`package.json` `version` plus the commit). Details for everything below are in [README.md](README.md).
 
+## 0.15.0
+
+Development Update 5 improves mobile framing, village visits, raid recovery, and building menus. Apply the revised [Village Hall migration](supabase/migration-2026-11-23-village-halls-20.sql) to recover leaderboard levels on an existing database.
+
+### New Features
+
+- Bitcoin Mines and Shake Collectors have Collect buttons in the quick bar and full info panel. Both use the existing transfer, settings, and feedback, and save successful collections.
+- Visits show the same range circles as the home village and list researched Mastery tiers under regular perks.
+
+### Changes
+
+- How to Play uses the Enemies roster cards for Buildings and groups entries by the existing shop categories. The RV Lab fits five larger building rows per page on phones, enlarges tier controls, and confirms research before spending Shakes.
+- Each hero’s recovery advances at normal speed during 2x and 4x raids. Save data retains fractional timers and the Mage resumes his remaining recovery if rebuilt during a raid.
+- The mobile rotation prompt uses the game’s slate, blue, and gold styling.
+
+### Balance
+
+- Shake Storage levels now hold 800 / 1,300 / 1,600 / 2,500 / 3,400 / 3,900 / 5,000 / 5,400 / 5,900 / 7,000 / 7,700 / 8,700 Shakes. The increase budgets room for additional raid earnings alongside existing upgrade costs.
+- Spawn cadence uses the mean of the pre-v0.12.5 and v0.12.5 rates per open entrance. The entrance opening schedule and wave composition stay the same.
+- Village Hall 20 allows 14 Locklair Archer Towers, down from 15. Existing towers remain in saved layouts.
+
+### Bug Fixes
+
+- Window, viewport, and orientation changes refit the Phaser canvas and refresh pointer bounds, including during loading. The map keeps its base texture under detail tiles so it covers the playable area through zoom and pan changes.
+- Village visits replace menu music with the saved time-of-day ambience and play regular building selection sounds.
+- The Level 20 leaderboard migration restores derived Hall levels from existing saves while preserving wave ranks, save revisions, and wave credit.
+
 ## 0.14.0
 
 Shakes: Burgers become Grimace Shakes (still `rp` internally), with two new buildings that make and hold them, and the

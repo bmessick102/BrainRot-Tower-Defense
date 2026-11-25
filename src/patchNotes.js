@@ -2,7 +2,7 @@
 // once per `version` (the first time the title screen opens after an update; saved in ibtd.patchNotes), and its
 // "What's New" button opens it any time. Keep `version` equal to package.json's for the release it describes.
 //
-// One tab per minor update (v0.7.1): PATCH_NOTES is the newest (its tab is "v0.14 · Latest"), PATCH_HISTORY the older
+// One tab per minor update (v0.7.1): PATCH_NOTES is the newest (its tab is "v0.15 · Latest"), PATCH_HISTORY the older
 // ones, newest first. Each has `release` (the tab's name: '0.7'), `version` (its newest patch) and `sections`.
 // When a new minor update ships, the current PATCH_NOTES content moves to the front of PATCH_HISTORY.
 //
@@ -18,50 +18,86 @@
 const allEntries = (release) => release.sections.flatMap((s) => s.entries);
 
 export const PATCH_NOTES = {
-  release: '0.14',
-  version: '0.14.0',
-  title: "What's New in v0.14",
+  release: '0.15',
+  version: '0.15.0',
+  title: "What's New in v0.15",
   sections: [
-    {
-      type: 'feature',
-      entries: [
-        {
-          version: '0.14.0', icon: { building: 'shakeCollector', level: 9 }, title: 'New building: Shake Collector (from Village Hall 3)',
-          text: 'It makes Grimace Shakes all the time. Click it when its Shake shows to collect, like a Bitcoin Mine (not during a wave). You can build 1 at Village Hall 3, up to 4 at Village Hall 14.'
-        },
-        {
-          version: '0.14.0', icon: { building: 'shakeStorage', level: 11 }, title: 'New building: Shake Storage (from Village Hall 3)',
-          text: 'A glass tank that raises how many Shakes you can hold, and fills up as your Shakes grow. Enemies that hit it spill some. You can build 1, and a second at Village Hall 8.'
-        },
-        {
-          version: '0.14.0', icon: { building: 'townHall', level: 10 }, title: 'Your Village Hall makes Shakes',
-          text: 'The Village Hall now makes a small trickle of Shakes on its own, like its gold, and holds a few Shakes too. Both grow with its level.'
-        }
-      ]
-    },
-    {
-      type: 'change',
-      entries: [
-        {
-          version: '0.14.0', icon: { texture: 'ui_shake' }, title: 'Burgers are now Shakes',
-          text: 'Burgers are now Grimace Shakes, with a purple bar and a new icon. You keep every one, and they still pay for perks, hero levels, spells and merges.'
-        },
-        {
-          version: '0.14.0', icon: { building: 'shakeStorage', level: 5 }, title: 'Shake Storages set how many Shakes you can hold',
-          text: 'The RV Lab no longer raises the limit: your Village Hall and Shake Storages do. If you had more Shakes than the new limit, you keep them all and can spend them; new ones come in once you are back under it.'
-        },
-        {
-          version: '0.14.0', icon: { hero: true }, title: 'Heroes have their own shop tab',
-          text: 'The Brisket King, Hatsune Queen and Locklair Mage moved from the Defenses tab to a new Heroes tab in the shop.'
-        }
-      ]
-    }
+    { type: 'feature', entries: [
+      { version: '0.15.0', icon: { building: 'shakeCollector' }, title: 'Collect from building menus',
+        text: 'Select a Bitcoin Mine or Shake Collector to see how much it holds and Collect. If storage fills up, the rest stays in the building.' },
+      { version: '0.15.0', icon: { building: 'archer' }, title: 'Inspect defenses in visited villages',
+        text: 'Tap a building to see its reach and any Mastery perks its owner researched.' }
+    ] },
+    { type: 'change', entries: [
+      { version: '0.15.0', icon: { building: 'rvlab' }, title: 'Larger RV Lab and How to Play controls',
+        text: 'How to Play groups buildings into larger picture cards. The RV Lab has larger perk cards, building pages on phones, and a confirmation before research.' },
+      { version: '0.15.0', icon: { hero: true }, title: 'Heroes recover at their own pace',
+        text: 'Start a raid while a hero sleeps and they’ll join once their own recovery timer ends and they wake up. Wave speed affects combat and leaves recovery at normal speed.' }
+    ] },
+    { type: 'balance', entries: [
+      { version: '0.15.0', icon: { building: 'shakeStorage' }, title: 'Shake Storages hold more',
+        text: 'Every Shake Storage holds more Shakes, from 800 at Level 1 to 8,700 at Level 12.' },
+      { version: '0.15.0', icon: { enemy: 'grunt' }, title: 'Faster spawns from multiple entrances',
+        text: 'When multiple entrances are open, enemies arrive at a pace halfway between the old and recent rates. Entrances still open in stages.' },
+      { version: '0.15.0', icon: { building: 'archer' }, title: '14 Archer Towers at Village Hall 20',
+        text: 'Village Hall 20 allows 14 Archer Towers for seven merge pairs. Any tower you already built stays in your village.' }
+    ] },
+    { type: 'fix', entries: [
+      { version: '0.15.0', icon: { building: 'townHall', level: 20 }, title: 'Village Hall 20 on the leaderboard',
+        text: 'The leaderboard shows Village Hall Levels 16 through 20 from your saved village.' },
+      { version: '0.15.0', icon: { building: 'townHall' }, title: 'Better framing on phones and at wide zoom',
+        text: 'The game refits the screen when you turn your phone, including during loading. The map stays visible while you zoom out.' },
+      { version: '0.15.0', icon: { building: 'dj' }, title: 'Village audio on visits',
+        text: 'Visiting a village plays its day or night ambience. Buildings play their usual sound when you select them.' }
+    ] }
   ],
   get entries() { return allEntries(this); }
 };
 
 /** Older updates, newest first: one What's New tab each (players can read them any time). */
 export const PATCH_HISTORY = [
+  {
+    release: '0.14',
+    version: '0.14.0',
+    title: "What's New in v0.14",
+    sections: [
+      {
+        type: 'feature',
+        entries: [
+          {
+            version: '0.14.0', icon: { building: 'shakeCollector', level: 9 }, title: 'New building: Shake Collector (from Village Hall 3)',
+            text: 'It makes Grimace Shakes all the time. Click it when its Shake shows to collect, like a Bitcoin Mine (not during a wave). You can build 1 at Village Hall 3, up to 4 at Village Hall 14.'
+          },
+          {
+            version: '0.14.0', icon: { building: 'shakeStorage', level: 11 }, title: 'New building: Shake Storage (from Village Hall 3)',
+            text: 'A glass tank that raises how many Shakes you can hold, and fills up as your Shakes grow. Enemies that hit it spill some. You can build 1, and a second at Village Hall 8.'
+          },
+          {
+            version: '0.14.0', icon: { building: 'townHall', level: 10 }, title: 'Your Village Hall makes Shakes',
+            text: 'The Village Hall now makes a small trickle of Shakes on its own, like its gold, and holds a few Shakes too. Both grow with its level.'
+          }
+        ]
+      },
+      {
+        type: 'change',
+        entries: [
+          {
+            version: '0.14.0', icon: { texture: 'ui_shake' }, title: 'Burgers are now Shakes',
+            text: 'Burgers are now Grimace Shakes, with a purple bar and a new icon. You keep every one, and they still pay for perks, hero levels, spells and merges.'
+          },
+          {
+            version: '0.14.0', icon: { building: 'shakeStorage', level: 5 }, title: 'Shake Storages set how many Shakes you can hold',
+            text: 'The RV Lab no longer raises the limit: your Village Hall and Shake Storages do. If you had more Shakes than the new limit, you keep them all and can spend them; new ones come in once you are back under it.'
+          },
+          {
+            version: '0.14.0', icon: { hero: true }, title: 'Heroes have their own shop tab',
+            text: 'The Brisket King, Hatsune Queen and Locklair Mage moved from the Defenses tab to a new Heroes tab in the shop.'
+          }
+        ]
+      }
+    ],
+    get entries() { return allEntries(this); }
+  },
   {
     release: '0.13',
     version: '0.13.1',

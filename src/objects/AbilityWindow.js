@@ -25,15 +25,16 @@ import { TEX } from '../assetKeys.js';
 import { isMergeable, hasMergedOf, masteryLevel, masteryTier, masteryTierCount, checkMastery, needsMergeReason } from '../logic/merge.js';
 import { mergeConfig } from '../logic/buildings.js';
 import { MERGE_GEAR } from './BuildingView.js';
+import { IS_TOUCH } from '../device.js';
 
 // Layout (pixels). The grid has a "Tier N" gutter, then three path columns; the details panel sits to its right.
 const GUTTER = 46;
 const COL_HEAD = 36;
-const NODE_H = 60, ROW_STEP = 70;
+const NODE_H = IS_TOUCH ? 80 : 64, ROW_STEP = NODE_H + 8;
 const TOP = 112;                                      // grid / panel top, below the title and the info line
 const INFO_Y = 84;                                    // the info line / tabs / balance row: clear of the title bar (ends at 60)
 const GRID_H = COL_HEAD + 8 + ROW_STEP * (MAX_TIER - 1) + NODE_H;
-const RESPEC_H = 46;                                  // the "Reset path" row under the tree
+const RESPEC_H = 58;                                  // the "Reset path" row under the tree
 // Merged defenses' Mastery (merge.js): a gold 4th column ("★ Mastery", 3 tiers) next to the three paths, for every type that can
 // merge (v0.9.3); greyed out, with no glow, until the village has a merged one. The window is always as wide as the
 // 4-column layout needs; a type that can't merge spreads its 3 columns wider.
@@ -168,11 +169,11 @@ function drawTree(scene, m, x, y, colW, gap, type, nodeState, selected, onSelect
       gem(ng, cx + 20, cy + NODE_H / 2, 10, color, owned, dim);
       // The Mastery column keeps to its gold theme: every name and line in gold tones (no green, red or grey).
       const nameInk = col.gold ? (dim ? MASTERY_INK.dim : MASTERY_INK.name) : dim || st.hidden ? '#a89c88' : COLORS.ink;
-      const name = m.add(scene.add.text(cx + 36, cy + 10, col.title(t, st), bodyStyle(14.5, nameInk, { fontStyle: 'bold' })));
+      const name = m.add(scene.add.text(cx + 36, cy + 12, col.title(t, st), bodyStyle(16, nameInk, { fontStyle: 'bold' })));
       fitWidth(name, colW - 42);
       const lineInk = col.gold ? (owned ? col.ink : dim ? MASTERY_INK.dim : MASTERY_INK.line)
         : owned ? col.ink : avail ? (st.short ? COLORS.inkBad : COLORS.inkGood) : dim ? '#b3a892' : COLORS.inkDim;
-      fitWidth(m.add(scene.add.text(cx + 36, cy + 33, st.line || '', bodyStyle(12.5, lineInk, { fontStyle: owned || avail ? 'bold' : 'normal' }))), colW - 42); // ("Research · 1,400 Shakes" fits)
+      fitWidth(m.add(scene.add.text(cx + 36, cy + NODE_H / 2 + 5, st.line || '', bodyStyle(14, lineInk, { fontStyle: owned || avail ? 'bold' : 'normal' }))), colW - 42);
       if (isSel) {
         const sel = m.add(scene.add.graphics());
         sel.lineStyle(3, 0xffc83a, 1).strokeRoundedRect(cx - 2, cy - 2, colW + 4, NODE_H + 4, 13);
@@ -217,7 +218,7 @@ function drawDetails(scene, m, x, y, w, h, d) {
   cy += 38;
   fitWidth(m.add(scene.add.text(x + 20, cy, d.subtitle || `Path ${d.path.toUpperCase()} · ${pathName(d.type, d.path)} · Tier ${d.tier}`, bodyStyle(14, d.ink || INK[d.path], { fontStyle: 'bold' }))), w - 40);
   cy += 30;
-  const desc = m.add(scene.add.text(x + 20, cy, info.desc, bodyStyle(16, COLORS.ink, { wordWrap: { width: w - 40 }, lineSpacing: 4 })));
+  const desc = m.add(scene.add.text(x + 20, cy, info.desc, bodyStyle(18, COLORS.ink, { wordWrap: { width: w - 40 }, lineSpacing: 4 })));
   cy += desc.height + 14;
   if (d.applies) {
     const ap = m.add(scene.add.text(x + 20, cy, d.applies, bodyStyle(14, COLORS.inkDim, { fontStyle: 'italic', wordWrap: { width: w - 40 } })));
@@ -228,14 +229,14 @@ function drawDetails(scene, m, x, y, w, h, d) {
     g.fillStyle(COLORS.frame, 0.15).fillRect(x + 20, cy - 10, w - 40, 1);
     for (const [ok, text] of d.checks) {
       m.add(scene.add.text(x + 22, cy, ok ? '✔' : '✘', bodyStyle(15, ok ? COLORS.inkGood : COLORS.inkBad, { fontStyle: 'bold' })));
-      m.add(scene.add.text(x + 44, cy, text, bodyStyle(14.5, ok ? COLORS.ink : COLORS.inkBad, { wordWrap: { width: w - 64 } })));
-      cy += 25;
+      const check = m.add(scene.add.text(x + 44, cy, text, bodyStyle(16, ok ? COLORS.ink : COLORS.inkBad, { wordWrap: { width: w - 64 } })));
+      cy += Math.max(25, check.height + 6);
     }
   }
   const by = y + h - 42;
   if (d.button) {
     // The price is on the button ("Research · 240 RP"); the RP balance is at the top right.
-    const b = new Button(scene, x + w / 2, by, w - 40, 56, d.button.label, d.button.onClick, { color: d.buttonColor ?? (d.rp ? 0x8e5bd6 : COLORS.buttonGood), fontSize: 22, radius: 12 });
+    const b = new Button(scene, x + w / 2, by, w - 40, 66, d.button.label, d.button.onClick, { color: d.buttonColor ?? (d.rp ? 0x8e5bd6 : COLORS.buttonGood), fontSize: 20, radius: 12 });
     b.setLabel(d.button.label, d.button.ok ? '' : d.button.sub || '').setEnabled(!!d.button.ok);
     m.add(b);
   } else if (d.note) {
@@ -295,6 +296,13 @@ export function openResearchWindow(scene, gs, { onClose = null, startType = null
   const TABS = [{ key: 'defenses', label: 'Defenses', types: DEFENSE_ABILITY_TYPES }, { key: 'economy', label: 'Economy', types: ECONOMY_ABILITY_TYPES }];
   if (!type) type = ABILITY_TYPES.find((t) => canResearchFor(gs, t)) || DEFENSE_ABILITY_TYPES[0];
   let tab = ECONOMY_ABILITY_TYPES.includes(type) ? 'economy' : 'defenses';
+  const pageSize = IS_TOUCH ? 5 : Infinity;
+  let page = IS_TOUCH ? Math.floor(TABS.find((t) => t.key === tab).types.indexOf(type) / pageSize) : 0;
+
+  const confirmResearch = (name, cost, onConfirm) => confirmDialog(scene, {
+    title: 'Research perk?', lines: [name, cost ? `Cost · ${rpText(cost)}` : 'Free research'],
+    confirmLabel: 'Research', confirmColor: COLORS.buttonGood, onConfirm
+  });
 
   /** "Applies to every Cannon (3 now), whatever its level." */
   const appliesText = (owned) => {
@@ -323,25 +331,28 @@ export function openResearchWindow(scene, gs, { onClose = null, startType = null
       : 'Build or rebuild an RV Lab to research.', W - 420 - LIST_W, m.x + 22 + LIST_W + 14);
     // The tabs, over the list: the selected one green, a red "!" on a tab with research ready.
     TABS.forEach((tb, i) => {
-      const tw = (LIST_W - 6) / 2, tx = m.x + 22 + i * (tw + 6), ty = m.y + INFO_Y - 16, on = tb.key === tab;
+      const tw = (LIST_W - 6) / 2, tx = m.x + 22 + i * (tw + 6), th = IS_TOUCH ? 48 : 36;
+      const ty = m.y + INFO_Y - th / 2, on = tb.key === tab;
       const g = m.add(scene.add.graphics());
-      g.fillStyle(COLORS.frame, 1).fillRoundedRect(tx, ty, tw, 30, 9);
-      g.fillStyle(on ? 0x6cbf2c : 0x4a4f5a, 1).fillRoundedRect(tx + 2, ty + 2, tw - 4, 25, 8);
+      g.fillStyle(COLORS.frame, 1).fillRoundedRect(tx, ty, tw, th, 9);
+      g.fillStyle(on ? 0x6cbf2c : 0x4a4f5a, 1).fillRoundedRect(tx + 2, ty + 2, tw - 4, th - 5, 8);
       g.fillStyle(0xffffff, 0.18).fillRoundedRect(tx + 5, ty + 4, tw - 10, 7, 4);
       // A red "!" inside the tab's right end (not over its corner, where it ran into the next tab); the label
       // moves left to make room.
       const ready = tb.types.some((t) => canResearchFor(gs, t));
-      const label = m.add(scene.add.text(tx + (ready ? (tw - 18) / 2 + 2 : tw / 2), ty + 14, tb.label, textStyle(15)).setOrigin(0.5));
+      const cy = ty + th / 2 - 2;
+      const label = m.add(scene.add.text(tx + (ready ? (tw - 18) / 2 + 2 : tw / 2), cy, tb.label, textStyle(16)).setOrigin(0.5));
       fitWidth(label, tw - (ready ? 28 : 12));
       if (ready) {
-        drawBadge(g, tx + tw - 13, ty + 14, 7);
-        m.add(scene.add.text(tx + tw - 13, ty + 13, '!', textStyle(11)).setOrigin(0.5));
+        drawBadge(g, tx + tw - 13, cy, 7);
+        m.add(scene.add.text(tx + tw - 13, cy, '!', textStyle(11)).setOrigin(0.5));
       }
-      const zone = m.add(scene.add.zone(tx, ty, tw, 30).setOrigin(0).setInteractive({ useHandCursor: true }));
+      const zone = m.add(scene.add.zone(tx, ty, tw, th).setOrigin(0).setInteractive({ useHandCursor: true }));
       zone.on('pointerdown', () => {
         if (tab === tb.key) return;
         tab = tb.key;
         type = tb.types.find((t) => canResearchFor(gs, t)) || tb.types[0];
+        page = IS_TOUCH ? Math.floor(tb.types.indexOf(type) / pageSize) : 0;
         selected = null;
         refresh();
       });
@@ -355,15 +366,22 @@ export function openResearchWindow(scene, gs, { onClose = null, startType = null
     // pick), centered together in the row, and a "!" badge on the right when research is ready. Everything is
     // placed from the row's height (12 defenses make short rows), so nothing overlaps.
     const types = TABS.find((tb) => tb.key === tab).types;
-    const lx = m.x + 22, ly = m.y + TOP, itemH = Math.min(58, Math.floor((treeH + RESPEC_H + 4) / types.length)); // (down past the tree, beside its Reset path row)
-    types.forEach((t, i) => {
+    const pages = Math.max(1, Math.ceil(types.length / pageSize));
+    const lx = m.x + 22, ly = m.y + TOP;
+    const itemH = IS_TOUCH ? 82 : Math.min(62, Math.floor((treeH + RESPEC_H + 4) / types.length));
+    const go = (dir) => {
+      const next = page + dir;
+      if (next >= 0 && next < pages) { page = next; refresh(); }
+    };
+    const first = IS_TOUCH ? page * pageSize : 0;
+    types.slice(first, first + pageSize).forEach((t, i) => {
       const y = ly + i * itemH, sel = t === type;
       const top = y + 2, inner = itemH - 8; // the row's face
       const g = m.add(scene.add.graphics());
       g.fillStyle(COLORS.frame, sel ? 1 : 0.2).fillRoundedRect(lx, y, LIST_W, itemH - 4, 9);
       g.fillStyle(sel ? 0x6cbf2c : 0xf3ecdd, 1).fillRoundedRect(lx + 2, top, LIST_W - 4, inner, 8);
       // Picture tile.
-      const tileW = 32, tileX = lx + 5;
+      const tileW = IS_TOUCH ? 48 : 34, tileX = lx + 5;
       g.fillStyle(sel ? 0x4f9a22 : 0xe3dac6, 1).fillRoundedRect(tileX, top + 2, tileW, inner - 4, 6);
       const pic = m.add(scene.add.image(tileX + tileW / 2, top + inner / 2, buildingTextureKey(scene, t, 1)));
       fitIcon(pic, tileW - 4, inner - 6);
@@ -372,7 +390,8 @@ export function openResearchWindow(scene, gs, { onClose = null, startType = null
       // Name over the tier bars, as one block centered in the row.
       const ready = canResearchFor(gs, t);
       const nx = tileX + tileW + 7, barH = Math.max(4, Math.min(6, Math.round(inner / 7)));
-      const name = m.add(scene.add.text(nx, 0, buildingName(t), sel ? textStyle(13.5) : bodyStyle(13, COLORS.ink, { fontStyle: 'bold' })));
+      const size = IS_TOUCH ? 17 : 14;
+      const name = m.add(scene.add.text(nx, 0, buildingName(t), sel ? textStyle(size) : bodyStyle(size, COLORS.ink, { fontStyle: 'bold' })));
       fitWidth(name, lx + LIST_W - nx - (ready ? 30 : 10)); // ends before the "!" badge
       const blockH = name.displayHeight + 2 + barH;
       name.setY(top + (inner - blockH) / 2);
@@ -392,7 +411,15 @@ export function openResearchWindow(scene, gs, { onClose = null, startType = null
       zone.on('pointerover', () => hover.setVisible(!sel));
       zone.on('pointerout', () => hover.setVisible(false));
       zone.on('pointerdown', () => { if (type !== t) { type = t; selected = null; refresh(); } });
+      if (pages > 1) zone.on('wheel', (p, dx, dy) => go(Math.sign(dy)));
     });
+    if (pages > 1) {
+      const y = ly + pageSize * itemH + 36;
+      const nav = { color: COLORS.buttonBlue, radius: 9 };
+      m.add(new Button(scene, lx + 32, y, 62, 58, '', () => go(-1), { ...nav, icon: 'left' }).setEnabled(page > 0));
+      m.add(new Button(scene, lx + LIST_W - 32, y, 62, 58, '', () => go(1), { ...nav, icon: 'right' }).setEnabled(page < pages - 1));
+      m.add(scene.add.text(lx + LIST_W / 2, y, `${page + 1} / ${pages}`, bodyStyle(16, COLORS.ink, { fontStyle: 'bold' })).setOrigin(0.5));
+    }
 
     const st = stateOf(lab);
     if (!selected) selected = firstPick(st);
@@ -430,33 +457,50 @@ export function openResearchWindow(scene, gs, { onClose = null, startType = null
           detail.applies = `Opens once you have a ${M.name}. Not part of the path lock.`;
           detail.checks = [[false, `A ${M.name} (merge two)`], ...detail.checks.filter(([, label]) => !/^Mastery \d first$/.test(label))];
           detail.note = needsMergeReason(type);
-        } else if (s.state === 'owned') { detail.note = '✔ Mastered'; detail.noteGood = true; }
+        } else if (s.state === 'owned') {
+          detail.note = have === masteryTierCount(type) ? '✔ Fully mastered' : '✔ Mastered';
+          detail.noteGood = true;
+        }
         else if (s.state === 'future') detail.note = `Research Mastery ${have + 1} first`;
-        else detail.button = { label: `Research · ${rpText(info.cost)}`, ok: mc.ok, sub: mc.reason, onClick: () => { if (gs.researchMastery(type).ok) { selected = { mastery: true, tier: Math.min(masteryTierCount(type), t + 1) }; refresh(); } } };
+        else {
+          const target = type;
+          detail.button = { label: `Research · ${rpText(info.cost)}`, ok: mc.ok, sub: mc.reason, onClick: () => confirmResearch(info.name, info.cost, () => {
+            if (checkMastery(gs, target, t).ok && gs.researchMastery(target).ok) {
+              selected = { mastery: true, tier: Math.min(masteryTierCount(target), t + 1) };
+              refresh();
+            }
+          }) };
+        }
         drawDetails(scene, m, panelX, gy, PANEL_W, treeH, detail);
       }
     }
     drawTree(scene, m, gx, gy, COL_W, GAP, type, st, selected, (sel) => { selected = sel; refresh(); }, labPicks(gs, type), mState ? { stateOf: mState, locked: masteryLocked } : null);
 
     if (!selected.mastery) {
-    const { path, tier } = selected;
-    const s = st(path, tier);
-    const c = checkResearch(gs, type, path, tier);
-    const count = labTierCount(gs, type);
-    const locked = lockedPath(gs, type);
-    const checks = s.state === 'owned' || s.state === 'taken' || s.hidden ? [] : [
-      [lab >= tier, `RV Lab level ${tier}${lab ? ` (yours: ${lab})` : ''}`],
-      ...(tier > 1 ? [[count >= tier - 1, `Tier ${tier - 1} first`]] : []),
-      [!isWaveActive(gs), 'Not during a wave']
-    ];
-    const detail = { type, path, tier, checks, hidden: !!s.hidden, applies: s.state === 'taken' || s.hidden ? '' : appliesText(s.state === 'owned'), rp: true, button: null };
-    if (!locked && !s.hidden && s.state === 'available') detail.applies += ' Picking it locks every ' + buildingName(type) + ' to Path ' + path.toUpperCase() + '.';
-    if (s.hidden) detail.note = `Unlocks at RV Lab level ${tier}`;
-    else if (s.state === 'owned') { detail.note = '✔ Researched'; detail.noteGood = true; }
-    else if (s.state === 'taken') detail.note = `Your ${buildingName(type)}s are locked to Path ${locked.toUpperCase()}. Reset the path to switch.`;
-    else if (s.state === 'future') detail.note = `Research tier ${count + 1} first`;
-    else detail.button = { label: c.cost === 0 ? 'Research (free)' : `Research · ${rpText(c.cost ?? researchCost(tier))}`, ok: c.ok, sub: c.reason, onClick: () => { if (gs.researchAbility(type, path, tier).ok) { selected = { path, tier: Math.min(MAX_TIER, tier + 1) }; refresh(); } } };
-    drawDetails(scene, m, panelX, gy, PANEL_W, treeH, detail);
+      const { path, tier } = selected;
+      const s = st(path, tier);
+      const c = checkResearch(gs, type, path, tier);
+      const count = labTierCount(gs, type);
+      const locked = lockedPath(gs, type);
+      const checks = s.state === 'owned' || s.state === 'taken' || s.hidden ? [] : [
+        [lab >= tier, `RV Lab level ${tier}${lab ? ` (yours: ${lab})` : ''}`],
+        ...(tier > 1 ? [[count >= tier - 1, `Tier ${tier - 1} first`]] : []),
+        [!isWaveActive(gs), 'Not during a wave']
+      ];
+      const detail = { type, path, tier, checks, hidden: !!s.hidden, applies: s.state === 'taken' || s.hidden ? '' : appliesText(s.state === 'owned'), rp: true, button: null };
+      if (!locked && !s.hidden && s.state === 'available') detail.applies += ' Picking it locks every ' + buildingName(type) + ' to Path ' + path.toUpperCase() + '.';
+      if (s.hidden) detail.note = `Unlocks at RV Lab level ${tier}`;
+      else if (s.state === 'owned') { detail.note = count === MAX_TIER ? '✔ Fully researched' : '✔ Researched'; detail.noteGood = true; }
+      else if (s.state === 'taken') detail.note = `Your ${buildingName(type)}s are locked to Path ${locked.toUpperCase()}. Reset the path to switch.`;
+      else if (s.state === 'future') detail.note = `Research tier ${count + 1} first`;
+      else {
+        const target = type;
+        detail.button = { label: c.cost === 0 ? 'Research (free)' : `Research · ${rpText(c.cost ?? researchCost(tier))}`, ok: c.ok, sub: c.reason,
+          onClick: () => confirmResearch(tierInfo(target, path, tier).name, c.cost, () => {
+            if (gs.researchAbility(target, path, tier).ok) { selected = { path, tier: Math.min(MAX_TIER, tier + 1) }; refresh(); }
+          }) };
+      }
+      drawDetails(scene, m, panelX, gy, PANEL_W, treeH, detail);
     }
 
     // Paid respec, under the tree: clears this type's path (its picks are not refunded) so it can take another. Always
@@ -466,7 +510,7 @@ export function openResearchWindow(scene, gs, { onClose = null, startType = null
     if (count > 0) {
       const rc = checkRespec(gs, type), ry = gy + treeH + 8 + RESPEC_H / 2;
       m.add(scene.add.text(gx, ry, `${buildingName(type)}s are locked to Path ${locked.toUpperCase()} · ${pathName(type, locked)}${rc.ok ? '' : ` (${rc.reason})`}`, bodyStyle(14, COLORS.inkDim, { fontStyle: 'bold' })).setOrigin(0, 0.5));
-      const rb = new Button(scene, panelX + PANEL_W - 150, ry, 300, 42, `Reset path · ${rpText(rc.cost)}`, () => {
+      const rb = new Button(scene, panelX + PANEL_W - 150, ry, 300, 54, `Reset path · ${rpText(rc.cost)}`, () => {
         confirmDialog(scene, {
           title: 'Reset path?',
           lines: [`Reset the ${buildingName(type)} path for ${rpText(rc.cost)}?`,
