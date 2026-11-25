@@ -45,7 +45,7 @@ const MASTERY_GREY = 0xb3aa9a; // the column before the type has a merged buildi
 const WIN_H = TOP + GRID_H + RESPEC_H + 24;
 const INK = { a: '#b8640a', b: '#2a6fb0', c: '#2f8a2f' }; // path colors that read on the light body
 // Events that can change what the windows show.
-const REFRESH_ON = ['goldChanged', 'abilityResearched', 'abilitiesApplied', 'buildingPlaced', 'buildingUpgraded', 'buildingDestroyed',
+const REFRESH_ON = ['abilityResearched', 'abilitiesApplied', 'buildingPlaced', 'buildingUpgraded', 'buildingDestroyed',
   'buildingRepaired', 'waveStarted', 'waveCleared', 'labGuideChanged', 'researchPointsChanged', 'buildingsMerged', 'masteryResearched', 'abilityRespecced'];
 
 /** Keep a window in sync with the game until it closes. Returns the unsubscribe function. */
