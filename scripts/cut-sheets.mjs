@@ -20,20 +20,22 @@ import sharp from 'sharp';
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const OUT = path.join(ROOT, 'art-source', 'buildings');
 
-// v0.14: the Shake Storage, six pictures (Levels 1-2 ... 11-12), each sheet 2172 x 724 (three 724 x 724 frames).
+// Shake Storage, eight pictures (one per two levels), each sheet 2172 x 724 (three 724 x 724 frames).
 const JOBS = [
   {
     type: 'shakeStorage',
     canvas: { w: 740, h: 740, bottom: 726 }, // bottom: the row the art stands on
     // Visible height of each picture on the canvas (level 1 first): every one ~3.5% taller than the one before.
-    heights: [600, 622, 644, 666, 688, 710],
+    heights: [600, 622, 644, 666, 688, 710, 714, 720],
     sheets: [
       'Shake Storage L1 Spritesheet.png',
-      'Shake Storage Level 2 Spritesheat.png',
+      'Shake Storage L3 Spritesheet.png',
       'Shake Storage L3 Spritesheet.png',
       'Shake Storage Level 4 Spritesheat.png',
       'Shake Storage L5 Spritesheet.png',
-      'Shake Storage L6 Spritesheet.png'
+      'Shake Storage L6 Spritesheet.png',
+      'Shake Storage L7 spritesheet image.png',
+      'Shake Storage L8 spritesheet image.png'
     ]
   }
 ];
