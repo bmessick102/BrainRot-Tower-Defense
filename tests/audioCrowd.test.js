@@ -1,7 +1,7 @@
 // Crowded audio (v0.12.5, src/audio.js): at most MAX_LIVE_SFX (18) effects play at once (a big wave at 4x crackled, then
 // went silent), and keepAudioAlive wakes an audio context the browser suspended.
 import { describe, it, expect, vi } from 'vitest';
-import { playSfx, liveSfxCount, keepAudioAlive, playMusic, stopMusic, releaseMusic } from '../src/audio.js';
+import { playSfx, liveSfxCount, keepAudioAlive, playMusic, stopMusic, releaseMusic, notifyGuideMessage, setSfxLevel } from '../src/audio.js';
 
 function fakeScene() {
   const sounds = [];
@@ -45,6 +45,28 @@ describe('crowded sound effects', () => {
     expect(resumed).toBe(1);
   });
 
+  it('plays a guide message once, swaps sounds without overlapping, and respects mute', () => {
+    const { scene, sounds } = fakeScene();
+    scene.sys = { isActive: () => true };
+    scene.sound.getAll = (key) => sounds.filter((sound) => sound.key === key);
+    const village = {};
+    notifyGuideMessage(scene, village, 'tutorial-1');
+    notifyGuideMessage(scene, village, 'tutorial-1');
+    expect(sounds).toHaveLength(1);
+    notifyGuideMessage(scene, village, 'tutorial-2');
+    expect(sounds).toHaveLength(2);
+    expect(sounds[0].isPlaying).toBe(false);
+    notifyGuideMessage(scene, village, 'tutorial-1');
+    expect(sounds).toHaveLength(2);
+    try {
+      setSfxLevel(0);
+      notifyGuideMessage(scene, village, 'lab-1');
+      expect(sounds).toHaveLength(2);
+    } finally {
+      setSfxLevel(1);
+    }
+  });
+
   it('unlocks a streamed HTML5 track on the next gesture and keeps the audio tag for a return visit', () => {
     const { scene, sounds } = fakeScene();
     scene.cache.audio.get = () => [{ dataset: { locked: 'true' } }];
@@ -60,5 +82,17 @@ describe('crowded sound effects', () => {
     }
     releaseMusic(scene, 'music_title');
     expect(scene.cache.audio.remove).not.toHaveBeenCalled();
+  });
+
+  it('drops pending HTML5 actions only for a track destroyed before audio unlock', () => {
+    const { scene, sounds } = fakeScene();
+    scene.cache.audio.get = () => [{ dataset: { locked: 'true' } }];
+    scene.sound.unlock = vi.fn();
+    playMusic(scene, 'music_title');
+    const manager = sounds[0].manager;
+    const unrelated = {};
+    manager.lockedActionsQueue = [{ sound: sounds[0], prop: 'play' }, { sound: unrelated, prop: 'play' }];
+    stopMusic();
+    expect(manager.lockedActionsQueue).toEqual([{ sound: unrelated, prop: 'play' }]);
   });
 });

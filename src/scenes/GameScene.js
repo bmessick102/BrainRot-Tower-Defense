@@ -11,7 +11,7 @@ import { AchievementTracker } from '../net/AchievementTracker.js';
 import { gridToScreen, screenToGrid, rangeEllipse } from '../logic/iso.js';
 import { canPlaceRect, footprintCenter, fpW, fpH, rectTiles } from '../logic/grid.js';
 import { checkBuy, footprintDims, isDefense, typeConfig, defenseRange, wallLevel } from '../logic/buildings.js';
-import { createLayoutDraft, draftBuildings, layoutChanged, isStored, storeAll, storeBuilding, hotbarGroups, checkDraftPlacement, placeInDraft, shiftLayout, wallRun, checkGroupMove, moveGroupInDraft } from '../logic/layout.js';
+import { readLayoutDraft, writeLayoutDraft, draftBuildings, layoutChanged, isStored, storeAll, storeBuilding, hotbarGroups, checkDraftPlacement, placeInDraft, shiftLayout, wallRun, checkGroupMove, moveGroupInDraft, wallStrokeTiles, placeWallStroke } from '../logic/layout.js';
 import { tutorialAllows } from '../logic/tutorial.js';
 import { isWaveActive, isWaveInProgress, clamp } from '../logic/util.js';
 import { mineShowsCoin } from '../logic/economy.js';
@@ -856,6 +856,10 @@ export class GameScene extends Phaser.Scene {
         return;
       }
       this.press = { x: p.x, y: p.y, scrollX: cam.scrollX, scrollY: cam.scrollY, dragging: false };
+      if (this.editMode && this.placement?.type === 'wall' && this.placement.fromHotbar) {
+        this.press.wall = { pointerId: p.id, previous: this.wallTile(p.x, p.y) };
+        return;
+      }
       // Touch: a press on the ghost drags the ghost (not the map), held where the finger grabbed it.
       if (this.touchMode && this.placement && this.onGhost(p.x, p.y)) {
         const c = this.ghostScreenCenter();
@@ -869,8 +873,18 @@ export class GameScene extends Phaser.Scene {
         if (fingers.length >= 2) this.updatePinch(fingers[0], fingers[1]);
         return;
       }
-      if (this.placement && !this.touchMode) this.updateGhost(p.x, p.y);
       const pr = this.press;
+      if (pr?.wall) {
+        if (p.id !== pr.wall.pointerId) return;
+        if (!p.isDown || this.isOverUI(p)) { this.press = null; return; }
+        const tile = this.wallTile(p.x, p.y);
+        if (pr.dragging || tile.col !== pr.wall.previous.col || tile.row !== pr.wall.previous.row) {
+          pr.dragging = true;
+          this.paintWalls(tile, pr.wall);
+        }
+        return;
+      }
+      if (this.placement && !this.touchMode) this.updateGhost(p.x, p.y);
       if (!pr || !p.isDown) return;
       if (!pr.dragging && Phaser.Math.Distance.Between(p.x, p.y, pr.x, pr.y) >= dragThreshold(CONFIG.camera.dragThresholdPx)) pr.dragging = true;
       if (pr.dragging && pr.ghost && this.placement) {
@@ -890,12 +904,27 @@ export class GameScene extends Phaser.Scene {
       }
       const pr = this.press;
       this.press = null;
+      if (pr?.wall && pr.wall.pointerId === p.id && !this.isOverUI(p)) {
+        this.paintWalls(this.wallTile(p.x, p.y), pr.wall, !pr.dragging);
+        return;
+      }
       if (!pr || pr.dragging || p.button !== 0) return;
       this.handleClick(p.x, p.y, pr);
+    });
+    this.input.on('pointerupoutside', () => { this.press = null; });
+    this.input.on('gameout', () => { if (this.press?.wall) this.press = null; });
+    const cancelStroke = () => { if (this.press?.wall) this.press = null; };
+    const canvas = this.game.canvas;
+    canvas.addEventListener('touchcancel', cancelStroke);
+    window.addEventListener('blur', cancelStroke);
+    this.events.once('shutdown', () => {
+      canvas.removeEventListener('touchcancel', cancelStroke);
+      window.removeEventListener('blur', cancelStroke);
     });
 
     this.input.on('wheel', (p, over, dx, dy) => {
       if (this.isOverUI(p)) return;
+      if (this.press?.wall) this.press = null;
       this.zoomAt(p.x, p.y, dy);
     });
 
@@ -991,7 +1020,7 @@ export class GameScene extends Phaser.Scene {
     let collected = false;
     if (coinShowing && tutorialAllows(this.gs, 'collect')) collected = this.gs.collect(b.id).ok;
     const canSelect = tutorialAllows(this.gs, 'select', b.type) && !collected;
-    if (collected || canSelect) this.views.buildings.get(b.id)?.pop(); // click feedback
+    if (canSelect) this.views.buildings.get(b.id)?.pop();
     if (canSelect) {
       // Either hero's altar makes the same altar sound (her own line plays only when you click her, above).
       playBuildingSelect(this, b.type);
@@ -1007,6 +1036,7 @@ export class GameScene extends Phaser.Scene {
     const onTile = this.layoutBuildings().find((b) => (!this.placement || this.placement.id !== b.id)
       && g.x >= b.col && g.x < b.col + fpW(b) && g.y >= b.row && g.y < b.row + fpH(b));
     if (onTile) return this.gs.getBuilding(onTile.id) || onTile;
+    if (this.editMode) return null; // only footprints can be selected while editing
     const views = [...this.views.buildings.values()].sort((a, b) => b.sprite.depth - a.sprite.depth);
     for (const v of views) {
       if (this.placement && this.placement.id === v.id) continue;
@@ -1054,12 +1084,16 @@ export class GameScene extends Phaser.Scene {
   }
 
   /** Edit mode on (a fresh draft) or off. Off discards the draft: players leave through leaveEdit / saveLayout. */
-  setEditMode(on) {
+  setEditMode(on, discard = true) {
     if (on && !this.canEdit()) return;
     if (this.editMode === on) return;
     if (this.placement) this.cancelPlacement();
     this.editMode = on;
-    this.layout = on ? createLayoutDraft(this.gs) : null;
+    this.layout = on ? readLayoutDraft(this.gs) : null;
+    if (!on) {
+      if (discard) writeLayoutDraft(this.gs, null);
+      for (const view of this.views.buildings.values()) view.setAlpha(1);
+    }
     this.rowSelect = false; // Select Row starts off every time
     this.select(null);
     this.syncViews(this.time.now);
@@ -1070,6 +1104,12 @@ export class GameScene extends Phaser.Scene {
   /** The buildings the map shows: the draft layout while editing, else the village. */
   layoutBuildings() {
     return this.layout ? draftBuildings(this.gs, this.layout) : this.gs.buildings;
+  }
+
+  mageDisplayPosition(altar) {
+    if (!altar || !this.layout) return altar;
+    if (this.placement?.id === altar.id) return this.placement;
+    return isStored(this.layout, altar.id) ? null : this.layout.pos[altar.id];
   }
 
   /** Leave edit mode (Cancel, Esc, right click, the Edit button). Unsaved changes ask first. */
@@ -1140,9 +1180,38 @@ export class GameScene extends Phaser.Scene {
 
   /** The draft changed: redraw the map and tell the UI (hotbar, Save button). */
   layoutUpdated() {
+    writeLayoutDraft(this.gs, this.layout);
     this.syncViews(this.time.now);
     this.drawEditOutlines();
     this.gs.emit('layoutDraftChanged', {});
+  }
+
+  wallTile(px, py) {
+    const { x, y } = this.screenToWorld(px, py);
+    const grid = screenToGrid(x, y);
+    const fence = this.placement;
+    return { col: Math.round(grid.x - (fence?.w || 1) / 2), row: Math.round(grid.y - (fence?.h || 1) / 2) };
+  }
+
+  paintWalls(tile, stroke, single = false) {
+    const pl = this.placement;
+    if (!this.layout || !this.canEdit() || pl?.type !== 'wall' || !pl.fromHotbar) return;
+    const group = hotbarGroups(this.gs, this.layout).find((g) => g.type === 'wall' && g.level === pl.level);
+    const tiles = single ? [tile] : wallStrokeTiles(stroke.previous, tile);
+    stroke.previous = tile;
+    const placed = placeWallStroke(this.gs, this.layout, group?.ids || [], tiles, pl.orient);
+    if (placed) {
+      this.endPlacement();
+      const next = group.ids[placed];
+      if (next) {
+        this.beginMove(next);
+        this.placement.orient = pl.orient;
+        Object.assign(this.placement, footprintDims('wall', pl.orient));
+      }
+      playSfxCapped(this, SFX.place, 1);
+      this.layoutUpdated();
+    } else if (single) playSfxCapped(this, SFX.invalid, 1);
+    if (this.placement) this.ghostToGrid(tile.col, tile.row);
   }
 
   /** In edit mode every building's footprint is outlined so it's clear what can be picked up. */
@@ -1400,6 +1469,7 @@ export class GameScene extends Phaser.Scene {
   cancelPlacement() {
     const pl = this.placement;
     if (!pl) return;
+    if (this.press?.wall) this.press = null;
     this.endPlacement();
     if (pl.mode === 'buy') this.gs.tutorialEvent('placementCancelled');
   }
@@ -2104,14 +2174,14 @@ export class GameScene extends Phaser.Scene {
     on('beamHeatUp', () => playSfxCapped(this, SFX.raHeatUp, 2));
     on('mineCollected', (d) => {
       const v = this.views.buildings.get(d.id);
-      if (v) { const top = v.topCenter(); floatText(this, top.x, top.y - 20, `+${d.amount}`, COLORS.textGold, 22); }
-      playSfx(this, SFX.coinCollect);
+      if (v) { const top = v.topCenter(); floatText(this, top.x, top.y - 20, `+${d.amount}`, COLORS.textGold, 22); v.pop(); }
+      playSfxCapped(this, SFX.coinCollect, 1);
     });
     // v0.14: a Shake Collector collected: a purple "+n" with the shake icon, and its own slurp (the coin sound if missing).
     on('shakesCollected', (d) => {
       const v = this.views.buildings.get(d.id);
-      if (v && d.amount) { const top = v.topCenter(); rpGainText(this, top.x, top.y - 20, d.amount, 22); }
-      playSfx(this, this.cache.audio.exists(SFX.shakeCollect) ? SFX.shakeCollect : SFX.coinCollect);
+      if (v && d.amount) { const top = v.topCenter(); rpGainText(this, top.x, top.y - 20, d.amount, 22); v.pop(); }
+      playSfxCapped(this, this.cache.audio.exists(SFX.shakeCollect) ? SFX.shakeCollect : SFX.coinCollect, 1);
     });
     on('buildingUpgraded', (d) => {
       playSfx(this, SFX.upgrade);
@@ -2149,7 +2219,7 @@ export class GameScene extends Phaser.Scene {
       if (w && w.paths && w.open !== undefined) this.showSpawnMarkers(w.paths.slice(0, w.open));
       if (this.placement) this.cancelPlacement();
       this.cancelMergePick();
-      this.setEditMode(false);
+      this.setEditMode(false, false);
       playSfx(this, SFX.waveStart);
       this.playAttackMusic(); // hard cut to the attack soundtrack at full volume, no fade-in
     });
@@ -2215,6 +2285,12 @@ export class GameScene extends Phaser.Scene {
     const gs = this.gs;
     this.layoutList = this.layoutBuildings(); // the draft layout in edit mode
     this.syncList(this.layoutList, this.views.buildings, (b) => (b.type === 'wall' ? new WallView(this, b) : new BuildingView(this, b)));
+    if (this.editMode) {
+      for (const b of this.layoutList) {
+        const held = this.placement?.id === b.id || this.placement?.ids?.includes(b.id);
+        this.views.buildings.get(b.id)?.setAlpha(held ? 0.3 : b.type === 'wall' ? 1 : 0.76);
+      }
+    }
     this.syncList(gs.enemies.filter((e) => e.alive), this.views.enemies, (e) => new EnemyView(this, e));
     this.syncList(gs.projectiles, this.views.projectiles, (p) => new ProjectileView(this, p));
     this.syncList(gs.pools || [], this.views.pools, (p) => new PoolView(this, p));

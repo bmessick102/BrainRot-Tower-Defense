@@ -25,7 +25,7 @@ export function mineProduction(state, b) {
   const fx = abilityFx(b);
   let pct = (fx.productionPct || 0) + (b.compound || 0);
   if (fx.nightProductionPct && isDark(state.clock)) pct += fx.nightProductionPct;
-  if (fx.poolPct) pct += fx.poolPct * state.buildings.filter((o) => o.type === 'mine' && o !== b && !o.destroyed).length;
+  if (fx.poolPct) pct += fx.poolPct * state.buildings.filter((o) => o.type === 'mine' && o.id !== b.id && !o.destroyed).length;
   const c = footprintCenter(b);
   for (const o of state.buildings) {
     if (o.destroyed) continue;
@@ -148,6 +148,13 @@ export function collectMine(state, mine) {
   return sendMineToStorage(state, mine);
 }
 
+/** Preview and transfer the same amount even when Tip Jar fills the last space. */
+export function mineCollectionAmount(mine, room) {
+  const stock = Math.min(Math.floor(mine.stock || 0), Math.max(0, Math.floor(room)));
+  const bonus = Math.round(stock * (abilityFx(mine).collectBonusPct || 0) / 100);
+  return { stock, total: Math.min(stock + bonus, Math.max(0, Math.floor(room))) };
+}
+
 /**
  * Move a mine's stock into gold (up to capacity), with its collection perks: Tip Jar pays extra, and
  * Compound Mining makes it mine a little more each time. Used by collecting and by Auto-Collect.
@@ -160,10 +167,11 @@ export function sendMineToStorage(state, mine) {
     emit(state, 'storageFull', { id: mine.id });
     return { collected: 0, storageFull: true };
   }
-  const amount = Math.min(whole, room);
-  mine.stock -= amount;
+  const { stock, total } = mineCollectionAmount(mine, room);
+  if (!stock) return { collected: 0, storageFull: true };
+  mine.stock -= stock;
   const fx = abilityFx(mine);
-  const added = addGold(state, amount + Math.round(amount * (fx.collectBonusPct || 0) / 100));
+  const added = addGold(state, total);
   if (fx.compoundPct) mine.compound = Math.min(fx.compoundMax || 0, (mine.compound || 0) + fx.compoundPct);
   emit(state, 'mineCollected', { id: mine.id, amount: added });
   return { collected: added, storageFull: false };

@@ -74,14 +74,17 @@ export function isBurrowedUnseen(e) {
   return !!e && !!e.underground && !e.flockSeen;
 }
 
-function validFor(aim, e) {
-  if (!e || !e.alive) return false;
-  if (isBurrowedUnseen(e)) return false; // tunneling: out of reach unless a F.L.O.C.K sees it
-  if (e.hidden && !aim.seeInvisible) return false; // invisible enemies can't be aimed at (splash still hits)
-  if (!(enemyIsAir(e) ? aim.air : aim.ground)) return false;
-  const d = distance(aim.c.x, aim.c.y, e.x, e.y);
+function targetDistanceSquared(aim, e) {
+  if (!e || !e.alive || isBurrowedUnseen(e) || (e.hidden && !aim.seeInvisible)) return Infinity;
+  if (!(enemyIsAir(e) ? aim.air : aim.ground)) return Infinity;
+  const x = e.x - aim.c.x, y = e.y - aim.c.y;
+  const d = x * x + y * y;
   const reach = aim.range + (aim.markRange && e.markBonus > 0 ? aim.markRange : 0);
-  return d <= reach && d >= aim.minRange;
+  return d <= reach * reach && d >= aim.minRange * aim.minRange ? d : Infinity;
+}
+
+function validFor(aim, e) {
+  return targetDistanceSquared(aim, e) < Infinity;
 }
 
 /** Alive, hittable type, inside range and outside minimum range (measured from the footprint center). */
@@ -104,8 +107,7 @@ export function chooseTarget(state, b) {
   if (validFor(aim, current)) return current;
   let best = null, bestD = Infinity;
   for (const e of state.enemies) {
-    if (!validFor(aim, e)) continue;
-    const d = distance(aim.c.x, aim.c.y, e.x, e.y);
+    const d = targetDistanceSquared(aim, e);
     if (d < bestD) { best = e; bestD = d; }
   }
   b.targetId = best ? best.id : null;

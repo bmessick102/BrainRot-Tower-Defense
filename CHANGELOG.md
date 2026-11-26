@@ -2,6 +2,35 @@
 
 The version shows in the bottom-left corner of every screen (`package.json` `version` plus the commit). Details for everything below are in [README.md](README.md).
 
+## 0.16.0
+
+Development Update 5.1 adds upgrade previews, layout tools, and expanded Shake, hero and Mastery progression.
+
+### New Features
+
+- Building Upgrade opens a next-level preview with live costs and requirements. Village Hall previews list new buildings, extra slots, and newly available levels. Confirmation validates the original level before spending.
+- Edit Mode stores selected buildings by ID and draws connected walls from the hotbar. Unfinished drafts can be resumed on the same device.
+- The RV Lab has five Mastery tiers per merged type and five-tier research paths for Shake Collectors and Shake Storages.
+
+### Changes
+
+- Collect All gathers same-type stock up to available storage room. Overflow stays in the buildings.
+- Village Hall Levels 13–20 use the supplied replacement sprites. Shake Storage art tiers 7 and 8 cover gameplay Levels 13–14 and 15–16, with three fill states each. Tier 2 now uses the former tier 3 art.
+- Upgrade, repair, merge, research and brewing costs show currency icons next to the amounts. Guide messages and unavailable actions have sound feedback.
+
+### Balance
+
+- Shake Storage reaches Level 16. Levels 13–16 hold 9,500 / 10,500 / 11,500 / 12,500 Shakes and unlock at their corresponding Village Hall levels. Existing levels keep their capacities and have lower Bitcoin prices.
+- Collectors double production and stock. Wave completion awards 22 Shakes per wave number, up from 15. Larger enemies also award more Shakes.
+- Mastery costs 1,200 / 2,000 / 3,000 / 4,200 / 5,600 Shakes plus 12,000 / 24,000 / 40,000 / 60,000 / 85,000 Bitcoin. Existing tiers carry forward.
+- Hero ability effects improve at Levels 5, 10, 15 and 20. The King gains 2.5 percentage points of Feast healing, the Queen gains 1 second of cloak, and the Mage gains 0.5 seconds of protection per milestone.
+
+### Bug Fixes
+
+- The Mage aura follows its draft or held position in Edit Mode and hides while the building is stored.
+- Reduced collision allocations and repeated target distance calculations without changing spawn queues.
+- Leaving a scene clears queued HTML5 audio actions for destroyed sounds, preventing a crash on audio unlock.
+
 ## 0.15.0
 
 Development Update 5 improves mobile framing, village visits, raid recovery, and building menus. Apply the revised [Village Hall migration](supabase/migration-2026-11-23-village-halls-20.sql) to recover leaderboard levels on an existing database.

@@ -54,7 +54,7 @@ describe('Shakes: the name and the buildings', () => {
       expect(shakeStorageCapacity(i + 1)).toBeGreaterThan(before[i]);
       if (i) expect(shakeStorageCapacity(i + 1)).toBeGreaterThan(shakeStorageCapacity(i));
     }
-    expect(shakeCapAt(20)).toBe(19_400);
+    expect(shakeCapAt(20)).toBe(27_000);
     expect(shakeCapAt(20)).toBeGreaterThan(2 * 7_730); // Wave 60 night bounty, clear reward, and three-star bonus
   });
 
@@ -64,10 +64,10 @@ describe('Shakes: the name and the buildings', () => {
     expect(rpText(2500)).toBe('2,500 Shakes');
   });
 
-  it('two new economy buildings: Shake Collector (10 levels) and Shake Storage (12 levels), from Village Hall 3, for gold', () => {
+  it('two new economy buildings: Shake Collector (10 levels) and Shake Storage (16 levels), from Village Hall 3, for gold', () => {
     expect(ECONOMY_TYPES).toEqual(expect.arrayContaining(['shakeCollector', 'shakeStorage']));
     expect(maxLevel('shakeCollector')).toBe(10);
-    expect(maxLevel('shakeStorage')).toBe(12);
+    expect(maxLevel('shakeStorage')).toBe(16);
     for (const t of ['shakeCollector', 'shakeStorage']) {
       expect(CONFIG[t].unlockTownHall).toBe(3);
       expect(CONFIG[t].levels.every((l) => !l.costCurrency)).toBe(true); // gold
@@ -99,7 +99,7 @@ describe('Shakes: the name and the buildings', () => {
   it('a Collector is worth far less than a Bitcoin Mine of the same level (at 15 gold a Shake)', () => {
     for (let l = 1; l <= 10; l++) {
       const shakeValue = levelStats('shakeCollector', l).production * CONFIG.rules.burgerGoldValue;
-      expect(shakeValue).toBeLessThan(levelStats('mine', l).production * 0.2);
+      expect(shakeValue).toBeLessThan(levelStats('mine', l).production * 0.35);
     }
   });
 });
@@ -164,9 +164,9 @@ describe('Shake Collectors: production and collecting', () => {
     if (shakes) gs.researchPoints = rpCap(gs) - 3;
     else gs.gold = gs.capacity - 3;
     b.stock = 9.5;
-    expect(gs.collectionStatus(b.id)).toEqual({ shakes, amount: 9, reason: '' });
+    expect(gs.collectionStatus(b.id)).toEqual({ shakes, amount: 3, reason: '' });
     expect(gs.collect(b.id)).toMatchObject({ ok: true, collected: 3 });
-    expect(gs.collectionStatus(b.id)).toEqual({ shakes, amount: 6, reason: 'Storage full' });
+    expect(gs.collectionStatus(b.id)).toEqual({ shakes, amount: 0, reason: 'Storage full' });
     for (let i = 0; i < 5; i++) expect(gs.collect(b.id).ok).toBe(false);
     expect(gs.collect('another-village-id').ok).toBe(false);
     expect(b.stock).toBe(6.5);
@@ -288,7 +288,7 @@ describe('balance: the biggest Shake price open at each Village Hall fits its Sh
 
   it('the helper sees the real prices (hero levels to 10,000, merges, perks, the Fuel Station) and the real cap', () => {
     expect(maxShakePriceAt(2)).toBe(CONFIG.fuelStation.spells.rage.brewCost);
-    expect(maxShakePriceAt(8)).toBe(4500); // the Hatsune Queen's Level 8
+    expect(maxShakePriceAt(8)).toBe(5600); // highest Tower of Rah Mastery
     expect(maxShakePriceAt(15)).toBe(10000);
     expect(shakePricesAt(10).map(([w]) => w)).toEqual(expect.arrayContaining(['merge cannon', 'perk tier 5', 'path reset', 'mageAltar Lv10']));
     // shakeCapAt matches what rpCap gives a village built that way.
@@ -330,7 +330,7 @@ describe('achievement: a Shake Storage at its top level', () => {
     const s = makeStateWithTownHall({}, 12);
     const st = addBuilding(s, 'shakeStorage', 5, 5, 11);
     expect(villageStats(s).shakeVault).toBe(0);
-    st.level = 12;
+    st.level = 16;
     expect(villageStats(s).shakeVault).toBe(1);
   });
 });

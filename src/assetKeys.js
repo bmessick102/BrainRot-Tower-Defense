@@ -79,6 +79,7 @@ export const SFX = {
   sell: 'sfx_sell',
   coinCollect: 'sfx_coin_collect',
   shakeCollect: 'sfx_shake_collect', // collecting a Shake Collector (v0.14; the coin sound stands in if missing)
+  guideMessage: 'sfx_guide_message',
   cannonFire: 'sfx_cannon_fire',
   arrowFire: 'sfx_arrow_fire',
   mortarFire: 'sfx_mortar_fire',

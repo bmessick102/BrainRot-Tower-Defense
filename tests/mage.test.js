@@ -130,7 +130,7 @@ describe('the Locklair Mage in a raid', () => {
     const before = [near.hp, far.hp, altar.hp];
     damageBuilding(s, near, 200); damageBuilding(s, far, 200); damageBuilding(s, altar, 200);
     expect([near.hp, far.hp, altar.hp]).toEqual([before[0], before[1] - 200, before[2]]);
-    run(s, M.aegis.seconds + 0.1);
+    run(s, mageStats(s.buildings.find((b) => b.type === 'mageAltar')).aegisSeconds + 0.1);
     damageBuilding(s, near, 200);
     expect(near.hp).toBe(before[0] - 200);       // over
     expect(checkAegis(s)).toMatchObject({ ok: false, reason: 'Used this wave' });
@@ -224,9 +224,9 @@ describe('the Locklair Mage\'s perks', () => {
     damageBuilding(s, near, 100);
     expect(hp - near.hp).toBeCloseTo(85);
     expect(useAegis(s).ok).toBe(true);
-    run(s, M.aegis.seconds + 0.1);
+    run(s, mageStats(s.buildings.find((b) => b.type === 'mageAltar')).aegisSeconds + 0.1);
     expect(useAegis(s).ok).toBe(true);
-    run(s, M.aegis.seconds + 0.1);
+    run(s, mageStats(s.buildings.find((b) => b.type === 'mageAltar')).aegisSeconds + 0.1);
     expect(checkAegis(s).reason).toBe('Used this wave');
   });
 
@@ -234,7 +234,7 @@ describe('the Locklair Mage\'s perks', () => {
     const { s, altar, h } = village(10, { mageAltar: ['c', 'c', 'c', 'c', 'c'] });
     const st = mageStats(altar);
     expect(st.maxHp).toBe(Math.round(levelStats('mageAltar', 10).hp * 1.3));
-    expect(st.aegisSeconds).toBe(M.aegis.seconds + 2);
+    expect(st.aegisSeconds).toBe(7);
     expect(st.minSleep).toBeCloseTo(M.minSleepSeconds * 0.6);
     wave(s);
     const near = addBuilding(s, 'cannon', 13, 10, 5);

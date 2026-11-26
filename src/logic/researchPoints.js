@@ -6,6 +6,7 @@
 // `costCurrency: 'rp'` (the RV Lab's upgrades); gold builds buildings.
 import { CONFIG } from '../config.js';
 import { emit } from './util.js';
+import { abilityFx } from './abilities.js';
 
 // ---------- what players call it ----------
 // The code, saves and config all say rp / researchPoints; every player-facing text says Shakes (v0.14; Burgers before).
@@ -30,9 +31,10 @@ export function hallShakeCapacity(level) {
 }
 
 /** What one Shake Storage holds at a level (CONFIG.shakeStorage). */
-export function shakeStorageCapacity(level) {
+export function shakeStorageCapacity(level, building) {
   const L = CONFIG.shakeStorage.levels;
-  return L[Math.max(1, Math.min(level, L.length)) - 1].capacity;
+  const base = L[Math.max(1, Math.min(level, L.length)) - 1].capacity;
+  return Math.round(base * (1 + (building ? abilityFx(building).capacityPct || 0 : 0) / 100));
 }
 
 /**
@@ -44,7 +46,7 @@ export function rpCap(state) {
   let cap = 0;
   for (const b of state.buildings || []) {
     if (b.type === 'townHall') cap += hallShakeCapacity(b.level);
-    else if (b.type === 'shakeStorage') cap += shakeStorageCapacity(b.level);
+    else if (b.type === 'shakeStorage') cap += shakeStorageCapacity(b.level, b);
   }
   return cap;
 }

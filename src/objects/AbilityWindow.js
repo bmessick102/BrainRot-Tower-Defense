@@ -8,6 +8,7 @@
 // points or the buildings change, keeping the selected node.
 import { Modal, confirmDialog } from './Modal.js';
 import { Button } from './Button.js';
+import { currencyCost } from './CurrencyCost.js';
 import { buildingTextureKey } from './BuildingView.js';
 import { drawBadge, fitWidth, fitIcon } from './uiDraw.js';
 import { COLORS, bodyStyle, textStyle, mix, RP_TEXT_COLOR } from '../theme.js';
@@ -21,6 +22,7 @@ import { buildingName } from '../logic/buildings.js';
 import { formatGold } from '../logic/economy.js';
 import { isWaveActive } from '../logic/util.js';
 import { labGuideHint } from '../logic/labGuide.js';
+import { notifyGuideMessage } from '../audio.js';
 import { TEX } from '../assetKeys.js';
 import { isMergeable, hasMergedOf, masteryLevel, masteryTier, masteryTierCount, checkMastery, needsMergeReason } from '../logic/merge.js';
 import { mergeConfig } from '../logic/buildings.js';
@@ -35,7 +37,7 @@ const TOP = 112;                                      // grid / panel top, below
 const INFO_Y = 84;                                    // the info line / tabs / balance row: clear of the title bar (ends at 60)
 const GRID_H = COL_HEAD + 8 + ROW_STEP * (MAX_TIER - 1) + NODE_H;
 const RESPEC_H = 58;                                  // the "Reset path" row under the tree
-// Merged defenses' Mastery (merge.js): a gold 4th column ("★ Mastery", 3 tiers) next to the three paths, for every type that can
+// Merged defenses' Mastery (merge.js): a gold fourth column next to the three paths, for every type that can
 // merge (v0.9.3); greyed out, with no glow, until the village has a merged one. The window is always as wide as the
 // 4-column layout needs; a type that can't merge spreads its 3 columns wider.
 const GOLD = 0xffc83a, GOLD_INK = '#8a5a00';
@@ -78,6 +80,7 @@ export function balance(scene, m, gs, rp, x, y) { // (also the Fuel Station wind
 function infoLine(scene, m, gs, kind, text, width, x = m.x + 24) {
   const hint = labGuideHint(gs, kind);
   if (hint) {
+    notifyGuideMessage(scene, gs, `lab-${gs.labGuideStep}`);
     const g = m.add(scene.add.graphics());
     const t = scene.add.text(x + 12, m.y + INFO_Y, `Guide: ${hint}`, bodyStyle(15, '#5a3a00', { fontStyle: 'bold', wordWrap: { width: width - 24 } })).setOrigin(0, 0.5);
     // At most three lines: a long hint steps its font down so the note stays clear of the title bar and the grid.
@@ -173,7 +176,11 @@ function drawTree(scene, m, x, y, colW, gap, type, nodeState, selected, onSelect
       fitWidth(name, colW - 42);
       const lineInk = col.gold ? (owned ? col.ink : dim ? MASTERY_INK.dim : MASTERY_INK.line)
         : owned ? col.ink : avail ? (st.short ? COLORS.inkBad : COLORS.inkGood) : dim ? '#b3a892' : COLORS.inkDim;
-      fitWidth(m.add(scene.add.text(cx + 36, cy + NODE_H / 2 + 5, st.line || '', bodyStyle(14, lineInk, { fontStyle: owned || avail ? 'bold' : 'normal' }))), colW - 42);
+      const style = bodyStyle(14, lineInk, { fontStyle: owned || avail ? 'bold' : 'normal' });
+      if (st.costs) {
+        const price = m.add(currencyCost(scene, st.costs, style, '', 16));
+        price.setPosition(cx + 36, cy + NODE_H / 2 + 13).setScale(Math.min(1, (colW - 42) / price.width));
+      } else fitWidth(m.add(scene.add.text(cx + 36, cy + NODE_H / 2 + 5, st.line || '', style)), colW - 42);
       if (isSel) {
         const sel = m.add(scene.add.graphics());
         sel.lineStyle(3, 0xffc83a, 1).strokeRoundedRect(cx - 2, cy - 2, colW + 4, NODE_H + 4, 13);
@@ -236,8 +243,11 @@ function drawDetails(scene, m, x, y, w, h, d) {
   const by = y + h - 42;
   if (d.button) {
     // The price is on the button ("Research · 240 RP"); the RP balance is at the top right.
-    const b = new Button(scene, x + w / 2, by, w - 40, 66, d.button.label, d.button.onClick, { color: d.buttonColor ?? (d.rp ? 0x8e5bd6 : COLORS.buttonGood), fontSize: 20, radius: 12 });
-    b.setLabel(d.button.label, d.button.ok ? '' : d.button.sub || '').setEnabled(!!d.button.ok);
+    const b = new Button(scene, x + w / 2, by, w - 40, 66, d.button.label, d.button.onClick, { color: d.buttonColor ?? (d.rp ? 0x8e5bd6 : COLORS.buttonGood), fontSize: 20, radius: 12, invalidFeedback: true });
+    const reason = d.button.ok ? '' : d.button.sub || '';
+    if (d.button.costs?.length) b.setCosts(d.button.costs, d.button.label, reason);
+    else b.setLabel(d.button.label, reason);
+    b.setEnabled(!!d.button.ok);
     m.add(b);
   } else if (d.note) {
     const bg = m.add(scene.add.graphics());
@@ -267,6 +277,7 @@ export function openResearchWindow(scene, gs, { onClose = null, startType = null
   let type = startType && ABILITY_TYPES.includes(startType) ? startType : null;
   let unfollow = () => {};
   let selected = null;
+  let goldThresholds = [];
   const m = new Modal(scene, { width: W, height: WIN_H, title: 'RV Lab · Research', header: 56, depth: 1000,
     onClose: () => { unfollow(); if (onClose) onClose(); } });
 
@@ -282,7 +293,8 @@ export function openResearchWindow(scene, gs, { onClose = null, startType = null
     if (!lab) return { state: 'locked', line: gs.buildings.some((b) => b.type === 'rvlab') ? 'RV Lab destroyed' : 'Build an RV Lab' };
     if (t > lab) return { state: 'locked', line: `RV Lab level ${t}` };
     const cost = checkResearch(gs, type, p, t).cost;
-    return { state: 'available', line: cost === 0 ? 'Research · Free' : `Research · ${rpText(researchCost(t))}`, short: (gs.researchPoints || 0) < cost };
+    return { state: 'available', line: cost === 0 ? 'Research · Free' : '',
+      costs: cost > 0 ? [{ currency: 'rp', amount: cost }] : null, short: (gs.researchPoints || 0) < cost };
   };
   /** The node to show: the next tier, on the path picked last (so climbing a path keeps going down it). */
   const firstPick = (st) => {
@@ -299,8 +311,9 @@ export function openResearchWindow(scene, gs, { onClose = null, startType = null
   const pageSize = IS_TOUCH ? 5 : Infinity;
   let page = IS_TOUCH ? Math.floor(TABS.find((t) => t.key === tab).types.indexOf(type) / pageSize) : 0;
 
-  const confirmResearch = (name, cost, onConfirm) => confirmDialog(scene, {
-    title: 'Research perk?', lines: [name, cost ? `Cost · ${rpText(cost)}` : 'Free research'],
+  const shakeCost = (amount) => amount > 0 ? [{ currency: 'rp', amount }] : [];
+  const confirmResearch = (name, costs, onConfirm) => confirmDialog(scene, {
+    title: 'Research perk?', lines: costs.length ? [name] : [name, 'Free research'], costs,
     confirmLabel: 'Research', confirmColor: COLORS.buttonGood, onConfirm
   });
 
@@ -321,6 +334,7 @@ export function openResearchWindow(scene, gs, { onClose = null, startType = null
     const lab = labLevel(gs);
     // The tree, plus the gold Mastery column for a merged type.
     const mastery = masteryShown(type);
+    goldThresholds = mastery ? mergeConfig(type).mastery.goldCosts.map((cost) => gs.gold >= cost) : [];
     const COL_W = mastery ? COL4_W : Math.floor((GRID_W - GUTTER - GAP * 2) / 3);
     const treeH = GRID_H;
     m.resize(TOP + treeH + RESPEC_H + 24);
@@ -429,13 +443,14 @@ export function openResearchWindow(scene, gs, { onClose = null, startType = null
     const masteryLocked = mastery && !masteryOpen(type);
     if (mastery) {
       const have = masteryLevel(gs, type);
+      const masteryCosts = (info) => [{ currency: 'gold', amount: info.goldCost }, ...shakeCost(info.cost)];
       mState = (t) => {
         if (masteryLocked) return { state: 'future', line: t === 1 ? 'Merge to unlock' : `After Mastery ${t - 1}` };
         if (t <= have) return { state: 'owned', line: '✔ Mastered' };
         if (t > have + 1) return { state: 'future', line: `After Mastery ${t - 1}` };
         const info = masteryTier(type, t);
         if (lab < info.labLevel) return { state: 'locked', line: `Locked · RV Lab lv ${info.labLevel}` };
-        return { state: 'available', line: `Research · ${rpText(info.cost)}`, short: (gs.researchPoints || 0) < info.cost };
+        return { state: 'available', costs: masteryCosts(info), short: (gs.researchPoints || 0) < info.cost || gs.gold < info.goldCost };
       };
       if (selected.mastery) {
         // The Mastery tier's details: what it does, what it needs, and its Research button (gold).
@@ -456,16 +471,17 @@ export function openResearchWindow(scene, gs, { onClose = null, startType = null
           detail.color = MASTERY_GREY; detail.ink = '#8c8170';
           detail.applies = `Opens once you have a ${M.name}. Not part of the path lock.`;
           detail.checks = [[false, `A ${M.name} (merge two)`], ...detail.checks.filter(([, label]) => !/^Mastery \d first$/.test(label))];
-          detail.note = needsMergeReason(type);
+          detail.button = { label: 'Research', costs: masteryCosts(info), ok: false, sub: needsMergeReason(type) };
         } else if (s.state === 'owned') {
           detail.note = have === masteryTierCount(type) ? '✔ Fully mastered' : '✔ Mastered';
           detail.noteGood = true;
         }
-        else if (s.state === 'future') detail.note = `Research Mastery ${have + 1} first`;
+
         else {
           const target = type;
-          detail.button = { label: `Research · ${rpText(info.cost)}`, ok: mc.ok, sub: mc.reason, onClick: () => confirmResearch(info.name, info.cost, () => {
-            if (checkMastery(gs, target, t).ok && gs.researchMastery(target).ok) {
+          const costs = masteryCosts(info);
+          detail.button = { label: 'Research', costs, ok: mc.ok, sub: mc.reason, onClick: () => confirmResearch(info.name, costs, () => {
+            if (checkMastery(gs, target, t).ok && gs.researchMastery(target, t).ok) {
               selected = { mastery: true, tier: Math.min(masteryTierCount(target), t + 1) };
               refresh();
             }
@@ -489,14 +505,14 @@ export function openResearchWindow(scene, gs, { onClose = null, startType = null
       ];
       const detail = { type, path, tier, checks, hidden: !!s.hidden, applies: s.state === 'taken' || s.hidden ? '' : appliesText(s.state === 'owned'), rp: true, button: null };
       if (!locked && !s.hidden && s.state === 'available') detail.applies += ' Picking it locks every ' + buildingName(type) + ' to Path ' + path.toUpperCase() + '.';
-      if (s.hidden) detail.note = `Unlocks at RV Lab level ${tier}`;
+      if (s.hidden) detail.button = { label: 'Research', costs: shakeCost(researchCost(tier)), ok: false, sub: c.reason };
       else if (s.state === 'owned') { detail.note = count === MAX_TIER ? '✔ Fully researched' : '✔ Researched'; detail.noteGood = true; }
       else if (s.state === 'taken') detail.note = `Your ${buildingName(type)}s are locked to Path ${locked.toUpperCase()}. Reset the path to switch.`;
-      else if (s.state === 'future') detail.note = `Research tier ${count + 1} first`;
+
       else {
         const target = type;
-        detail.button = { label: c.cost === 0 ? 'Research (free)' : `Research · ${rpText(c.cost ?? researchCost(tier))}`, ok: c.ok, sub: c.reason,
-          onClick: () => confirmResearch(tierInfo(target, path, tier).name, c.cost, () => {
+        detail.button = { label: c.cost === 0 ? 'Research (free)' : 'Research', costs: shakeCost(c.cost ?? researchCost(tier)), ok: c.ok, sub: c.reason,
+          onClick: () => confirmResearch(tierInfo(target, path, tier).name, shakeCost(c.cost), () => {
             if (gs.researchAbility(target, path, tier).ok) { selected = { path, tier: Math.min(MAX_TIER, tier + 1) }; refresh(); }
           }) };
       }
@@ -510,19 +526,29 @@ export function openResearchWindow(scene, gs, { onClose = null, startType = null
     if (count > 0) {
       const rc = checkRespec(gs, type), ry = gy + treeH + 8 + RESPEC_H / 2;
       m.add(scene.add.text(gx, ry, `${buildingName(type)}s are locked to Path ${locked.toUpperCase()} · ${pathName(type, locked)}${rc.ok ? '' : ` (${rc.reason})`}`, bodyStyle(14, COLORS.inkDim, { fontStyle: 'bold' })).setOrigin(0, 0.5));
-      const rb = new Button(scene, panelX + PANEL_W - 150, ry, 300, 54, `Reset path · ${rpText(rc.cost)}`, () => {
+      const rb = new Button(scene, panelX + PANEL_W - 150, ry, 300, 54, 'Reset path', () => {
         confirmDialog(scene, {
           title: 'Reset path?',
-          lines: [`Reset the ${buildingName(type)} path for ${rpText(rc.cost)}?`,
+          lines: [`Reset the ${buildingName(type)} path?`,
             `Its ${count} researched tier${count > 1 ? 's' : ''} are lost (no refund) and you pick a path again.`],
-          confirmLabel: 'Reset', onConfirm: () => { if (gs.respecPath(type).ok) { selected = null; refresh(); } }
+          confirmLabel: 'Reset', costs: shakeCost(rc.cost), onConfirm: () => { if (gs.respecPath(type).ok) { selected = null; refresh(); } }
         });
-      }, { color: 0x8e5bd6, fontSize: 18, radius: 12 });
-      rb.setEnabled(rc.ok);
+      }, { color: 0x8e5bd6, fontSize: 18, radius: 12, invalidFeedback: true });
+      rb.setCosts(shakeCost(rc.cost), 'Reset path').setEnabled(rc.ok);
       m.add(rb);
     }
   };
-  unfollow = follow(scene, gs, refresh);
+  const stopFollowing = follow(scene, gs, refresh);
+  const onGoldChanged = () => {
+    if (goldThresholds.some((met, index) => met !== (gs.gold >= mergeConfig(type).mastery.goldCosts[index]))) refresh();
+  };
+  gs.on('goldChanged', onGoldChanged, m);
+  unfollow = () => {
+    stopFollowing();
+    gs.off('goldChanged', onGoldChanged, m);
+    scene.events.off('shutdown', unfollow);
+  };
+  scene.events.once('shutdown', unfollow);
   refresh();
   return m;
 }

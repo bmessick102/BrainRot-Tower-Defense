@@ -4,7 +4,8 @@
 // and what it does; and the three RV Lab perk paths. Stats include the perks you've researched for that hero.
 import { Modal } from './Modal.js';
 import { Button } from './Button.js';
-import { drawShowcaseCard, drawGlossy, fitIcon } from './uiDraw.js';
+import { drawShowcaseCard, drawGlossy, drawStatBar, fitIcon } from './uiDraw.js';
+import { currencyCost } from './CurrencyCost.js';
 import { buildingTextureKey } from './BuildingView.js';
 import { ensureEncoreTextures, ENCORE_COLOR } from './EncoreIcon.js';
 import { ensureAegisTexture, AEGIS_COLOR } from './AegisIcon.js';
@@ -13,11 +14,10 @@ import { COLORS, bodyStyle, textStyle } from '../theme.js';
 import { CONFIG } from '../config.js';
 import { ABILITIES, PATH_COLORS, picksFor } from '../abilityConfig.js';
 import { levelStats, maxLevel, typeConfig } from '../logic/buildings.js';
-import { heroStatsFor } from '../logic/heroes.js';
+import { heroStatsFor, heroAbilityProgress } from '../logic/heroes.js';
 import { formatGold } from '../logic/economy.js';
-import { rpText } from '../logic/researchPoints.js';
 
-const W = 760, H = 470;
+const W = 760, H = 510;
 const PIC = { w: 220, h: 250 };
 // What each hero is, under the name, and his or her picture (the walking heroes' own art; the Mage is his statue).
 const HERO_INFO = {
@@ -69,9 +69,7 @@ export function openHeroWindow(scene, gs, type) {
       ['Health', fmt(st.maxHp)], ['Damage', `${fmt(st.damage)} per zap`], ['Attack speed', perSec(st.attackInterval)],
       ['Range', `${st.attackRange} tiles`], ['Sanctuary Aura', `${fmt(st.heal)} HP/s · ${st.auraRadius} tiles`]
     ];
-    const price = level === 1 ? `${formatGold(L.cost)} gold` : L.costCurrency === 'rp' ? rpText(L.cost) : `${formatGold(L.cost)} gold`;
     const needs = L.townHall || (type === 'altar' ? Math.max(typeConfig(type).unlockTownHall, level) : typeConfig(type).unlockTownHall);
-    rows.push([level === 1 ? 'Build cost' : 'Upgrade cost', `${price} · needs Village Hall ${needs}`]);
     let y = py + 34;
     for (const [i, [label, value]] of rows.entries()) {
       if (i > 0) g.fillStyle(COLORS.frame, 0.12).fillRect(cx, y - 4, cw, 1);
@@ -79,6 +77,11 @@ export function openHeroWindow(scene, gs, type) {
       md.add(scene.add.text(cx + cw, y, value, bodyStyle(15, COLORS.ink, { fontStyle: 'bold' })).setOrigin(1, 0));
       y += 26;
     }
+    const price = md.add(currencyCost(scene, [{ amount: L.cost, currency: L.costCurrency || 'gold' }],
+      bodyStyle(15, COLORS.ink, { fontStyle: 'bold' }), level === 1 ? 'Build' : 'Upgrade', 18));
+    price.setPosition(cx, y + 8);
+    md.add(scene.add.text(cx + cw, y, `Village Hall ${needs} required`, bodyStyle(15, COLORS.inkDim)).setOrigin(1, 0));
+    y += 26;
     // The ability.
     y += 8;
     const ab = abilityOf(scene, type, st);
@@ -91,7 +94,9 @@ export function openHeroWindow(scene, gs, type) {
     const title = md.add(scene.add.text(tx, y + 8, ab.name, textStyle(18)));
     md.add(scene.add.text(title.x + title.width + 8, y + 12, `Ability · ${ab.charges}x per wave`, textStyle(13, COLORS.textGold)));
     md.add(scene.add.text(tx, y + 34, ab.text, bodyStyle(13, COLORS.ink, { wordWrap: { width: cx + cw - 12 - tx }, lineSpacing: 2 })));
-    y += 108;
+    y += 107;
+    drawHeroAbilityProgress(scene, md, g, altar, cx, y, cw, ab.color);
+    y += 39;
     // The perk paths.
     md.add(scene.add.text(cx, y, 'RV Lab perk paths', bodyStyle(14, COLORS.inkDim, { fontStyle: 'bold' })));
     let x = cx;
@@ -109,6 +114,14 @@ export function openHeroWindow(scene, gs, type) {
   return md;
 }
 
+export function drawHeroAbilityProgress(scene, parent, g, altar, x, y, w, color) {
+  const { label, value, max, next, nextLevel, unit } = heroAbilityProgress(altar);
+  const gain = nextLevel ? ` → ${next}${unit} at Lv ${nextLevel}` : '';
+  parent.add(scene.add.text(x, y, label, bodyStyle(14, COLORS.inkDim, { fontStyle: 'bold' })));
+  parent.add(scene.add.text(x + w, y, `${value}${unit}${gain}`, bodyStyle(14, COLORS.inkGood, { fontStyle: 'bold' })).setOrigin(1, 0));
+  drawStatBar(g, x, y + 19, w, value / max, color, 9);
+}
+
 /** A hero's ability for the window: { name, icon, color, charges, text } from his or her stats at the shown level. */
 function abilityOf(scene, type, st) {
   if (type === 'queenAltar') {
@@ -122,5 +135,5 @@ function abilityOf(scene, type, st) {
   }
   const F = CONFIG.altar.hero.feast;
   return { name: 'Brisket Feast', icon: TEX.feastReady, color: COLORS.button, charges: st.feastCharges,
-    text: `Heals him ${F.healPct}%, then he rages for ${F.boostSeconds} s (+${F.damagePct}% damage, +${F.speedPct}% speed) and slams and stuns enemies around him.` };
+    text: `Heals him ${st.feastHealPct}%, then he rages for ${F.boostSeconds} s (+${F.damagePct}% damage, +${F.speedPct}% speed) and slams and stuns enemies around him.` };
 }

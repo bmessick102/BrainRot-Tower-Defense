@@ -11,7 +11,7 @@ import { canPlaceRect } from '../logic/grid.js';
 import {
   checkBuy, checkUpgrade, planSwap, checkWallUpgrade, wallLevel, createBuilding, applyLevelUp, buildCost, footprintDims, getTownHall, townHallLevel, DEFENSE_TYPES
 } from '../logic/buildings.js';
-import { getCapacity, spendGold, addGold, setGold, collectMine, repairBuilding } from '../logic/economy.js';
+import { getCapacity, spendGold, addGold, setGold, collectMine, mineCollectionAmount, repairBuilding } from '../logic/economy.js';
 import { createIdleWave, skipCountdown, cancelCountdown, legacyDebuted } from '../logic/waves.js';
 import { advanceTutorial, applyStarterBase, canSkipTutorial, tutorialAllows, TUTORIAL_DONE_STEP, TUTORIAL_NIGHT_STEP } from '../logic/tutorial.js';
 import { createClock, startTutorialWave, resumeClockOnLoad, startGrace, startNextWave } from '../logic/dayNight.js';
@@ -313,10 +313,23 @@ export class GameState {
   }
 
   /** Upgrade (instant). A town hall upgrade unlocks buildings (the waves follow the wave number, not the hall: v0.10). */
-  upgradeBuilding(id) {
+  upgradeBuilding(id, expectedLevel) {
     const b = this.getBuilding(id);
     if (!b) return { ok: false, reason: 'Missing' };
+    if (expectedLevel !== undefined && (expectedLevel !== (b.type === 'wall' ? wallLevel(this) : b.level)
+      || this.gameOver || !tutorialAllows(this, 'upgrade', b.type))) return { ok: false, reason: 'Upgrade no longer available' };
+    if (this.upgrading) return { ok: false, reason: 'Upgrade in progress' };
+    this.upgrading = true;
+    try {
+      return this.#purchaseUpgrade(b);
+    } finally {
+      this.upgrading = false;
+    }
+  }
+
+  #purchaseUpgrade(b) {
     if (b.type === 'wall') return this.upgradeWalls(); // walls only ever go up all together
+    const { id } = b;
     const check = checkUpgrade(this, b);
     if (!check.ok) return check;
     if (check.currency === 'rp') spendResearchPoints(this, check.cost); // costCurrency: 'rp' levels (the RV Lab)
@@ -395,12 +408,15 @@ export class GameState {
   }
 
   /** RV Lab: research a merged type's next Mastery tier (merge.js). Every merged building of that type gets it. */
-  researchMastery(type) {
-    const check = checkMastery(this, type);
+  researchMastery(type, tier) {
+    const check = checkMastery(this, type, tier);
     if (!check.ok) return check;
-    spendResearchPoints(this, check.cost);
+    this.gold -= check.goldCost;
+    this.researchPoints -= check.cost;
     this.mastery[type] = check.tier;
     const ids = syncMastery(this);
+    this.emit('goldChanged', { gold: this.gold, capacity: this.capacity });
+    this.emit('researchPointsChanged', { researchPoints: this.researchPoints, added: -check.cost });
     this.emit('masteryResearched', { type, tier: check.tier, ids });
     this.save();
     return { ok: true, reason: '', tier: check.tier };
@@ -410,23 +426,50 @@ export class GameState {
     const b = this.getBuilding(id);
     if (!b || (b.type !== 'mine' && b.type !== 'shakeCollector')) return null;
     const shakes = b.type === 'shakeCollector';
-    const amount = Math.floor(b.stock || 0);
-    const room = shakes ? rpRoom(this) : getCapacity(this) - this.gold;
+    let room = Math.max(0, Math.floor(shakes ? rpRoom(this) : getCapacity(this) - this.gold));
+    let amount = 0;
+    const producers = this.collectionProducers(b);
     const reason = b.destroyed ? 'Destroyed' : this.gameOver || isWaveActive(this) ? 'Not during a wave'
-      : !tutorialAllows(this, 'collect') ? 'Follow the guide' : !amount ? 'Empty' : room <= 0 ? 'Storage full' : '';
+      : !tutorialAllows(this, 'collect') ? 'Follow the guide'
+        : producers.length === 0 ? 'Empty' : room === 0 ? 'Storage full' : '';
+    if (!reason) {
+      for (const producer of producers) {
+        const added = shakes ? Math.min(Math.floor(producer.stock), room) : mineCollectionAmount(producer, room).total;
+        amount += added;
+        room -= added;
+        if (!room) break;
+      }
+    }
     return { shakes, amount, reason };
+  }
+
+  collectionProducers(selected) {
+    const stocked = (b) => !b.destroyed && Math.floor(b.stock || 0) > 0;
+    const others = this.buildings.filter((b) => b !== selected && b.type === selected.type && stocked(b));
+    return stocked(selected) ? [selected, ...others] : others;
   }
 
   collect(id) {
     const b = this.getBuilding(id);
-    if (!b || b.destroyed || this.gameOver || !tutorialAllows(this, 'collect')) return { ok: false, reason: '' };
-    const shakes = b.type === 'shakeCollector';
-    if (!shakes && b.type !== 'mine') return { ok: false, reason: '' };
-    const r = shakes ? collectShakes(this, b) : collectMine(this, b);
-    const ok = r.collected > 0;
-    if (ok) this.save();
-    const reason = r.waveActive ? 'Not during a wave' : r.full ? 'Shakes full' : r.storageFull ? 'Storage full' : '';
-    return { ok, reason, collected: r.collected };
+    if (this.collecting) return { ok: false, reason: '' };
+    const status = this.collectionStatus(id);
+    if (!status) return { ok: false, reason: '' };
+    const { reason, shakes } = status;
+    if (reason && reason !== 'Storage full') return { ok: false, reason, collected: 0 };
+    let collected = 0;
+    this.collecting = true;
+    try {
+      for (const producer of this.collectionProducers(b)) {
+        const result = shakes ? collectShakes(this, producer) : collectMine(this, producer);
+        collected += result.collected;
+        if (result.full || result.storageFull || result.waveActive) break;
+        if ((shakes ? rpRoom(this) : getCapacity(this) - this.gold) < 1) break;
+      }
+      if (collected) this.save();
+    } finally {
+      this.collecting = false;
+    }
+    return { ok: collected > 0, reason: reason && shakes ? 'Shakes full' : reason, collected };
   }
 
   repair(id) {

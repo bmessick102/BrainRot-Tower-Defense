@@ -33,9 +33,11 @@ export class MageFx {
     const gs = this.scene.gs;
     this.ground.clear();
     this.over.clear();
-    const altar = gs && getMageAltar(gs), h = gs && gs.mage;
+    const committed = gs && getMageAltar(gs), h = gs && gs.mage;
+    const position = this.scene.mageDisplayPosition(committed);
+    const altar = position && { ...committed, ...position };
     const bv = altar && this.scene.views.buildings.get(altar.id);
-    if (!altar || !h || !bv || !bv.sprite) { this.glow.setVisible(false); this.zzz.setVisible(false); return; }
+    if (!altar || !h) { this.glow.setVisible(false); this.zzz.setVisible(false); return; }
     const st = mageStats(altar);
     const c = footprintCenter(altar), sc = gridToScreen(c.x, c.y), { rx, ry } = rangeEllipse(st.auraRadius, c.x, c.y);
     const down = altar.destroyed;
@@ -43,6 +45,11 @@ export class MageFx {
     {
       const k = 0.5 + 0.5 * Math.sin(time * 0.0035);
       this.ground.lineStyle(2.5, 0xffffff, 0.14 + 0.18 * k).strokeEllipse(sc.x, sc.y, rx * 2, ry * 2);
+    }
+    if (!bv?.sprite || this.scene.placement?.id === altar.id) {
+      this.glow.setVisible(false);
+      this.zzz.setVisible(false);
+      return;
     }
     const asleep = !down && (h.status === 'asleep' || h.status === 'waking' || h.resting);
     // Staff glow (not while he's knocked out).

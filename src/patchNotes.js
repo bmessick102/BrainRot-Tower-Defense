@@ -2,7 +2,7 @@
 // once per `version` (the first time the title screen opens after an update; saved in ibtd.patchNotes), and its
 // "What's New" button opens it any time. Keep `version` equal to package.json's for the release it describes.
 //
-// One tab per minor update (v0.7.1): PATCH_NOTES is the newest (its tab is "v0.15 · Latest"), PATCH_HISTORY the older
+// One tab per minor update (v0.7.1): PATCH_NOTES is the newest (its tab is "v0.16 · Latest"), PATCH_HISTORY the older
 // ones, newest first. Each has `release` (the tab's name: '0.7'), `version` (its newest patch) and `sections`.
 // When a new minor update ships, the current PATCH_NOTES content moves to the front of PATCH_HISTORY.
 //
@@ -18,37 +18,37 @@
 const allEntries = (release) => release.sections.flatMap((s) => s.entries);
 
 export const PATCH_NOTES = {
-  release: '0.15',
-  version: '0.15.0',
-  title: "What's New in v0.15",
+  release: '0.16',
+  version: '0.16.0',
+  title: "What's New in v0.16",
   sections: [
     { type: 'feature', entries: [
-      { version: '0.15.0', icon: { building: 'shakeCollector' }, title: 'Collect from building menus',
-        text: 'Select a Bitcoin Mine or Shake Collector to see how much it holds and Collect. If storage fills up, the rest stays in the building.' },
-      { version: '0.15.0', icon: { building: 'archer' }, title: 'Inspect defenses in visited villages',
-        text: 'Tap a building to see its reach and any Mastery perks its owner researched.' }
+      { version: '0.16.0', icon: { building: 'townHall', level: 14 }, title: 'Preview upgrades before buying',
+        text: 'See the next building picture, stat changes, costs, and requirements before confirming. Village Hall previews also list new buildings, extra slots, and upgrade levels.' },
+      { version: '0.16.0', icon: { building: 'wall' }, title: 'Draw walls in Edit Mode',
+        text: 'Select walls from the hotbar, then drag across the map to place a line or corner. Store a lifted building from its new action button. Reopening Edit Mode on the same device can restore a saved draft.' },
+      { version: '0.16.0', icon: { building: 'rvlab' }, title: 'New research and Mastery tiers',
+        text: 'The RV Lab has new paths for Shake Collectors and Shake Storages. Merged buildings have five Mastery tiers that cost both Bitcoin and Shakes.' }
     ] },
     { type: 'change', entries: [
-      { version: '0.15.0', icon: { building: 'rvlab' }, title: 'Larger RV Lab and How to Play controls',
-        text: 'How to Play groups buildings into larger picture cards. The RV Lab has larger perk cards, building pages on phones, and a confirmation before research.' },
-      { version: '0.15.0', icon: { hero: true }, title: 'Heroes recover at their own pace',
-        text: 'Start a raid while a hero sleeps and they’ll join once their own recovery timer ends and they wake up. Wave speed affects combat and leaves recovery at normal speed.' }
+      { version: '0.16.0', icon: { building: 'mine' }, title: 'Collect all of one resource',
+        text: 'Collect from a Bitcoin Mine or Shake Collector to gather from every producer of that type. Collect All shows what will fit. Extra stock stays where it was produced.' },
+      { version: '0.16.0', icon: { building: 'shakeStorage', level: 15 }, title: 'New Village Hall and Shake Storage art',
+        text: 'Village Halls 13 through 20 have updated artwork. Shake Storage upgrades reach Level 16 with new fill pictures at Levels 13 and 15.' }
     ] },
     { type: 'balance', entries: [
-      { version: '0.15.0', icon: { building: 'shakeStorage' }, title: 'Shake Storages hold more',
-        text: 'Every Shake Storage holds more Shakes, from 800 at Level 1 to 8,700 at Level 12.' },
-      { version: '0.15.0', icon: { enemy: 'grunt' }, title: 'Faster spawns from multiple entrances',
-        text: 'When multiple entrances are open, enemies arrive at a pace halfway between the old and recent rates. Entrances still open in stages.' },
-      { version: '0.15.0', icon: { building: 'archer' }, title: '14 Archer Towers at Village Hall 20',
-        text: 'Village Hall 20 allows 14 Archer Towers for seven merge pairs. Any tower you already built stays in your village.' }
+      { version: '0.16.0', icon: { building: 'shakeCollector' }, title: 'More Shakes and cheaper storage',
+        text: 'Shake Collectors make and hold twice as much. Clearing waves and defeating larger enemies pays more Shakes, and Shake Storage prices are lower.' },
+      { version: '0.16.0', icon: { hero: true }, title: 'Hero abilities improve with levels',
+        text: 'Every five levels Brisket Feast heals more, Encore Cloak lasts longer, and Arcane Aegis protects buildings longer.' }
     ] },
     { type: 'fix', entries: [
-      { version: '0.15.0', icon: { building: 'townHall', level: 20 }, title: 'Village Hall 20 on the leaderboard',
-        text: 'The leaderboard shows Village Hall Levels 16 through 20 from your saved village.' },
-      { version: '0.15.0', icon: { building: 'townHall' }, title: 'Better framing on phones and at wide zoom',
-        text: 'The game refits the screen when you turn your phone, including during loading. The map stays visible while you zoom out.' },
-      { version: '0.15.0', icon: { building: 'dj' }, title: 'Village audio on visits',
-        text: 'Visiting a village plays its day or night ambience. Buildings play their usual sound when you select them.' }
+      { version: '0.16.0', icon: { building: 'mageAltar' }, title: 'Mage aura follows layout edits',
+        text: 'The range ring moves with the Mage in Edit Mode and disappears while he is stored.' },
+      { version: '0.16.0', icon: { enemy: 'grunt' }, title: 'Less targeting and collision work during raids',
+        text: 'Large crowds use less processing time for aiming and collision checks.' },
+      { version: '0.16.0', icon: { texture: 'guide_portrait' }, title: 'Audio feedback for guide messages and unavailable actions',
+        text: 'Guide messages play a sound as they appear. Disabled purchases and research play the invalid placement sound if you try them.' }
     ] }
   ],
   get entries() { return allEntries(this); }
@@ -56,6 +56,42 @@ export const PATCH_NOTES = {
 
 /** Older updates, newest first: one What's New tab each (players can read them any time). */
 export const PATCH_HISTORY = [
+  {
+    release: '0.15',
+    version: '0.15.0',
+    title: "What's New in v0.15",
+    sections: [
+      { type: 'feature', entries: [
+        { version: '0.15.0', icon: { building: 'shakeCollector' }, title: 'Collect from building menus',
+          text: 'Select a Bitcoin Mine or Shake Collector to see how much it holds and Collect. If storage fills up, the rest stays in the building.' },
+        { version: '0.15.0', icon: { building: 'archer' }, title: 'Inspect defenses in visited villages',
+          text: 'Tap a building to see its reach and any Mastery perks its owner researched.' }
+      ] },
+      { type: 'change', entries: [
+        { version: '0.15.0', icon: { building: 'rvlab' }, title: 'Larger RV Lab and How to Play controls',
+          text: 'How to Play groups buildings into larger picture cards. The RV Lab has larger perk cards, building pages on phones, and a confirmation before research.' },
+        { version: '0.15.0', icon: { hero: true }, title: 'Heroes recover at their own pace',
+          text: 'Start a raid while a hero sleeps and they’ll join once their own recovery timer ends and they wake up. Wave speed affects combat and leaves recovery at normal speed.' }
+      ] },
+      { type: 'balance', entries: [
+        { version: '0.15.0', icon: { building: 'shakeStorage' }, title: 'Shake Storages hold more',
+          text: 'Every Shake Storage holds more Shakes, from 800 at Level 1 to 8,700 at Level 12.' },
+        { version: '0.15.0', icon: { enemy: 'grunt' }, title: 'Faster spawns from multiple entrances',
+          text: 'When multiple entrances are open, enemies arrive at a pace halfway between the old and recent rates. Entrances still open in stages.' },
+        { version: '0.15.0', icon: { building: 'archer' }, title: '14 Archer Towers at Village Hall 20',
+          text: 'Village Hall 20 allows 14 Archer Towers for seven merge pairs. Any tower you already built stays in your village.' }
+      ] },
+      { type: 'fix', entries: [
+        { version: '0.15.0', icon: { building: 'townHall', level: 20 }, title: 'Village Hall 20 on the leaderboard',
+          text: 'The leaderboard shows Village Hall Levels 16 through 20 from your saved village.' },
+        { version: '0.15.0', icon: { building: 'townHall' }, title: 'Better framing on phones and at wide zoom',
+          text: 'The game refits the screen when you turn your phone, including during loading. The map stays visible while you zoom out.' },
+        { version: '0.15.0', icon: { building: 'dj' }, title: 'Village audio on visits',
+          text: 'Visiting a village plays its day or night ambience. Buildings play their usual sound when you select them.' }
+      ] }
+    ],
+    get entries() { return allEntries(this); }
+  },
   {
     release: '0.14',
     version: '0.14.0',

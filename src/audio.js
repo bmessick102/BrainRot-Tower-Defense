@@ -88,7 +88,7 @@ let sfxLevel = 0.7;
 const FADE = Symbol('fade');
 const fadeOf = (s) => (typeof s[FADE] === 'number' ? s[FADE] : 1);
 const musicVolume = (key = musicKey, fade = 1) => musicTrackVolume(MUSIC_MIX, TRACK_GAIN[key] ?? 1, musicLevel, fade);
-const applyMusicVolume = (s) => { if (isAlive(s)) s.setVolume(musicVolume(s.key, fadeOf(s))); };
+const applyMusicVolume = (s) => { if (isAlive(s) && !lockedTag(s)) s.setVolume(musicVolume(s.key, fadeOf(s))); };
 // Effect sounds that are playing: sound -> its own base volume, rescaled when the Effects slider moves.
 const liveSfx = new Map();
 function trackSfx(snd, base) {
@@ -150,9 +150,15 @@ export function sfxVolume(v = 1) {
 // While the browser still blocks audio (no click or tap yet), Phaser queues every sound it's asked to play and
 // keeps it until then (and it never finishes, so it's never cleaned up): effects are skipped instead.
 const audioLocked = (scene) => !!(scene.sound && scene.sound.locked);
+const effectReady = (scene, key) => {
+  if (!key || !scene.cache.audio.exists(key) || audioLocked(scene)) return false;
+  // HTML5 can still have locked tags as it swaps in newly loaded audio.
+  const tags = scene.cache.audio.get?.(key);
+  return !Array.isArray(tags) || tags[0]?.dataset?.locked !== 'true';
+};
 
 export function playSfx(scene, key, config = undefined) {
-  if (!key || !scene.cache.audio.exists(key) || audioLocked(scene)) return;
+  if (!effectReady(scene, key)) return;
   const live = liveSfxCount();
   if (live >= MAX_LIVE_SFX) return; // crowded: skipped
   const now = performance.now();
@@ -194,6 +200,27 @@ export function playSfxCapped(scene, key, maxAtOnce, config = undefined) {
   playSfx(scene, key, config);
 }
 
+const guideMessages = new WeakMap();
+
+/** The village bubble and the RV Lab can display the same message. Play it once across both. */
+export function notifyGuideMessage(scene, state, key) {
+  let guide = guideMessages.get(state);
+  if (!guide) {
+    guide = { shown: new Set(), key: null, sound: null };
+    guideMessages.set(state, guide);
+  }
+  if (guide.shown.has(key)) return;
+  guide.shown.add(key);
+  guide.key = key;
+  const play = () => {
+    if (guide.key !== key || !scene.sys.isActive()) return;
+    if (isAlive(guide.sound)) destroySound(guide.sound);
+    guide.sound = playSfxClip(scene, SFX.guideMessage, { maxAtOnce: 1, minGapMs: 0 });
+  };
+  if (audioLocked(scene)) scene.sound.once('unlocked', play);
+  else play();
+}
+
 /**
  * A sound effect that may be long (a spell's cast, John Pork's call, Brr Brr Patapim's quake): played through the SFX
  * level like playSfx (skipped while the browser still blocks audio or the SFX slider is at 0), but
@@ -203,7 +230,7 @@ export function playSfxCapped(scene, key, maxAtOnce, config = undefined) {
  */
 const clipStarts = new Map();
 export function playSfxClip(scene, key, { maxSeconds = 0, fadeMs = 400, maxAtOnce = 2, minGapMs = 300, volume = 1 } = {}) {
-  if (!key || !scene.cache.audio.exists(key) || audioLocked(scene) || sfxLevel <= 0 || !sfxRoom()) return null;
+  if (!effectReady(scene, key) || sfxLevel <= 0 || !sfxRoom()) return null;
   const now = performance.now();
   if (now - (clipStarts.get(key) || -Infinity) < minGapMs) return null;
   if (scene.sound.getAll(key).filter((s) => s.isPlaying).length >= maxAtOnce) return null;
@@ -296,11 +323,18 @@ export function fadeOutMusic(scene, ms = 500) {
 }
 
 const isAlive = (s) => s && !s.pendingRemove && s.manager;
+const lockedTag = (s) => s.tags?.[0]?.dataset?.locked === 'true';
 
 function destroySound(s) {
   if (!isAlive(s)) return;
-  s.stop();
+  const manager = s.manager;
+  if (!lockedTag(s)) s.stop();
   s.destroy();
+  // Phaser queues play/stop/volume actions while the HTML5 tag is locked. If we leave the
+  // village before the first gesture, the manager must not replay actions on this destroyed sound.
+  if (manager.lockedActionsQueue?.length) {
+    manager.lockedActionsQueue = manager.lockedActionsQueue.filter((action) => action.sound !== s);
+  }
 }
 
 // Volume fades tween a plain number and only touch the sound while it still exists, so a track
@@ -373,8 +407,8 @@ function applyAmbience() {
   const a = ambience;
   if (!a) return;
   const v = ambienceVolumes(MUSIC_MIX * AMBIENCE_GAIN, musicLevel, a.presence, a.dark);
-  if (isAlive(a.day)) a.day.setVolume(v.day);
-  if (isAlive(a.night)) a.night.setVolume(v.night);
+  if (isAlive(a.day) && !lockedTag(a.day)) a.day.setVolume(v.day);
+  if (isAlive(a.night) && !lockedTag(a.night)) a.night.setVolume(v.night);
 }
 
 export function stopAmbience() {

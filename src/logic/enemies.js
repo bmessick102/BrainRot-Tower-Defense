@@ -735,21 +735,35 @@ export function isOverWall(nav, x, y) {
  * walkers). Each overlapping pair moves apart by part of the overlap; a push that would shove a
  * ground enemy into a building or wall is skipped.
  */
+const separationScratch = new WeakMap();
+
 export function separateEnemies(state, nav = getNav(state)) {
-  const list = state.enemies.filter((e) => e.alive);
+  let scratch = separationScratch.get(state);
+  if (!scratch) {
+    scratch = { list: [], air: [], rad: [], dx: [], dy: [], buckets: new Map(), used: [], spare: [] };
+    separationScratch.set(state, scratch);
+  }
+  const { list, air, rad, dx, dy, buckets, used, spare } = scratch;
+  list.length = 0;
+  for (const e of state.enemies) if (e.alive) list.push(e);
   const n = list.length;
-  if (n < 2) return;
+  if (n < 2) { list.length = 0; return; }
   // Layers that never push each other: on the ground, in the air, and tunneling (Skibidi Toilets).
-  const air = list.map((e) => (isAirKind(e.kind) ? 1 : e.underground ? 2 : 0));
-  const rad = list.map((e) => enemyConfig(e.kind).radius ?? 0.25);
-  const dx = new Float64Array(n), dy = new Float64Array(n);
   // Bucket enemies by tile (bodies are under a tile across) so each one only checks its neighbors.
-  const buckets = new Map();
   const keyOf = (cx, cy) => cx * 4096 + cy;
   for (let i = 0; i < n; i++) {
-    const k = keyOf(Math.floor(list[i].x), Math.floor(list[i].y));
-    if (!buckets.has(k)) buckets.set(k, []);
-    buckets.get(k).push(i);
+    const e = list[i];
+    air[i] = isAirKind(e.kind) ? 1 : e.underground ? 2 : 0;
+    rad[i] = enemyConfig(e.kind).radius ?? 0.25;
+    dx[i] = dy[i] = 0;
+    const k = keyOf(Math.floor(e.x), Math.floor(e.y));
+    let bucket = buckets.get(k);
+    if (!bucket) {
+      bucket = spare.pop() || [];
+      buckets.set(k, bucket);
+      used.push(bucket);
+    }
+    bucket.push(i);
   }
   for (let i = 0; i < n; i++) {
     const a = list[i];
@@ -763,8 +777,9 @@ export function separateEnemies(state, nav = getNav(state)) {
       const minD = rad[i] + rad[j];
       let ox = b.x - a.x, oy = b.y - a.y;
       if (Math.abs(ox) >= minD || Math.abs(oy) >= minD) continue;
-      let d = Math.hypot(ox, oy);
-      if (d >= minD) continue;
+      const squared = ox * ox + oy * oy;
+      if (squared >= minD * minD) continue;
+      let d = Math.sqrt(squared);
       if (d < 1e-6) { const ang = random(state) * Math.PI * 2; ox = Math.cos(ang); oy = Math.sin(ang); d = 0; } // exact overlap: random direction, full push
       else { ox /= d; oy /= d; }
       const push = ((minD - d) / 2) * SEPARATION_STRENGTH;
@@ -776,12 +791,20 @@ export function separateEnemies(state, nav = getNav(state)) {
   for (let i = 0; i < n; i++) {
     let px = dx[i], py = dy[i];
     if (!px && !py) continue;
-    const len = Math.hypot(px, py);
-    if (len > MAX_PUSH) { px = (px / len) * MAX_PUSH; py = (py / len) * MAX_PUSH; }
+    const squared = px * px + py * py;
+    if (squared > MAX_PUSH * MAX_PUSH) {
+      const scale = MAX_PUSH / Math.sqrt(squared);
+      px *= scale;
+      py *= scale;
+    }
     const e = list[i];
     const nx = e.x + px, ny = e.y + py;
     if (air[i] || walkable(nav, nx, ny, jumpsWalls(e.kind))) { e.x = nx; e.y = ny; } // (tunnelers go anywhere)
   }
+  buckets.clear();
+  for (const bucket of used) { bucket.length = 0; spare.push(bucket); }
+  used.length = 0;
+  list.length = 0;
 }
 
 export function removeDeadEnemies(state) {

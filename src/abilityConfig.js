@@ -424,6 +424,38 @@ export function registerPerkTree(type, tree, group = 'defense') {
   if (!list.includes(type)) list.push(type);
 }
 
+function economyPath(name, effect, tiers) {
+  return { name, tiers: tiers.map(([tier, amount, desc]) => t(tier, desc || `+${amount}% ${name.toLowerCase()}.`, { [effect]: amount })) };
+}
+
+registerPerkTree('shakeCollector', {
+  a: economyPath('Shake Production', 'productionPct', [
+    ['Fast Mixer', 12], ['Dual Spout', 12], ['Blender Motor', 16], ['High Flow', 20], ['Triple Blend', 25]
+  ]),
+  b: economyPath('Collector Stock Capacity', 'stockCapPct', [
+    ['Tall Cups', 15], ['Cup Rack', 15], ['Cold Tank', 20], ['Cold Room', 25], ['Reserve Vat', 30]
+  ]),
+  c: economyPath('Health', 'hpPct', [
+    ['Reinforced Cart', 10], ['Shock Mounts', 12], ['Steel Counter', 14], ['Guard Rails', 16], ['Mixer Bunker', 20]
+  ])
+}, 'economy');
+
+registerPerkTree('shakeStorage', {
+  a: economyPath('Shake Storage Capacity', 'capacityPct', [
+    ['Stacked Cups', 8], ['Deep Shelves', 10], ['Second Cooler', 12], ['Bulk Chiller', 14], ['Mega Cooler', 16]
+  ]),
+  b: economyPath('Spill Protection', 'drainResistPct', [
+    ['Snap Lids', 8, 'Lose 8% fewer stored Shakes when hit.'],
+    ['Sealed Racks', 10, 'Lose 10 percentage points fewer stored Shakes when hit.'],
+    ['Spill Tray', 12, 'Lose 12 percentage points fewer stored Shakes when hit.'],
+    ['Double Seal', 14, 'Lose 14 percentage points fewer stored Shakes when hit.'],
+    ['Armored Chiller', 16, 'Lose 16 percentage points fewer stored Shakes when hit.']
+  ]),
+  c: economyPath('Health', 'hpPct', [
+    ['Cooler Panels', 10], ['Braced Door', 12], ['Steel Shelves', 14], ['Rebar Shell', 16], ['Shake Fortress', 20]
+  ])
+}, 'economy');
+
 // ---------- Spear Thrower (piercing sniper; fx read by combat.js fireSpear / hitEffects) ----------
 // spearPierceAdd / spearLengthAdd / spearFalloffAdd change the spear's line (falloff is the share lost per enemy
 // pierced: 0.25 = 100/75/50/25%); the rest are the usual hit effects.
@@ -530,7 +562,7 @@ registerPerkTree('queenAltar', {
   ] },
   b: { name: 'Idol', tiers: [
     t('Warm-Up', 'While she\'s awake, defenses within her guard range fire 10% faster.', { queenWarmupPct: 10 }),
-    t('Backup Chorus', 'Encore Cloak lasts 6 s instead of 4 s.', { encoreSecondsAdd: 2 }),
+    t('Backup Chorus', 'Encore Cloak lasts 2 s longer.', { encoreSecondsAdd: 2 }),
     t('Encore+', 'While Encore Cloak lasts, defenses within her guard range deal 25% more damage.', { encoreDefensePct: 25 }),
     t('Fan Favorite', 'Every enemy she defeats heals her 5% of her health.', { queenKillHeal: 0.05 }),
     t('Sold Out Show', 'Encore Cloak can be used twice per wave.', { encoreCharges: 2 })
@@ -569,7 +601,7 @@ registerPerkTree('mageAltar', {
   ] },
   c: { name: 'Eternity', tiers: [
     t('Stone Skin', 'The Locklair Mage has 30% more health.', { hpPct: 30 }),
-    t('Lasting Aegis', 'Arcane Aegis lasts 6 s instead of 4 s.', { aegisSecondsAdd: 2 }),
+    t('Lasting Aegis', 'Arcane Aegis lasts 2 s longer.', { aegisSecondsAdd: 2 }),
     t('Deep Meditation', 'He sleeps 40% shorter after a raid.', { mageSleepFasterPct: 40 }),
     t('Aegis Surge', 'Arcane Aegis also heals every building it covers 25% of its health.', { aegisHealPct: 0.25 }),
     t('Undying', 'Knocked out in a raid, he rises again after 20 s with 40% health (once per raid).', { mageReviveSeconds: 20, mageReviveHpPct: 0.4 })

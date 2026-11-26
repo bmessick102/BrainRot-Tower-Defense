@@ -30,6 +30,10 @@ export function isBeam(type) {
   return !!(cfg && cfg.beam);
 }
 
+export function beamDamagePerSecond(b) {
+  return levelStats(b.type, b.level).dps * towerDamageMult(b) * (1 - Math.max(0, Math.min(90, b.frigoSlow || 0)) / 100);
+}
+
 /** Heat stage (0-based) after locking onto one enemy for \`seconds\`, and its damage multiplier. */
 export function beamStage(type, seconds) {
   const stages = CONFIG.defenses[type].stages;
@@ -66,7 +70,7 @@ export function stepBeams(state, dt) {
     const fx = abilityFx(b);
     const cfg = CONFIG.defenses[b.type];
     // (Frigo Camillo's cold aura burns it slower too.)
-    const dps = levelStats(b.type, b.level).dps * towerDamageMult(b) * (1 - Math.max(0, Math.min(90, b.frigoSlow || 0)) / 100);
+    const dps = beamDamagePerSecond(b);
     const heat = 1 + (fx.heatPct || 0) / 100;
     const lance = lanceStats(b); // Great Pyramid of Rah: Solar Lance (null for a plain Tower of Rah)
     if (lance) b._lanceClock = (b._lanceClock || 0) + dt;

@@ -17,6 +17,7 @@
 //     of music notes for a few seconds. Enemies lose track of her (they stop attacking her and can't pick her), her
 //     bolts deal +150% and pierce 2 more enemies, and she heals 30% of her health.
 // Status: 'ready' | 'asleep' | 'waking' | 'down', like the Brisket King's.
+import { heroAbilityLevelValue } from './heroAbilityLevels.js';
 import { CONFIG } from '../config.js';
 import { levelStats } from './buildings.js';
 import { abilityFx } from './abilities.js';
@@ -54,7 +55,7 @@ export function queenStats(altar) {
     pierce: fx.queenPierce || 0,
     critChance: fx.queenCrit || 0,
     critMult: fx.queenCritMult || 1,
-    encoreSeconds: H.encore.seconds + (fx.encoreSecondsAdd || 0),
+    encoreSeconds: heroAbilityLevelValue('queenAltar', altar.level) + (fx.encoreSecondsAdd || 0),
     encoreCharges: Math.max(1, fx.encoreCharges || 1),
     fx
   };

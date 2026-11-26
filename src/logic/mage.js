@@ -15,6 +15,7 @@
 //     not rubble, with knocked-out stars); enemies ignore it like any destroyed building. Rebuilt in the raid he gets up;
 //     after the raid it's rebuilt free and he naps. Undying (a perk): back up once a raid after a while.
 // Status: 'ready' | 'asleep' | 'waking' | 'down', like the other heroes; `resting` while ready at night between raids.
+import { heroAbilityLevelValue } from './heroAbilityLevels.js';
 import { CONFIG } from '../config.js';
 import { levelStats, maxHp } from './buildings.js';
 import { abilityFx } from './abilities.js';
@@ -52,7 +53,7 @@ export function mageStats(altar) {
     overchargeEvery: fx.mageOverchargeEvery || 0,
     overchargeMult: fx.mageOverchargeMult || 1,
     ward: fx.mageWard || 0,
-    aegisSeconds: H.aegis.seconds + (fx.aegisSecondsAdd || 0),
+    aegisSeconds: heroAbilityLevelValue('mageAltar', altar.level) + (fx.aegisSecondsAdd || 0),
     aegisCharges: Math.max(1, fx.aegisCharges || 1),
     aegisHeal: fx.aegisHealPct || 0,
     maxSleep: H.maxSleepSeconds * sleepK,

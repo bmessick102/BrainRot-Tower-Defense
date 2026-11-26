@@ -257,10 +257,10 @@ export function buildableCount(state) {
  * What each Village Hall level adds over the one before it: [{ type, add }] for every type whose cap goes up, in
  * shop order (defenses first, then the economy and the rest; walls last). Empty for levels past the top.
  */
-export function hallUnlocks(level) {
-  if (level < 2 || level > CONFIG.rules.maxTownHallLevel) return [];
+export function hallUnlocks(level, fromLevel = Math.max(1, level - 1)) {
+  if (level < 1 || level > CONFIG.rules.maxTownHallLevel) return [];
   const order = [...DEFENSE_TYPES, ...ECONOMY_TYPES, ...SPELL_TYPES, ...RESEARCH_TYPES, ...UTILITY_TYPES, ...HERO_TYPES, ...WALL_TYPES];
-  return order.map((type) => ({ type, add: limitFor(type, level) - limitFor(type, level - 1) })).filter((u) => u.add > 0);
+  return order.map((type) => ({ type, add: limitFor(type, level) - limitFor(type, fromLevel) })).filter((u) => u.add > 0);
 }
 
 export function getTownHall(state) {
@@ -274,6 +274,12 @@ export function townHallLevel(state) {
 
 export function needGoldReason(cost, gold) {
   return `Need ${(cost - gold).toLocaleString('en-US')} more gold`;
+}
+
+/** Hall gate shared by purchases, their preview, and the Hall's list of newly available upgrades. */
+export function upgradeHallRequirement(type, nextLevel) {
+  if (type === 'townHall') return 0;
+  return Math.max(nextLevel, levelStats(type, nextLevel).townHall || 0);
 }
 
 /** Can the player buy one more of this type right now? Reasons match the shop card text. */
@@ -299,11 +305,7 @@ export function checkUpgrade(state, b) {
   if (cost === null) return { ok: false, reason: 'Max level', cost: null };
   // Every answer names the currency, so a locked Shake-priced level still reads "600 Shakes", not "600".
   const currency = upgradeCurrency(b.type, b.level);
-  if (b.type !== 'townHall' && b.level >= townHallLevel(state)) {
-    return { ok: false, reason: `Requires VH${b.level + 1}`, cost, currency };
-  }
-  // Some levels need a higher Village Hall than that (the RV Lab: level N needs VH N+3).
-  const needVH = levelStats(b.type, b.level + 1).townHall;
+  const needVH = upgradeHallRequirement(b.type, b.level + 1);
   if (needVH && townHallLevel(state) < needVH) return { ok: false, reason: `Requires VH${needVH}`, cost, currency };
   if (isWaveActive(state)) return { ok: false, reason: 'Not during a wave', cost, currency };
   if (b.destroyed) return { ok: false, reason: 'Destroyed', cost, currency };
@@ -390,7 +392,7 @@ export function checkWallUpgrade(state) {
   const each = upgradeCost('wall', from);
   const cost = count * each;
   const out = { ...base, cost, each };
-  const needVH = levelStats('wall', from + 1).townHall || from + 1;
+  const needVH = upgradeHallRequirement('wall', from + 1);
   if (townHallLevel(state) < needVH) return { ...out, ok: false, reason: `Requires VH${needVH}` };
   if (isWaveActive(state)) return { ...out, ok: false, reason: 'Not during a wave' };
   if (count === 0) return { ...out, ok: false, reason: 'No walls yet' };

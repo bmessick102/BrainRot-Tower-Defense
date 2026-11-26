@@ -32,7 +32,7 @@ export function hotbarSlots(state) {
     slots.push({
       id: 'feast', type: 'feast', name: 'Brisket Feast', ready: c.ok, reason: heroAbilityReason(state.hero, c),
       meter: st.feastCharges ? left / st.feastCharges : 0, count: st.feastCharges > 1 ? left : null,
-      desc: `The Brisket King heals ${F.healPct}%, rages for ${F.boostSeconds} s and slams the enemies around him. ${st.feastCharges} per wave.`
+        desc: `The Brisket King heals ${st.feastHealPct}%, rages for ${F.boostSeconds} s and slams the enemies around him. ${st.feastCharges} per wave.`
     });
   }
   const qAltar = getQueenAltar(state);

@@ -2,8 +2,8 @@
 // `storage` is passed in (window.localStorage in the game, a fake in tests). Every access is try/catch.
 import { validHeroSleep } from './hero.js';
 import { CONFIG } from '../config.js';
-import { collectorStockCap } from './shakes.js';
 import { BUILDING_TYPES, COLLECTOR_TYPES, HERO_TYPES, WALL_ORIENTS, footprintDims, buildingSize, maxLevel, levelStats, isDefense, maxHp, wallLevel, commonWallLevel } from './buildings.js';
+import { maxCollectorStock } from './shakes.js';
 import { isRectOnGrass, footprintsOverlap } from './grid.js';
 import { MAP } from '../mapTiles.js';
 import { validDecorSeed } from './decor.js';
@@ -340,7 +340,7 @@ export function deserializeGame(obj) {
     if (s.merged) { b.merged = true; if (mastery[s.type]) b.mastery = mastery[s.type]; } // a merged defense, with its type's Mastery
     b.hp = maxHp(b); // with any health tiers (and a merged one's extra health)
     if (s.type === 'mine') b.stock = Math.min(b.stock, mineStockCap(b));
-    if (s.type === 'shakeCollector') b.stock = Math.min(b.stock, collectorStockCap(b));
+    if (s.type === 'shakeCollector') b.stock = Math.min(b.stock, maxCollectorStock(b.level));
     if (s.destroyed) { b.destroyed = true; b.hp = 0; }
     return b;
   });

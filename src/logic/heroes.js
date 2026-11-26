@@ -6,6 +6,8 @@
 import { ensureHero, stepHero, heroWaveStarted, heroAfterWave, damageHero, heroStats } from './hero.js';
 import { ensureQueen, stepQueen, queenWaveStarted, queenAfterWave, damageQueen, queenStats, queenTargetable } from './queen.js';
 import { ensureMage, stepMage, mageWaveStarted, mageAfterWave, mageStats } from './mage.js';
+import { abilityFx } from './abilities.js';
+import { abilityLevelProgress } from './heroAbilityLevels.js';
 
 /** The altar types and which hero each one holds. */
 export const HERO_OF_ALTAR = { altar: 'brisket', queenAltar: 'queen', mageAltar: 'mage' };
@@ -25,6 +27,12 @@ export function heroOfAltar(state, altar) {
 /** A hero's numbers from its altar (heroStats for the Brisket King, queenStats for the Hatsune Queen, mageStats for the Mage). */
 export function heroStatsFor(altar) {
   return altar.type === 'queenAltar' ? queenStats(altar) : altar.type === 'mageAltar' ? mageStats(altar) : heroStats(altar);
+}
+
+export function heroAbilityProgress(altar) {
+  const fx = abilityFx(altar);
+  const bonus = altar.type === 'queenAltar' ? fx.encoreSecondsAdd : altar.type === 'mageAltar' ? fx.aegisSecondsAdd : 0;
+  return abilityLevelProgress(altar.type, altar.level, bonus);
 }
 
 /** Every walking hero out right now (each rebuilt from its altar if needed; the Locklair Mage is his building). */

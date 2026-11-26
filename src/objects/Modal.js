@@ -119,7 +119,7 @@ export class Modal {
  * Yes / no question. `lines`: the question text (string or array; the first line is drawn bigger).
  * onConfirm runs after the dialog closes. Returns the Modal.
  */
-export function confirmDialog(scene, { title, lines, confirmLabel = 'OK', confirmColor = COLORS.buttonDanger, cancelLabel = 'Cancel', onConfirm, onCancel = null, width = 540 }) {
+export function confirmDialog(scene, { title, lines, confirmLabel = 'OK', confirmColor = COLORS.buttonDanger, cancelLabel = 'Cancel', onConfirm, onCancel = null, width = 540, costs = null }) {
   const list = Array.isArray(lines) ? lines : [lines];
   const height = 200 + list.length * 30;
   const m = new Modal(scene, { width, height, title, header: 56, onClose: onCancel });
@@ -129,7 +129,8 @@ export function confirmDialog(scene, { title, lines, confirmLabel = 'OK', confir
     y += i === 0 ? 38 : 28;
   });
   const by = m.y + height - 50;
-  m.add(new Button(scene, m.cx - 120, by, 210, 54, confirmLabel, () => { m.destroy(); onConfirm(); }, { color: confirmColor, fontSize: 21 }));
+  const confirm = m.add(new Button(scene, m.cx - 120, by, 210, 54, confirmLabel, () => { m.destroy(); onConfirm(); }, { color: confirmColor, fontSize: 21 }));
+  if (costs?.length) confirm.setCosts(costs, confirmLabel);
   m.add(new Button(scene, m.cx + 120, by, 210, 54, cancelLabel, () => m.close(), { color: COLORS.buttonDark, fontSize: 21 }));
   return m;
 }

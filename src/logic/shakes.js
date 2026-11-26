@@ -7,6 +7,8 @@
 //   Village Hall     a small trickle straight into the balance (rules.hallShakeIncome), like its gold (hallIncome).
 //   Shake Storage    raises the cap (rpCap); an enemy hitting it drains Shakes, as a Storage drains gold.
 import { CONFIG } from '../config.js';
+import { abilityFx } from './abilities.js';
+import { ABILITIES, PATH_KEYS } from '../abilityConfig.js';
 import { levelStats, maxHp } from './buildings.js';
 import { emit, isWaveActive } from './util.js';
 import { addResearchPoints, researchPoints, rpCap, rpRoom, shakeStorageCapacity } from './researchPoints.js';
@@ -14,12 +16,18 @@ import { addResearchPoints, researchPoints, rpCap, rpRoom, shakeStorageCapacity 
 // ---------- Shake Collectors ----------
 /** A Shake Collector's stock cap (Shakes it holds before it stops). */
 export function collectorStockCap(b) {
-  return levelStats('shakeCollector', b.level).stockCap;
+  return Math.round(levelStats('shakeCollector', b.level).stockCap * (1 + (abilityFx(b).stockCapPct || 0) / 100));
+}
+
+export function maxCollectorStock(level) {
+  const tree = ABILITIES.shakeCollector;
+  const pct = Math.max(...PATH_KEYS.map((path) => tree[path].tiers.reduce((total, t) => total + (t.fx.stockCapPct || 0), 0)));
+  return Math.round(levelStats('shakeCollector', level).stockCap * (1 + pct / 100));
 }
 
 /** Shakes per second a Shake Collector makes. */
 export function collectorProduction(b) {
-  return levelStats('shakeCollector', b.level).production;
+  return levelStats('shakeCollector', b.level).production * (1 + (abilityFx(b).productionPct || 0) / 100);
 }
 
 /** Shake Collectors fill their stock up to its cap, day and night, waves too. Destroyed ones don't. */
@@ -27,7 +35,8 @@ export function produceShakeCollectors(state, dt) {
   for (const b of state.buildings) {
     if (b.type !== 'shakeCollector' || b.destroyed) continue;
     const before = Math.floor(b.stock || 0);
-    b.stock = Math.min(collectorStockCap(b), (b.stock || 0) + collectorProduction(b) * dt);
+    const cap = collectorStockCap(b);
+    if ((b.stock || 0) < cap) b.stock = Math.min(cap, (b.stock || 0) + collectorProduction(b) * dt);
     if (Math.floor(b.stock) !== before) emit(state, 'collectorStockChanged', { id: b.id, stock: b.stock });
   }
 }
@@ -51,7 +60,7 @@ export function collectShakes(state, b) {
   if (isWaveActive(state)) return { collected: 0, full: false, waveActive: true };
   const whole = Math.floor(b.stock || 0);
   if (whole <= 0) return { collected: 0, full: false };
-  const room = rpRoom(state);
+  const room = Math.floor(rpRoom(state));
   if (room <= 0) {
     emit(state, 'shakesFull', { id: b.id });
     return { collected: 0, full: true };
@@ -106,8 +115,9 @@ export function shakeFill(state) {
 export function shakeStorageDrainAmount(state, storage, damage) {
   const cap = rpCap(state);
   if (cap <= 0) return 0;
-  const storedHere = (Math.min(researchPoints(state), cap) * shakeStorageCapacity(storage.level)) / cap;
-  return Math.round((damage / maxHp(storage)) * CONFIG.rules.storageDrainOnDestroy * storedHere);
+  const storedHere = (Math.min(researchPoints(state), cap) * shakeStorageCapacity(storage.level, storage)) / cap;
+  const retained = 1 - (abilityFx(storage).drainResistPct || 0) / 100;
+  return Math.round((damage / maxHp(storage)) * CONFIG.rules.storageDrainOnDestroy * storedHere * retained);
 }
 
 /** Take Shakes out of the balance after a raid hit (never below 0). Returns how many went. */

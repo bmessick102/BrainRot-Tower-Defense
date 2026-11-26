@@ -90,7 +90,10 @@ export class VisitHudScene extends Phaser.Scene {
   showBuilding(b) {
     if (this.card) { this.card.destroy(true); this.card = null; }
     if (!b) return;
-    const W = 500, HEADER = 62, PIC = { w: 112, h: 122 }, pad = 18;
+    const merge = mergedConfigOf(b);
+    const mastery = merge ? masteryLevel(this.visit.gs, b.type) : 0;
+    const W = mastery > 3 ? 558 : 500;
+    const HEADER = 62, PIC = { w: 112, h: 122 }, pad = 18;
     const c = this.add.container(0, 0).setDepth(10);
     const bg = this.add.graphics();
     c.add(bg);
@@ -102,8 +105,6 @@ export class VisitHudScene extends Phaser.Scene {
     const name = this.add.text(pad, 10, displayName(b), textStyle(22)); // (a merged defense: "Mega Cannon")
     fitWidth(name, W - pad - 60);
     const ruin = b.type === 'townHall' && b.level === 0;
-    const merge = mergedConfigOf(b);
-    const mastery = merge ? masteryLevel(this.visit.gs, b.type) : 0;
     const lv = this.add.text(pad, 37, ruin ? 'In ruins' : `Level ${b.level} / ${maxLevel(b.type)}${merge ? '  ·  Merged' : ''}`, textStyle(15, COLORS.textGold));
     c.add([name, lv]);
     c.add(new Button(this, W - 10, 10, 40, 40, '', () => this.visit.select(null), { color: COLORS.buttonDanger, icon: 'x', radius: 9 }));
@@ -190,7 +191,8 @@ export class VisitHudScene extends Phaser.Scene {
     drawWindow(bg, 0, 0, W, y, { header: HEADER });
     blocker.setSize(W, y);
     blocker.input.hitArea.setSize(W, y);
-    c.setPosition(16, VIEW.height - 34 - y);
+    const scale = Math.min(1, (VIEW.height - 110) / y);
+    c.setScale(scale).setPosition(16, VIEW.height - 34 - y * scale);
     c.cardW = W; c.cardH = y;
     this.card = c;
   }

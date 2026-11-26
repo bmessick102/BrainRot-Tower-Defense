@@ -10,7 +10,7 @@
 // levels (a level with costCurrency 'rp'; none for the Cannon, Locklair Tower or Mortar) are refunded, allowed past the
 // Shake cap. Merging gives no free path reset (v0.8.3; before that each merge left one, state.freeRespecs): a reset
 // always costs its normal price.
-// Mastery: a 3-tier track per mergeable type (state.mastery[type] = tiers researched), researched in the RV Lab with
+// Mastery: a five-tier track per mergeable type (state.mastery[type] = tiers researched), researched in the RV Lab with
 // Shakes, gated by RV Lab level; it only changes the merged ability and isn't part of the one-path lock. Every merged
 // building of the type has it (b.mastery, kept in step by syncMastery, read by masteryFxOf in buildings.js).
 // No Phaser here; GameState.mergeBuilding / researchMastery call these and save.
@@ -154,10 +154,10 @@ export function masteryLevel(state, type) {
 /** One Mastery tier's data { name, desc, fx, cost, labLevel } (tier is 1-based). */
 export function masteryTier(type, tier) {
   const m = mergeConfig(type).mastery;
-  return { ...m.tiers[tier - 1], cost: m.costs[tier - 1], labLevel: m.labLevel[tier - 1] };
+  return { ...m.tiers[tier - 1], cost: m.costs[tier - 1], goldCost: m.goldCosts[tier - 1], labLevel: m.labLevel[tier - 1] };
 }
 
-/** How many Mastery tiers a type has (3). */
+/** How many Mastery tiers a type has. */
 export function masteryTierCount(type) {
   const m = mergeConfig(type);
   return m ? m.mastery.tiers.length : 0;
@@ -181,8 +181,9 @@ export function checkMastery(state, type, tier = masteryLevel(state, type) + 1) 
   if (!m) return { ok: false, reason: "Can't merge", cost: null, tier: null };
   const have = masteryLevel(state, type);
   if (tier > m.mastery.tiers.length || have >= m.mastery.tiers.length) return { ok: false, reason: 'Fully mastered', cost: null, tier: null };
-  if (tier <= have) return { ok: false, reason: 'Already researched', cost: null, tier };
+  if (!Number.isInteger(tier) || tier <= have) return { ok: false, reason: 'Already researched', cost: null, tier };
   const t = masteryTier(type, tier);
+  const price = { cost: t.cost, goldCost: t.goldCost, tier };
   if (tier > have + 1) return { ok: false, reason: `Research Mastery ${have + 1} first`, cost: t.cost, tier };
   if (!hasMergedOf(state, type)) return { ok: false, reason: needsMergeReason(type), cost: t.cost, tier };
   const lab = labLevel(state);
@@ -193,7 +194,8 @@ export function checkMastery(state, type, tier = masteryLevel(state, type) + 1) 
   if (lab < t.labLevel) return { ok: false, reason: `Needs RV Lab level ${t.labLevel}`, cost: t.cost, tier };
   if (isWaveActive(state)) return { ok: false, reason: 'Not during a wave', cost: t.cost, tier };
   if (researchPoints(state) < t.cost) return { ok: false, reason: needRpReason(t.cost, researchPoints(state)), cost: t.cost, tier };
-  return { ok: true, reason: '', cost: t.cost, tier };
+  if (state.gold < t.goldCost) return { ...price, ok: false, reason: needGoldReason(t.goldCost, state.gold) };
+  return { ...price, ok: true, reason: '' };
 }
 
 /** Give every merged building its type's Mastery (b.mastery). Returns the ids that changed. */

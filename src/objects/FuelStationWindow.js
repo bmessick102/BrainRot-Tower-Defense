@@ -6,12 +6,12 @@
 // there to pour it out). The Perks tab opens its perk tree in the RV Lab window. It redraws on RP, brewing,
 // upgrades and waves. Rules live in src/logic/spells.js.
 import { Modal, confirmDialog } from './Modal.js';
+import { currencyCost } from './CurrencyCost.js';
 import { Button } from './Button.js';
 import { drawBadge, drawGlossy, fitWidth } from './uiDraw.js';
 import { balance } from './AbilityWindow.js';
 import { addSpellIcon, SPELL_COLORS } from './SpellIcons.js';
 import { COLORS, bodyStyle, textStyle } from '../theme.js';
-import { rpText } from '../logic/researchPoints.js';
 import { isWaveActive } from '../logic/util.js';
 import {
   SPELL_KINDS, spellConfig, spellStats, spellSummary, spellFullName, checkBrew, brewCost, brewedSpells, spellCount, spellSlots, fuelLevel, fuelStation, spellUnlocked
@@ -102,10 +102,12 @@ function drawNode(scene, m, gs, kind, x, y, isSel, onSelect) {
   if (!open) { icon.setTint(0x9a9a9a); icon.setAlpha(0.6); }
   m.add(scene.add.text(x + 86, y + 10, cfg.name, bodyStyle(16, open ? COLORS.ink : '#a89c88', { fontStyle: 'bold' })));
   const cost = brewCost(gs, kind);
-  const line = !open ? `Locked · Fuel Station lv ${cfg.level}` : cost === 0 ? 'Brew · Free (first one)' : `Brew · ${rpText(cost)}`;
+  const line = !open ? `Locked · Fuel Station lv ${cfg.level}` : 'Brew · Free (first one)';
   const short = open && /more Shakes?$/.test(c.reason || '');
   const ink = !open ? '#b3a892' : c.ok ? COLORS.inkGood : short ? COLORS.inkBad : COLORS.inkDim;
-  fitWidth(m.add(scene.add.text(x + 86, y + 33, line, bodyStyle(12.5, ink, { fontStyle: 'bold' }))), CARD_W - 96);
+  const priceStyle = bodyStyle(12.5, ink, { fontStyle: 'bold' });
+  if (open && cost > 0) m.add(currencyCost(scene, [{ currency: 'rp', amount: cost }], priceStyle, 'Brew', 16).setPosition(x + 86, y + 41));
+  else fitWidth(m.add(scene.add.text(x + 86, y + 33, line, priceStyle)), CARD_W - 96);
   const s = spellStats(gs, kind);
   const ink2 = open ? COLORS.inkDim : '#b3a892';
   // Two short lines (what it does, then its size and length) so nothing has to shrink to fit the card.
@@ -169,9 +171,11 @@ function drawDetails(scene, m, gs, kind, x, y, w, h) {
   }
   const c = checkBrew(gs, kind);
   const price = c.cost ?? brewCost(gs, kind);
-  const b = new Button(scene, x + w / 2, y + h - 42, w - 40, 56, price === 0 ? 'Brew · Free' : `Brew · ${rpText(price)}`, () => gs.brewSpell(kind),
-    { color: BREW_COLOR, fontSize: 22, radius: 12 });
-  b.setLabel(b.label.text, c.ok ? '' : c.reason).setEnabled(c.ok);
+  const b = new Button(scene, x + w / 2, y + h - 42, w - 40, 56, 'Brew · Free', () => gs.brewSpell(kind),
+    { color: BREW_COLOR, fontSize: 22, radius: 12, invalidFeedback: true });
+  if (price > 0) b.setCosts([{ currency: 'rp', amount: price }], 'Brew', c.reason);
+  else b.setLabel('Brew · Free', c.reason);
+  b.setEnabled(c.ok);
   m.add(b);
 }
 

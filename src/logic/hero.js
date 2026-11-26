@@ -13,6 +13,7 @@
 //   - Brisket Feast: its hotbar button during a wave (once per wave; twice with Feast for Days): heals, boosts his
 //     damage and speed for a few seconds, and slams the enemies around him.
 // The hero lives in state.hero (not saved: rebuilt from the altar), status 'ready' | 'asleep' | 'waking' | 'down'.
+import { heroAbilityLevelValue } from './heroAbilityLevels.js';
 import { CONFIG } from '../config.js';
 import { levelStats, maxHp } from './buildings.js';
 import { abilityFx } from './abilities.js';
@@ -187,6 +188,7 @@ export function heroStats(altar) {
     guardRange: H().guardRange + (fx.guardRangeAdd || 0),
     maxSleep: H().maxSleepSeconds * (1 - (fx.heroSleepFasterPct || 0) / 100),
     feastCharges: Math.max(1, fx.feastCharges || 1),
+    feastHealPct: heroAbilityLevelValue('altar', altar.level),
     fx
   };
 }
@@ -384,7 +386,7 @@ export function useFeast(state) {
   const st = heroStats(altar);
   const F = H().feast;
   h.feastsUsed++;
-  h.hp = Math.min(st.maxHp, h.hp + st.maxHp * F.healPct / 100);
+  h.hp = Math.min(st.maxHp, h.hp + st.maxHp * st.feastHealPct / 100);
   h.boostT = F.boostSeconds;
   for (const e of state.enemies) {
     if (!e.alive || enemyIsAir(e) || isBurrowedUnseen(e) || distance(h.x, h.y, e.x, e.y) > F.slamRadius) continue;

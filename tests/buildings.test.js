@@ -48,7 +48,7 @@ describe('buildings.js', () => {
   it('has 10 levels (the Catapult 5, walls 10, the Tower of Rah 8, the RV Lab and DJ Babyface 5, the Fuel Station 8, the three heroes and the Storage 20) and blocks upgrades at the top level', () => {
     const max = CONFIG.rules.maxTownHallLevel;
     expect(max).toBe(20); // v0.8: Village Halls 12-15; v0.11: 16-20
-    for (const type of BUILDING_TYPES) expect(maxLevel(type)).toBe({ townHall: 20, catapult: 5, wall: 10, ra: 8, rvlab: 5, dj: 5, fuelStation: 8, altar: 20, queenAltar: 20, mageAltar: 20, storage: 20, shakeStorage: 12 }[type] ?? 10); // (v0.14: the Shake Collector 10, the Shake Storage 12)
+    for (const type of BUILDING_TYPES) expect(maxLevel(type)).toBe({ townHall: 20, catapult: 5, wall: 10, ra: 8, rvlab: 5, dj: 5, fuelStation: 8, altar: 20, queenAltar: 20, mageAltar: 20, storage: 20, shakeStorage: 16 }[type] ?? 10); // (v0.14: the Shake Collector 10, the Shake Storage 16)
     const s6 = makeStateWithTownHall({ gold: 9999999 }, max);
     const cat = addBuilding(s6, 'catapult', 8, 8, 5);
     expect(checkUpgrade(s6, cat)).toMatchObject({ ok: false, reason: 'Max level' });

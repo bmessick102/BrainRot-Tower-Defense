@@ -26,6 +26,10 @@ export function flockBonus(level) {
   return levelStats('flock', level).markBonus / 100;
 }
 
+export function flockMarkBonus(b) {
+  return flockBonus(b.level) + ((abilityFx(b).markAdd || 0) + (mergedConfigOf(b)?.markAdd || 0)) / 100;
+}
+
 const AURA_KEYS = { auraFireRatePct: 'fireRatePct', auraRangeAdd: 'rangeAdd', auraDamagePct: 'damagePct', auraSeeInvisible: 'seeInvisible' };
 
 /** Mark (and reveal) every enemy inside a tower's range; unmark the rest; set Commander auras. Runs every step. */
@@ -34,7 +38,7 @@ export function stepFlockTowers(state) {
   const towers = state.buildings.filter((b) => b.type === 'flock' && !b.destroyed && !(b.silencedT > 0)).map((b) => {
     const fx = abilityFx(b);
     // (A F.L.O.C.K Mothership, the merged tower, marks a little stronger: CONFIG.merges.flock.markAdd.)
-    return { b, fx, c: footprintCenter(b), range: towerRange(b), bonus: flockBonus(b.level) + ((fx.markAdd || 0) + (mergedConfigOf(b)?.markAdd || 0)) / 100, seen: 0 };
+    return { b, fx, c: footprintCenter(b), range: towerRange(b), bonus: flockMarkBonus(b), seen: 0 };
   });
   for (const e of state.enemies) {
     if (!e.alive) continue;

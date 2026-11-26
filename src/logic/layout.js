@@ -18,6 +18,39 @@ export function createLayoutDraft(state) {
   return { pos, stored: [] };
 }
 
+export const LAYOUT_DRAFT_KEY = 'ibtd.layoutDraft';
+
+export function readLayoutDraft(state) {
+  const base = createLayoutDraft(state);
+  try {
+    const saved = JSON.parse(state.storage?.getItem(LAYOUT_DRAFT_KEY) || 'null');
+    if (!saved || saved.base !== JSON.stringify(base.pos) || !saved.draft?.pos || !Array.isArray(saved.draft.stored)) return base;
+    const { pos, stored } = saved.draft;
+    if (new Set(stored).size !== stored.length || stored.some((id) => !Object.hasOwn(base.pos, id))) return base;
+    const draft = { pos: {}, stored };
+    for (const b of state.buildings) {
+      const p = pos[b.id];
+      if (!p || !Number.isInteger(p.col) || !Number.isInteger(p.row)) return base;
+      if (b.type === 'wall' && p.orient !== 'x' && p.orient !== 'y') return base;
+      draft.pos[b.id] = { col: p.col, row: p.row, orient: b.type === 'wall' ? p.orient : undefined, ...footprintDims(b.type, p.orient) };
+    }
+    const buildings = draftBuildings(state, draft);
+    if (buildings.some((b) => !canPlaceRect(buildings.filter((o) => o.id !== b.id), b.col, b.row, fpW(b), fpH(b)).ok)) return base;
+    return draft;
+  } catch {
+    return base;
+  }
+}
+
+export function writeLayoutDraft(state, draft) {
+  try {
+    if (!draft || !layoutChanged(state, draft)) state.storage?.removeItem(LAYOUT_DRAFT_KEY);
+    else state.storage?.setItem(LAYOUT_DRAFT_KEY, JSON.stringify({ base: JSON.stringify(createLayoutDraft(state).pos), draft }));
+  } catch {
+    // The editor still works in memory when storage is unavailable.
+  }
+}
+
 export const isStored = (draft, id) => draft.stored.includes(id);
 
 /** The village as the draft lays it out: copies of the placed buildings at their draft spots. */
@@ -86,6 +119,32 @@ export function placeInDraft(state, draft, id, col, row, orient = null) {
   }
   draft.stored = draft.stored.filter((x) => x !== id);
   return check;
+}
+
+/** Tile centers crossed by one pointer segment, using an edge-connected path through diagonal crossings. */
+export function wallStrokeTiles(from, to) {
+  let { col, row } = from;
+  const dc = Math.abs(to.col - col), dr = Math.abs(to.row - row);
+  const sc = Math.sign(to.col - col), sr = Math.sign(to.row - row);
+  const tiles = [{ col, row }];
+  for (let x = 0, y = 0; x < dc || y < dr;) {
+    if (y === dr || (x < dc && (2 * x + 1) * dr <= (2 * y + 1) * dc)) { col += sc; x++; }
+    else { row += sr; y++; }
+    tiles.push({ col, row });
+  }
+  return tiles;
+}
+
+/** Use each owned wall once, skipping blocked cells just as an individual hotbar placement does. */
+export function placeWallStroke(state, draft, ids, tiles, orient) {
+  let placed = 0;
+  for (const { col, row } of tiles) {
+    if (placed === ids.length) break;
+    const id = ids[placed];
+    if (!isStored(draft, id) || !state.buildings.some((b) => b.id === id && b.type === 'wall')) break;
+    if (placeInDraft(state, draft, id, col, row, orient).ok) placed++;
+  }
+  return placed;
 }
 
 /**

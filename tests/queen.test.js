@@ -297,11 +297,11 @@ describe('her RV Lab tree (3 paths x 5 tiers), every tier', () => {
     expect(towerFireInterval(cannon)).toBeCloseTo(plain, 6);
   });
 
-  it('Backup Chorus: Encore Cloak lasts 6 s', () => {
+  it('Backup Chorus: adds 2 s to the level 5 cloak', () => {
     const { s, h } = village(5, ['a', 'b']);
     wave(s); queenWaveStarted(s);
     useEncore(s);
-    expect(h.cloakT).toBe(6);
+    expect(h.cloakT).toBe(7);
   });
 
   it('Encore+: while Encore Cloak lasts, defenses in her guard range deal 25% more', () => {
@@ -311,7 +311,7 @@ describe('her RV Lab tree (3 paths x 5 tiers), every tier', () => {
     const plain = towerDamageMult(cannon);
     useEncore(s);
     expect(towerDamageMult(cannon)).toBeCloseTo(plain * 1.25, 6);
-    run(s, 4.1);
+    run(s, 5.1);
     expect(towerDamageMult(cannon)).toBeCloseTo(plain, 6);
   });
 
@@ -329,9 +329,9 @@ describe('her RV Lab tree (3 paths x 5 tiers), every tier', () => {
     const { s, h } = village(5, ['a', 'a', 'a', 'a', 'b']);
     wave(s); queenWaveStarted(s);
     expect(useEncore(s).ok).toBe(true);
-    run(s, 4.1);
+    run(s, 5.1);
     expect(useEncore(s).ok).toBe(true);
-    run(s, 4.1);
+    run(s, 5.1);
     expect(checkEncore(s).reason).toBe('Used this wave');
     expect(h.encoresUsed).toBe(2);
   });

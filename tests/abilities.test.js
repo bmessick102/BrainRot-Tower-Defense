@@ -27,7 +27,7 @@ function memoryStorage() {
 describe('ability trees', () => {
   it('every defense and economy building has three paths (A, B, C) of five tiers, each with a name, text and effects', () => {
     expect([...DEFENSE_ABILITY_TYPES].sort()).toEqual([...DEFENSE_TYPES, 'altar', 'queenAltar', 'mageAltar'].sort()); // (+ the heroes' altars)
-    expect([...ECONOMY_ABILITY_TYPES].sort()).toEqual(['dj', 'fuelStation', 'house', 'mine', 'storage']);
+    expect([...ECONOMY_ABILITY_TYPES].sort()).toEqual(['dj', 'fuelStation', 'house', 'mine', 'shakeCollector', 'shakeStorage', 'storage']);
     expect([...ABILITY_TYPES].sort()).toEqual([...DEFENSE_ABILITY_TYPES, ...ECONOMY_ABILITY_TYPES].sort());
     // Every tier name is unique across the whole game (no repeats).
     const names = ABILITY_TYPES.flatMap((t) => ['a', 'b', 'c'].flatMap((p) => ABILITIES[t][p].tiers.map((x) => x.name)));

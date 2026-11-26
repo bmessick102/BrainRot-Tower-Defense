@@ -48,8 +48,8 @@ describe('merging: rules', () => {
     expect(MERGE_TYPES).toEqual(['cannon', 'archer', 'mortar', 'firework', 'wizard', 'flock', 'spear', 'ksi', 'catapult', 'ra']);
     for (const t of MERGE_TYPES) {
       const m = CONFIG.merges[t];
-      expect(m.mastery.tiers).toHaveLength(3);
-      expect(m.mastery.costs).toHaveLength(3);
+      expect(m.mastery.tiers).toHaveLength(5);
+      expect(m.mastery.costs).toHaveLength(5);
       expect(m.art.key.startsWith(`bld_${t}_merged`)).toBe(true);
       for (const k of Object.values(m.art.facings || {})) expect(k.startsWith(`bld_${t}_merged_`)).toBe(true);
     }
@@ -442,9 +442,9 @@ describe('Mastery research', () => {
     const c = checkMastery(s, 'cannon');
     expect(c).toMatchObject({ ok: true, tier: 1, cost: CONFIG.merges.cannon.mastery.costs[0] });
     expect(checkMastery(s, 'cannon', 3).reason).toBe('Research Mastery 1 first');
-    s.mastery = { cannon: 3 };
+    s.mastery = { cannon: 5 };
     expect(checkMastery(s, 'cannon').reason).toBe('Fully mastered');
-    expect(masteryLevel(s, 'cannon')).toBe(3);
+    expect(masteryLevel(s, 'cannon')).toBe(5);
     expect(s.research.cannon).toEqual(['b']);
   });
 
@@ -519,7 +519,7 @@ describe('saves', () => {
     const bad = (mut) => { const o = JSON.parse(JSON.stringify(serializeGame(s))); mut(o); return parseSave(JSON.stringify(o)).status; };
     expect(bad((o) => { o.buildings.find((x) => x.type === 'archer').level = 9; o.buildings.find((x) => x.type === 'archer').merged = true; })).toBe('invalid');
     expect(bad((o) => { o.buildings.find((x) => x.type === 'rvlab').merged = true; })).toBe('invalid');
-    expect(bad((o) => { o.mastery = { archer: 4 }; })).toBe('invalid');
+    expect(bad((o) => { o.mastery = { archer: 6 }; })).toBe('invalid');
     expect(bad((o) => { o.mastery = { mousetrap: 1 }; })).toBe('invalid');       // (the Mousetrap doesn't merge)
     expect(bad((o) => { o.freeRespecs = ['mousetrap']; })).toBe('invalid');
     expect(bad((o) => { o.buildings.find((x) => x.type === 'archer').merged = true; })).toBe('ok');

@@ -6,9 +6,10 @@
 import Phaser from 'phaser';
 import { COLORS, shade, textStyle } from '../theme.js';
 import { drawGlossy, drawCross, drawArrow, drawFullscreenIcon, drawEye } from './uiDraw.js';
-import { playSfx } from '../audio.js';
+import { playSfx, playSfxCapped } from '../audio.js';
 import { SFX } from '../assetKeys.js';
 import { IS_TOUCH } from '../device.js';
+import { currencyCost } from './CurrencyCost.js';
 
 const LIP = 4;
 // Touch screens: small buttons (close X, info, arrows) also react a little outside their edges, so a finger
@@ -38,6 +39,7 @@ export class Button extends Phaser.GameObjects.Container {
     this.onClick = onClick;
     // Called when a disabled button is tapped (a greyed button that explains itself), instead of nothing.
     this.onDisabledClick = opts.onDisabledClick ?? null;
+    this.invalidFeedback = !!opts.invalidFeedback;
     this.enabled = true;
     this.hover = false;
 
@@ -51,7 +53,11 @@ export class Button extends Phaser.GameObjects.Container {
     this.on('pointerout', () => { this.hover = false; this.redraw(); });
     this.on(opts.onRelease ? 'pointerup' : 'pointerdown', (pointer, lx, ly, event) => {
       if (event) event.stopPropagation();
-      if (!this.enabled) { if (this.onDisabledClick) this.onDisabledClick(); return; }
+      if (!this.enabled) {
+        if (this.invalidFeedback) playSfxCapped(scene, SFX.invalid, 1);
+        if (this.onDisabledClick) this.onDisabledClick();
+        return;
+      }
       if (!this.onClick) return;
       playSfx(scene, SFX.uiClick);
       this.squash();
@@ -84,6 +90,10 @@ export class Button extends Phaser.GameObjects.Container {
     this.label.setY(hasSub ? faceMid - this.btnH * 0.15 : faceMid);
     this.sub.setY(faceMid + this.btnH * 0.22);
     this.label.setAlpha(this.enabled ? 1 : 0.85);
+    if (this.costRow) {
+      const scale = Math.min(1, (this.btnW - 16) / this.costRow.width);
+      this.costRow.setScale(scale).setPosition(-this.costRow.width * scale / 2, this.label.y).setAlpha(this.label.alpha);
+    }
   }
 
   /** Change the button's size (drawing and click area). */
@@ -98,10 +108,30 @@ export class Button extends Phaser.GameObjects.Container {
   }
 
   setLabel(text, sub = '') {
+    this.costRow?.destroy();
+    this.costRow = null;
+    this.costKey = null;
     if (this.label.text !== text) this.label.setText(text);
     if (this.sub.text !== sub) this.sub.setText(sub);
     this.redraw();
     return this;
+  }
+
+  setCosts(costs, title = '', sub = '') {
+    const key = JSON.stringify([costs, title]);
+    if (key !== this.costKey) {
+      this.setLabel('', sub);
+      this.costRow = currencyCost(this.scene, costs, textStyle(this.fontSize), title);
+      this.add(this.costRow);
+      this.costKey = key;
+    }
+    this.sub.setText(sub);
+    this.redraw();
+    return this;
+  }
+
+  get contentWidth() {
+    return Math.max(this.costRow?.width || this.label.width, this.sub.width);
   }
 
   setEnabled(enabled) {
