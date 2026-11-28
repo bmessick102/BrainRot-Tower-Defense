@@ -146,7 +146,7 @@ Sounds are kept in `art-source/audio/`, named by key; `npm run prepare-audio` wr
 | File | Plays when |
 | --- | --- |
 | `music_title.mp3` | Title screen (loops) |
-| `music_startup_jingle.mp3` | Once as the page loads (v0.15): `index.html` starts it before the game code downloads, and the loading screen stays up until it ends plus a 0.75 s pause (`AFTER_JINGLE_MS`; at most 8 s past loading). If the browser blocks sound, the full bar reads "Tap to start" and the tap plays it, then the same wait. The title music waits for it. Follows the Music slider; its last 0.35 s fade out (`prepare-audio` `FADE_OUT`). |
+| `music_startup_jingle.mp3` | Once as the page loads (v0.15): `index.html` starts it before the game code downloads, and the loading screen stays up until it ends plus a 0.75 s pause (`AFTER_JINGLE_MS`; at most 8 s past loading). If the browser blocks sound until the first click (v0.15.1), there is no jingle and nothing waits. The title music waits for it. Follows the Music slider; its last 0.35 s fade out (`prepare-audio` `FADE_OUT`). |
 | `ambient_day.mp3` | Between waves by day: a looping ambience bed. It plays together with `ambient_night.mp3`, and their volumes follow the day/night clock, so they crossfade through dusk and dawn (`updateAmbience()` in [src/audio.js](src/audio.js), called every frame by GameScene). Both fade out (about 1.4 s) when a wave starts and back in when it's beaten. They follow the Music slider; `AMBIENCE_GAIN` sets their loudness. |
 | `ambient_night.mp3` | Between waves by night (see `ambient_day.mp3`) |
 | `music_village.mp3` | Fallback between waves, only if the two ambience files are missing |

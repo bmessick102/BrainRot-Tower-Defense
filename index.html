@@ -6,20 +6,20 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
     <title>Italian Brainrot Tower Defense</title>
     <!-- v0.15: the startup jingle starts the moment the page loads, before the game's code has downloaded. It follows the
-         saved Music level (ibtd.settings; silent at 0). A browser that blocks sound until the first click or tap plays it
-         on that first click. src/audio.js reads window.__ibtdJingle: the loading screen waits while it plays
-         (whenJingleDone) and the title music starts after it. -->
+         saved Music level (ibtd.settings; silent at 0). src/audio.js reads window.__ibtdJingle: the loading screen waits
+         while it plays (whenJingleDone) and the title music starts after it. v0.15.1: a browser that blocks sound until
+         the first click or tap gets no jingle at all (it never plays on a click; loading goes straight on). -->
     <script>
       (function () {
-        var j = window.__ibtdJingle = { state: 'done', audio: null, waiters: [], cancel: function () {} };
-        function finish() {
+        var j = window.__ibtdJingle = { state: 'done', audio: null, waiters: [] };
+        function finish(played) {
           if (j.state === 'done') return;
           j.state = 'done';
-          j.endedAt = performance.now();
+          if (played) j.endedAt = performance.now(); // (the short pause after it counts from here)
           var w = j.waiters.splice(0);
           for (var i = 0; i < w.length; i++) { try { w[i](); } catch (e) { /* keep going */ } }
         }
-        j.stop = function () { try { if (j.audio) j.audio.pause(); } catch (e) { /* ignore */ } j.cancel(); finish(); };
+        j.stop = function () { try { if (j.audio) j.audio.pause(); } catch (e) { /* ignore */ } finish(true); };
         try {
           var s = JSON.parse(localStorage.getItem('ibtd.settings') || 'null') || {};
           var level = typeof s.music === 'number' ? s.music : typeof s.volume === 'number' ? s.volume : 0.7;
@@ -28,27 +28,12 @@
           a.volume = Math.min(1, level);
           j.audio = a;
           j.state = 'playing';
-          a.addEventListener('ended', finish);
-          a.addEventListener('error', finish);
+          a.addEventListener('ended', function () { finish(true); });
+          a.addEventListener('error', function () { finish(false); });
           var p = a.play();
-          if (p && p.catch) p.catch(function (err) {
-            if (!err || err.name !== 'NotAllowedError') { finish(); return; } // (stopped, or the file failed)
-            // Blocked until the first click / tap / key: play it then.
-            var events = ['pointerdown', 'touchend', 'keydown'];
-            var off = function () { events.forEach(function (e) { window.removeEventListener(e, go, true); }); };
-            var go = function () {
-              off();
-              if (j.state !== 'waiting') return;
-              j.state = 'playing';
-              var q = a.play();
-              if (q && q.catch) q.catch(finish);
-            };
-            if (j.state !== 'playing') return; // (cancelled meanwhile)
-            j.state = 'waiting';
-            j.cancel = function () { off(); finish(); };
-            events.forEach(function (e) { window.addEventListener(e, go, true); });
-          });
-        } catch (e) { finish(); }
+          // Blocked (NotAllowedError) or failed: no jingle this time.
+          if (p && p.catch) p.catch(function () { finish(false); });
+        } catch (e) { finish(false); }
       })();
     </script>
     <!-- App and browser icons: the start screen's background with the game logo centered (docs/branding/app_icon.png).

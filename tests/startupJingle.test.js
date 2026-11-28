@@ -1,15 +1,19 @@
 // The startup jingle (v0.15): index.html starts it as the page loads and keeps its state in window.__ibtdJingle;
-// src/audio.js holds the title music and the loading screen (whenJingleDone) until it ends, and drops a jingle still
-// waiting for the first click once a village's music starts.
+// src/audio.js holds the title music and the loading screen (whenJingleDone) until it ends plus a short pause.
+// v0.15.1: a browser that blocks sound gets no jingle, and nothing waits for one.
 import { describe, it, expect, vi, afterEach } from 'vitest';
-import { playMusic, whenJingleDone, setMusicLevel, AFTER_JINGLE_MS } from '../src/audio.js';
+import { playMusic, stopMusic, whenJingleDone, setMusicLevel, AFTER_JINGLE_MS } from '../src/audio.js';
 
-/** A stand-in for index.html's window.__ibtdJingle. */
+/** A stand-in for index.html's window.__ibtdJingle. `finish(true)` = it played to the end; `finish(false)` = blocked. */
 function fakeJingle(state) {
   const j = { state, audio: { volume: 1, paused: false, pause() { this.paused = true; } }, waiters: [] };
-  j.finish = () => { if (j.state === 'done') return; j.state = 'done'; j.waiters.splice(0).forEach((fn) => fn()); };
-  j.cancel = () => j.finish();
-  j.stop = () => { j.audio.pause(); j.finish(); };
+  j.finish = (played = true) => {
+    if (j.state === 'done') return;
+    j.state = 'done';
+    if (played) j.endedAt = performance.now();
+    j.waiters.splice(0).forEach((fn) => fn());
+  };
+  j.stop = () => { j.audio.pause(); j.finish(true); };
   globalThis.__ibtdJingle = j;
   return j;
 }
@@ -30,7 +34,7 @@ function fakeScene() {
   return { scene, playing: () => sounds.filter((s) => s.isPlaying).map((s) => s.key) };
 }
 
-afterEach(() => { delete globalThis.__ibtdJingle; vi.useRealTimers(); });
+afterEach(() => { stopMusic(); delete globalThis.__ibtdJingle; vi.useRealTimers(); });
 
 describe('startup jingle', () => {
   it('holds the title music and the loading screen until it ends, plus a short pause', () => {
@@ -42,7 +46,7 @@ describe('startup jingle', () => {
     playMusic(scene, 'music_title');
     expect(playing()).toEqual([]);
     expect(loaded).not.toHaveBeenCalled();
-    j.finish();
+    j.finish(true);
     vi.advanceTimersByTime(AFTER_JINGLE_MS - 1);
     expect(playing()).toEqual([]);
     expect(loaded).not.toHaveBeenCalled();
@@ -76,30 +80,20 @@ describe('startup jingle', () => {
     expect(loaded).toHaveBeenCalledOnce();
   });
 
-  it('waiting for the first click: the loading screen goes on, the title music waits, a village drops the jingle', () => {
-    const j = fakeJingle('waiting');
+  it('blocked by the browser: no jingle, and the loading screen and title music go on without a pause', () => {
+    vi.useFakeTimers();
+    const j = fakeJingle('playing');
     const { scene, playing } = fakeScene();
     const loaded = vi.fn();
     whenJingleDone(loaded);
-    expect(loaded).toHaveBeenCalledOnce();
     playMusic(scene, 'music_title');
-    expect(playing()).toEqual([]);
-    playMusic(scene, 'music_village');
-    expect(j.state).toBe('done');
-    expect(playing()).toEqual(['music_village']);
-  });
-
-  it('blocked until the first tap: the loading screen can wait for that tap, the jingle and the pause', () => {
-    vi.useFakeTimers();
-    const j = fakeJingle('waiting');
-    const loaded = vi.fn();
-    whenJingleDone(loaded, 8000, { waitForTap: true });
-    vi.advanceTimersByTime(60000); // (no tap yet: it waits as long as it takes)
-    expect(loaded).not.toHaveBeenCalled();
-    j.state = 'playing'; // the tap (index.html plays it)
-    j.finish();
-    vi.advanceTimersByTime(AFTER_JINGLE_MS);
+    j.finish(false); // play() was refused
+    vi.advanceTimersByTime(0);
     expect(loaded).toHaveBeenCalledOnce();
+    expect(playing()).toEqual(['music_title']);
+    const later = vi.fn();
+    whenJingleDone(later); // (BootScene's second wait, after loading)
+    expect(later).toHaveBeenCalledOnce();
   });
 
   it('no jingle (or Music at 0): nothing waits', () => {

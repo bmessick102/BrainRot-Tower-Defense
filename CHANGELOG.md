@@ -2,6 +2,19 @@
 
 The version shows in the bottom-left corner of every screen (`package.json` `version` plus the commit). Details for everything below are in [README.md](README.md).
 
+## 0.15.1
+
+The startup jingle no longer asks for a tap: it plays during loading only when the browser allows sound.
+
+### Changes
+
+- **Startup jingle without "Tap to start"**: when the browser refuses `play()` (`NotAllowedError`, sound blocked
+  before the first gesture), `index.html` ends the jingle at once (`finish(false)`, no `endedAt`), so the loading
+  screen and title music don't wait and add no pause, and no click ever starts it late. Removed `jingleWaitingForTap`,
+  the `waiting` state, `whenJingleDone`'s `waitForTap` and BootScene's "Tap to start" label. When the browser allows
+  sound (installed app, a site allowed to play sound, Chrome's media engagement), nothing changed: it plays as the page
+  loads and the loading screen waits for it plus `AFTER_JINGLE_MS` (0.75 s).
+
 ## 0.15.0
 
 Upgrade and merge confirmation windows, per-village achievements, wall drawing in Edit Mode, Shake-economy rebalance,

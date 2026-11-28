@@ -8,8 +8,7 @@ import { ENEMY_KINDS } from '../logic/enemies.js';
 import { MAP } from '../mapTiles.js';
 import { loadSettings } from '../logic/save.js';
 import { getStorage } from '../state/GameState.js';
-import { setMusicLevel, setSfxLevel, whenJingleDone, jingleWaitingForTap } from '../audio.js';
-import { IS_TOUCH } from '../device.js';
+import { setMusicLevel, setSfxLevel, whenJingleDone } from '../audio.js';
 import { COLORS, FONT, textStyle, shade } from '../theme.js';
 import { pickTip } from '../loadingTips.js';
 import { LOADED_EVENT, LOADED_FLAG } from './TitleBackdropScene.js';
@@ -124,27 +123,15 @@ export class BootScene extends Phaser.Scene {
       })
     });
     this.load.once('complete', () => {
-      // v0.15: the full bar stays up until the startup jingle (index.html) has finished, plus a short pause. A browser
-      // that blocks sound until the first tap: the bar asks for one (that tap plays the jingle), then waits the same way.
-      if (jingleWaitingForTap()) {
-        label.setText(IS_TOUCH ? 'Tap to start' : 'Click to start');
-        const pulse = this.tweens.add({ targets: label, scale: 1.08, duration: 520, yoyo: true, repeat: -1, ease: 'Sine.easeInOut' });
-        const events = ['pointerdown', 'touchend', 'keydown'];
-        const started = () => {
-          events.forEach((e) => window.removeEventListener(e, started, true));
-          pulse.stop();
-          if (label.scene) label.setScale(1).setText('Loading');
-        };
-        events.forEach((e) => window.addEventListener(e, started, true));
-        this.events.once('shutdown', started);
-      }
+      // v0.15: the full bar stays up until the startup jingle (index.html) has finished, plus a short pause. (A browser
+      // that blocks sound before the first click never plays it: no wait.)
       whenJingleDone(() => {
         rotate.remove();
         items.forEach((o) => { if (o.scene) o.destroy(); });
         // The title picture's mortar fires its last shot (its man then hovers there on the title menu).
         this.registry.set(LOADED_FLAG, true);
         this.game.events.emit(LOADED_EVENT);
-      }, 8000, { waitForTap: true });
+      });
     });
   }
 
@@ -185,7 +172,7 @@ export class BootScene extends Phaser.Scene {
     // enemies...) were sized for the placeholders, so those only get a notice with a Reload button.
     const keys = missing.map((f) => f.key);
     if (keys.length && !picturesUnsupported()) { requestImages(keys.filter((k) => /^bld_/.test(k)), { front: true }); markBrokenImages(keys.filter((k) => !/^bld_/.test(k))); }
-    whenJingleDone(() => this.scene.start('AuthScene'), 8000, { waitForTap: true }); // logs in (or picks up a saved login), then the title screen
+    whenJingleDone(() => this.scene.start('AuthScene')); // logs in (or picks up a saved login), then the title screen
   }
 
   /** Draw a placeholder with a 2D canvas unless a real texture already has this key. */
