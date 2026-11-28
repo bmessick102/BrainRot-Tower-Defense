@@ -202,13 +202,15 @@ export class SupabaseBackend {
   // ---------- stats, achievements, leaderboard ----------
   async getStats() {
     const r = check(await this.db.from('player_stats').select('best_wave, best_town_hall, counters').maybeSingle());
-    return r ? { bestWave: r.best_wave, bestTownHall: r.best_town_hall, counters: r.counters || {} } : { bestWave: 0, bestTownHall: 0, counters: {} };
+    const { villages, ...counters } = r?.counters || {};
+    return { bestWave: r?.best_wave || 0, bestTownHall: r?.best_town_hall || 0, counters, villageCounters: villages || {} };
   }
 
   /** Save the stats. Returns what the server kept ({ bestWave }): it only counts waves it has verified. */
   async saveStats(stats) {
     const r = check(await this.db.from('player_stats').upsert({
-      user_id: this.userId, best_wave: stats.bestWave, best_town_hall: stats.bestTownHall, counters: stats.counters
+      user_id: this.userId, best_wave: stats.bestWave, best_town_hall: stats.bestTownHall,
+      counters: { ...stats.counters, villages: stats.villageCounters || {} }
     }).select('best_wave').maybeSingle());
     return { bestWave: r ? r.best_wave : null };
   }
@@ -221,12 +223,13 @@ export class SupabaseBackend {
   /** Record earned achievements ([{ id, baseId }]); ones already recorded are left alone. */
   async earnAchievements(list) {
     if (!list.length) return;
-    const rows = list.map((a) => ({ user_id: this.userId, achievement: a.id, base_id: a.baseId || null }));
-    check(await this.db.from('achievements').upsert(rows, { onConflict: 'user_id,achievement', ignoreDuplicates: true }));
+    const rows = list.map((a) => ({ user_id: this.userId, achievement: a.id, base_id: a.baseId }));
+    check(await this.db.from('achievements').upsert(rows, { onConflict: 'user_id,base_id,achievement', ignoreDuplicates: true }));
   }
 
-  async claimAchievement(id) {
-    check(await this.db.from('achievements').update({ claimed_at: new Date().toISOString() }).eq('user_id', this.userId).eq('achievement', id).is('claimed_at', null));
+  async claimAchievement(id, baseId) {
+    check(await this.db.from('achievements').update({ claimed_at: new Date().toISOString() })
+      .eq('user_id', this.userId).eq('base_id', baseId).eq('achievement', id).is('claimed_at', null));
   }
 
   /**
@@ -296,7 +299,7 @@ export class SupabaseBackend {
     return {
       username: r.username, joinedAt: r.joined_at, publicBases: !!r.public_bases, isMe: !!r.is_me,
       bestWave: r.best_wave || 0, bestTownHall: r.best_town_hall || 0, rank: Number(r.rank) || null,
-      achievements: (r.achievements || []).map((a) => ({ id: a.id, earnedAt: a.earned_at })),
+      achievements: (r.achievements || []).map((a) => ({ id: a.id, baseId: a.base_id, earnedAt: a.earned_at })),
       bases: (r.bases || []).map((b) => ({ id: b.id, name: b.name, townHall: b.town_hall, bestWave: b.best_wave, wave: b.wave, rank: b.rank != null ? Number(b.rank) : null }))
     };
   }

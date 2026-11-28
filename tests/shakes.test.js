@@ -96,10 +96,10 @@ describe('Shakes: the name and the buildings', () => {
     expect(checkUpgrade(s, c)).toMatchObject({ ok: true, currency: 'gold', cost: levelStats('shakeCollector', 4).cost });
   });
 
-  it('a Collector is worth far less than a Bitcoin Mine of the same level (at 15 gold a Shake)', () => {
+  it('a Collector produces less than half the value of a Bitcoin Mine of the same level (at 15 gold a Shake)', () => {
     for (let l = 1; l <= 10; l++) {
-      const shakeValue = levelStats('shakeCollector', l).production * CONFIG.rules.burgerGoldValue;
-      expect(shakeValue).toBeLessThan(levelStats('mine', l).production * 0.35);
+      const shakeValue = levelStats('shakeCollector', l).production * CONFIG.rules.shakeGoldValue;
+      expect(shakeValue).toBeLessThan(levelStats('mine', l).production * 0.5);
     }
   });
 });
@@ -163,16 +163,16 @@ describe('Shake Collectors: production and collecting', () => {
     const shakes = type === 'shakeCollector';
     if (shakes) gs.researchPoints = rpCap(gs) - 3;
     else gs.gold = gs.capacity - 3;
-    b.stock = 9.5;
+    b.stock = 19.5;
     expect(gs.collectionStatus(b.id)).toEqual({ shakes, amount: 3, reason: '' });
     expect(gs.collect(b.id)).toMatchObject({ ok: true, collected: 3 });
     expect(gs.collectionStatus(b.id)).toEqual({ shakes, amount: 0, reason: 'Storage full' });
     for (let i = 0; i < 5; i++) expect(gs.collect(b.id).ok).toBe(false);
     expect(gs.collect('another-village-id').ok).toBe(false);
-    expect(b.stock).toBe(6.5);
+    expect(b.stock).toBe(16.5);
     const saved = parseSave(gs.storage.getItem('ibtd.save'));
     expect(saved.status).toBe('ok');
-    expect(saved.data.buildings.find((x) => x.id === b.id).stock).toBe(6.5);
+    expect(saved.data.buildings.find((x) => x.id === b.id).stock).toBe(16.5);
     expect(shakes ? saved.data.researchPoints : saved.data.gold).toBe(shakes ? rpCap(gs) : gs.capacity);
     activeWave(gs);
     expect(gs.collectionStatus(b.id).reason).toBe('Not during a wave');

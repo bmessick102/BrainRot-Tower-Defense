@@ -1,9 +1,7 @@
-// Achievements window: tabs (Village / Battle / Builder), a card per achievement with its medal, progress and
-// gold reward. Earned rewards are claimed into the village being played (opened from the in-game Profile, top left);
-// from the title screen the window only shows progress.
+// Village achievements from a player profile. Rewards are paid into the village that earned them.
 import { Modal } from './Modal.js';
 import { Button } from './Button.js';
-import { drawStatBar, drawBadge, fitIcon } from './uiDraw.js';
+import { drawStatBar, drawBadge, fitIcon, fitWidth } from './uiDraw.js';
 import { ACHIEVEMENTS, ACHIEVEMENT_GROUPS, achievementProgress, progressValues } from '../logic/achievements.js';
 import { addGold, formatGold } from '../logic/economy.js';
 import { isWaveActive } from '../logic/util.js';
@@ -11,7 +9,7 @@ import { TEX, SFX } from '../assetKeys.js';
 import { playSfx } from '../audio.js';
 import { COLORS, bodyStyle, textStyle } from '../theme.js';
 
-const W = 880, H = 610, TOP = 55;
+const W = 880, H = 650, TOP = 35;
 const CARD_H = 80, CARD_GAP = 8, COL_GAP = 16, PAD = 24;
 const GOLD = 0xffc83a, GOLD_DARK = 0xa86a12;
 
@@ -65,12 +63,16 @@ export class AchievementsWindow {
    * @param {object} [o.gs] the GameState being played (needed to claim rewards)
    * @param {() => void} [o.onClose]
    */
-  constructor(scene, { session, gs = null, onClose = null }) {
+  constructor(scene, { session = null, gs = null, publicBase = null, publicAchievements = [], onClose = null }) {
     this.scene = scene;
     this.session = session;
     this.gs = gs;
+    this.playedBaseId = session?.activeId;
+    this.publicBase = publicBase;
+    this.publicAchievements = publicAchievements;
+    this.baseId = publicBase?.id || this.playedBaseId;
     this.message = '';
-    const claimable = new Set(session.unclaimed());
+    const claimable = new Set(session?.unclaimed(this.baseId));
     const firstWithClaim = ACHIEVEMENT_GROUPS.find((grp) => ACHIEVEMENTS.some((a) => a.group === grp.key && claimable.has(a.id)));
     this.tab = firstWithClaim ? firstWithClaim.key : ACHIEVEMENT_GROUPS[0].key;
     this.modal = new Modal(scene, { width: W, height: H, title: 'Achievements', y: TOP, onClose });
@@ -81,8 +83,12 @@ export class AchievementsWindow {
     const m = this.modal, s = this.scene, ses = this.session;
     if (!m.frame) return;
     m.clear();
-    const earned = ses.earnedIds(), claimable = new Set(ses.unclaimed());
-    const values = progressValues(ses.stats, this.gs);
+    const base = this.publicBase || ses?.baseById(this.baseId);
+    const earned = ses ? ses.earnedIds(this.baseId) : new Set(this.publicAchievements.map((a) => a.id));
+    const claimable = new Set(ses?.unclaimed(this.baseId));
+    const live = this.baseId === this.playedBaseId ? this.gs : null;
+    const values = ses ? progressValues(ses.villageAchievementStats(this.baseId, live), live || base?.save) : null;
+    const canClaim = !!live && ses?.activeId === this.baseId;
 
     // Count in the header (left).
     this.hasIcon = s.textures.exists(TEX.achievementIcon);
@@ -90,8 +96,23 @@ export class AchievementsWindow {
     else star(m.add(s.add.graphics()), m.x + 36, m.y + 34, 15, GOLD);
     m.add(s.add.text(m.x + 58, m.y + 34, `${earned.size} / ${ACHIEVEMENTS.length}`, textStyle(22, COLORS.textGold)).setOrigin(0, 0.5));
 
+    const villages = ses?.bases || [];
+    const baseIndex = villages.findIndex((b) => b.id === this.baseId);
+    const villageLabel = m.add(s.add.text(m.cx, m.y + 88, base?.name || 'Village', textStyle(21, COLORS.ink)).setOrigin(0.5));
+    fitWidth(villageLabel, 295);
+    if (villages.length > 1) {
+      const move = (step) => {
+        this.baseId = villages[baseIndex + step].id;
+        this.message = '';
+        this.render();
+      };
+      const nav = { color: COLORS.buttonBlue, radius: 9 };
+      m.add(new Button(s, m.cx - 177, m.y + 88, 58, 46, '', () => move(-1), { ...nav, icon: 'left' })).setEnabled(baseIndex > 0);
+      m.add(new Button(s, m.cx + 177, m.y + 88, 58, 46, '', () => move(1), { ...nav, icon: 'right' })).setEnabled(baseIndex < villages.length - 1);
+    }
+
     // Tabs, each with a red badge counting rewards ready to claim.
-    const tabW = 180, tabY = m.y + 60 + 32;
+    const tabW = 180, tabY = m.y + 136;
     ACHIEVEMENT_GROUPS.forEach((grp, i) => {
       const x = m.cx + (i - (ACHIEVEMENT_GROUPS.length - 1) / 2) * (tabW + 12);
       m.add(new Button(s, x, tabY, tabW, 40, grp.label, () => { this.tab = grp.key; this.message = ''; this.render(); },
@@ -106,17 +127,17 @@ export class AchievementsWindow {
 
     const list = ACHIEVEMENTS.filter((a) => a.group === this.tab);
     const cardW = (W - PAD * 2 - COL_GAP) / 2;
-    const top = m.y + 128;
+    const top = m.y + 166;
     list.forEach((a, i) => {
       const col = i % 2, rowI = Math.floor(i / 2);
-      this.card(a, m.x + PAD + col * (cardW + COL_GAP), top + rowI * (CARD_H + CARD_GAP), cardW, earned.has(a.id), claimable.has(a.id), values);
+      this.card(a, m.x + PAD + col * (cardW + COL_GAP), top + rowI * (CARD_H + CARD_GAP), cardW, earned.has(a.id), claimable.has(a.id), values, canClaim);
     });
 
-    const note = this.message || (this.gs ? '' : 'Rewards are claimed inside a village: Profile (top left) → Achievements.');
+    const note = this.message || (ses && !canClaim ? 'Play this village to claim its rewards.' : '');
     this.msg = m.add(s.add.text(m.cx, m.y + H - 22, note, bodyStyle(16, this.message ? COLORS.inkBad : COLORS.inkDim, { align: 'center' })).setOrigin(0.5));
   }
 
-  card(a, x, y, w, earned, claimable, values) {
+  card(a, x, y, w, earned, claimable, values, canClaim) {
     const m = this.modal, s = this.scene;
     const g = m.add(s.add.graphics());
     const face = !earned ? 0xe2dccd : claimable ? 0xfff1c4 : 0xe4f3d2;
@@ -138,8 +159,8 @@ export class AchievementsWindow {
     const tx = x + 78;
     m.add(s.add.text(tx, y + 16, a.name, bodyStyle(18, earned ? COLORS.ink : COLORS.inkDim)).setOrigin(0, 0.5));
     m.add(s.add.text(tx, y + 38, a.desc, bodyStyle(13, COLORS.inkDim, { wordWrap: { width: w - 78 - 128 } })).setOrigin(0, 0.5));
-    const p = achievementProgress(a, values);
-    if (!earned) {
+    if (!earned && values) {
+      const p = achievementProgress(a, values);
       const bar = m.add(s.add.graphics());
       drawStatBar(bar, tx, y + 56, 150, p.value / p.goal, 0x6cbf2c, 12);
       m.add(s.add.text(tx + 158, y + 62, `${formatGold(p.value)} / ${formatGold(p.goal)}`, bodyStyle(13, COLORS.inkDim)).setOrigin(0, 0.5));
@@ -153,28 +174,28 @@ export class AchievementsWindow {
       m.add(coin);
     }
     m.add(s.add.text(rx - 20, y + 22, formatGold(a.reward), bodyStyle(17, earned && !claimable ? COLORS.inkDim : COLORS.inkAccent)).setOrigin(0, 0.5));
-    if (claimable && this.gs) {
+    if (claimable && canClaim) {
       m.add(new Button(s, rx, y + 54, 104, 36, 'Claim', () => this.claim(a), { color: COLORS.buttonGood, fontSize: 18, radius: 9 }));
     } else if (claimable) {
       m.add(s.add.text(rx, y + 54, 'Ready to claim', bodyStyle(13, COLORS.inkAccent)).setOrigin(0.5));
     } else if (earned) {
-      m.add(s.add.text(rx, y + 54, '✔ Claimed', bodyStyle(15, COLORS.inkGood)).setOrigin(0.5));
+      m.add(s.add.text(rx, y + 54, this.publicBase ? '✔ Earned' : '✔ Claimed', bodyStyle(15, COLORS.inkGood)).setOrigin(0.5));
     }
   }
 
   /** Pay the reward into the village (if it fits in storage) and mark it claimed. */
   claim(a) {
     const gs = this.gs;
-    if (!gs) return;
+    if (!gs || this.baseId !== this.playedBaseId || this.session.activeId !== this.baseId) return;
     if (isWaveActive(gs)) { this.message = 'Claim rewards after the wave.'; this.render(); return; }
     // Offline, the server doesn't have this achievement yet: its reward waits for the next login.
     if (this.session.offline) { this.message = 'You’re playing offline: rewards can be claimed once you log in again.'; this.render(); return; }
     if (gs.gold + a.reward > gs.capacity) {
-      this.message = `Not enough storage room for ${formatGold(a.reward)} gold: spend some, or build / upgrade Bitcoin Storage.`;
+      this.message = `Not enough storage room for ${formatGold(a.reward)} Bitcoin: spend some, or build / upgrade Bitcoin Storage.`;
       this.render();
       return;
     }
-    if (!this.session.claim(a.id)) return;
+    if (!this.session.claim(a.id, this.baseId)) return;
     addGold(gs, a.reward);
     gs.emit('goldChanged', { gold: gs.gold, capacity: gs.capacity });
     gs.save();

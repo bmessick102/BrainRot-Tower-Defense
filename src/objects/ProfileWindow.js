@@ -5,6 +5,7 @@ import { Modal } from './Modal.js';
 import { Button } from './Button.js';
 import { AchievementsWindow } from './AchievementsWindow.js';
 import { LeaderboardWindow } from './LeaderboardWindow.js';
+import { PlayerCardWindow } from './PlayerCardWindow.js';
 import { drawBadge, drawTag, fitIcon } from './uiDraw.js';
 import { addLeagueRow } from './LeagueRow.js';
 import { COLORS, bodyStyle, textStyle } from '../theme.js';
@@ -16,7 +17,7 @@ const W = 760;
 // Lifetime stats: [label, value from session.stats].
 const STATS = [
   ['Enemies defeated', (s) => s.counters.kills],
-  ['Gold mined', (s) => s.counters.mined],
+  ['Bitcoin mined', (s) => s.counters.mined],
   ['Bombers shot down', (s) => s.counters.bomberKills],
   ['Balloons popped', (s) => s.counters.balloonKills],
   ['Perfect waves', (s) => s.counters.perfect],
@@ -120,7 +121,7 @@ export class ProfileWindow {
     m.add(new Button(s, left + half - 82, y + 70, 140, 46, 'Leaderboard', () => this.openLeaderboard(), { color: COLORS.buttonBlue, fontSize: 17, radius: 10 }));
 
     const ax = left + half + 16;
-    card(s, m, ax, y, half, 112, 'Achievements');
+    card(s, m, ax, y, half, 112, 'Village achievements');
     const earned = ses.earnedIds().size, unclaimed = ses.unclaimed().length;
     const count = m.add(s.add.text(ax + 16, y + 40, `${earned} / ${ACHIEVEMENTS.length}`, textStyle(30, COLORS.textGold)));
     const fresh = this.news.newAchievements.length;
@@ -165,6 +166,10 @@ export class ProfileWindow {
   }
 
   openLeaderboard() {
-    new LeaderboardWindow(this.scene, { session: this.session, onClose: () => { this.rank = 'loading'; this.render(); this.loadRank(); } });
+    new LeaderboardWindow(this.scene, {
+      session: this.session,
+      onOpenPlayer: (username, focusBaseId) => new PlayerCardWindow(this.scene, { session: this.session, username, focusBaseId }),
+      onClose: () => { this.rank = 'loading'; this.render(); this.loadRank(); }
+    });
   }
 }

@@ -72,9 +72,39 @@ create table if not exists public.achievements (
   achievement text not null check (char_length(achievement) <= 40),
   base_id uuid references public.bases (id) on delete set null,
   earned_at timestamptz not null default now(),
-  claimed_at timestamptz,
-  primary key (user_id, achievement)
+  claimed_at timestamptz
 );
+create unique index if not exists achievements_per_village
+  on public.achievements (user_id, base_id, achievement);
+
+-- Preserve independent village counters when two devices upload their account stats.
+create or replace function public.merge_village_achievement_counters()
+returns trigger language plpgsql set search_path = '' as $$
+declare
+  previous jsonb := '{}'::jsonb;
+  incoming jsonb := coalesce(new.counters -> 'villages', '{}'::jsonb);
+  merged jsonb;
+begin
+  if tg_op = 'UPDATE' then previous := coalesce(old.counters -> 'villages', '{}'::jsonb); end if;
+  select coalesce(jsonb_object_agg(b.id::text, village.counters), '{}'::jsonb) into merged
+  from public.bases b
+  cross join lateral (
+    select jsonb_object_agg(k.name, greatest(
+      case when jsonb_typeof(v.before_value) = 'number' then (v.before_value #>> '{}')::numeric else 0 end,
+      case when jsonb_typeof(v.input_value) = 'number' then (v.input_value #>> '{}')::numeric else 0 end
+    )) as counters
+    from unnest(array['kills','bomberKills','balloonKills','traps','rahMax','perfect','early','mined','stars']) k(name)
+    cross join lateral (values (previous #> array[b.id::text, k.name], incoming #> array[b.id::text, k.name])) v(before_value, input_value)
+    where jsonb_typeof(v.before_value) = 'number' or jsonb_typeof(v.input_value) = 'number'
+  ) village
+  where b.user_id = new.user_id and village.counters is not null;
+  new.counters := jsonb_set(new.counters, '{villages}', merged);
+  return new;
+end $$;
+
+drop trigger if exists merge_village_achievement_counters on public.player_stats;
+create trigger merge_village_achievement_counters before insert or update of counters on public.player_stats
+  for each row execute function public.merge_village_achievement_counters();
 
 -- ---------------------------------------------------------------- sign-up: profile + stats row
 create or replace function public.handle_new_user()
@@ -364,8 +394,12 @@ begin
     'best_wave', coalesce((select max(m.best_wave) from mine m), s.best_wave, 0),
     'best_town_hall', coalesce((select max(m.town_hall) from mine m), s.best_town_hall, 0),
     'rank', (select min(m.rank) from mine m),
-    'achievements', coalesce((select jsonb_agg(jsonb_build_object('id', a.achievement, 'earned_at', a.earned_at) order by a.earned_at)
-                              from public.achievements a where a.user_id = uid), '[]'::jsonb),
+    'achievements', case when p.public_bases or uid = auth.uid() then
+                       coalesce((select jsonb_agg(jsonb_build_object('id', a.achievement, 'base_id', a.base_id, 'earned_at', a.earned_at)
+                                             order by a.earned_at, a.base_id, a.achievement)
+                                 from public.achievements a join mine m on m.id = a.base_id
+                                 where a.user_id = uid and m.save is not null), '[]'::jsonb)
+                     else '[]'::jsonb end,
     'bases', case when p.public_bases or uid = auth.uid() then
                coalesce((select jsonb_agg(jsonb_build_object('id', m.id, 'name', m.name, 'town_hall', m.town_hall,
                                                             'best_wave', m.best_wave, 'wave', m.wave, 'rank', m.rank)
@@ -435,17 +469,23 @@ create policy "achievements: read own" on public.achievements
   for select to authenticated using (user_id = auth.uid());
 drop policy if exists "achievements: insert own" on public.achievements;
 create policy "achievements: insert own" on public.achievements
-  for insert to authenticated with check (user_id = auth.uid());
+  for insert to authenticated with check (
+    user_id = auth.uid() and exists (select 1 from public.bases b where b.id = base_id and b.user_id = auth.uid())
+  );
 drop policy if exists "achievements: update own" on public.achievements;
 create policy "achievements: update own" on public.achievements
-  for update to authenticated using (user_id = auth.uid()) with check (user_id = auth.uid());
+  for update to authenticated
+  using (user_id = auth.uid() and base_id is not null and claimed_at is null)
+  with check (user_id = auth.uid() and base_id is not null and claimed_at is not null);
 
 -- ---------------------------------------------------------------- access for the game (anon key)
 grant usage on schema public to anon, authenticated;
 grant select on public.profiles to authenticated;
 grant select, insert, update, delete on public.bases to authenticated;
 grant select, insert, update on public.player_stats to authenticated;
-grant select, insert, update on public.achievements to authenticated;
+revoke update on public.achievements from authenticated;
+grant select, insert on public.achievements to authenticated;
+grant update (claimed_at) on public.achievements to authenticated;
 
 revoke execute on function public.get_leaderboard(int) from public, anon;
 grant execute on function public.get_leaderboard(int) to authenticated;

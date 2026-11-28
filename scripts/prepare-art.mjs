@@ -107,6 +107,8 @@ const TARGETS = [
   { match: /^ui_merge_gear$/, width: 128, trim: true, needsAlpha: true },     // v0.8: the badge over merged defenses
   { match: /^ui_ability_[a-z_]+$/, width: 192, fit: 'box', trim: true, needsAlpha: true }, // v0.8.5: merged ability icons (MergeIcons.js)
   { match: /^ui_armor_shield$/, width: 64, fit: 'box', trim: true, needsAlpha: true },     // v0.8.5: the shield by an armored enemy's health bar
+  { match: /^ui_stat_[a-z_]+$/, width: 96, fit: 'box', trim: true, needsAlpha: true },     // v0.15: icons beside the upgrade / merge windows' stat bars (shown about 38 px)
+  { match: /^ui_showcase_tile$/, width: 512, trim: true, needsAlpha: true },  // v0.15: the grass block under the picture in the upgrade / merge windows (shown 276 px wide)
   { match: /^ui_feast_ready$/, width: 192, trim: true, needsAlpha: true },    // the Brisket Feast HUD button / ready icon
   { match: /^ui_encore_ready$/, width: 192, trim: true, needsAlpha: true },   // v0.8.2: the Hatsune Queen's Encore Cloak icon (a cloak)
   { match: /^ui_hero_crown$/, width: 128, trim: true, needsAlpha: true },     // the hero level crown beside his health bar

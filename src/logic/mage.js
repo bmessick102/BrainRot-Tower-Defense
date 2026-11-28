@@ -292,10 +292,13 @@ export function mageAfterWave(state) {
   const st = mageStats(altar);
   h.aegisT = 0;
   markBuildings(state, h, st, altar);
-  if (h.sleepT > 0) { h.status = 'asleep'; h.knockedOut = false; return; }
+  // (worstShare is 0 once he's been knocked out this raid, even if his building was rebuilt and he went back to sleep.)
   const lost = h.status === 'down' ? 1 : 1 - Math.max(0, Math.min(1, h.worstShare));
+  // Slept through the raid untouched: he just finishes the nap he was taking.
+  if (h.sleepT > 0 && lost <= 0) { h.status = 'asleep'; h.knockedOut = false; return; }
   h.status = 'asleep'; h.knockedOut = false; h.resting = false; h.targetId = null; h.attacking = false;
-  h.sleepT = h.sleepTotal = Math.max(st.minSleep, lost * st.maxSleep, 0.1);
+  // Hurt or knocked out: the nap this raid earns, or what was left of the old one if that's longer.
+  h.sleepT = h.sleepTotal = Math.max(h.sleepT || 0, st.minSleep, lost * st.maxSleep, 0.1);
   h.worstShare = 1;
   altar.heroSleep = h.sleepT;
   emit(state, 'mageSleeping', { seconds: h.sleepT });

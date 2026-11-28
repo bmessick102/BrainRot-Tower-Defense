@@ -12,10 +12,10 @@ import { fitWidth, fitIcon } from './uiDraw.js';
 
 const W = 720, H = 600, ROW_H = 74, ROW_GAP = 8;
 
-/** "Village Hall 7 · 23 buildings · 4,210 gold" */
+/** "Village Hall 7 · 23 buildings · 4,210 Bitcoin" */
 function describeVillage(save) {
   const n = (save.buildings || []).filter((b) => b.type !== 'wall').length;
-  return `Village Hall ${save.townHallLevel}  ·  ${n} buildings  ·  ${Math.floor(save.gold).toLocaleString('en-US')} gold`;
+  return `Village Hall ${save.townHallLevel}  ·  ${n} buildings  ·  ${Math.floor(save.gold).toLocaleString('en-US')} Bitcoin`;
 }
 
 /** "saved Nov 11, 3:42 PM" */

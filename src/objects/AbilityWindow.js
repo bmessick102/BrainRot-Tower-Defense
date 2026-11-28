@@ -60,10 +60,10 @@ function follow(scene, gs, refresh) {
   return () => handlers.forEach(([name, fn]) => gs.off(name, fn));
 }
 
-/** "123 Shakes" / "4,500 gold" with its icon in a dark pill, right-aligned at (x, y). */
+/** "123 Shakes" / "4,500 Bitcoin" with its icon in a dark pill, right-aligned at (x, y). */
 export function balance(scene, m, gs, rp, x, y) { // (also the Fuel Station window's Shakes pill)
   const pill = m.add(scene.add.graphics());
-  const text = rp ? rpText(gs.researchPoints || 0) : `${formatGold(Math.floor(gs.gold))} gold`;
+  const text = rp ? rpText(gs.researchPoints || 0) : `${formatGold(Math.floor(gs.gold))} Bitcoin`;
   const t = m.add(scene.add.text(x - 14, y, text, textStyle(18, rp ? RP_TEXT_COLOR : COLORS.textGold)).setOrigin(1, 0.5));
   const key = rp ? TEX.researchPoint : TEX.coin;
   let left = t.x - t.width - 12;
@@ -272,7 +272,7 @@ function drawPips(g, x, y, picks) {
 /** The RV Lab window: pick a defense on the left, research its tree (in RP). `startType` opens on a defense. */
 export function openResearchWindow(scene, gs, { onClose = null, startType = null, focusMastery = false } = {}) {
   // Fixed width, sized for four columns (3 paths + Mastery): a type without a merged building spreads three wider columns over it.
-  const LIST_W = 184, PANEL_W = 310, COL4_W = 150, GAP = 10;
+  const LIST_W = 234, PANEL_W = 296, COL4_W = 141, GAP = 10;
   const GRID_W = GUTTER + COL4_W * 4 + GAP * 3, W = 22 + LIST_W + 14 + GRID_W + 16 + PANEL_W + 22;
   let type = startType && ABILITY_TYPES.includes(startType) ? startType : null;
   let unfollow = () => {};
@@ -308,8 +308,8 @@ export function openResearchWindow(scene, gs, { onClose = null, startType = null
   const TABS = [{ key: 'defenses', label: 'Defenses', types: DEFENSE_ABILITY_TYPES }, { key: 'economy', label: 'Economy', types: ECONOMY_ABILITY_TYPES }];
   if (!type) type = ABILITY_TYPES.find((t) => canResearchFor(gs, t)) || DEFENSE_ABILITY_TYPES[0];
   let tab = ECONOMY_ABILITY_TYPES.includes(type) ? 'economy' : 'defenses';
-  const pageSize = IS_TOUCH ? 5 : Infinity;
-  let page = IS_TOUCH ? Math.floor(TABS.find((t) => t.key === tab).types.indexOf(type) / pageSize) : 0;
+  const pageSize = IS_TOUCH ? 4 : 6;
+  let page = Math.floor(TABS.find((t) => t.key === tab).types.indexOf(type) / pageSize);
 
   const shakeCost = (amount) => amount > 0 ? [{ currency: 'rp', amount }] : [];
   const confirmResearch = (name, costs, onConfirm) => confirmDialog(scene, {
@@ -366,7 +366,7 @@ export function openResearchWindow(scene, gs, { onClose = null, startType = null
         if (tab === tb.key) return;
         tab = tb.key;
         type = tb.types.find((t) => canResearchFor(gs, t)) || tb.types[0];
-        page = IS_TOUCH ? Math.floor(tb.types.indexOf(type) / pageSize) : 0;
+        page = Math.floor(tb.types.indexOf(type) / pageSize);
         selected = null;
         refresh();
       });
@@ -376,18 +376,16 @@ export function openResearchWindow(scene, gs, { onClose = null, startType = null
     const balanceLeft = balance(scene, m, gs, true, m.x + W - 22, m.y + INFO_Y);
     drawPips(pg, balanceLeft - 14 - (18 * MAX_TIER + 8) / 2, m.y + INFO_Y, labPicks(gs, type)); // just left of the RP pill, whatever its width
 
-    // The tab's buildings: its picture in a small tile, then its name over its five tiers (slim bars colored by
-    // pick), centered together in the row, and a "!" badge on the right when research is ready. Everything is
-    // placed from the row's height (12 defenses make short rows), so nothing overlaps.
+    // Fixed-size building rows keep the touch targets large as more defenses are added.
     const types = TABS.find((tb) => tb.key === tab).types;
     const pages = Math.max(1, Math.ceil(types.length / pageSize));
     const lx = m.x + 22, ly = m.y + TOP;
-    const itemH = IS_TOUCH ? 82 : Math.min(62, Math.floor((treeH + RESPEC_H + 4) / types.length));
+    const itemH = IS_TOUCH ? 102 : 62;
     const go = (dir) => {
       const next = page + dir;
       if (next >= 0 && next < pages) { page = next; refresh(); }
     };
-    const first = IS_TOUCH ? page * pageSize : 0;
+    const first = page * pageSize;
     types.slice(first, first + pageSize).forEach((t, i) => {
       const y = ly + i * itemH, sel = t === type;
       const top = y + 2, inner = itemH - 8; // the row's face
@@ -395,7 +393,7 @@ export function openResearchWindow(scene, gs, { onClose = null, startType = null
       g.fillStyle(COLORS.frame, sel ? 1 : 0.2).fillRoundedRect(lx, y, LIST_W, itemH - 4, 9);
       g.fillStyle(sel ? 0x6cbf2c : 0xf3ecdd, 1).fillRoundedRect(lx + 2, top, LIST_W - 4, inner, 8);
       // Picture tile.
-      const tileW = IS_TOUCH ? 48 : 34, tileX = lx + 5;
+      const tileW = IS_TOUCH ? 66 : 48, tileX = lx + 6;
       g.fillStyle(sel ? 0x4f9a22 : 0xe3dac6, 1).fillRoundedRect(tileX, top + 2, tileW, inner - 4, 6);
       const pic = m.add(scene.add.image(tileX + tileW / 2, top + inner / 2, buildingTextureKey(scene, t, 1)));
       fitIcon(pic, tileW - 4, inner - 6);
@@ -404,7 +402,7 @@ export function openResearchWindow(scene, gs, { onClose = null, startType = null
       // Name over the tier bars, as one block centered in the row.
       const ready = canResearchFor(gs, t);
       const nx = tileX + tileW + 7, barH = Math.max(4, Math.min(6, Math.round(inner / 7)));
-      const size = IS_TOUCH ? 17 : 14;
+      const size = IS_TOUCH ? 20 : 16;
       const name = m.add(scene.add.text(nx, 0, buildingName(t), sel ? textStyle(size) : bodyStyle(size, COLORS.ink, { fontStyle: 'bold' })));
       fitWidth(name, lx + LIST_W - nx - (ready ? 30 : 10)); // ends before the "!" badge
       const blockH = name.displayHeight + 2 + barH;

@@ -387,6 +387,116 @@ export function fireworkBurst(scene, x, y, radiusTiles, lightKey) {
   scene.time.delayedCall(1500, () => { stars.destroy(); glitter.destroy(); });
 }
 
+// ---------- building upgrade (v0.15) ----------
+const UPGRADE_GOLD = [0xffffff, 0xfff3b0, 0xffd84a, 0xffb020];
+const SPARKLE_GOLD = [0xfff6c8, 0xffe066, 0xffc93c];
+
+/** A four-point twinkle star (white, with a light grey rim that tints to a darker edge), made once on first use. */
+function sparkleTexture(scene) {
+  const key = 'fx_sparkle';
+  if (!scene.textures.exists(key)) {
+    const size = 32, c = size / 2, pts = [];
+    for (let i = 0; i < 8; i++) {
+      const r = i % 2 ? 4 : 15, a = (i / 8) * Math.PI * 2 - Math.PI / 2;
+      pts.push({ x: c + Math.cos(a) * r, y: c + Math.sin(a) * r });
+    }
+    const g = scene.make.graphics({ x: 0, y: 0, add: false });
+    g.fillStyle(0xffffff, 1).fillPoints(pts, true);
+    g.lineStyle(2, 0x9a9a9a, 1).strokePoints(pts, true);
+    g.fillStyle(0xffffff, 1).fillCircle(c, c, 3);
+    g.generateTexture(key, size, size);
+    g.destroy();
+  }
+  return key;
+}
+
+/**
+ * A building just went up a level (its new picture is already showing): a pillar of gold light through it, a warm
+ * glow on the ground, gold sparkles rising off its footprint, a star burst over its top and a gold "Level N!".
+ * (x, y): the footprint's center on screen; `top`: the picture's top; `rx`, `ry`: the footprint's half size on screen;
+ * `k` scales it all (the Village Hall's is bigger). `label` false skips the text (walls upgrade by the dozen).
+ */
+export function upgradeBurst(scene, { x, y, top, rx, ry, level, lightKey, k = 1, label = true }) {
+  const low = isLowQuality();
+  const height = Math.max(60, y - top);
+  // Ground glow and the pillar of light (stretched glows, added on top of the picture).
+  const glow = scene.add.image(x, y, lightKey).setBlendMode('ADD').setTint(0xffd84a).setDepth(FX_DEPTH)
+    .setScale((rx * 2.6) / 256, (ry * 2.6) / 256).setAlpha(0.9);
+  scene.tweens.add({ targets: glow, alpha: 0, scaleX: glow.scaleX * 1.3, scaleY: glow.scaleY * 1.3, duration: 900, ease: 'Cubic.easeOut', onComplete: () => glow.destroy() });
+  if (!low) {
+    const pillar = scene.add.image(x, y - height * 0.55, lightKey).setBlendMode('ADD').setTint(0xfff0b0).setDepth(FX_DEPTH + 1)
+      .setScale((rx * 0.9) / 256, (height * 2.4) / 256).setAlpha(0);
+    scene.tweens.chain({
+      targets: pillar,
+      tweens: [
+        { alpha: 0.85, duration: 120, ease: 'Quad.easeOut' },
+        { alpha: 0, scaleX: pillar.scaleX * 0.3, duration: 650, ease: 'Cubic.easeIn' }
+      ],
+      onComplete: () => pillar.destroy()
+    });
+  }
+  // Gold sparkles rising off the footprint for half a second.
+  const rise = scene.add.particles(x, y, lightKey, {
+    x: { min: -rx * 0.8, max: rx * 0.8 },
+    y: { min: -ry * 0.6, max: ry * 0.6 },
+    speedY: { min: -150 * k, max: -60 * k },
+    speedX: { min: -12, max: 12 },
+    lifespan: { min: 800, max: 1300 },
+    scale: { start: 0.07 * k, end: 0 },
+    alpha: { start: 1, end: 0 },
+    tint: UPGRADE_GOLD,
+    blendMode: 'ADD',
+    frequency: low ? 60 : 22,
+    quantity: low ? 1 : 2
+  }).setDepth(FX_DEPTH + 2);
+  scene.time.delayedCall(700, () => rise.stop());
+  // Twinkling gold stars drifting up with them (drawn normally, so they show on bright grass too).
+  const twinkle = scene.add.particles(x, y - height * 0.3, sparkleTexture(scene), {
+    x: { min: -rx, max: rx },
+    y: { min: -height * 0.4, max: ry },
+    speedY: { min: -90 * k, max: -30 * k },
+    speedX: { min: -20, max: 20 },
+    lifespan: { min: 700, max: 1200 },
+    scale: { start: 0.9 * k, end: 0 },
+    rotate: { min: -40, max: 40 },
+    tint: SPARKLE_GOLD,
+    frequency: low ? 90 : 32,
+    quantity: 1
+  }).setDepth(FX_DEPTH + 3);
+  twinkle.emitParticle(low ? 4 : Math.round(12 * k)); // a first handful at once (explode would stop the flow)
+  scene.time.delayedCall(600, () => twinkle.stop());
+  // A little star burst over its top.
+  const stars = scene.add.particles(x, top + 10, lightKey, {
+    speed: { min: 70 * k, max: 170 * k },
+    angle: { min: 0, max: 360 },
+    lifespan: { min: 500, max: 850 },
+    scale: { start: 0.08 * k, end: 0.01 },
+    alpha: { start: 1, end: 0 },
+    tint: UPGRADE_GOLD,
+    blendMode: 'ADD',
+    gravityY: 120,
+    emitting: false
+  }).setDepth(FX_DEPTH + 2);
+  stars.explode(low ? 10 : Math.round(22 * k));
+  scene.time.delayedCall(2200, () => { rise.destroy(); stars.destroy(); twinkle.destroy(); });
+  if (label) levelUpText(scene, x, top - 6, `Level ${level}!`, Math.round(24 * Math.min(k, 1.3)));
+}
+
+/** "Level 5!" in gold: pops in, holds a moment, then floats up and fades (about 1.5 s). */
+export function levelUpText(scene, x, y, text, size = 24) {
+  const t = scene.add.text(x, y, text, textStyle(size, '#ffe066')).setOrigin(0.5, 1).setDepth(6000).setScale(0.4);
+  scene.tweens.chain({
+    targets: t,
+    tweens: [
+      { scale: 1.15, duration: 170, ease: 'Back.easeOut' },
+      { scale: 1, duration: 120, ease: 'Quad.easeOut' },
+      { y: y - 34, alpha: 0, delay: 650, duration: 500, ease: 'Cubic.easeIn' }
+    ],
+    onComplete: () => t.destroy()
+  });
+  return t;
+}
+
 /** A ring the size of a splash radius (tiles) at a world point, fading over `duration` ms (0.3 s by default). */
 export function splashRing(scene, x, y, radiusTiles, color = 0xffe08a, { duration = 300, depth = 2600 } = {}) {
   const { rx, ry } = rangeEllipse(radiusTiles);

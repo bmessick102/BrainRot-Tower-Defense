@@ -2,61 +2,132 @@
 
 The version shows in the bottom-left corner of every screen (`package.json` `version` plus the commit). Details for everything below are in [README.md](README.md).
 
-## 0.16.0
-
-Development Update 5.1 adds upgrade previews, layout tools, and expanded Shake, hero and Mastery progression.
-
-### New Features
-
-- Building Upgrade opens a next-level preview with live costs and requirements. Village Hall previews list new buildings, extra slots, and newly available levels. Confirmation validates the original level before spending.
-- Edit Mode stores selected buildings by ID and draws connected walls from the hotbar. Unfinished drafts can be resumed on the same device.
-- The RV Lab has five Mastery tiers per merged type and five-tier research paths for Shake Collectors and Shake Storages.
-
-### Changes
-
-- Collect All gathers same-type stock up to available storage room. Overflow stays in the buildings.
-- Village Hall Levels 13–20 use the supplied replacement sprites. Shake Storage art tiers 7 and 8 cover gameplay Levels 13–14 and 15–16, with three fill states each. Tier 2 now uses the former tier 3 art.
-- Upgrade, repair, merge, research and brewing costs show currency icons next to the amounts. Guide messages and unavailable actions have sound feedback.
-
-### Balance
-
-- Shake Storage reaches Level 16. Levels 13–16 hold 9,500 / 10,500 / 11,500 / 12,500 Shakes and unlock at their corresponding Village Hall levels. Existing levels keep their capacities and have lower Bitcoin prices.
-- Collectors double production and stock. Wave completion awards 22 Shakes per wave number, up from 15. Larger enemies also award more Shakes.
-- Mastery costs 1,200 / 2,000 / 3,000 / 4,200 / 5,600 Shakes plus 12,000 / 24,000 / 40,000 / 60,000 / 85,000 Bitcoin. Existing tiers carry forward.
-- Hero ability effects improve at Levels 5, 10, 15 and 20. The King gains 2.5 percentage points of Feast healing, the Queen gains 1 second of cloak, and the Mage gains 0.5 seconds of protection per milestone.
-
-### Bug Fixes
-
-- The Mage aura follows its draft or held position in Edit Mode and hides while the building is stored.
-- Reduced collision allocations and repeated target distance calculations without changing spawn queues.
-- Leaving a scene clears queued HTML5 audio actions for destroyed sounds, preventing a crash on audio unlock.
-
 ## 0.15.0
 
-Development Update 5 improves mobile framing, village visits, raid recovery, and building menus. Apply the revised [Village Hall migration](supabase/migration-2026-11-23-village-halls-20.sql) to recover leaderboard levels on an existing database.
+Upgrade and merge confirmation windows, per-village achievements, wall drawing in Edit Mode, Shake-economy rebalance,
+mobile viewport and visit-audio fixes. Folds in the never-released 0.15.0-0.17.3 work (Codex), reviewed and reworked.
+**Database:** run [migration-2026-11-25-village-achievements.sql](supabase/migration-2026-11-25-village-achievements.sql)
+before deploying (achievement earns use `onConflict: 'user_id,base_id,achievement'`, which needs its unique index); the
+revised [migration-2026-11-23-village-halls-20.sql](supabase/migration-2026-11-23-village-halls-20.sql) restores Hall 16-20 on the leaderboard.
 
 ### New Features
 
-- Bitcoin Mines and Shake Collectors have Collect buttons in the quick bar and full info panel. Both use the existing transfer, settings, and feedback, and save successful collections.
-- Visits show the same range circles as the home village and list researched Mastery tiers under regular perks.
+- **Upgrade window** (`src/objects/UpgradeWindow.js`, layout in `src/objects/PurchasePreview.js`, rules in
+  `src/logic/upgradePreview.js`): Upgrade (quick bar and Info) opens "Upgrade to level N?": the next level's picture on a
+  grass tile (`ui_showcase_tile`, flattened to the 2:1 ground, `PurchasePreview` `TILE_TOP` / `TILE_FLATTEN`; the yellow tag is
+  drawn over it) with a yellow "Level 5 → 6" tag, stat bars with icons ("Damage: 116 +29", from `UIScene.upgradeStatRows`; icons `ui_stat_<kind>` for hp / damage / range / time / speed / slow / research / spells / star, picked by `statIconFor`, drawn stand-ins without the art),
+  facts (Range / Fires every / Damage type / Targets for defenses, hero facts for altars, `statNotes` otherwise) and a
+  centered price button. `previewUpgrade` returns `notes` (whole sentences: "You need to upgrade your Village Hall to
+  level 6!", "You need 10,795 more gold!") and `short`; with any note the bottom turns into a red "Note!" band beside a
+  grey price button with the price in red. The Village Hall's window shows its five bars (capacities, HP, incomes) and
+  "Unlocks Buildings:" cards (`hallUpgradeUnlocks`, incl. spell slots), 7 per page; the level 0 ruin reads "Rebuild the
+  Village Hall?"; walls "Upgrade walls to level N?". `GameState.upgradeBuilding(id, expectedLevel)` refuses a stale
+  window. The Upgrade button is always enabled below the top level (the window says what's missing).
+- **Merge window** (`src/objects/MergeWindow.js`): replaces `UIScene.openMergeConfirm`. Opens from Merge on any max-level
+  unmerged copy, even with no partner: merged picture (gear badge), "Merges 2 × Level 10", HP / damage bars, the ability
+  box, Range / Damage type / Targets, gold + Shake price. `merge.js previewMerge` gives the notes ("You need another
+  Level 10 Cannon to merge with!", raid, gold / Shakes short). Confirm starts `GameScene.beginMergePick`; tapping the
+  partner buys the merge (`mergePickClick` → `gs.mergeBuilding`). `checkMerge` lost Codex's `canPreview`.
+- **Per-village achievements**: awards and claims are keyed by village (`session.js` `achievementKey(baseId, id)`,
+  `earnedIds(baseId)`, `unclaimed(baseId)`, `claim(id, baseId)`); counters per village in `stats.villageCounters`
+  (stored in `player_stats.counters.villages`, merged by high-water mark in `mergeVillageCounters` and the
+  `merge_village_achievement_counters` trigger). Older account-wide counters stay as lifetime stats and are not
+  assigned to a village; existing awards keep the village they were earned in. AchievementsWindow pages through your
+  villages and claims only into the one being played; player cards list each village's achievements. The title
+  screen's Achievements button is gone (Profile → Village achievements). Deleting a village drops its counters and
+  pending earns.
+- **Edit Mode wall drawing** (`layout.js` `wallStrokeTiles`, `placeWallStroke`; `GameScene.paintWalls`): with walls
+  picked from the hotbar, dragging lays an edge-connected line or corner, one hotbar wall per tile. Store in Hotbar
+  button for a lifted building. The draft is kept in `localStorage` `ibtd.layoutDraft` (`readLayoutDraft` /
+  `writeLayoutDraft`; only restored when the saved layout still matches and every spot is valid). Buildings are drawn at
+  76% opacity while editing and only footprints are pickable.
+- **RV Lab**: perk trees for `shakeCollector` (productionPct / stockCapPct / hpPct) and `shakeStorage` (capacityPct /
+  drainResistPct / hpPct) in `abilityConfig.js` (`economyPath`; `...Pct` sums down a path, so the lines say the running
+  total). Mastery has 5 tiers (`masteryPrices`: Shakes 1,200 / 2,000 / 3,000 / 4,200 / 5,600, gold 12,000 / 24,000 /
+  40,000 / 60,000 / 85,000, RV Lab 3 / 4 / 5 / 5 / 5); `researchMastery(type, tier)` spends both. Saved tiers carry over.
+- **Visits**: range circles like at home (`RangeCircle.inspectionRange` / `showBuilding`) and a Mastery list on merged
+  defenses (`VisitHudScene.showBuilding`).
 
 ### Changes
 
-- How to Play uses the Enemies roster cards for Buildings and groups entries by the existing shop categories. The RV Lab fits five larger building rows per page on phones, enlarges tier controls, and confirms research before spending Shakes.
-- Each hero’s recovery advances at normal speed during 2x and 4x raids. Save data retains fractional timers and the Mage resumes his remaining recovery if rebuilt during a raid.
-- The mobile rotation prompt uses the game’s slate, blue, and gold styling.
+- **Collecting**: a tap on a Bitcoin Mine or Shake Collector showing its ready icon calls `GameState.collect`, which now
+  takes from every standing one of that type with stock (the tapped one first) up to the room left
+  (`collectionStatus`, `collectionProducers`, `economy.js mineCollectionAmount` so Tip Jar never overfills). Info has a
+  Collect All button with the amount. Storage full: the tap opens the building as before. Selecting a mine no longer
+  opens Info by itself (only the RV Lab does). `mineStockChanged` / `collectorStockChanged` also fire when the ready
+  icon flips.
+- **Hero recovery** runs on the real clock: `simulate(state, dt, recoveryDt)` and `stepHeroes` get `step / steps` at 2x /
+  4x, so a nap isn't shortened by speeding up a raid. A hero asleep when a raid starts joins when the nap ends (hotbar
+  "Recovering · Ns left"). Saves keep the exact `heroSleep` (no rounding).
+- **Upgrade effect** (`Effects.upgradeBurst` / `levelUpText`, `GameScene.upgradeFx`): on `buildingUpgraded` the
+  building flashes, gold rings ripple round its footprint (`footprintRipple`), a pillar of light and a ground glow
+  (`fx_light`, ADD), rising gold motes and twinkle stars (`fx_sparkle`, made on first use, drawn normally so they show on
+  grass) and a star burst over the top, then a gold "Level N!" that pops, holds and floats off. The Village Hall's is
+  1.5x with a small camera shake. `wallsUpgraded`: a 0.6x sparkle on up to 20 walls and one "Walls Level N!". Low
+  quality: fewer particles, no pillar.
+- **Startup jingle** (`music_startup_jingle`, 3.8 s, a 0.35 s fade-out baked in by `prepare-audio` `FADE_OUT`): an
+  inline script in `index.html` plays it as a plain `<audio>` the moment the page loads (before the game bundle
+  downloads), at the saved Music level (`ibtd.settings`; nothing at 0), and keeps its state in `window.__ibtdJingle`
+  (`playing` / `waiting` / `done`). `BootScene` keeps the full loading bar up until it ends
+  (`audio.js whenJingleDone`, at most 8 s after loading) plus a 0.75 s pause (`AFTER_JINGLE_MS`), and music asked for meanwhile (the title track) starts after
+  it (`holdForJingle`). A browser that blocks sound (`NotAllowedError`): the full bar reads "Tap to start" / "Click to start"
+  (`jingleWaitingForTap`) and waits; that tap plays the jingle (index.html's listener), then the same wait and pause
+  (`whenJingleDone(..., { waitForTap: true })`). The Music slider changes its volume; 0 stops it.
+- **Gold is now Bitcoin** in every player-facing text: prices and notes ("You need N more Bitcoin!", `needGoldReason`,
+  `economy.js`, `upgradePreview.shortText`), `CurrencyCost`, banners, toasts, tips, loading tips, How to Play, the
+  tutorial, perk texts (`Gold Magnet` -> Bitcoin Magnet), achievements (`Gold Rush` -> Bitcoin Rush; ids unchanged),
+  the Profile stat, the village list and the Heist theme hint. Mines and Storages show "Bitcoin production" / "Bitcoin
+  capacity" bars (`UIScene.statRows` / `upgradeStatRows` metric keys). Code and save fields keep `gold` (`gs.gold`,
+  currency `'gold'`, `goldChanged`), so saves and the database are untouched. The last Burger names in code went too:
+  `rules.burgerGoldValue` -> `shakeGoldValue`, `merge.js burgersSpentOnLevels` -> `shakesSpentOnLevels`.
+- **Prices with icons** (`src/objects/CurrencyCost.js`, `Button.setCosts`): upgrade, repair, merge, research, respec,
+  brewing; a `short` cost is drawn red. `invalidFeedback` buttons play `sfx.invalid` when tapped while greyed out; the
+  guide plays `sfx_guide_message` once per message (`audio.js notifyGuideMessage`).
+- **RV Lab window**: bigger list rows (4 per page on touch, 6 on desktop, arrows), bigger nodes, a confirm dialog
+  before research. How to Play's Buildings tab uses picture cards grouped like the shop; its Upgrades tab describes the
+  new windows.
+- **Art**: Village Halls 13-20 replaced (`bld_townHall_lv7`-`lv10` art files); Shake Storage pictures 7 and 8
+  (`bld_shakeStorage_lv7`/`lv8` + fills, Levels 13-16); picture 2 now uses the Level 3 sheet (`scripts/cut-sheets.mjs`).
+- Locklair Mage aura: a faint copy drawn over buildings (`MageFx.over`), and it follows the Mage's draft spot or
+  hides while he's stored (`GameScene.mageDisplayPosition`). Rotation prompt restyled (`index.html`).
 
 ### Balance
 
-- Shake Storage levels now hold 800 / 1,300 / 1,600 / 2,500 / 3,400 / 3,900 / 5,000 / 5,400 / 5,900 / 7,000 / 7,700 / 8,700 Shakes. The increase budgets room for additional raid earnings alongside existing upgrade costs.
-- Spawn cadence uses the mean of the pre-v0.12.5 and v0.12.5 rates per open entrance. The entrance opening schedule and wave composition stay the same.
-- Village Hall 20 allows 14 Locklair Archer Towers, down from 15. Existing towers remain in saved layouts.
+- **Shake Collector** (`CONFIG.shakeCollector.levels`): production 0.06 ... 0.51 Shakes/s (3.6 ... 30.6 a minute, was
+  0.02 ... 0.17), `stockCap` 120 ... 1,120 (was 60 ... 560): full in about 33-37 minutes.
+- **Shake Storage** (`CONFIG.shakeStorage.levels`): 16 levels (was 12), gold 150 ... 144,000 (about 1.5x a gold
+  Storage of the same level), capacity 800 ... 12,500. Levels 13-16 need Village Hall 13-16. Existing Storages keep their
+  level and get the new capacity.
+- **Shake income**: `rules.researchPointsPerWave` 15 → 22; enemy `researchPoints` up about 25-30% (Slinger and Shark 3 → 4,
+  Baby Car 40 → 50, Patapim / Lirili 14 → 18, Grimace 12 → 15 ...).
+- **Hero ability levels** (`src/logic/heroAbilityLevels.js`, `CONFIG.heroAbilityLevelInterval` 5): Feast +2.5
+  points of healing (`feast.healPctPerMilestone`, 50% at Level 20), Encore Cloak +0.5 s (`encore.secondsPerMilestone`,
+  6 s at 20; Codex had +1 s), Arcane Aegis +0.5 s (`aegis.secondsPerMilestone`, 6 s at 20). Shown in the hero panels
+  and the upgrade window.
+- **Mastery tiers 4-5** rewritten to be worth their price (Codex's were +3-20% nudges): e.g. Cannon Long Ember (trail
+  0.75 tiles, 5 s) / Hot Coals (30% trail damage); Locklair Deep Barbs (pin 2.5 s) / Exposed Target (+40%); Firework
+  Wide Mesh / Triple Net; F.L.O.C.K Long Pulse / Fifth Bolt; Spear Winch Drum / Triple Hook; others in `CONFIG.merges`.
+  Tier effects combine by taking the larger value (`masteryFxOf`), so each tier's numbers exceed the earlier ones.
+- **Spawn pacing** (`rules.spawnSpread.perEntrance` 0.2 → 0.1, `waves.js spawnGap` back to the plain formula): each
+  entrance spawns every 0.8 + 0.1 per extra open entrance (8 open: 1.5 s, was 2.2 s), halfway between pre-v0.12.5
+  and v0.12.5. Codex's harmonic-mean version (8 open: 1.17 s) is gone.
+- Locklair Archer Tower cap at Village Hall 20 stays 15 (Codex lowered it to 14; reverted).
 
 ### Bug Fixes
 
-- Window, viewport, and orientation changes refit the Phaser canvas and refresh pointer bounds, including during loading. The map keeps its base texture under detail tiles so it covers the playable area through zoom and pan changes.
-- Village visits replace menu music with the saved time-of-day ambience and play regular building selection sounds.
-- The Level 20 leaderboard migration restores derived Hall levels from existing saves while preserving wave ranks, save revisions, and wave credit.
+- Leaderboard Village Hall 16-20: the revised Hall 20 migration recomputes derived Hall levels from saves, keeping wave
+  ranks, save revisions and wave credit.
+- Viewport: window, `visualViewport`, orientation, fullscreen and parent `ResizeObserver` changes refit the canvas and
+  refresh pointer bounds (`renderScale.js syncViewport`, `main.js`), including during loading. `MapDetail` keeps the
+  base map under detail pieces so zooming out never shows black edges.
+- Visits replace the menu music with the village's saved day / night ambience (`VisitScene` `DayNight`, `startAmbience`);
+  HTML5 audio tags are unlocked on touch browsers (`audio.js unlockStreamedAudio`, village tracks preloaded in
+  `BootScene` when HTML5 audio is in use); destroyed sounds are removed from Phaser's locked-actions queue so leaving a
+  scene before the first tap no longer crashes on unlock.
+- Locklair Mage knocked out while napping and rebuilt in the raid: after it he now takes the full knockout nap (Codex's
+  version let him keep the shorter old nap). Untouched naps still just continue (`mageAfterWave`).
+- Edit Mode wall placement plays one short clip per wall (`playEditWallSound`) instead of queuing full-length sounds.
+- Performance: enemy separation reuses its buffers and compares squared distances; targeting uses squared distances.
 
 ## 0.14.0
 

@@ -24,9 +24,9 @@ describe('buildings.js', () => {
     expect(checkBuy(state, 'wizard')).toEqual({ ok: false, reason: 'Requires VH3' });
   });
 
-  it('explains missing gold', () => {
+  it('explains missing Bitcoin', () => {
     const state = makeStateWithTownHall({ gold: 50 });
-    expect(checkBuy(state, 'mine')).toEqual({ ok: false, reason: 'Need 100 more gold' });
+    expect(checkBuy(state, 'mine')).toEqual({ ok: false, reason: 'Need 100 more Bitcoin' });
   });
 
   it('reads shop and upgrade prices from config', () => {

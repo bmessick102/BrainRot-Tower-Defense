@@ -26,8 +26,16 @@ export const TEX = {
   beatReady: 'ui_beat_ready',        // over DJ Babyface when Drop the Beat is ready (falls back to a "DROP!" label)
   feastReady: 'ui_feast_ready',      // Brisket Feast's hotbar icon, and over him while it's ready (a gold crown)
   heroCrown: 'ui_hero_crown',        // the crown behind the hero's level number beside his health bar
-  armorShield: 'ui_armor_shield'     // beside an armored enemy's health bar while its armor holds (falls back to a drawn kite)
+  armorShield: 'ui_armor_shield',    // beside an armored enemy's health bar while its armor holds (falls back to a drawn kite)
+  showcaseTile: 'ui_showcase_tile'   // v0.15: the grass block under the picture in the upgrade / merge windows (PurchasePreview draws one without it)
 };
+
+/**
+ * v0.15: the icon beside a stat bar in the upgrade / merge windows (art-source/ui/ui_stat_<kind>.png), by kind:
+ * hp, heal, damage, beam, pool, mark, range, time, speed, slow, research, spells, gnomes, gold_capacity, shake_capacity,
+ * star. PurchasePreview draws a stand-in for a missing one.
+ */
+export const statIconKey = (kind) => `ui_stat_${kind}`;
 
 /** Base (single-model) building texture. */
 export const buildingKey = (type) => `bld_${type}`;
@@ -166,6 +174,7 @@ export const SPELL_SFX = {
 
 export const MUSIC = {
   title: 'music_title',
+  startupJingle: 'music_startup_jingle', // v0.15: index.html plays it as the page loads (audio.js whenJingleDone)
   village: 'music_village', // fallback between waves when the ambience files are missing
   ambientDay: 'ambient_day',     // between waves by day: looping ambience (crossfades with the night one)
   ambientNight: 'ambient_night', // between waves by night

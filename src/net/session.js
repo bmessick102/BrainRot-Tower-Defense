@@ -23,7 +23,7 @@
 //   this device (and didn't log out) can play its device copies. Its progress stays unsent until that account
 //   logs in again; nothing is sent, and achievement rewards can't be claimed, until then.
 import { parseSave } from '../logic/save.js';
-import { COUNTERS, estimateBestWave } from '../logic/achievements.js';
+import { COUNTERS, estimateBestWave, mergeVillageCounters } from '../logic/achievements.js';
 import { isConflictError } from './errors.js';
 
 export const MAX_BASES = 5;
@@ -73,7 +73,8 @@ export function saveWave(save) {
   return (save.wavesCleared || 0) + 1;
 }
 
-const emptyStats = () => ({ bestWave: 0, bestTownHall: 0, counters: {} });
+const emptyStats = () => ({ bestWave: 0, bestTownHall: 0, counters: {}, villageCounters: {} });
+const achievementKey = (baseId, id) => `${baseId || ''}|${id}`;
 const sameJson = (a, b) => JSON.stringify(a ?? null) === JSON.stringify(b ?? null);
 
 /** A short, stable name for a text (backup keys). */
@@ -130,8 +131,10 @@ export class Session {
     this.activeId = null;
     this.held = new Set(); // villages this tab has opened (openBase): another tab opening one takes it from here
     this.stats = emptyStats();
-    this.achievements = new Map(); // id -> { earnedAt, claimedAt, baseId }
+    this.achievements = new Map(); // village and achievement -> award record
     this.outbox = { stats: false, earns: [], claims: [] };
+    this.inflightOutbox = null;
+    this.sending = null;
     this.syncState = 'ok'; // 'ok' | 'saving' | 'offline' (see updateSync)
     this.outboxFailed = false;
     this.statsTimer = null;
@@ -172,7 +175,7 @@ export class Session {
   updateSync() {
     const live = this.bases.filter((b) => !b.lost);
     const failing = this.outboxFailed || live.some((b) => (b.retry || 0) > 0);
-    const waiting = live.some((b) => b.dirty) || this.hasOutbox();
+    const waiting = live.some((b) => b.dirty) || this.hasOutbox() || !!this.inflightOutbox;
     this.setSync(failing ? 'offline' : waiting ? 'saving' : 'ok');
   }
 
@@ -412,9 +415,9 @@ export class Session {
     this.reset();
     this.user = user;
     this.bases = bases.map((b) => ({ ...b, uid: user.id, serverRev: b.updatedAt || null, rev: 0, syncedRev: 0, dirty: false }));
-    this.stats = { bestWave: stats.bestWave || 0, bestTownHall: stats.bestTownHall || 0, counters: { ...(stats.counters || {}) } };
+    this.mergeStats(stats);
     this.serverBestWave = stats.bestWave || 0; // what the leaderboard shows (the server only counts waves it has verified)
-    for (const a of achievements) this.achievements.set(a.id, { earnedAt: a.earnedAt, claimedAt: a.claimedAt, baseId: a.baseId });
+    for (const a of achievements) this.achievements.set(achievementKey(a.baseId, a.id), a);
 
     // A village saved on this device but never uploaded (tab closed, offline): see mergeDeviceCopy.
     for (const b of this.bases) if (!others.has(b.id)) this.mergeDeviceCopy(b);
@@ -437,10 +440,22 @@ export class Session {
     const box = this.ljson(outboxKey(uid));
     if (!box) return;
     if (box.stats) this.mergeStats(box.stats);
-    for (const e of box.earns || []) if (!this.achievements.has(e.id)) { this.achievements.set(e.id, { earnedAt: e.at, claimedAt: null, baseId: e.baseId }); this.outbox.earns.push(e); }
-    for (const id of box.claims || []) {
-      const a = this.achievements.get(id);
-      if (a && !a.claimedAt) { a.claimedAt = new Date().toISOString(); this.outbox.claims.push(id); }
+    for (const e of box.earns || []) {
+      const key = achievementKey(e.baseId, e.id);
+      if (!this.baseById(e.baseId) || this.achievements.has(key)) continue;
+      this.achievements.set(key, { id: e.id, earnedAt: e.at, claimedAt: null, baseId: e.baseId });
+      this.outbox.earns.push(e);
+    }
+    for (const claim of box.claims || []) {
+      // Before village-specific awards, pending claims stored only the achievement ID.
+      const a = typeof claim === 'string'
+        ? [...this.achievements.values()].filter((award) => award.id === claim && this.baseById(award.baseId))
+          .sort((a, b) => String(a.earnedAt).localeCompare(String(b.earnedAt)))[0]
+        : this.achievements.get(achievementKey(claim.baseId, claim.id));
+      if (a && this.baseById(a.baseId) && !a.claimedAt) {
+        a.claimedAt = new Date().toISOString();
+        this.outbox.claims.push({ id: a.id, baseId: a.baseId });
+      }
     }
     if (box.stats) this.outbox.stats = true;
     this.queueOutbox();
@@ -511,8 +526,11 @@ export class Session {
       };
     }).filter(Boolean);
     const s = idx.stats || {};
-    this.stats = { bestWave: s.bestWave || 0, bestTownHall: s.bestTownHall || 0, counters: { ...(s.counters || {}) } };
-    for (const [id, a] of Array.isArray(idx.achievements) ? idx.achievements : []) this.achievements.set(id, a);
+    this.mergeStats(s);
+    for (const [key, a] of Array.isArray(idx.achievements) ? idx.achievements : []) {
+      const id = a.id || key;
+      this.achievements.set(achievementKey(a.baseId, id), { ...a, id });
+    }
     this.loadOutbox(who.id);
     const last = this.lget(lastBaseKey(who.id));
     this.activeId = this.baseById(last) ? last : (this.bases[0] ? this.bases[0].id : null);
@@ -594,6 +612,11 @@ export class Session {
     const b = this.baseById(id);
     if (b && b.timer) this.timers.clear(b.timer);
     this.bases = this.bases.filter((x) => x.id !== id);
+    delete this.stats.villageCounters[id];
+    this.outbox.earns = this.outbox.earns.filter((a) => a.baseId !== id);
+    this.outbox.claims = this.outbox.claims.filter((a) => a.baseId !== id);
+    for (const [key, award] of this.achievements) if (award.baseId === id) this.achievements.delete(key);
+    this.queueOutbox();
     this.held.delete(id);
     if (this.activeId === id) {
       this.activeId = this.bases[0] ? this.bases[0].id : null;
@@ -764,6 +787,11 @@ export class Session {
   // ---------- stats ----------
   bump(counter, n = 1) {
     if (!this.user || !COUNTERS.includes(counter) || !(n > 0)) return;
+    const base = this.activeBase;
+    if (base && !base.lost) {
+      const row = this.stats.villageCounters[base.id] ||= {};
+      row[counter] = (row[counter] || 0) + n;
+    }
     this.stats.counters[counter] = (this.stats.counters[counter] || 0) + n;
     this.statsChanged();
   }
@@ -789,6 +817,7 @@ export class Session {
       const v = s.counters && s.counters[k];
       if (Number.isFinite(v)) this.stats.counters[k] = Math.max(this.stats.counters[k] || 0, v);
     }
+    this.stats.villageCounters = mergeVillageCounters(this.stats.villageCounters, s.villageCounters);
   }
 
   statsChanged() {
@@ -797,16 +826,45 @@ export class Session {
   }
 
   // ---------- achievements ----------
-  earnedIds() { return new Set(this.achievements.keys()); }
-  unclaimed() { return [...this.achievements.entries()].filter(([, a]) => !a.claimedAt).map(([id]) => id); }
+  achievementEntries(baseId = this.activeId) {
+    if (!this.baseById(baseId)) return [];
+    return [...this.achievements.values()].filter((a) => a.baseId === baseId);
+  }
+
+  earnedIds(baseId = this.activeId) { return new Set(this.achievementEntries(baseId).map((a) => a.id)); }
+  unclaimed(baseId = this.activeId) { return this.achievementEntries(baseId).filter((a) => !a.claimedAt).map((a) => a.id); }
+
+  async playerProfile(username) {
+    const uid = this.user?.id;
+    const profile = await this.backend.playerProfile(username);
+    if (!profile?.isMe || this.user?.id !== uid) return profile;
+    const awards = new Map(profile.achievements.map((a) => [achievementKey(a.baseId, a.id), a]));
+    for (const base of profile.bases) {
+      for (const { baseId, id, earnedAt } of this.achievementEntries(base.id)) {
+        const key = achievementKey(baseId, id);
+        if (!awards.has(key)) awards.set(key, { baseId, id, earnedAt });
+      }
+    }
+    return { ...profile, achievements: [...awards.values()] };
+  }
+
+  villageAchievementStats(baseId = this.activeId, gs = null) {
+    const base = this.baseById(baseId);
+    return {
+      bestWave: Math.max(base?.bestWave || 0, gs?.wavesCleared ?? base?.save?.wavesCleared ?? 0),
+      bestTownHall: gs?.townHallLevel ?? base?.townHall ?? 0,
+      counters: this.stats.villageCounters[baseId] || {}
+    };
+  }
 
   /** Mark achievements earned (in the open village). Offline, they wait on this device for the next login. */
   earn(ids) {
-    if (!this.user) return;
+    if (!this.user || !this.activeBase || this.activeBase.lost) return;
     const at = new Date().toISOString(), baseId = this.activeId;
     for (const id of ids) {
-      if (this.achievements.has(id)) continue;
-      this.achievements.set(id, { earnedAt: at, claimedAt: null, baseId });
+      const key = achievementKey(baseId, id);
+      if (this.achievements.has(key)) continue;
+      this.achievements.set(key, { id, earnedAt: at, claimedAt: null, baseId });
       this.outbox.earns.push({ id, baseId, at });
     }
     this.queueOutbox();
@@ -814,12 +872,13 @@ export class Session {
   }
 
   /** Mark an achievement's reward as taken (the caller has already paid it into the village). Never offline. */
-  claim(id) {
+  claim(id, baseId = this.activeId) {
     if (this.offline) return false; // rewards wait until the server has the achievement
-    const a = this.achievements.get(id);
+    if (baseId !== this.activeId || !this.activeBase || this.activeBase.lost) return false;
+    const a = this.achievements.get(achievementKey(baseId, id));
     if (!a || a.claimedAt) return false;
     a.claimedAt = new Date().toISOString();
-    this.outbox.claims.push(id);
+    this.outbox.claims.push({ id, baseId });
     this.queueOutbox(0);
     this.changed();
     return true;
@@ -831,35 +890,62 @@ export class Session {
   /** Keep what's waiting on this device too, and send it soon (not while offline: at the next login). */
   queueOutbox(ms = STATS_MS) {
     if (!this.user) return;
-    this.lset(outboxKey(this.user.id), JSON.stringify({ stats: this.outbox.stats ? this.stats : null, earns: this.outbox.earns, claims: this.outbox.claims }));
+    this.persistOutbox();
     if (!this.canSend) return;
     if (this.statsTimer) this.timers.clear(this.statsTimer);
     this.statsTimer = this.timers.set(() => { this.statsTimer = null; return this.sendOutbox(); }, ms);
   }
 
+  persistOutbox() {
+    const key = outboxKey(this.user.id), flight = this.inflightOutbox, queued = this.outbox;
+    if (!flight && !this.hasOutbox()) { this.ldel(key); return; }
+    this.lset(key, JSON.stringify({
+      stats: flight?.stats || queued.stats ? this.stats : null,
+      earns: [...(flight?.earns || []), ...queued.earns],
+      claims: [...(flight?.claims || []), ...queued.claims]
+    }));
+  }
+
   async sendOutbox() {
-    if (!this.canSend || !this.hasOutbox()) return;
-    if (this.sending) { this.sendAgain = true; return; }
-    this.sending = true;
+    if (!this.canSend) return;
     const uid = this.user.id;
-    const box = { stats: this.outbox.stats, earns: [...this.outbox.earns], claims: [...this.outbox.claims] };
+    if (this.sending) {
+      await this.sending;
+      if (this.user?.id === uid && !this.outboxFailed) return this.sendOutbox();
+      return;
+    }
+    if (!this.hasOutbox()) return;
+    const box = this.outbox;
     this.outbox = { stats: false, earns: [], claims: [] };
+    this.inflightOutbox = box;
+    this.sending = Promise.resolve().then(() => this.uploadOutbox(uid, box));
+    return this.sending;
+  }
+
+  async uploadOutbox(uid, box) {
+    const stillCurrent = () => this.user?.id === uid && this.inflightOutbox === box;
+    let retry = null;
     try {
+      if (!stillCurrent()) return;
       if (box.stats) await Promise.all(this.bases.filter((x) => x.dirty && !x.lost).map((x) => this.uploadBase(x)));
-      if (box.earns.length) await this.backend.earnAchievements(box.earns);
-      for (const id of box.claims) await this.backend.claimAchievement(id);
+      if (!stillCurrent()) return;
+      if (box.earns.length) await this.backend.earnAchievements(box.earns.filter((a) => this.baseById(a.baseId)));
+      for (const { id, baseId } of box.claims) {
+        if (!stillCurrent()) return;
+        if (this.baseById(baseId)) await this.backend.claimAchievement(id, baseId);
+      }
+      if (!stillCurrent()) return;
       if (box.stats) {
         const kept = await this.backend.saveStats(this.stats);
+        if (!stillCurrent()) return;
         if (kept && Number.isFinite(kept.bestWave)) this.serverBestWave = kept.bestWave;
       }
       this.statsRetry = 0;
       this.outboxFailed = false;
-      if (this.user && this.user.id === uid && !this.hasOutbox()) this.ldel(outboxKey(uid));
-      if (this.user && this.user.id === uid) this.saveIndex();
-      this.updateSync();
+      this.saveIndex();
     } catch (e) {
       console.warn('Stats upload failed', e);
-      if (!this.user || this.user.id !== uid) return;
+      if (!stillCurrent()) return;
       // Put it back (in front of anything newer) and try again later.
       this.outbox = {
         stats: box.stats || this.outbox.stats,
@@ -867,11 +953,15 @@ export class Session {
         claims: [...box.claims, ...this.outbox.claims]
       };
       this.outboxFailed = true;
-      this.updateSync();
-      this.queueOutbox(RETRY_MS[Math.min(this.statsRetry++, RETRY_MS.length - 1)]);
+      retry = RETRY_MS[Math.min(this.statsRetry++, RETRY_MS.length - 1)];
     } finally {
-      this.sending = false;
-      if (this.sendAgain) { this.sendAgain = false; this.sendOutbox(); }
+      if (stillCurrent()) {
+        this.inflightOutbox = null;
+        this.sending = null;
+        if (retry === null) this.persistOutbox();
+        else this.queueOutbox(retry);
+        this.updateSync();
+      }
     }
   }
 }

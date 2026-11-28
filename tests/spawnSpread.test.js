@@ -7,10 +7,10 @@ import { makeStateWithTownHall } from './helpers.js';
 const S = CONFIG.rules.spawnSpread;
 
 describe('spawn spread', () => {
-  it('uses the midpoint in enemies per second between the last two releases', () => {
-    expect(spawnGap(1)).toBeCloseTo(0.8);
-    for (const [open, previousGap] of [[2, 1], [4, 1.4], [8, 2.2]]) {
-      expect(1 / spawnGap(open)).toBeCloseTo((1 / 0.8 + 1 / previousGap) / 2);
+  it('each entrance spawns a little more slowly the more entrances are open (v0.15: halfway back from v0.12.5)', () => {
+    // Halfway, in seconds per spawn, between the flat 0.8 s before v0.12.5 and v0.12.5's 0.8 + 0.2 per extra entrance.
+    for (const [open, before, v0125] of [[1, 0.8, 0.8], [2, 0.8, 1], [4, 0.8, 1.4], [8, 0.8, 2.2]]) {
+      expect(spawnGap(open)).toBeCloseTo((before + v0125) / 2);
     }
   });
 

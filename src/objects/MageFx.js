@@ -24,7 +24,7 @@ export class MageFx {
   constructor(scene) {
     this.scene = scene;
     this.ground = scene.add.graphics().setDepth(-4140);                    // the aura on the ground, under buildings
-    this.over = scene.add.graphics().setDepth(2640).setBlendMode('ADD');   // the Aegis dome and the stars
+    this.over = scene.add.graphics().setDepth(2640).setBlendMode('ADD');   // faint aura over buildings, Aegis dome and stars
     this.glow = scene.add.image(0, 0, TEX.light).setBlendMode('ADD').setDepth(2645).setVisible(false);
     this.zzz = scene.add.text(0, 0, 'Z', textStyle(16, '#e9d8ff')).setOrigin(0.5).setDepth(2646).setVisible(false);
   }
@@ -45,6 +45,7 @@ export class MageFx {
     {
       const k = 0.5 + 0.5 * Math.sin(time * 0.0035);
       this.ground.lineStyle(2.5, 0xffffff, 0.14 + 0.18 * k).strokeEllipse(sc.x, sc.y, rx * 2, ry * 2);
+      this.over.lineStyle(2, 0xffffff, 0.06 + 0.04 * k).strokeEllipse(sc.x, sc.y, rx * 2, ry * 2);
     }
     if (!bv?.sprite || this.scene.placement?.id === altar.id) {
       this.glow.setVisible(false);
@@ -66,6 +67,8 @@ export class MageFx {
       this.ground.fillStyle(VIOLET, 0.07 + 0.03 * k).fillEllipse(sc.x, sc.y, rx * 2, ry * 2); // (its edge: the white ring)
       const p = (time % PULSE_MS) / PULSE_MS;
       this.ground.lineStyle(3, 0xe8c8ff, 0.5 * (1 - p)).strokeEllipse(sc.x, sc.y, rx * 2 * p, ry * 2 * p);
+      this.over.fillStyle(VIOLET, 0.035 + 0.02 * k).fillEllipse(sc.x, sc.y, rx * 2, ry * 2);
+      this.over.lineStyle(2, 0xe8c8ff, 0.13 * (1 - p)).strokeEllipse(sc.x, sc.y, rx * 2 * p, ry * 2 * p);
     }
     // Arcane Aegis: a dome over the aura while it lasts.
     if (h.aegisT > 0) {

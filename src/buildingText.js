@@ -1,9 +1,9 @@
 // Player-facing descriptions shown on the building panel's Info tab. Names live in config.js.
 export const BUILDING_DESCRIPTIONS = {
   townHall: "The heart of your village. It holds some Bitcoin and Shakes, makes a little of both, and unlocks new buildings as it levels up. If it falls, the wave is lost.",
-  mine: "Makes Bitcoin all the time. Click it when the coin shows to collect (not during a wave). It stops when full.",
-  house: "Home to gnome workers. They mine extra gold by day and repair buildings during attacks.",
-  storage: "A vault that lets you hold more Bitcoin. Enemies that hit it steal some of the gold inside.",
+  mine: "Makes Bitcoin all the time. Click it when its Bitcoin shows to collect (not during a wave). It stops when full.",
+  house: "Home to gnome workers. They mine extra Bitcoin by day and repair buildings during attacks.",
+  storage: "A vault that lets you hold more Bitcoin. Enemies that hit it steal some of the Bitcoin inside.",
   shakeCollector: "Makes Grimace Shakes all the time. Click it when the Shake shows to collect (not during a wave). It stops when full, or when you can't hold any more Shakes.",
   shakeStorage: "A glass tank that lets you hold more Shakes. It fills up as your Shakes grow. Enemies that hit it spill some of the Shakes inside.",
   cannon: "Fires heavy cannonballs at ground enemies. It can't hit flyers.",

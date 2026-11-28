@@ -36,8 +36,10 @@ export function produceShakeCollectors(state, dt) {
     if (b.type !== 'shakeCollector' || b.destroyed) continue;
     const before = Math.floor(b.stock || 0);
     const cap = collectorStockCap(b);
+    const threshold = CONFIG.rules.mineCoinIconThreshold;
+    const wasReady = (b.stock || 0) / cap >= threshold;
     if ((b.stock || 0) < cap) b.stock = Math.min(cap, (b.stock || 0) + collectorProduction(b) * dt);
-    if (Math.floor(b.stock) !== before) emit(state, 'collectorStockChanged', { id: b.id, stock: b.stock });
+    if (Math.floor(b.stock) !== before || wasReady !== (b.stock / cap >= threshold)) emit(state, 'collectorStockChanged', { id: b.id, stock: b.stock });
   }
 }
 

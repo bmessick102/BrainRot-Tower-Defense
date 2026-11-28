@@ -3,6 +3,7 @@
 // so accounts, villages, achievements and the leaderboard can be tried without a server.
 // Not secure (anyone with the browser can read it) and never used in the built game.
 
+import { mergeVillageCounters } from '../logic/achievements.js';
 import { conflictError } from './errors.js';
 import { boardPage } from './paging.js';
 
@@ -138,6 +139,9 @@ export class LocalBackend {
     const d = this.db();
     this.me(d);
     d.bases = d.bases.filter((x) => !(x.id === id && x.userId === this.userId));
+    for (const award of d.achievements) if (award.userId === this.userId && award.baseId === id) award.baseId = null;
+    const stats = d.stats.find((row) => row.userId === this.userId);
+    if (stats?.villageCounters) delete stats.villageCounters[id];
     this.write(d);
   }
 
@@ -146,7 +150,8 @@ export class LocalBackend {
     const d = this.db();
     this.me(d);
     const s = d.stats.find((x) => x.userId === this.userId);
-    return s ? { bestWave: s.bestWave, bestTownHall: s.bestTownHall, counters: { ...s.counters } } : { bestWave: 0, bestTownHall: 0, counters: {} };
+    return s ? { bestWave: s.bestWave, bestTownHall: s.bestTownHall, counters: { ...s.counters }, villageCounters: s.villageCounters || {} }
+      : { bestWave: 0, bestTownHall: 0, counters: {}, villageCounters: {} };
   }
 
   async saveStats(stats) {
@@ -158,6 +163,9 @@ export class LocalBackend {
     if (stats.bestWave > s.bestWave) { s.bestWave = stats.bestWave; s.reachedAt = now(); }
     s.bestTownHall = Math.max(s.bestTownHall, stats.bestTownHall);
     s.counters = { ...stats.counters };
+    const owned = Object.fromEntries(d.bases.filter((base) => base.userId === this.userId)
+      .map((base) => [base.id, stats.villageCounters?.[base.id]]));
+    s.villageCounters = mergeVillageCounters(s.villageCounters, owned);
     this.write(d);
     return { bestWave: s.bestWave };
   }
@@ -174,17 +182,18 @@ export class LocalBackend {
     const d = this.db();
     this.me(d);
     for (const a of list) {
-      if (d.achievements.some((x) => x.userId === this.userId && x.id === a.id)) continue;
-      d.achievements.push({ userId: this.userId, id: a.id, baseId: a.baseId || null, earnedAt: now(), claimedAt: null });
+      if (!d.bases.some((base) => base.userId === this.userId && base.id === a.baseId)) continue;
+      if (d.achievements.some((x) => x.userId === this.userId && x.baseId === a.baseId && x.id === a.id)) continue;
+      d.achievements.push({ userId: this.userId, id: a.id, baseId: a.baseId, earnedAt: now(), claimedAt: null });
     }
     this.write(d);
   }
 
-  async claimAchievement(id) {
+  async claimAchievement(id, baseId) {
     await wait();
     const d = this.db();
     this.me(d);
-    const a = d.achievements.find((x) => x.userId === this.userId && x.id === id);
+    const a = d.achievements.find((x) => x.userId === this.userId && x.baseId === baseId && x.id === id);
     if (a && !a.claimedAt) a.claimedAt = now();
     this.write(d);
   }
@@ -261,7 +270,8 @@ export class LocalBackend {
       bestWave: own.length ? Math.max(...own.map((b) => b.bestWave || 0)) : s.bestWave,
       bestTownHall: own.length ? Math.max(...own.map((b) => b.townHall || 0)) : s.bestTownHall,
       rank: own.map((b) => rankOf.get(b.id)).filter(Boolean)[0] || null,
-      achievements: d.achievements.filter((a) => a.userId === u.id).map((a) => ({ id: a.id, earnedAt: a.earnedAt })),
+      achievements: open || isMe ? d.achievements.filter((a) => a.userId === u.id && own.some((b) => b.id === a.baseId && b.save))
+        .map((a) => ({ id: a.id, baseId: a.baseId, earnedAt: a.earnedAt })) : [],
       bases: open || isMe ? own.filter((b) => b.save)
         .map((b) => ({ id: b.id, name: b.name, townHall: b.townHall, bestWave: b.bestWave, wave: b.wave, rank: rankOf.get(b.id) || null })) : []
     };

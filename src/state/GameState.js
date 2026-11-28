@@ -11,7 +11,7 @@ import { canPlaceRect } from '../logic/grid.js';
 import {
   checkBuy, checkUpgrade, planSwap, checkWallUpgrade, wallLevel, createBuilding, applyLevelUp, buildCost, footprintDims, getTownHall, townHallLevel, DEFENSE_TYPES
 } from '../logic/buildings.js';
-import { getCapacity, spendGold, addGold, setGold, collectMine, mineCollectionAmount, repairBuilding } from '../logic/economy.js';
+import { getCapacity, spendGold, addGold, setGold, collectMine, mineCollectionAmount, mineShowsCoin, repairBuilding } from '../logic/economy.js';
 import { createIdleWave, skipCountdown, cancelCountdown, legacyDebuted } from '../logic/waves.js';
 import { advanceTutorial, applyStarterBase, canSkipTutorial, tutorialAllows, TUTORIAL_DONE_STEP, TUTORIAL_NIGHT_STEP } from '../logic/tutorial.js';
 import { createClock, startTutorialWave, resumeClockOnLoad, startGrace, startNextWave } from '../logic/dayNight.js';
@@ -24,7 +24,7 @@ import { dropTheBeat } from '../logic/dj.js';
 import { tipEvent, dismissTip, hideAllTips } from '../logic/tips.js';
 import { checkResearch, checkRespec, labPicks, syncAbilityPicks } from '../logic/abilities.js';
 import { rpRoom, spendResearchPoints } from '../logic/researchPoints.js';
-import { collectShakes } from '../logic/shakes.js';
+import { collectShakes, collectorShowsIcon } from '../logic/shakes.js';
 import { advanceLabGuide, startLabGuideIfDue, skipLabGuide } from '../logic/labGuide.js';
 import { brewSpell, discardSpell, castSpell, fuelGuideEvent } from '../logic/spells.js';
 import { mergeBuildings, checkMastery, syncMastery } from '../logic/merge.js';
@@ -312,31 +312,24 @@ export class GameState {
     return r;
   }
 
-  /** Upgrade (instant). A town hall upgrade unlocks buildings (the waves follow the wave number, not the hall: v0.10). */
-  upgradeBuilding(id, expectedLevel) {
+  /**
+   * Upgrade (instant). A town hall upgrade unlocks buildings (the waves follow the wave number, not the hall: v0.10).
+   * `expectedLevel` (the upgrade window): the level the player saw (walls: the wall level); if it has moved on since (a
+   * second tap, an upgrade elsewhere) nothing is bought.
+   */
+  upgradeBuilding(id, expectedLevel = undefined) {
     const b = this.getBuilding(id);
     if (!b) return { ok: false, reason: 'Missing' };
     if (expectedLevel !== undefined && (expectedLevel !== (b.type === 'wall' ? wallLevel(this) : b.level)
       || this.gameOver || !tutorialAllows(this, 'upgrade', b.type))) return { ok: false, reason: 'Upgrade no longer available' };
-    if (this.upgrading) return { ok: false, reason: 'Upgrade in progress' };
-    this.upgrading = true;
-    try {
-      return this.#purchaseUpgrade(b);
-    } finally {
-      this.upgrading = false;
-    }
-  }
-
-  #purchaseUpgrade(b) {
     if (b.type === 'wall') return this.upgradeWalls(); // walls only ever go up all together
-    const { id } = b;
     const check = checkUpgrade(this, b);
     if (!check.ok) return check;
     if (check.currency === 'rp') spendResearchPoints(this, check.cost); // costCurrency: 'rp' levels (the RV Lab)
     else spendGold(this, check.cost);
     applyLevelUp(b);
     const ids = syncAbilityPicks(this);
-    this.emit('buildingUpgraded', { id, type: b.type, level: b.level });
+    this.emit('buildingUpgraded', { id: b.id, type: b.type, level: b.level });
     if (ids.length) this.emit('abilitiesApplied', { ids, type: b.type });
     this.emit('goldChanged', { gold: this.gold, capacity: this.capacity });
     if (b.type === 'townHall') this.emit('townHallUpgraded', { level: b.level });
@@ -407,33 +400,40 @@ export class GameState {
     return r;
   }
 
-  /** RV Lab: research a merged type's next Mastery tier (merge.js). Every merged building of that type gets it. */
-  researchMastery(type, tier) {
+  /**
+   * RV Lab: research a merged type's Mastery tier `tier` (the next one when left out; merge.js), for Shakes and gold.
+   * Every merged building of that type gets it.
+   */
+  researchMastery(type, tier = undefined) {
     const check = checkMastery(this, type, tier);
     if (!check.ok) return check;
-    this.gold -= check.goldCost;
-    this.researchPoints -= check.cost;
+    spendGold(this, check.goldCost);
+    spendResearchPoints(this, check.cost);
     this.mastery[type] = check.tier;
     const ids = syncMastery(this);
     this.emit('goldChanged', { gold: this.gold, capacity: this.capacity });
-    this.emit('researchPointsChanged', { researchPoints: this.researchPoints, added: -check.cost });
     this.emit('masteryResearched', { type, tier: check.tier, ids });
     this.save();
     return { ok: true, reason: '', tier: check.tier };
   }
 
+  /**
+   * What Collect would do for a Bitcoin Mine or Shake Collector (null for anything else): { shakes, amount, reason }.
+   * It collects from every standing one of the same type, this one first, up to the room left in storage; `reason`
+   * says why it can't ('Storage full' still collects nothing but shows the storage-full feedback).
+   */
   collectionStatus(id) {
     const b = this.getBuilding(id);
     if (!b || (b.type !== 'mine' && b.type !== 'shakeCollector')) return null;
     const shakes = b.type === 'shakeCollector';
     let room = Math.max(0, Math.floor(shakes ? rpRoom(this) : getCapacity(this) - this.gold));
     let amount = 0;
-    const producers = this.collectionProducers(b);
+    const ready = shakes ? collectorShowsIcon(b) : mineShowsCoin(b);
     const reason = b.destroyed ? 'Destroyed' : this.gameOver || isWaveActive(this) ? 'Not during a wave'
       : !tutorialAllows(this, 'collect') ? 'Follow the guide'
-        : producers.length === 0 ? 'Empty' : room === 0 ? 'Storage full' : '';
+        : !ready ? 'Wait for the ready icon' : room === 0 ? 'Storage full' : '';
     if (!reason) {
-      for (const producer of producers) {
+      for (const producer of this.collectionProducers(b)) {
         const added = shakes ? Math.min(Math.floor(producer.stock), room) : mineCollectionAmount(producer, room).total;
         amount += added;
         room -= added;
@@ -443,32 +443,27 @@ export class GameState {
     return { shakes, amount, reason };
   }
 
+  /** The buildings Collect takes from: this one (if it has stock), then the other stocked ones of its type. */
   collectionProducers(selected) {
     const stocked = (b) => !b.destroyed && Math.floor(b.stock || 0) > 0;
     const others = this.buildings.filter((b) => b !== selected && b.type === selected.type && stocked(b));
     return stocked(selected) ? [selected, ...others] : others;
   }
 
+  /** Collect (a tap on a ready mine or collector, or Collect All in its panel): see collectionStatus. */
   collect(id) {
-    const b = this.getBuilding(id);
-    if (this.collecting) return { ok: false, reason: '' };
     const status = this.collectionStatus(id);
     if (!status) return { ok: false, reason: '' };
     const { reason, shakes } = status;
     if (reason && reason !== 'Storage full') return { ok: false, reason, collected: 0 };
     let collected = 0;
-    this.collecting = true;
-    try {
-      for (const producer of this.collectionProducers(b)) {
-        const result = shakes ? collectShakes(this, producer) : collectMine(this, producer);
-        collected += result.collected;
-        if (result.full || result.storageFull || result.waveActive) break;
-        if ((shakes ? rpRoom(this) : getCapacity(this) - this.gold) < 1) break;
-      }
-      if (collected) this.save();
-    } finally {
-      this.collecting = false;
+    for (const producer of this.collectionProducers(this.getBuilding(id))) {
+      const result = shakes ? collectShakes(this, producer) : collectMine(this, producer);
+      collected += result.collected;
+      if (result.full || result.storageFull || result.waveActive) break;
+      if ((shakes ? rpRoom(this) : getCapacity(this) - this.gold) < 1) break;
     }
+    if (collected) this.save();
     return { ok: collected > 0, reason: reason && shakes ? 'Shakes full' : reason, collected };
   }
 

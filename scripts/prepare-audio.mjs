@@ -26,6 +26,8 @@ const LOOPS = new Set(['sfx_bomber_flying', 'sfx_ra_beam', 'sfx_hero_snore', 'sf
 // Seconds kept: a little past the longest maxSeconds the game plays them for (GameScene).
 const CLIPS = { sfx_patapim_quake: 2.5, sfx_pork_call: 3.8, sfx_skeleton_rage: 2.8, sfx_lirili_voice: 3 };
 const FADE = 0.15;
+// Tracks that end abruptly in the original: a quick fade-out over their last seconds (v0.15: the startup jingle).
+const FADE_OUT = { music_startup_jingle: 0.35 };
 
 const probe = (file) => {
   let out = '';
@@ -47,7 +49,11 @@ for (const name of fs.readdirSync(SRC).sort()) {
   const { kbps } = probe(src);
   let how;
   if (ext !== '.mp3') { fs.copyFileSync(src, dst); how = 'copied'; }
-  else if (key.startsWith('music_')) { encode(src, dst, ['-c:a', 'libmp3lame', '-b:a', '96k', '-ar', '44100']); how = '96k'; }
+  else if (key.startsWith('music_')) {
+    const fade = FADE_OUT[key] ? ['-af', `afade=t=out:st=${(probe(src).seconds - FADE_OUT[key]).toFixed(2)}:d=${FADE_OUT[key]}`] : [];
+    encode(src, dst, [...fade, '-c:a', 'libmp3lame', '-b:a', '96k', '-ar', '44100']);
+    how = fade.length ? `96k, ${FADE_OUT[key]} s fade-out` : '96k';
+  }
   else if (key.startsWith('ambient_') || LOOPS.has(key)) { encode(src, dst, ['-c:a', 'libmp3lame', '-b:a', '96k', '-ar', '44100', '-ac', '1']); how = '96k mono'; }
   else if (CLIPS[key]) {
     const t = CLIPS[key];
@@ -57,7 +63,7 @@ for (const name of fs.readdirSync(SRC).sort()) {
   else { fs.copyFileSync(src, dst); how = 'copied'; }
   // An original that was already small (a low bitrate) can come out bigger: keep it as is, unless it's trimmed
   // or made mono (those save memory once it's decoded, whatever the file size).
-  if (how !== 'copied' && !how.startsWith('trimmed') && !how.includes('mono') && fs.statSync(dst).size >= fs.statSync(src).size) {
+  if (how !== 'copied' && !how.startsWith('trimmed') && !how.includes('mono') && !how.includes('fade') && fs.statSync(dst).size >= fs.statSync(src).size) {
     fs.copyFileSync(src, dst);
     how = 'copied (re-encoding was no smaller)';
   }

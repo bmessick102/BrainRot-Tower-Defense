@@ -448,11 +448,9 @@ export function startingEntrances(n) {
   return Math.min(n, n >= CONFIG.rules.spawnSpread.startTwoFrom ? 2 : 1);
 }
 
-/** Seconds per spawn at the midpoint of the original and staggered rates, with `open` entrances open. */
+/** Seconds between spawns at each entrance with `open` entrances open (rules.spawnInterval + perEntrance each). */
 export function spawnGap(open) {
-  const base = CONFIG.rules.spawnInterval;
-  const staggered = base + CONFIG.rules.spawnSpread.perEntrance * Math.max(0, open - 1);
-  return 2 / (1 / base + 1 / staggered);
+  return CONFIG.rules.spawnInterval + CONFIG.rules.spawnSpread.perEntrance * Math.max(0, open - 1);
 }
 
 /**

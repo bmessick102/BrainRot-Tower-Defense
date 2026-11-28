@@ -44,8 +44,8 @@ export const ACHIEVEMENTS = [
 
   // ---- Builder: your villages ----
   { id: 'early', group: 'builder', name: 'Bring It On', desc: 'Start a wave within 10 s of clearing the last one, 5 times', stat: 'early', goal: 5, reward: 500 },
-  { id: 'mined10k', group: 'builder', name: 'Gold Rush', desc: 'Collect 10,000 gold from Bitcoin Mines', stat: 'mined', goal: 10000, reward: 1000 },
-  { id: 'mined100k', group: 'builder', name: 'Bitcoin Baron', desc: 'Collect 100,000 gold from Bitcoin Mines', stat: 'mined', goal: 100000, reward: 6000 },
+  { id: 'mined10k', group: 'builder', name: 'Bitcoin Rush', desc: 'Collect 10,000 Bitcoin from Bitcoin Mines', stat: 'mined', goal: 10000, reward: 1000 },
+  { id: 'mined100k', group: 'builder', name: 'Bitcoin Baron', desc: 'Collect 100,000 Bitcoin from Bitcoin Mines', stat: 'mined', goal: 100000, reward: 6000 },
   { id: 'walls', group: 'builder', name: 'Great Wall', desc: 'Have 50 walls in one village', stat: 'walls', goal: 50, reward: 1500 },
   { id: 'arsenal', group: 'builder', name: 'Full Arsenal', desc: 'Have one of every defense and trap in one village', stat: 'defenseTypes', goal: DEFENSE_TYPES.length, reward: 6000 },
   { id: 'maxed', group: 'builder', name: 'Maxed Out', desc: 'Upgrade a building (not a wall) to its top level', stat: 'maxed', goal: 1, reward: 3000 },
@@ -85,6 +85,19 @@ export function progressValues(stats, state = null) {
   const out = { bestTownHall: s.bestTownHall || 0, bestWave: s.bestWave || 0, ...villageStats(state) };
   for (const k of COUNTERS) out[k] = Number.isFinite(c[k]) ? c[k] : 0;
   return out;
+}
+
+/** Preserve each counter's high-water mark across devices without mixing villages. */
+export function mergeVillageCounters(current = {}, incoming = {}) {
+  const merged = { ...current };
+  for (const [baseId, counters] of Object.entries(incoming || {})) {
+    const row = { ...merged[baseId] };
+    for (const key of COUNTERS) {
+      if (Number.isFinite(counters?.[key])) row[key] = Math.max(row[key] || 0, counters[key]);
+    }
+    if (Object.keys(row).length) merged[baseId] = row;
+  }
+  return merged;
 }
 
 /** How far along an achievement is: { value (capped at the goal), goal, done }. */

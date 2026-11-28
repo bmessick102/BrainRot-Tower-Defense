@@ -25,7 +25,7 @@ const wave = (s) => { s.wave = { ...s.wave, phase: 'active', number: 3, queues: 
 const run = (s, seconds, dt = 0.05) => { for (let t = 0; t < seconds - 1e-9; t += dt) stepMage(s, dt); };
 const tough = { hp: 1e7, maxHp: 1e7, speed: 0 };
 
-it('continues a nap after the Mage is knocked out and his altar is rebuilt during a raid', () => {
+it('knocked out while napping: rebuilt in the raid he naps on, and after it he takes the full knockout nap', () => {
   const { s, altar, h } = village();
   mageAfterWave(s);
   const left = h.sleepT;
@@ -40,7 +40,17 @@ it('continues a nap after the Mage is knocked out and his altar is rebuilt durin
   expect(h.sleepT).toBeCloseTo(left - 0.2);
   expect(checkAegis(s).ok).toBe(false);
   mageAfterWave(s);
-  expect(altar.heroSleep).toBeCloseTo(left - 0.2);
+  expect(altar.heroSleep).toBeCloseTo(Math.max(left - 0.2, mageStats(altar).maxSleep));
+});
+
+it('slept through a raid untouched: he just finishes the nap he was taking', () => {
+  const { s, h, altar } = village();
+  mageAfterWave(s);
+  const left = h.sleepT;
+  wave(s);
+  stepMage(s, 0.4, 0.1);
+  mageAfterWave(s);
+  expect(altar.heroSleep).toBeCloseTo(left - 0.1);
 });
 
 describe('the Locklair Mage: his building', () => {

@@ -2,11 +2,11 @@
 // Keep each one to a sentence or two, and keep them true to the rules in config.js.
 export const LOADING_TIPS = [
   // Economy
-  'Bitcoin Mines fill up on their own. Click a mine when its coin appears, or it stops producing once full.',
-  'When your gold is at its limit, mines can\'t be collected. Build Bitcoin Storage to hold more.',
-  'Enemies that hit your Bitcoin Storage steal a share of the gold inside. Keep it guarded!',
+  'Bitcoin Mines fill up on their own. Click a mine when its Bitcoin appears, or it stops producing once full.',
+  'When your Bitcoin is at its limit, mines can\'t be collected. Build Bitcoin Storage to hold more.',
+  'Enemies that hit your Bitcoin Storage steal a share of the Bitcoin inside. Keep it guarded!',
   'Each Village Hall allows a set number of every building. To rearrange your village, move buildings in edit mode.',
-  'Every enemy you defeat drops gold. Tougher enemies are worth more.',
+  'Every enemy you defeat drops Bitcoin. Tougher enemies are worth more.',
 
   // Village Hall and building
   'Upgrading your Village Hall unlocks new buildings and more of each. The waves grow with every wave you survive, and new enemy types join at set waves.',
@@ -36,7 +36,7 @@ export const LOADING_TIPS = [
 
   // Day and night
   'There\'s no rush: the next wave only comes when you press Start Wave. Each wave is a little tougher than the last.',
-  'Every 3rd wave is a special wave, like an all-flyer Air Raid. The top bar turns red to warn you, and beating one pays bonus gold.',
+  'Every 3rd wave is a special wave, like an all-flyer Air Raid. The top bar turns red to warn you, and beating one pays bonus Bitcoin.',
   'Watch for the flashing spawn markers when a wave starts: they show where the enemies are coming from.',
   'Your game saves automatically at dusk and after every cleared wave.',
   'Lost a night? Retry rewinds to that dusk and gives you some daytime to rebuild first.'

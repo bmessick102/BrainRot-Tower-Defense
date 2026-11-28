@@ -1,6 +1,6 @@
 // Title: the START GAME sign, with a caption saying what it starts, and a row of buttons below.
 // Logged in (the usual way): START GAME plays your current village (or makes your first one); the row has
-// Villages (pick, make, delete), Achievements, Leaderboard, How to Play, Settings; your name and Log Out
+// Villages (pick, make, delete), Leaderboard, How to Play, Settings; your name and Log Out
 // sit top-left. Offline (no server set up): START GAME continues the browser's save or starts fresh, and
 // the row is New Game (only with a save; asks before overwriting), How to Play, Settings.
 // Playing offline as an account (the server couldn't be reached; session.offline): the logged-in layout, on
@@ -21,12 +21,10 @@ import { COLORS, bodyStyle, textStyle } from '../theme.js';
 import { session } from '../net/account.js';
 import { BASE_NAME_MAX } from '../net/session.js';
 import { VillagesWindow } from '../objects/VillagesWindow.js';
-import { AchievementsWindow } from '../objects/AchievementsWindow.js';
 import { LeaderboardWindow } from '../objects/LeaderboardWindow.js';
 import { PlayerCardWindow } from '../objects/PlayerCardWindow.js';
 import { PlayerSearchWindow } from '../objects/PlayerSearchWindow.js';
 import { confirmDialog, promptDialog } from '../objects/Modal.js';
-import { drawBadge } from '../objects/uiDraw.js';
 import { leagueFor, leagueBadgeSize } from '../logic/leagues.js';
 import { showTitleBackdrop } from './TitleBackdropScene.js';
 import { takeTakeover } from '../objects/LockOverlay.js';
@@ -121,7 +119,6 @@ export class TitleScene extends Phaser.Scene {
 
     const row = this.online ? [
       ['Villages', () => this.openVillages(), COLORS.button],
-      ['Achievements', () => this.openAchievements(), COLORS.buttonGood],
       ['Leaderboard', () => this.openLeaderboard(), 0x8e5bd6],
       ['How to Play', () => this.scene.start('HowToPlayScene'), COLORS.buttonBlue],
       ['Settings', () => this.openSettings(), COLORS.buttonDark]
@@ -140,7 +137,6 @@ export class TitleScene extends Phaser.Scene {
 
     if (this.online) {
       this.buildAccountPill();
-      this.drawClaimBadge();
       // "Reload here and take over" (LockOverlay.js): straight back into that village, taking it from the other tab.
       const takeover = takeTakeover();
       if (takeover && session.baseById(takeover)) { this.playVillage(session.baseById(takeover)); return; }
@@ -198,15 +194,6 @@ export class TitleScene extends Phaser.Scene {
     }
   }
 
-  /** Red badge on Achievements: rewards ready to claim. */
-  drawClaimBadge() {
-    const n = session.unclaimed().length, btn = this.rowButtons.Achievements;
-    if (!n || !btn) return;
-    const x = btn.x + btn.btnW / 2 - 8, y = btn.y - btn.btnH / 2 + 2;
-    drawBadge(this.add.graphics().setDepth(5), x, y, 13);
-    this.add.text(x, y - 1, String(n), textStyle(15)).setOrigin(0.5).setDepth(6);
-  }
-
   async logOut() {
     if (this.windowOpen || this.loggingOut) return;
     this.loggingOut = true;
@@ -222,11 +209,6 @@ export class TitleScene extends Phaser.Scene {
       onPlay: (b) => this.playVillage(b),
       onClose: () => this.scene.restart() // the caption may have changed
     });
-  }
-
-  openAchievements() {
-    this.windowOpen = true;
-    new AchievementsWindow(this, { session, onClose: () => { this.windowOpen = false; } });
   }
 
   openLeaderboard() {

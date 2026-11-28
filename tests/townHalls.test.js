@@ -64,7 +64,7 @@ describe('Village Halls 1-20: caps', () => {
       catapult: [1, 2, 2, 3, 3, 4, 4, 5, 5, 5, 6],
       ksi: [3, 4, 4, 5, 5, 6, 6, 7, 7, 8, 8],
       cannon: [6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16], // (v0.10.1: one more Cannon and Locklair Tower per hall after 10)
-      archer: [5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 14],
+      archer: [5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15],
       mortar: [5, 5, 6, 6, 7, 8, 9, 9, 10, 10, 10],
       spear: [3, 4, 4, 4, 5, 6, 6, 7, 7, 7, 8],
       flock: [3, 3, 4, 4, 5, 6, 6, 6, 7, 7, 8],
@@ -96,7 +96,7 @@ describe('Village Halls 1-20: caps', () => {
     expect(adds(17)).toEqual({ cannon: 1, archer: 1, ksi: 1, spear: 1, catapult: 1, mine: 1, wall: 12 });
     expect(adds(18)).toEqual({ cannon: 1, archer: 1, mortar: 1, flock: 1, house: 1, wall: 12 });
     expect(adds(19)).toEqual({ cannon: 1, archer: 1, ksi: 1, mousetrap: 1, ra: 1, wall: 12 });
-    expect(adds(20)).toEqual({ cannon: 1, spear: 1, flock: 1, catapult: 1, mine: 1, house: 1, wall: 12 });
+    expect(adds(20)).toEqual({ cannon: 1, archer: 1, spear: 1, flock: 1, catapult: 1, mine: 1, house: 1, wall: 12 });
     expect(hallUnlocks(21)).toEqual([]);
     expect(hallUnlocks(1)).toEqual([]);
     // Defenses first (shop order), walls last.
@@ -111,23 +111,9 @@ describe('Village Halls 1-20: caps', () => {
     const defenses = (th) => DEFENSE_TYPES.reduce((n, t) => n + limitFor(t, th), 0);
     expect(defenses(10)).toBe(40);
     expect([11, 12, 13, 14, 15].map(defenses)).toEqual([47, 54, 59, 65, 73]);
-    expect([16, 17, 18, 19, 20].map(defenses)).toEqual([77, 82, 86, 91, 95]);
-    for (const th of [15, 20]) for (const t of DEFENSE_TYPES) {
-      if (CONFIG.merges[t] && (th === 20 || (t !== 'cannon' && t !== 'archer'))) expect(limitFor(t, th) % 2, `${t} VH${th}`).toBe(0);
-    }
-  });
-
-  it('keeps a legacy 15th Archer Tower through save and load and closes the purchase slot', () => {
-    const s = makeStateWithTownHall({ gold: 1e6, tutorialDone: true }, MAX);
-    place(s, 'archer', 15, maxLevel('archer'));
-    const save = serializeGame(s);
-    expect(validateSave(save)).toBe(true);
-    const gs = new GameState({ storage: memoryStorage() });
-    gs.loadFromSave(save);
-    expect(gs.buildings.filter((b) => b.type === 'archer').map(({ id, col, row, level }) => ({ id, col, row, level })))
-      .toEqual(save.buildings.filter((b) => b.type === 'archer').map(({ id, col, row, level }) => ({ id, col, row, level })));
-    expect(overCap(gs, 'archer')).toBe(1);
-    expect(checkBuy(gs, 'archer')).toMatchObject({ ok: false, reason: 'Limit reached' });
+    expect([16, 17, 18, 19, 20].map(defenses)).toEqual([77, 82, 86, 91, 96]); // (v0.11)
+    // (Cannon and Locklair Tower grow by one every hall, the user's call; every other mergeable defense ends even.)
+    for (const th of [15, 20]) for (const t of DEFENSE_TYPES) if (CONFIG.merges[t] && t !== 'cannon' && t !== 'archer') expect(limitFor(t, th) % 2, `${t} VH${th}`).toBe(0);
   });
 
   it('a Village Hall 20 village with every building it allows fits on the map, with a tile of space between buildings', () => {

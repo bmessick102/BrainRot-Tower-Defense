@@ -71,7 +71,7 @@ describe('Upgrade Walls (every wall at once)', () => {
 
   it('is all or nothing: short on gold, no wall is upgraded', () => {
     const gs = village(3, 5, 5 * prices()[1] - 1);
-    expect(gs.upgradeWalls()).toMatchObject({ ok: false, reason: 'Need 1 more gold' });
+    expect(gs.upgradeWalls()).toMatchObject({ ok: false, reason: 'Need 1 more Bitcoin' });
     expect(walls(gs).every((w) => w.level === 1)).toBe(true);
     expect(gs.wallLevel).toBe(1);
   });
@@ -134,7 +134,7 @@ describe('new walls start at the village wall level', () => {
     gs.wallLevel = 3;
     gs.buildings.find((b) => b.type === 'wall').level = 3;
     gs.gold = totalSpent('wall', 3) - 1;
-    expect(checkBuy(gs, 'wall')).toMatchObject({ ok: false, reason: 'Need 1 more gold' });
+    expect(checkBuy(gs, 'wall')).toMatchObject({ ok: false, reason: 'Need 1 more Bitcoin' });
     gs.gold += 1;
     expect(checkBuy(gs, 'wall').ok).toBe(true);
   });

@@ -219,7 +219,7 @@ describe('his upgrades cost Shakes (research points), building the altar costs g
   it('a rebuild is priced in gold and grows with the level', () => {
     const altar = { type: 'altar', level: 7 };
     const burgers = levelStats('altar', 7).cost;
-    expect(repairCost(altar)).toBe(Math.round(Math.max(3000, burgers * CONFIG.rules.burgerGoldValue) * CONFIG.rules.rebuildCostShare));
+    expect(repairCost(altar)).toBe(Math.round(Math.max(3000, burgers * CONFIG.rules.shakeGoldValue) * CONFIG.rules.rebuildCostShare));
     expect(repairCost({ type: 'altar', level: 1 })).toBe(Math.round(3000 * CONFIG.rules.rebuildCostShare));
     // Every Shake-priced building costs more to rebuild at a higher level (the Fuel Station used to be flat).
     for (const type of ['fuelStation', 'rvlab', 'altar']) {

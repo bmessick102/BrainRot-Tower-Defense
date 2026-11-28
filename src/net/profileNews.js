@@ -4,7 +4,7 @@
 // until they're claimed. "Seen" is remembered per account on this device (localStorage via the session).
 import { leagueFor } from '../logic/leagues.js';
 
-const key = (s) => `ibtd.profileSeen.${s.user.id}`;
+const key = (s) => `ibtd.profileSeen.${s.user.id}.${s.activeId || ''}`;
 
 function read(s) {
   try { return JSON.parse(s.lget(key(s)) || 'null'); } catch { return null; }

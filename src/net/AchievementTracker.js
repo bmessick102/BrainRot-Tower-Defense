@@ -11,8 +11,10 @@ export class AchievementTracker {
   constructor(gs, session) {
     this.gs = gs;
     this.session = session;
+    this.baseId = session.activeId;
+    this.userId = session.user?.id;
     this.lostTonight = 0; // buildings (not walls) destroyed during the current wave
-    const on = (name, fn) => gs.on(name, fn, this);
+    const on = (name, fn) => gs.on(name, (data) => { if (this.isTrackingVillage()) fn(data); }, this);
     const bump = (counter, n = 1) => { session.bump(counter, n); this.check(); };
 
     on('enemyKilled', (d) => {
@@ -55,10 +57,16 @@ export class AchievementTracker {
 
   /** Award every achievement whose goal is now met. */
   check() {
-    const ids = newlyEarned(progressValues(this.session.stats, this.gs), this.session.earnedIds());
+    if (!this.isTrackingVillage()) return;
+    const ids = newlyEarned(progressValues(this.session.villageAchievementStats(this.baseId, this.gs), this.gs), this.session.earnedIds(this.baseId));
     if (!ids.length) return;
     this.session.earn(ids);
     for (const id of ids) this.gs.emit('achievementEarned', { id });
+  }
+
+  isTrackingVillage() {
+    return this.session.user?.id === this.userId && this.session.activeId === this.baseId
+      && !!this.session.activeBase && !this.session.activeBase.lost;
   }
 
   destroy() {

@@ -18,7 +18,7 @@ import { mineShowsCoin } from '../logic/economy.js';
 import { collectorShowsIcon } from '../logic/shakes.js';
 import { MAX_STEP } from '../logic/simulate.js';
 import { stepsPerFrame } from '../logic/fastForward.js';
-import { BuildingView, buildingTextureKey, buildingPictureKey, mergedSizeFactor, placeBuildingSprite } from '../objects/BuildingView.js';
+import { BuildingView, buildingTextureKey, buildingPictureKey, mergedSizeFactor, placeBuildingSprite, footprintRipple } from '../objects/BuildingView.js';
 import { EnemyView } from '../objects/EnemyView.js';
 import { djStats, buildingsInDjRange } from '../logic/dj.js';
 import { HeroView, QUEEN_VIEW } from '../objects/HeroView.js';
@@ -34,7 +34,7 @@ import { GrassTufts, drawGroundPlots, groundColor } from '../objects/Ground.js';
 import { Villagers } from '../objects/Villagers.js';
 import { AirHum } from '../objects/AirHum.js';
 import { BeamHum } from '../objects/BeamHum.js';
-import { floatText, rpGainText, splashRing, fireballImpact, frostImpact, fireworkBurst, breakerExplosion, fireBreathFx } from '../objects/Effects.js';
+import { floatText, rpGainText, splashRing, fireballImpact, frostImpact, fireworkBurst, breakerExplosion, fireBreathFx, upgradeBurst, levelUpText } from '../objects/Effects.js';
 import { TEX, SFX, MUSIC, FIRE_SFX, ENEMY_ATTACK_SFX, ENEMY_VOICE, SPELL_SFX, PROJECTILE_KEYS } from '../assetKeys.js';
 import { missileWarningFx, quakeFx, ICE_BLUE } from '../objects/EnemyFx.js';
 import { playSfxClip, playSfx, playSfxCapped, playSfxEndingIn, playVoiceLine, playMusic, pauseMusic, resumeMusic, stopMusic, crossfadeMusic, fadeOutMusic, hasAmbience, startAmbience, updateAmbience, stopAmbience, soundDuration, prefetchMusic, hasMusicFile, releaseMusic, keepAudioAlive, playBuildingSelect } from '../audio.js';
@@ -471,7 +471,7 @@ export class GameScene extends Phaser.Scene {
   /**
    * Start picking the copy to merge `id` with: every other max-level, unmerged copy of its type glows gold (BuildingView
    * reads scene.mergeTargets) over a pulsing gold tile, and UIScene shows "Tap another Level 10 Cannon to merge" with
-   * Cancel. Tapping one opens the confirm window; Cancel, Esc or a right click stop. Returns false if it can't merge now.
+   * Cancel. Tapping one completes the confirmed merge. Cancel, Esc or a right click stop before any purchase.
    */
   beginMergePick(id) {
     const b = this.gs.getBuilding(id);
@@ -514,15 +514,17 @@ export class GameScene extends Phaser.Scene {
     }
   }
 
-  /** A tap while picking: a glowing partner opens the confirm window; anything else does nothing (Cancel is on screen). */
+  /** A tap on a glowing partner purchases the merge after rechecking both defenses and currencies. */
   mergePickClick(wx, wy) {
     const b = this.pickBuilding(wx, wy);
     if (!b || !this.mergeTargets || !this.mergeTargets.has(b.id)) { playSfx(this, SFX.invalid); return; }
     const keepId = this.mergePick.id;
-    this.views.buildings.get(b.id)?.pop();
-    playSfx(this, SFX.buildingSelect);
     this.cancelMergePick();
-    this.scene.get('UIScene').openMergeConfirm(keepId, b.id);
+    const result = this.gs.mergeBuilding(keepId, b.id);
+    if (!result.ok) {
+      playSfxCapped(this, SFX.invalid, 1);
+      this.scene.get('UIScene').showBanner(result.reason);
+    }
   }
 
   // ---------- spells (cast from the hotbar: click the spell, then the map) ----------
@@ -1003,29 +1005,15 @@ export class GameScene extends Phaser.Scene {
       return;
     }
     if (!b) { this.select(null); return; }
-    // A mine showing its coin: this click just collects. Clicking it again (coin gone) opens its panel.
-    // Mines: with the coin showing, a click only collects (coin sound). Otherwise (or if it couldn't
-    // collect, e.g. storage full) it opens the panel with the info sound, like any building.
-    // (v0.14: a Shake Collector showing its Shake works the same way.)
-    const coinShowing = (b.type === 'mine' ? mineShowsCoin(b) : b.type === 'shakeCollector' && collectorShowsIcon(b)) && !isWaveActive(this.gs);
-    // RV Lab: a click opens its full info panel straight away (its Research button opens the research window).
-    if (b.type === 'rvlab' && tutorialAllows(this.gs, 'select', b.type)) {
-      this.views.buildings.get(b.id)?.pop();
-      playSfx(this, SFX.buildingSelect);
-      if (this.selectedId !== b.id) this.select(b.id);
-      this.scene.get('UIScene').openInfo();
-      return;
-    }
-    // (DJ Babyface's Drop the Beat is only on the hotbar now: clicking the booth just selects it.)
-    let collected = false;
-    if (coinShowing && tutorialAllows(this.gs, 'collect')) collected = this.gs.collect(b.id).ok;
-    const canSelect = tutorialAllows(this.gs, 'select', b.type) && !collected;
-    if (canSelect) this.views.buildings.get(b.id)?.pop();
-    if (canSelect) {
-      // Either hero's altar makes the same altar sound (her own line plays only when you click her, above).
-      playBuildingSelect(this, b.type);
-      if (this.selectedId !== b.id) this.select(b.id); // already selected: stays as it is (Info opens the panel)
-    }
+    // A Bitcoin Mine or Shake Collector showing its ready icon: the tap collects from every one of that type that has
+    // stock (GameState.collect; the coin sound and "+n" come from the mineCollected / shakesCollected events). If nothing
+    // fits (storage full) it opens the building as usual.
+    const ready = b.type === 'mine' ? mineShowsCoin(b) : b.type === 'shakeCollector' && collectorShowsIcon(b);
+    if (ready && !isWaveActive(this.gs) && tutorialAllows(this.gs, 'collect') && this.gs.collect(b.id).ok) return;
+    if (!tutorialAllows(this.gs, 'select', b.type)) return;
+    this.views.buildings.get(b.id)?.pop();
+    playBuildingSelect(this, b.type);
+    if (this.selectedId !== b.id) this.select(b.id);
   }
 
   /** Frontmost building whose sprite has a visible pixel under the point, else whose footprint contains it. */
@@ -1057,6 +1045,22 @@ export class GameScene extends Phaser.Scene {
     this.selectedId = id;
     this.updateSelectionVisuals();
     this.gs.emit('selectionChanged', { id });
+  }
+
+  /**
+   * The upgrade effect over a building (Effects.upgradeBurst), a frame or so later so its new picture is showing.
+   * `k` scales it, `label` false skips "Level N!", `delay` in ms.
+   */
+  upgradeFx(id, level, { k = 1, label = true, delay = 30 } = {}) {
+    this.time.delayedCall(delay, () => {
+      const b = this.gs.getBuilding(id), view = this.views.buildings.get(id);
+      if (!b || !view) return;
+      const c = footprintCenter(b), g = gridToScreen(c.x, c.y);
+      const { rx, ry } = rangeEllipse(Math.max(fpW(b), fpH(b)) * 0.6, c.x, c.y);
+      view.flash(this.time.now, 140);
+      footprintRipple(this, b.col, b.row, fpW(b), fpH(b)); // the gold rings on the ground (as when collecting)
+      upgradeBurst(this, { x: g.x, y: g.y, top: view.topCenter().y, rx, ry, level, lightKey: TEX.light, k, label });
+    });
   }
 
   updateSelectionVisuals() {
@@ -1170,11 +1174,11 @@ export class GameScene extends Phaser.Scene {
   }
 
   /** Take the next building of a hotbar card (type + level) to place it. */
-  pickFromHotbar(type, level, merged = false) {
+  pickFromHotbar(type, level, merged = false, playSelect = true) {
     if (!this.layout) return;
     const group = hotbarGroups(this.gs, this.layout).find((g) => g.type === type && g.level === level && g.merged === !!merged);
     if (!group) return;
-    playSfx(this, SFX.buildingSelect);
+    if (playSelect) playSfx(this, SFX.buildingSelect);
     this.beginMove(group.ids[0]);
   }
 
@@ -1208,10 +1212,15 @@ export class GameScene extends Phaser.Scene {
         this.placement.orient = pl.orient;
         Object.assign(this.placement, footprintDims('wall', pl.orient));
       }
-      playSfxCapped(this, SFX.place, 1);
+      this.playEditWallSound(!single);
       this.layoutUpdated();
     } else if (single) playSfxCapped(this, SFX.invalid, 1);
     if (this.placement) this.ghostToGrid(tile.col, tile.row);
+  }
+
+  /** A stroke can place several walls at once. Play a short cue as they land. */
+  playEditWallSound(stroke = false) {
+    playSfxClip(this, SFX.buildingSelect, { maxSeconds: 0.15, fadeMs: 50, maxAtOnce: 2, minGapMs: stroke ? 90 : 0 });
   }
 
   /** In edit mode every building's footprint is outlined so it's clear what can be picked up. */
@@ -1434,7 +1443,7 @@ export class GameScene extends Phaser.Scene {
     if (!pl.valid) { playSfx(this, SFX.invalid); return; }
     if (pl.mode === 'row' && this.layout) {
       if (!moveGroupInDraft(this.gs, this.layout, pl.ids, pl.col - pl.base.col, pl.row - pl.base.row).ok) { playSfx(this, SFX.invalid); return; }
-      playSfx(this, SFX.place);
+      this.playEditWallSound();
       this.endPlacement();
       this.layoutUpdated();
       return;
@@ -1442,13 +1451,14 @@ export class GameScene extends Phaser.Scene {
     if (pl.mode === 'move' && this.layout) {
       // Edit mode: drop it into the draft layout (the village changes on Save).
       if (!placeInDraft(this.gs, this.layout, pl.id, pl.col, pl.row, pl.orient).ok) { playSfx(this, SFX.invalid); return; }
-      playSfx(this, this.placeSound(pl.type, SFX.place));
+      if (pl.type === 'wall') this.playEditWallSound();
+      else playSfx(this, this.placeSound(pl.type, SFX.place));
       this.endPlacement();
       this.layoutUpdated();
       // Walls out of the hotbar: keep laying the same stack in a row until it runs out (Esc to stop).
       if (pl.fromHotbar && pl.type === 'wall') {
         this.wallOrient = pl.orient;
-        this.pickFromHotbar(pl.type, pl.level);
+        this.pickFromHotbar(pl.type, pl.level, false, false);
         if (this.placement) { this.placement.orient = pl.orient; Object.assign(this.placement, footprintDims('wall', pl.orient)); this.continueWallRow(pl); }
       }
       return;
@@ -2188,6 +2198,9 @@ export class GameScene extends Phaser.Scene {
       this.lastUpgradeSfxAt = this.time.now;
       const view = d && this.views.buildings.get(d.id);
       if (view && view.growPop) view.growPop(d.level - 1, d.level); // walls just bounce (their size follows the level)
+      // v0.15: light, sparkles and "Level N!" (bigger for the Village Hall, with a little shake).
+      this.upgradeFx(d.id, d.level, d.type === 'townHall' ? { k: 1.5 } : {});
+      if (d.type === 'townHall') this.cameras.main.shake(160, 0.003);
       this.updateSelectionVisuals();
     });
     // Upgrade Walls: every wall bounces, with one upgrade sound.
@@ -2198,6 +2211,11 @@ export class GameScene extends Phaser.Scene {
         const view = this.views.buildings.get(id);
         if (view && view.growPop) view.growPop(d.level - 1, d.level);
       }
+      // A small sparkle on up to 20 of them (a village can have hundreds), and one "Walls Level N!" over the first.
+      const sparkle = d.ids.length <= 20 ? d.ids : [...d.ids].sort(() => Math.random() - 0.5).slice(0, 20);
+      sparkle.forEach((id, i) => this.upgradeFx(id, d.level, { k: 0.6, label: false, delay: 30 + i * 25 }));
+      const first = d.ids.length && this.views.buildings.get(d.ids[0]);
+      if (first) { const t = first.topCenter(); levelUpText(this, t.x, t.y - 6, `Walls Level ${d.level}!`, 22); }
       this.updateSelectionVisuals();
     });
     on('buildingMoved', () => this.updateSelectionVisuals());

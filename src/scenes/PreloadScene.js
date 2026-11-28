@@ -1,6 +1,6 @@
 // First scene: loads only what the loading screen itself shows (the animated title backdrop's art and the UI
 // font), then starts the backdrop and hands off to BootScene, which loads the core files in front of it (the rest
-// streams in later: src/assetPlan.js).
+// streams in later: src/assetPlan.js). (The startup jingle is already playing: index.html starts it.)
 import Phaser from 'phaser';
 import { IMAGE_FILES } from '../assetManifest.js';
 import { FONT_FAMILY } from '../theme.js';

@@ -36,7 +36,7 @@ export const CONFIG = {
     entrancesByStage: [1, 2, 2, 3, 3, 4, 4, 5, 5, 6, 6, 7, 8, 8, 8],
     // Rebuilding is always paid in gold. A level bought with Burgers (RV Lab, Fuel Station, Brisket King) counts
     // as this much gold per Burger, so its rebuild price grows with the level like every other building's.
-    burgerGoldValue: 15,
+    shakeGoldValue: 15,
     // Safety net so a ruined economy can always recover: the Village Hall itself makes gold (base +
     // perLevel per level above 1; none while the starting hall is in ruins), paid in batches of `batch`.
     hallIncome: { base: 1, perLevel: 0.5, batch: 5 },
@@ -66,9 +66,11 @@ export const CONFIG = {
     // Resetting a type's path costs this share of what its picks cost to research (no refund of the picks).
     respecShare: 0.5,
     spawnInterval: 0.8,
-    // The v0.12.5 interval adds perEntrance seconds for each extra open entrance. spawnGap takes the midpoint of
-    // that rate and the earlier flat rate. Entrances still open one at a time every `every` seconds.
-    spawnSpread: { perEntrance: 0.2, every: 8, startTwoFrom: 5 },
+    // Each entrance spawns every spawnInterval + perEntrance x (open entrances - 1) s (src/logic/waves.js spawnGap):
+    // 1 entrance 0.8 s, 2 -> 0.9, 4 -> 1.1, 8 -> 1.5. v0.15: perEntrance 0.1, halfway between the flat 0.8 s before
+    // v0.12.5 and v0.12.5's 0.2 (8 entrances: 2.2 s), which players found too slow. Entrances still open one at a time:
+    // a wave starts from startingEntrances (2 when it has `startTwoFrom` or more, else 1) and the next joins every `every` s.
+    spawnSpread: { perEntrance: 0.1, every: 8, startTwoFrom: 5 },
     // Anti-stall (src/logic/enrage.js): `after` s after a wave's last enemy spawns, enemies start to enrage.
     enrage: { after: 90, ramp: 30, maxDamage: 5, maxSpeed: 2 },
     // Restless nights (src/logic/enrage.js): while it's dark, attacking enemies deal `damage`x damage and move
@@ -213,25 +215,23 @@ export const CONFIG = {
       { cost: 150000, hp: 34704, capacity: 181000 }
     ]
   },
-  // Shake Collector (v0.14, src/logic/shakes.js): makes Shakes over time into its own stock, collected by clicking it
-  // like a Bitcoin Mine (not during a wave; it keeps filling). production in Shakes per second (2.4 a minute at Level 1,
-  // 20.4 at Level 10); stockCap fills in about 50-55 minutes. Worth far less than a mine (rules.burgerGoldValue, 15 gold a
-  // Shake: a Level 10 Collector makes about 5.1 gold's worth a second, a Level 10 mine 48 gold). Each level needs the
-  // usual Village Hall (no higher than the hall). Count: limits.shakeCollector (1 at VH3, 2 at VH6, 3 at VH10, 4 at VH14).
+  // Shake Collector (src/logic/shakes.js): makes Shakes over time into its own stock, collected through Info.
+  // Production in Shakes per second (3.6 a minute at Level 1, 30.6 at Level 10). Stock fills in about 33-37 minutes.
+  // Levels need the usual Village Hall. Count: limits.shakeCollector (1 at VH3, 2 at VH6, 3 at VH10, 4 at VH14).
   shakeCollector: {
     name: "Shake Collector",
     unlockTownHall: 3,
     levels: [
-      { cost: 1000, hp: 400, production: 0.04, stockCap: 120 },
-      { cost: 2000, hp: 500, production: 0.06, stockCap: 180 },
-      { cost: 4000, hp: 625, production: 0.08, stockCap: 240 },
-      { cost: 8000, hp: 781, production: 0.1, stockCap: 320 },
-      { cost: 15000, hp: 977, production: 0.13, stockCap: 420 },
-      { cost: 25000, hp: 1221, production: 0.16, stockCap: 520 },
-      { cost: 40000, hp: 1526, production: 0.2, stockCap: 640 },
-      { cost: 60000, hp: 1907, production: 0.24, stockCap: 780 },
-      { cost: 90000, hp: 2384, production: 0.29, stockCap: 940 },
-      { cost: 120000, hp: 2980, production: 0.34, stockCap: 1120 }
+      { cost: 1000, hp: 400, production: 0.06, stockCap: 120 },
+      { cost: 2000, hp: 500, production: 0.09, stockCap: 180 },
+      { cost: 4000, hp: 625, production: 0.12, stockCap: 240 },
+      { cost: 8000, hp: 781, production: 0.15, stockCap: 320 },
+      { cost: 15000, hp: 977, production: 0.195, stockCap: 420 },
+      { cost: 25000, hp: 1221, production: 0.24, stockCap: 520 },
+      { cost: 40000, hp: 1526, production: 0.30, stockCap: 640 },
+      { cost: 60000, hp: 1907, production: 0.36, stockCap: 780 },
+      { cost: 90000, hp: 2384, production: 0.435, stockCap: 940 },
+      { cost: 120000, hp: 2980, production: 0.51, stockCap: 1120 }
     ]
   },
   // Shake Storage (v0.14): raises the Shake cap by its capacity (researchPoints.js rpCap, with the Village Hall's own
@@ -412,7 +412,7 @@ export const CONFIG = {
     hero: {
       speed: 1.4, attackInterval: 0.8, attackRange: 5, guardRange: 8, keepAway: 2.5, boltSpeed: 18,
       maxSleepSeconds: 120, wakeSeconds: 1.5,
-      encore: { seconds: 4, secondsPerMilestone: 1, damagePct: 150, pierce: 2, healPct: 30 }
+      encore: { seconds: 4, secondsPerMilestone: 0.5, damagePct: 150, pierce: 2, healPct: 30 }
     },
     levels: [
       { cost: 25000, townHall: 8, hp: 2400, heroHp: 2400, heroDamage: 160 },
@@ -841,8 +841,8 @@ export const CONFIG = {
           { name: 'Heavier Ball', desc: 'The cannonball rolls 2 tiles further.', fx: { rollAdd: 2 } },
           { name: 'Shockwave', desc: 'The burst at the end of the roll stuns every ground enemy in it for 0.5 s (bosses are slowed instead).', fx: { burstStun: 0.5 } },
           { name: 'Scorched Path', desc: 'The ball leaves a burning trail: ground enemies on it burn for 15% of its damage every second for 3 s.', fx: { trailDps: 0.15, trailSeconds: 3, trailRadius: 0.5 } },
-          { name: 'Long Ember', desc: 'The burning trail reaches 0.6 tiles from its center.', fx: { trailRadius: 0.6 } },
-          { name: 'Hot Coals', desc: 'Trail damage rises to 18% of shot damage each second.', fx: { trailDps: 0.18 } }
+          { name: 'Long Ember', desc: 'The burning trail is 50% wider and burns for 5 s.', fx: { trailRadius: 0.75, trailSeconds: 5 } },
+          { name: 'Hot Coals', desc: "The trail burns for 30% of the ball's damage every second (was 15%).", fx: { trailDps: 0.3 } }
         ]
       },
       // Four facings like the Cannon's own (turned toward its target; down-left is the plain picture for windows).
@@ -869,8 +869,8 @@ export const CONFIG = {
           { name: 'Quick Crank', desc: 'A Ballista Bolt every 4th shot.', fx: { boltEvery: 4 } },
           { name: 'Barbed Bolt', desc: 'Bolts pin for 1.5 s, and pinned enemies take 20% more damage from everything.', fx: { pinSeconds: 1.5, pinVuln: 0.2 } },
           { name: 'Skewer', desc: 'The bolt passes through its target and pins one more enemy behind it.', fx: { skewer: 1 } },
-          { name: 'Deep Barbs', desc: 'The pin lasts 1.75 seconds.', fx: { pinSeconds: 1.75 } },
-          { name: 'Exposed Target', desc: 'Pinned targets take 25% more damage.', fx: { pinVuln: 0.25 } }
+          { name: 'Deep Barbs', desc: 'Bolts pin for 2.5 s.', fx: { pinSeconds: 2.5 } },
+          { name: 'Exposed Target', desc: 'Pinned enemies take 40% more damage from everything (was 20%).', fx: { pinVuln: 0.4 } }
         ]
       },
       art: { key: 'bld_archer_merged', scale: 1.15, standInScale: 1.15 }
@@ -895,8 +895,8 @@ export const CONFIG = {
           { name: 'Quick Reload', desc: 'Fires 15% more often.', fx: { fireIntervalMult: 0.85 } },
           { name: 'Concussion', desc: 'Each shell slows the enemies it hits by 30% for 2 s.', fx: { slowOnHit: 0.3, slowSeconds: 2 } },
           { name: 'Synchronized Impact', desc: 'When 2 or more shells of a volley land within 1.5 tiles of each other, a combined blast hits for 50% of a shell\'s damage and stuns for 0.5 s.', fx: { syncRadius: 1.5, syncDamage: 0.5, syncStun: 0.5 } },
-          { name: 'Blast Pattern', desc: 'Shells within 1.75 tiles trigger the combined blast.', fx: { syncRadius: 1.75 } },
-          { name: 'Heavy Payload', desc: 'The combined blast hits for 60% of shell damage.', fx: { syncDamage: 0.6 } }
+          { name: 'Blast Pattern', desc: 'Shells within 2.25 tiles of each other set off the combined blast, and it stuns for 1 s.', fx: { syncRadius: 2.25, syncStun: 1 } },
+          { name: 'Heavy Payload', desc: "The combined blast hits for a full shell's damage (was 50%).", fx: { syncDamage: 1 } }
         ]
       },
       art: { key: 'bld_mortar_merged', scale: 1.24, standInScale: 1.15 }
@@ -922,8 +922,8 @@ export const CONFIG = {
           { name: 'Wider Net', desc: 'The net is 1 tile wider.', fx: { netRadiusAdd: 1 } },
           { name: 'Tangled', desc: 'Enemies in the net take 20% more damage from everything.', fx: { netVuln: 0.2 } },
           { name: 'Double Net', desc: 'Fires two nets, at the two biggest groups.', fx: { nets: 2 } },
-          { name: 'Wide Mesh', desc: 'Net radius gains another quarter tile.', fx: { netRadiusAdd: 1.25 } },
-          { name: 'Tight Weave', desc: 'Netted targets take 25% more damage.', fx: { netVuln: 0.25 } }
+          { name: 'Wide Mesh', desc: 'The net is another 0.75 tile wider.', fx: { netRadiusAdd: 1.75 } },
+          { name: 'Triple Net', desc: 'Fires three nets, at the three biggest groups.', fx: { nets: 3 } }
         ]
       },
       art: { key: 'bld_firework_merged_left', facings: { left: 'bld_firework_merged_left', right: 'bld_firework_merged_right' }, scale: 1.32, standInScale: 1.15 }
@@ -947,8 +947,8 @@ export const CONFIG = {
           { name: 'Wider Wall', desc: 'The wall is 1.5 tiles longer and stands 1 s longer.', fx: { wallLengthAdd: 1.5, wallSecondsAdd: 1 } },
           { name: 'Searing Ward', desc: 'Enemies held at the wall burn for 30% of his fireball damage every second.', fx: { wallBurn: 0.3 } },
           { name: 'Double Cast', desc: 'A second wall rises behind the crowd, trapping it between the two.', fx: { walls: 2 } },
-          { name: 'Stone Seal', desc: 'The walls last half a second longer.', fx: { wallSecondsAdd: 1.5 } },
-          { name: 'White Flame', desc: 'The wall burns for 36% of fireball damage a second.', fx: { wallBurn: 0.36 } }
+          { name: 'Stone Seal', desc: 'The walls are another tile longer and stand another second.', fx: { wallLengthAdd: 2.5, wallSecondsAdd: 2 } },
+          { name: 'White Flame', desc: 'Enemies held at a wall burn for 60% of his fireball damage every second (was 30%).', fx: { wallBurn: 0.6 } }
         ]
       },
       art: { key: 'bld_wizard_merged', scale: 1.2, standInScale: 1.15 }
@@ -972,8 +972,8 @@ export const CONFIG = {
           { name: 'Fourth Bolt', desc: 'Zaps 4 enemies at once instead of 3.', fx: { zapTargets: 4 } },
           { name: 'Overcharge', desc: 'Zaps deal 50% more damage to enemies under half health.', fx: { zapLowMult: 1.5 } },
           { name: 'EMP Pulse', desc: 'Every 12 s, a pulse stuns every enemy in zap range for 0.75 s (bosses are slowed).', fx: { empEvery: 12, empSeconds: 0.75 } },
-          { name: 'Long Pulse', desc: 'The EMP stun lasts 0.9 seconds.', fx: { empSeconds: 0.9 } },
-          { name: 'Surge', desc: 'Zaps deal 60% extra damage below half health.', fx: { zapLowMult: 1.6 } }
+          { name: 'Long Pulse', desc: 'The EMP Pulse stuns for 1.25 s.', fx: { empSeconds: 1.25 } },
+          { name: 'Fifth Bolt', desc: 'Zaps 5 enemies at once.', fx: { zapTargets: 5 } }
         ]
       },
       // Its base is a diamond whose side corners are 16% of the way up the picture and span its full width, so it stands by
@@ -1003,8 +1003,8 @@ export const CONFIG = {
           { name: 'Longer Chain', desc: 'The harpoon drags enemies 2 tiles further.', fx: { harpoonPullAdd: 2 } },
           { name: 'Dragnet', desc: 'Enemies the harpooned one is dragged through take 25% of the harpoon\'s hit.', fx: { harpoonDrag: 0.25 } },
           { name: 'Double Hook', desc: 'Harpoons the two toughest enemies in range at once.', fx: { harpoonHooks: 2 } },
-          { name: 'Winch Drum', desc: 'Harpoons pull targets another half tile.', fx: { harpoonPullAdd: 2.5 } },
-          { name: 'Barbed Cable', desc: 'Dragged-through targets take 30% of harpoon damage.', fx: { harpoonDrag: 0.3 } }
+          { name: 'Winch Drum', desc: 'The harpoon drags enemies another 1.5 tiles.', fx: { harpoonPullAdd: 3.5 } },
+          { name: 'Triple Hook', desc: 'Harpoons the three toughest enemies in range at once.', fx: { harpoonHooks: 3 } }
         ]
       },
       // Four facings like the Spear Thrower's own (turned toward its target; down-left is the plain picture for windows).
@@ -1034,8 +1034,8 @@ export const CONFIG = {
           { name: 'Bigger Burst', desc: 'Ice shards fly 0.5 tile further.', fx: { shatterRadiusAdd: 0.5 } },
           { name: 'Sharp Shards', desc: 'Ice shards deal 150% of a bottle\'s damage.', fx: { shatterMult: 1.5 } },
           { name: 'Splinter', desc: 'Ice shards chill everything they hit, so those enemies can shatter too.', fx: { shatterChill: 1 } },
-          { name: 'Fracture Ring', desc: 'Shards reach another quarter tile.', fx: { shatterRadiusAdd: 0.75 } },
-          { name: 'Dense Shards', desc: 'Shards hit for 165% of bottle damage.', fx: { shatterMult: 1.65 } }
+          { name: 'Fracture Ring', desc: 'Ice shards fly another 0.5 tile.', fx: { shatterRadiusAdd: 1 } },
+          { name: 'Dense Shards', desc: "Ice shards deal 200% of a bottle's damage.", fx: { shatterMult: 2 } }
         ]
       },
       // Its base is a round ice mound, widest 15-20% of the way up the picture (Level 10's is widest at 8-13%), so it stands
@@ -1067,8 +1067,8 @@ export const CONFIG = {
           { name: 'More Jugs', desc: 'The barrel bursts into 6 jugs.', fx: { barrelJugs: 6 } },
           { name: 'Wide Spray', desc: 'Jugs fly 3 tiles and their pools are 1.25 tiles wide.', fx: { jugDistance: 3, jugPoolRadius: 1.25 } },
           { name: 'Tar Pit', desc: "The barrel's own pool slows 60% and lasts 10 s.", fx: { tarSlow: 0.6, tarSeconds: 10 } },
-          { name: 'Oil Slick', desc: 'Jug pools reach 1.4 tiles.', fx: { jugPoolRadius: 1.4 } },
-          { name: 'Thick Tar', desc: 'The main tar pool lasts 12 seconds.', fx: { tarSeconds: 12 } }
+          { name: 'Oil Slick', desc: 'The barrel bursts into 8 jugs, and their pools are 1.5 tiles wide.', fx: { barrelJugs: 8, jugPoolRadius: 1.5 } },
+          { name: 'Thick Tar', desc: "The barrel's own pool slows 75% and lasts 15 s.", fx: { tarSlow: 0.75, tarSeconds: 15 } }
         ]
       },
       // The user's "Merged Diddypult building image v2": its base is widest (the crystals at its sides) 25% of the way up the
@@ -1100,8 +1100,8 @@ export const CONFIG = {
           { name: 'Early Lance', desc: 'The lance starts at x3 heat instead of full heat.', fx: { lanceStage: 1 } },
           { name: 'Wide Lance', desc: "The lance is twice as wide and deals 75% of the beam's damage.", fx: { lanceHalfWidth: 1, lanceMult: 0.75 } },
           { name: 'Blinding Light', desc: 'Enemies the lance touches are slowed 30% while it touches them (bosses 15%).', fx: { lanceSlow: 0.3 } },
-          { name: 'Prism Lens', desc: 'The lance extends 1.1 tiles to either side.', fx: { lanceHalfWidth: 1.1 } },
-          { name: 'Solar Focus', desc: 'The lance hits for 85% of beam damage.', fx: { lanceMult: 0.85 } }
+          { name: 'Prism Lens', desc: 'The lance is 1.5 tiles wide on each side (3 times its first width).', fx: { lanceHalfWidth: 1.5 } },
+          { name: 'Solar Focus', desc: "The lance deals the beam's full damage, and slows 45% (bosses half that).", fx: { lanceMult: 1, lanceSlow: 0.45 } }
         ]
       },
       // The user's picture: a short tower on a wide round stone base. The base's ground ring is 97% of the picture's width
@@ -1138,7 +1138,7 @@ export const CONFIG = {
     shakeCollector: [0, 0, 1, 1, 1, 2, 2, 2, 2, 3, 3, 3, 3, 4, 4, 4, 4, 4, 4, 4], // v0.14: 1 at VH3, 2 at VH6, 3 at VH10, 4 at VH14
     shakeStorage: [0, 0, 1, 1, 1, 1, 1, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2],     // v0.14: 1 at VH3, 2 at VH8 (max 2)
     cannon: [1, 2, 2, 3, 3, 4, 4, 5, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16], // (v0.10.1: one more per Village Hall after 10)
-    archer: [0, 1, 2, 2, 3, 3, 4, 4, 5, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 14], // VH20 keeps seven merge pairs
+    archer: [0, 1, 2, 2, 3, 3, 4, 4, 5, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15], // (v0.10.1: one more per Village Hall after 10)
     mortar: [0, 1, 1, 2, 2, 3, 3, 4, 4, 5, 5, 6, 6, 7, 8, 9, 9, 10, 10, 10],
     wizard: [0, 0, 1, 1, 2, 2, 3, 3, 4, 4, 5, 6, 6, 6, 6, 6, 6, 6, 6, 6], // (v0.8.2: back to 6 after v0.8.1's cap of 4; they can merge instead)
     townHall: [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1],
@@ -1653,7 +1653,7 @@ export const CONFIG = {
       ironLegion: { name: 'Iron Legion', hint: 'Armored legionaries and Tanks: heavy hitters break armor', mix: { bicus: 0.7, tank: 0.3 }, needs: ['bicus'], share: 0.55 },
       air: { name: 'Air Raid', hint: 'Flyers only: build anti-air', pure: true, mix: { bomber: 0.6, balloon: 0.15, vaca: 0.12, bombo: 0.13 }, needs: ['bomber'], strength: 0.7 },
       boneMarch: { name: 'Bone March', hint: 'Rahhh Skeletons raise the dead beside armored legionaries', mix: { skeleton: 0.6, bicus: 0.4 }, needs: ['skeleton'], share: 0.55 },
-      heist: { name: 'Heist', hint: 'A gang of Mr. Leasts after your gold', pure: true, mix: { thief: 0.85, grunt: 0.15 }, needs: ['thief'], strength: 0.6 },
+      heist: { name: 'Heist', hint: 'A gang of Mr. Leasts after your Bitcoin', pure: true, mix: { thief: 0.85, grunt: 0.15 }, needs: ['thief'], strength: 0.6 },
       frozenFront: { name: 'Frozen Front', hint: 'Frigo Camillo slows your defenses as Tanks push in', mix: { frigo: 0.4, tank: 0.4, bicus: 0.2 }, needs: ['frigo'], share: 0.55 },
       bombSquad: { name: 'Bomb Squad', hint: 'Wall Breakers blow a way in for the horde', mix: { breaker: 0.45, grunt: 0.55 }, needs: ['breaker'], share: 0.5 },
       skyFire: { name: 'Sky Fire', hint: 'Fire-breathing geese and boulder-throwing cows', mix: { bombo: 0.5, vaca: 0.3, bomber: 0.2 }, needs: ['bombo'], share: 0.55 },

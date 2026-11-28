@@ -166,7 +166,7 @@ export const ABILITIES = {
       t('Weak Point Scan', 'Marked enemies under 30% health take double the mark bonus.', { executeMark: 0.3 }),
       t('Drone Tail', 'Marks follow enemies for 3 s after they leave range.', { markLinger: 3 }),
       t('Weak Spots', '+10% mark bonus.', { markAdd: 10 }),
-      t('Bounty Hunter', 'Marked enemies drop 50% more gold when defeated.', { markBounty: 0.5 })
+      t('Bounty Hunter', 'Marked enemies drop 50% more Bitcoin when defeated.', { markBounty: 0.5 })
     ] },
     b: { name: 'Commander', tiers: [
       t('Drill Sergeant', 'Defenses in range fire 10% faster.', { auraFireRatePct: 10 }),
@@ -313,17 +313,17 @@ export const DEFENSE_ABILITY_TYPES = [...DEFENSE_TREE_TYPES, 'altar'];
 export const ECONOMY_ABILITIES = {
   mine: {
     a: { name: 'Overclock', tiers: [
-      t('Overclocked Rig', 'Mines 25% more gold.', { productionPct: 25 }),
-      t('Deep Vault', 'Holds 75% more before it\'s full.', { stockCapPct: 75 }),
-      t('Night Shift', 'Mines 50% more gold while it\'s dark.', { nightProductionPct: 50 }),
+      t('Overclocked Rig', 'Mines 25% more Bitcoin.', { productionPct: 25 }),
+      t('Deep Vault', 'Holds 75% more Bitcoin before it\'s full.', { stockCapPct: 75 }),
+      t('Night Shift', 'Mines 50% more Bitcoin while it\'s dark.', { nightProductionPct: 50 }),
       t('Mining Pool', 'Mines 6% more for every other standing Bitcoin Mine.', { poolPct: 6 }),
-      t('Bull Run', 'Mines 60% more gold.', { productionPct: 60 })
+      t('Bull Run', 'Mines 60% more Bitcoin.', { productionPct: 60 })
     ] },
     b: { name: 'Automation', tiers: [
-      t('Gnome Rail', 'Gnomes carry its gold to storage 40% faster.', { tripFasterPct: 40 }),
-      t('Auto-Collect', 'Sends its gold to storage by itself every 40 s (between waves).', { autoCollectPerMin: 1.5 }),
+      t('Gnome Rail', 'Gnomes carry its Bitcoin to storage 40% faster.', { tripFasterPct: 40 }),
+      t('Auto-Collect', 'Sends its Bitcoin to storage by itself every 40 s (between waves).', { autoCollectPerMin: 1.5 }),
       t('Tip Jar', 'Collecting it (by hand or automatically) pays 15% extra.', { collectBonusPct: 15 }),
-      t('Smart Contract', 'Sends its gold to storage by itself every 20 s, even during waves.', { autoCollectPerMin: 3, autoInWaves: 1 }),
+      t('Smart Contract', 'Sends its Bitcoin to storage by itself every 20 s, even during waves.', { autoCollectPerMin: 3, autoInWaves: 1 }),
       t('Compound Mining', 'Every collection makes it mine 2% more (up to +30%) until it\'s destroyed.', { compoundPct: 2, compoundMax: 30 })
     ] },
     c: { name: 'Security', tiers: [
@@ -331,30 +331,30 @@ export const ECONOMY_ABILITIES = {
       t('Booby-Trapped Coins', 'Enemies that hit it take 40% of the damage back.', { thorns: 0.4 }),
       t('Hidden Stash', 'Mr. Least deals 60% less damage to it.', { thiefResistPct: 60 }),
       t('Panic Room', 'Below 30% health it takes 50% less damage.', { lowHpArmor: 0.5 }),
-      t('Bounty Vault', 'Enemies defeated within 3 tiles of it pay 50% more gold.', { nearBountyPct: 50, nearRadius: 3 })
+      t('Bounty Vault', 'Enemies defeated within 3 tiles of it pay 50% more Bitcoin.', { nearBountyPct: 50, nearRadius: 3 })
     ] }
   },
   storage: {
     a: { name: 'Capacity', tiers: [
-      t('Extra Shelves', 'Holds 25% more gold.', { capacityPct: 25 }),
-      t('Compound Interest', 'Beating a wave pays 2% of the gold stored in it.', { interestPct: 2 }),
-      t('Expansion Wing', 'Holds 50% more gold.', { capacityPct: 50 }),
-      t('Night Dividend', 'Beating a wave pays 2% of the gold stored in it, doubled if it\'s dark.', { interestPct: 2, nightInterestMult: 2 }),
-      t('Mega Vault', 'Holds twice as much gold.', { capacityPct: 100 })
+      t('Extra Shelves', 'Holds 25% more Bitcoin.', { capacityPct: 25 }),
+      t('Compound Interest', 'Beating a wave pays 2% of the Bitcoin stored in it.', { interestPct: 2 }),
+      t('Expansion Wing', 'Holds 50% more Bitcoin.', { capacityPct: 50 }),
+      t('Night Dividend', 'Beating a wave pays 2% of the Bitcoin stored in it, doubled if it\'s dark.', { interestPct: 2, nightInterestMult: 2 }),
+      t('Mega Vault', 'Holds twice as much Bitcoin.', { capacityPct: 100 })
     ] },
     b: { name: 'Vault', tiers: [
-      t('Time Lock', 'Loses 30% less gold when it\'s hit.', { drainResistPct: 30 }),
+      t('Time Lock', 'Loses 30% less Bitcoin when it\'s hit.', { drainResistPct: 30 }),
       t('Reinforced Door', '+40% health.', { hpPct: 40 }),
       t('Dye Pack', 'Mr. Least is slowed 50% for 4 s when he hits it.', { thiefSlow: 0.5 }),
-      t('Insurance', 'Half the gold it loses during a wave is paid back when you beat the wave.', { insurancePct: 50 }),
-      t('Fort Knox', 'Loses no gold at all while it\'s above half health.', { drainImmuneAbove: 0.5 })
+      t('Insurance', 'Half the Bitcoin it loses during a wave is paid back when you beat the wave.', { insurancePct: 50 }),
+      t('Fort Knox', 'Loses no Bitcoin at all while it\'s above half health.', { drainImmuneAbove: 0.5 })
     ] },
     c: { name: 'Logistics', tiers: [
-      t('Loading Dock', 'Gnomes delivering gold here deliver 15% more.', { dropBonusPct: 15 }),
+      t('Loading Dock', 'Gnomes delivering Bitcoin here deliver 15% more.', { dropBonusPct: 15 }),
       t('Express Lane', 'Gnome trips to it are 30% faster.', { tripFasterPct: 30 }),
-      t('Gold Magnet', 'Bitcoin Mines within 4 tiles mine 15% more.', { mineAuraPct: 15, auraRadius: 4 }),
+      t('Bitcoin Magnet', 'Bitcoin Mines within 4 tiles mine 15% more.', { mineAuraPct: 15, auraRadius: 4 }),
       t('Payroll', 'Gnomes working at Bitcoin Mines within 4 tiles mine 25% faster.', { gnomeAuraPct: 25, auraRadius: 4 }),
-      t('Central Bank', 'Every enemy defeated pays 10% more gold.', { bountyPct: 10 })
+      t('Central Bank', 'Every enemy defeated pays 10% more Bitcoin.', { bountyPct: 10 })
     ] }
   },
   house: {
@@ -362,7 +362,7 @@ export const ECONOMY_ABILITIES = {
       t('Lunchboxes', 'Its gnomes mine 20% faster.', { gnomeMinePct: 20 }),
       t('Bunk Beds', '+1 gnome.', { gnomesAdd: 1 }),
       t('Better Pickaxes', 'Its gnomes mine 40% faster.', { gnomeMinePct: 40 }),
-      t('Bigger Sacks', 'Its gnomes carry 50% more gold per trip.', { sackPct: 50 }),
+      t('Bigger Sacks', 'Its gnomes carry 50% more Bitcoin per trip.', { sackPct: 50 }),
       t('Gnome Union', '+2 gnomes.', { gnomesAdd: 2 })
     ] },
     b: { name: 'Builders', tiers: [
@@ -374,7 +374,7 @@ export const ECONOMY_ABILITIES = {
     ] },
     c: { name: 'Village Life', tiers: [
       t('Cozy Home', '+40% health.', { hpPct: 40 }),
-      t('Vegetable Garden', 'Makes 1 gold per second on its own.', { houseIncome: 1 }),
+      t('Vegetable Garden', 'Makes 1 Bitcoin per second on its own.', { houseIncome: 1 }),
       t('Gnome Militia', 'Its gnomes pelt enemies within 2.5 tiles with pebbles (6 damage/s).', { militiaDps: 6, militiaRadius: 2.5 }),
       t('Night Watch', 'Pebbles at enemies within 2.5 tiles (6 damage/s), double in the dark.', { militiaDps: 6, militiaRadius: 2.5, militiaNightMult: 2 }),
       t('Town Pride', 'Every Bitcoin Mine mines 5% more.', { pridePct: 5 })
@@ -397,7 +397,7 @@ export const ECONOMY_ABILITIES = {
     ] },
     c: { name: 'Party', tiers: [
       t('Crowd Pleaser', 'Gnomes in range work 20% faster on top.', { gnomeBoostAdd: 20 }),
-      t('After Party', 'Beating a wave pays 10% more of its gold.', { afterPartyPct: 10 }),
+      t('After Party', 'Beating a wave pays 10% more of its Bitcoin.', { afterPartyPct: 10 }),
       t('VIP Lounge', 'During waves, buildings in range heal 1% of their health each second.', { partyHealPct: 1 }),
       t('Dance Floor', 'Every 10 s, enemies in range stop to dance for 1 s.', { danceEvery: 10, danceSeconds: 1 }),
       t('Main Stage', 'Drop the Beat also gives defenses in range +30% damage.', { beatDamagePct: 30 })
@@ -424,34 +424,33 @@ export function registerPerkTree(type, tree, group = 'defense') {
   if (!list.includes(type)) list.push(type);
 }
 
-function economyPath(name, effect, tiers) {
-  return { name, tiers: tiers.map(([tier, amount, desc]) => t(tier, desc || `+${amount}% ${name.toLowerCase()}.`, { [effect]: amount })) };
+// Shake Collector and Shake Storage (v0.15): one number per path, raised a step at every tier. `...Pct` keys add up
+// down a path (abilities.js mergeFx), so each line says what that tier adds and the running total.
+function economyPath(name, effect, line, tiers) {
+  let total = 0;
+  return { name, tiers: tiers.map(([tier, amount]) => { total += amount; return t(tier, line(amount, total), { [effect]: amount }); }) };
 }
 
 registerPerkTree('shakeCollector', {
-  a: economyPath('Shake Production', 'productionPct', [
+  a: economyPath('Shake Production', 'productionPct', (n, all) => `Makes ${n}% more Shakes (${all}% in all).`, [
     ['Fast Mixer', 12], ['Dual Spout', 12], ['Blender Motor', 16], ['High Flow', 20], ['Triple Blend', 25]
   ]),
-  b: economyPath('Collector Stock Capacity', 'stockCapPct', [
+  b: economyPath('Stock Capacity', 'stockCapPct', (n, all) => `Holds ${n}% more before it's full (${all}% in all).`, [
     ['Tall Cups', 15], ['Cup Rack', 15], ['Cold Tank', 20], ['Cold Room', 25], ['Reserve Vat', 30]
   ]),
-  c: economyPath('Health', 'hpPct', [
+  c: economyPath('Health', 'hpPct', (n, all) => `+${n}% health (${all}% in all).`, [
     ['Reinforced Cart', 10], ['Shock Mounts', 12], ['Steel Counter', 14], ['Guard Rails', 16], ['Mixer Bunker', 20]
   ])
 }, 'economy');
 
 registerPerkTree('shakeStorage', {
-  a: economyPath('Shake Storage Capacity', 'capacityPct', [
+  a: economyPath('Capacity', 'capacityPct', (n, all) => `Holds ${n}% more Shakes (${all}% in all).`, [
     ['Stacked Cups', 8], ['Deep Shelves', 10], ['Second Cooler', 12], ['Bulk Chiller', 14], ['Mega Cooler', 16]
   ]),
-  b: economyPath('Spill Protection', 'drainResistPct', [
-    ['Snap Lids', 8, 'Lose 8% fewer stored Shakes when hit.'],
-    ['Sealed Racks', 10, 'Lose 10 percentage points fewer stored Shakes when hit.'],
-    ['Spill Tray', 12, 'Lose 12 percentage points fewer stored Shakes when hit.'],
-    ['Double Seal', 14, 'Lose 14 percentage points fewer stored Shakes when hit.'],
-    ['Armored Chiller', 16, 'Lose 16 percentage points fewer stored Shakes when hit.']
+  b: economyPath('Spill Guard', 'drainResistPct', (n, all) => `Spills ${n}% fewer Shakes when it's hit (${all}% in all).`, [
+    ['Snap Lids', 8], ['Sealed Racks', 10], ['Spill Tray', 12], ['Double Seal', 14], ['Armored Chiller', 16]
   ]),
-  c: economyPath('Health', 'hpPct', [
+  c: economyPath('Health', 'hpPct', (n, all) => `+${n}% health (${all}% in all).`, [
     ['Cooler Panels', 10], ['Braced Door', 12], ['Steel Shelves', 14], ['Rebar Shell', 16], ['Shake Fortress', 20]
   ])
 }, 'economy');

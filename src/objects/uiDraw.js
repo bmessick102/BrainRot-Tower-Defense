@@ -80,8 +80,9 @@ export function drawShowcaseCard(g, x, y, w, h, { locked = false, tileY, tileW =
     locked ? COLORS.lockedTop : COLORS.cardTop, locked ? COLORS.lockedBottom : COLORS.cardBottom);
   g.fillStyle(0xffffff, 0.18).fillRoundedRect(x + 6, y + 5, w - 12, 18, { tl: 8, tr: 8, bl: 4, br: 4 });
   const cx = x + w / 2;
-  g.fillStyle(0xffffff, 0.12).fillEllipse(cx, tileY - 30, w * 0.85, 120);
-  g.fillStyle(0xffffff, 0.14).fillEllipse(cx, tileY - 20, w * 0.6, 80);
+  const glowHeight = Math.min(120, h * 0.6);
+  g.fillStyle(0xffffff, 0.12).fillEllipse(cx, tileY - glowHeight / 4, w * 0.85, glowHeight);
+  g.fillStyle(0xffffff, 0.14).fillEllipse(cx, tileY - glowHeight / 6, w * 0.6, glowHeight * 2 / 3);
   const th = tileW / 2;
   const diamond = [{ x: cx, y: tileY - th }, { x: cx + tileW, y: tileY }, { x: cx, y: tileY + th }, { x: cx - tileW, y: tileY }];
   g.fillStyle(0xffffff, 0.22).fillPoints(diamond, true);
@@ -102,6 +103,18 @@ export function drawStatBar(g, x, y, w, frac, color, h = 12) {
   const iw = Math.max(h - 4, (w - 4) * f);
   g.fillStyle(color, 1).fillRoundedRect(x + 2, y + 2, iw, h - 4, (h - 4) / 2);
   g.fillStyle(0xffffff, 0.35).fillRect(x + 6, y + 3, Math.max(0, iw - 8), 2);
+}
+
+/** Comparison meter: the lighter segment shows the projected gain, or the amount lost when it decreases. */
+export function drawStatComparison(g, x, y, w, current, next, max, color, h = 12) {
+  const scale = Math.max(max || 0, current, next) || 1;
+  drawStatBar(g, x, y, w, Math.max(current, next) / scale, mix(color, 0xffffff, 0.55), h);
+  const lower = Math.min(current, next);
+  if (lower > 0) {
+    const inner = h - 4;
+    const fill = Math.max(inner, (w - 4) * lower / scale);
+    g.fillStyle(color, 1).fillRoundedRect(x + 2, y + 2, fill, inner, inner / 2);
+  }
 }
 
 /** Small glossy tag pill. Returns its width so callers can lay tags out in a row. */

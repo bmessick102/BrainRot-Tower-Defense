@@ -7,7 +7,7 @@ import {
   DEFENSE_TYPES, ECONOMY_TYPES, WALL_TYPES, buildableCount, buildCost, buildingName, checkBuy, checkUpgrade, countOwned, isDefense,
   levelStats, limitFor, maxHp, maxLevel, typeConfig, footprintDims, wallLevel, overCap, hallUnlocks, displayName, mergedConfigOf
 } from '../logic/buildings.js';
-import { checkMerge, mergePreview, plainName } from '../logic/merge.js';
+import { checkMerge, plainName } from '../logic/merge.js';
 import { abilityIcon } from '../objects/MergeIcons.js';
 import { masteryLevel, masteryTierCount, masteryTier } from '../logic/merge.js';
 import { checkRepair, formatGold, repairCost, hallIncomeRate, mineStockCap, mineProduction, storageCapacity } from '../logic/economy.js';
@@ -34,7 +34,7 @@ import { BUILDING_DESCRIPTIONS } from '../buildingText.js';
 import { buildingTextureKey, buildingPictureKey, MERGE_GEAR } from '../objects/BuildingView.js';
 import { TEX, SFX } from '../assetKeys.js';
 import { playSfx, playSfxCapped, notifyGuideMessage } from '../audio.js';
-import { COLORS, bodyStyle, textStyle, RP_BAR_COLORS, RP_TEXT_COLOR, RP_COLOR } from '../theme.js';
+import { COLORS, bodyStyle, textStyle, RP_BAR_COLORS, RP_COLOR } from '../theme.js';
 import { achievementById } from '../logic/achievements.js';
 import { LEAGUES } from '../logic/leagues.js';
 import { RESEARCH_TYPES, UTILITY_TYPES, HERO_TYPES, SPELL_TYPES } from '../logic/buildings.js';
@@ -56,6 +56,7 @@ import { currentTip } from '../logic/tips.js';
 import { isLabGuideVisible, labGuideStep, labGuideText } from '../logic/labGuide.js';
 import { Modal } from '../objects/Modal.js';
 import { openUpgradeWindow } from '../objects/UpgradeWindow.js';
+import { openMergeWindow } from '../objects/MergeWindow.js';
 import { beamDamagePerSecond } from '../logic/beams.js';
 import { flockMarkBonus } from '../logic/flock.js';
 import { trapStatsFor } from '../logic/traps.js';
@@ -92,7 +93,7 @@ const SHOP_TABS = [
 
 // Quick bar: a compact strip along the bottom, right-aligned just left of the Edit / Shop buttons.
 // Centered on the same line as the Edit button (y 650), about its height.
-const QB = { y: 650 - 40, h: 80, right: 1004, btnH: 52, upgradeW: 200, infoW: 74, abilityW: 132, collectW: 178 };
+const QB = { y: 650 - 40, h: 80, right: 1004, btnH: 52, upgradeW: 200, infoW: 74, abilityW: 132 };
 
 const INFO_W = 440;
 const INFO_X = 1280 - 16 - INFO_W;
@@ -561,7 +562,7 @@ export class UIScene extends Phaser.Scene {
     img.on('pointerover', () => { if (this.shopButtonEnabled()) img.setScale(s * 1.06); });
     img.on('pointerout', () => img.setScale(s));
     img.on('pointerdown', () => {
-      if (!this.shopButtonEnabled() && !this.shopOpen) return;
+      if (!this.shopButtonEnabled() && !this.shopOpen) { playSfxCapped(this, SFX.invalid, 1); return; }
       playSfx(this, SFX.uiClick);
       this.toggleShop();
     });
@@ -706,7 +707,7 @@ export class UIScene extends Phaser.Scene {
     img.on('pointerover', () => { if (this.world.canEdit()) img.setScale(s * 1.06); });
     img.on('pointerout', () => img.setScale(this.world.editMode ? s * 1.1 : s));
     img.on('pointerdown', () => {
-      if (!this.world.editMode && !this.world.canEdit()) return;
+      if (!this.world.editMode && !this.world.canEdit()) { playSfxCapped(this, SFX.invalid, 1); return; }
       playSfx(this, SFX.uiClick);
       this.closeShop();
       if (this.world.editMode) this.world.leaveEdit(); // asks first if the layout changed
@@ -1246,13 +1247,13 @@ New walls are built at your wall level (${wallLevel(this.gs)}), so one costs wha
     const bw = INFO_W - 32;
     this.infoButtons = {
       collect: this.makeCollectButton(INFO_W / 2, 0, bw, INFO_BTN_H),
-      upgrade: new Button(this, INFO_W / 2, 0, bw, INFO_BTN_H, 'Upgrade', () => this.onUpgrade(), { color: COLORS.buttonGood, fontSize: 19 }),
+      upgrade: new Button(this, INFO_W / 2, 0, bw, INFO_BTN_H, 'Upgrade', () => this.onUpgrade(), { color: COLORS.buttonGood, fontSize: 19, invalidFeedback: true }),
       repair: new Button(this, INFO_W / 2, 0, bw, INFO_BTN_H, 'Repair', () => this.gs.repair(this.selectedId), { invalidFeedback: true, color: COLORS.buttonGood, fontSize: 19 }),
       // RV Lab abilities: a defense's own tiers, or the RV Lab's research.
       abilities: new Button(this, INFO_W / 2, 0, bw, INFO_BTN_H, 'Abilities', () => this.openAbilities(), { color: COLORS.button, fontSize: 19 }),
-      research: new Button(this, INFO_W / 2, 0, bw, INFO_BTN_H, 'Research', () => this.openResearch(), { color: COLORS.button, fontSize: 19 }),
+      research: new Button(this, INFO_W / 2, 0, bw, INFO_BTN_H, 'Research', () => this.openResearch(), { color: COLORS.button, fontSize: 19, invalidFeedback: true }),
       // Fuel Station: its brewing window.
-      brew: new Button(this, INFO_W / 2, 0, bw, INFO_BTN_H, 'Brew Spells', () => this.openFuelStation(), { color: 0x8e5bd6, fontSize: 19 }),
+      brew: new Button(this, INFO_W / 2, 0, bw, INFO_BTN_H, 'Brew Spells', () => this.openFuelStation(), { color: 0x8e5bd6, fontSize: 19, invalidFeedback: true }),
       // A max-level Cannon / Locklair / Mortar: Merge (in the Upgrade button's place: it has nothing left to upgrade).
       merge: new Button(this, INFO_W / 2, 0, bw, INFO_BTN_H, 'Merge', () => this.onMerge(), { color: MERGE_COLOR, invalidFeedback: true, fontSize: 19 }),
       // Below its top level: a greyed Merge beside Upgrade ("Needs Level 10"); a tap says how merging works.
@@ -1371,10 +1372,11 @@ New walls are built at your wall level (${wallLevel(this.gs)}), so one costs wha
     });
     add('HP', values[0].color, maxHp);
     const metric = {
-      'Gold capacity': b.type === 'storage' ? storageCapacity : null,
+      'Bitcoin capacity': b.type === 'storage' ? storageCapacity : b.type === 'mine' ? mineStockCap : null, // (the hall's comes from its config row)
       'Shake capacity': b.type === 'shakeStorage' ? (target) => shakeStorageCapacity(target.level, target) : null,
-      'Stock capacity': b.type === 'mine' ? mineStockCap : collectorStockCap,
-      'Production': b.type === 'mine' ? (target) => mineProduction(this.gs, target) : collectorProduction,
+      'Stock capacity': collectorStockCap,
+      'Bitcoin production': (target) => mineProduction(this.gs, target),
+      'Production': collectorProduction,
       'Damage': b.type === 'mousetrap' ? (target) => trapStatsFor(target).damage : (target) => levelStats(target.type, target.level).damage * towerDamageMult(target),
       'Beam damage': beamDamagePerSecond,
       'Hold time': (target) => trapStatsFor(target).hold,
@@ -1449,10 +1451,10 @@ New walls are built at your wall level (${wallLevel(this.gs)}), so one costs wha
     if (b.type === 'catapult') rows.push(row('Pool damage', 'poolDps', 0xff4fa3, { unit: ' / s' }));
     if (b.type === 'ksi') rows.push(row('Chill (slow)', 'slow', 0x8fd8ff, { unit: '%', fmt: (v) => String(Math.round(v * 100)) }));
     if (b.type === 'mine') {
-      rows.push(row('Production', 'production', 0xffc93c, { unit: ' / s' }));
-      rows.push(row('Stock capacity', 'stockCap', 0x3cb8ff));
+      rows.push(row('Bitcoin production', 'production', 0xffc93c, { unit: ' / s' }));
+      rows.push(row('Bitcoin capacity', 'stockCap', 0x3cb8ff)); // what it holds before it's collected
     }
-    if (b.type === 'storage' || b.type === 'townHall') rows.push(row('Gold capacity', 'capacity', 0xffc93c));
+    if (b.type === 'storage' || b.type === 'townHall') rows.push(row('Bitcoin capacity', 'capacity', 0xffc93c));
     // v0.14: the Shake buildings, and the Village Hall's own Shake store (purple, like the Shakes bar).
     if (b.type === 'townHall') rows.push(row('Shake capacity', 'shakeCapacity', RP_COLOR));
     if (b.type === 'shakeCollector') {
@@ -1519,7 +1521,7 @@ New walls are built at your wall level (${wallLevel(this.gs)}), so one costs wha
     if (b.type === 'mine') {
       const crew = (this.gs._gnomes ? [...this.gs._gnomes.values()] : []).filter((g) => g.task === 'mine' && g.targetId === b.id);
       const extra = crew.reduce((sum, g) => sum + gnomeStats(g.level).mine, 0);
-      return [`Stock now ${formatGold(b.stock || 0)} / ${formatGold(Math.round(mineStockCap(b)))}`,
+      return [`Bitcoin inside: ${formatGold(b.stock || 0)} / ${formatGold(Math.round(mineStockCap(b)))}`,
         `Gnome workers: ${crew.length} / ${V.maxPerMine} (+${pct(extra)} carried to storage)`];
     }
     if (b.type === 'shakeCollector') {
@@ -1578,7 +1580,7 @@ New walls are built at your wall level (${wallLevel(this.gs)}), so one costs wha
       const nextText = adds.length ? [`Level ${b.level + 1} adds: ${adds.map((u) => (u.type === 'wall' ? `${u.add} walls` : `${u.add > 1 ? `${u.add} ` : ''}${buildingName(u.type)}`)).join(', ')}`] : [];
       // (v0.14: and a trickle of Shakes, a minute's worth, plus its own Shake store)
       const shakes = Math.round(hallShakeRate(b.level) * 600) / 10;
-      const own = rate > 0 ? [`Makes ${rate} gold / s and ${shakes} Shakes / min · holds ${formatGold(hallShakeCapacity(b.level))} Shakes`] : [];
+      const own = rate > 0 ? [`Makes ${rate} Bitcoin / s and ${shakes} Shakes / min · holds ${formatGold(hallShakeCapacity(b.level))} Shakes`] : [];
       return [`Next attack: wave ${next.number}${next.specialInfo ? ` (${next.specialInfo.name})` : ''}`, ...own, ...nextText];
     }
     return [];
@@ -1886,12 +1888,11 @@ New walls are built at your wall level (${wallLevel(this.gs)}), so one costs wha
     this.qbName = this.add.text(18, QB.h / 2 - 25, '', textStyle(19));
     this.qbLevel = this.add.text(18, QB.h / 2 + 2, '', textStyle(14, COLORS.textGold));
     this.qbButtons = {
-      collect: this.makeCollectButton(0, QB.h / 2, QB.collectW, QB.btnH),
-      upgrade: new Button(this, 0, QB.h / 2, QB.upgradeW, QB.btnH, 'Upgrade', () => this.onUpgrade(), { color: COLORS.buttonGood, fontSize: 17 }),
+      upgrade: new Button(this, 0, QB.h / 2, QB.upgradeW, QB.btnH, 'Upgrade', () => this.onUpgrade(), { color: COLORS.buttonGood, fontSize: 17, invalidFeedback: true }),
       repair: new Button(this, 0, QB.h / 2, QB.upgradeW, QB.btnH, 'Rebuild', () => this.gs.repair(this.selectedId), { invalidFeedback: true, color: COLORS.buttonGood, fontSize: 17 }),
       abilities: new Button(this, 0, QB.h / 2, QB.abilityW, QB.btnH, 'Abilities', () => this.openAbilities(), { color: COLORS.button, fontSize: 17 }),
-      research: new Button(this, 0, QB.h / 2, QB.abilityW, QB.btnH, 'Research', () => this.openResearch(), { color: COLORS.button, fontSize: 17 }),
-      brew: new Button(this, 0, QB.h / 2, QB.abilityW, QB.btnH, 'Brew', () => this.openFuelStation(), { color: 0x8e5bd6, fontSize: 17 }),
+      research: new Button(this, 0, QB.h / 2, QB.abilityW, QB.btnH, 'Research', () => this.openResearch(), { color: COLORS.button, fontSize: 17, invalidFeedback: true }),
+      brew: new Button(this, 0, QB.h / 2, QB.abilityW, QB.btnH, 'Brew', () => this.openFuelStation(), { color: 0x8e5bd6, fontSize: 17, invalidFeedback: true }),
       info: new Button(this, 0, QB.h / 2, QB.infoW, QB.btnH, 'Info', () => this.openInfo(), { color: COLORS.buttonBlue, fontSize: 17 }),
       merge: new Button(this, 0, QB.h / 2, QB.upgradeW, QB.btnH, 'Merge', () => this.onMerge(), { color: MERGE_COLOR, invalidFeedback: true, fontSize: 17 }),
       mergePreview: new Button(this, 0, QB.h / 2, MERGE_PREVIEW_W.qb, QB.btnH, 'Merge', null,
@@ -1929,7 +1930,6 @@ New walls are built at your wall level (${wallLevel(this.gs)}), so one costs wha
     this.qbName.setText(displayName(b));
     this.qbLevel.setText(`Level ${b.level} / ${maxLevel(b.type)}${b.destroyed ? '  ·  Destroyed' : ruin ? '  ·  In ruins' : b.merged ? '  ·  Merged' : ''}`);
     const shown = [];
-    if (this.refreshCollectButton(btn.collect, b)) shown.push(btn.collect);
     // A ruined building can still preview its next level while Rebuild remains available beside it.
     if (b.destroyed && b.type !== 'wall') {
       const rep = checkRepair(gs, b);
@@ -2002,14 +2002,14 @@ New walls are built at your wall level (${wallLevel(this.gs)}), so one costs wha
   }
 
   /**
-   * The Merge button for a max-level Cannon / Locklair Tower / Litman Mortar that isn't merged yet: { show, label, sub, ok }.
-   * Greyed with the reason when it can't (no partner, a wave, gold or Shakes); otherwise its sub line is the price.
+   * The Merge button for a max-level mergeable defense that isn't merged yet: { show, label, sub, ok, costs }. It always
+   * opens the merge window (which says what's missing, like the Upgrade window); the sub line names the first thing.
    */
   mergeButtonState(b) {
     const c = checkMerge(this.gs, b);
     if (!c.show) return { show: false, preview: !!c.preview, top: maxLevel(b.type) };
     const costs = [{ currency: 'gold', amount: c.cost.gold }, { currency: 'rp', amount: c.cost.rp }];
-    return { show: true, label: 'Merge', sub: c.ok ? '' : c.reason, ok: c.ok, costs };
+    return { show: true, label: 'Merge', sub: c.ok ? '' : c.reason, ok: !b.destroyed, costs };
   }
 
   /** The greyed Merge preview tapped: one line on how merging works. */
@@ -2018,12 +2018,16 @@ New walls are built at your wall level (${wallLevel(this.gs)}), so one costs wha
     if (b) this.showBanner(`Upgrade to Level ${maxLevel(b.type)}, then merge two into one stronger building.`);
   }
 
-  /** Merge pressed: the panel closes and the map asks for the second copy (GameScene.beginMergePick). */
+  /** Merge pressed: the merge window; confirming it closes the panel and the map asks for the second copy. */
   onMerge() {
-    const b = this.gs.getBuilding(this.selectedId);
-    if (!b || !this.world.beginMergePick(b.id)) return;
-    this.infoOpen = false;
-    this.refreshInfo();
+    if (Modal.isOpen(this)) return;
+    const id = this.selectedId;
+    openMergeWindow(this, this.gs, id, () => {
+      if (!this.world.beginMergePick(id)) return false;
+      this.infoOpen = false;
+      this.refreshInfo();
+      return true;
+    });
   }
 
   // ---------- merging: the "tap the other one" bar and the confirm window ----------
@@ -2054,81 +2058,6 @@ New walls are built at your wall level (${wallLevel(this.gs)}), so one costs wha
     if (this.mpBlock.input) this.mpBlock.input.hitArea.setSize(w, H);
     this.mpText.setPosition(x + pad, y + H / 2);
     this.mpCancel.setPosition(x + w - pad - this.mpCancel.btnW / 2, y + H / 2);
-  }
-
-  /**
-   * The merge confirm window: [picture] + [picture] -> [merged picture], Damage / Health / Range old -> new, the ability
-   * in one line, the price (gold and Shakes), Cancel / Merge.
-   */
-  openMergeConfirm(keepId, otherId) {
-    const gs = this.gs, a = gs.getBuilding(keepId), o = gs.getBuilding(otherId);
-    if (!a || !o || Modal.isOpen(this)) return;
-    const pv = mergePreview(gs, a, o), M = pv.config;
-    const W = 620, H = 500;
-    const md = new Modal(this, { width: W, height: H, title: `Merge into ${M.name}?`, header: 56 });
-    const g = md.add(this.add.graphics());
-    // Pictures: the two copies, then the merged building on a gold-rimmed card with its gear.
-    const cw = 128, ch = 132, gap = 40, top = md.y + 76, left = md.cx - (cw * 3 + gap * 2) / 2;
-    const card = (x, key, gold) => {
-      if (gold) g.fillStyle(0xffc83a, 1).fillRoundedRect(x - 4, top - 4, cw + 8, ch + 8, 15);
-      drawShowcaseCard(g, x, top, cw, ch, { tileY: top + ch - 34, tileW: 58 });
-      const im = md.add(this.add.image(x + cw / 2, top + ch - 34 + 17, key).setOrigin(0.5, 1));
-      fitIcon(im, cw - 22, ch - 26);
-      return im;
-    };
-    card(left, buildingPictureKey(this, a));
-    card(left + cw + gap, buildingPictureKey(this, o));
-    const mergedPic = card(left + (cw + gap) * 2, buildingPictureKey(this, { ...a, merged: true }), true);
-    if (!this.textures.exists(M.art.key)) mergedPic.setTint(0xffe2a0); // (the stand-in: the max-level picture, golden)
-    if (this.textures.exists(MERGE_GEAR)) md.add(fitIcon(this.add.image(left + (cw + gap) * 2 + cw - 16, top + 16, MERGE_GEAR), 34));
-    md.add(this.add.text(left + cw + gap / 2, top + ch / 2, '+', textStyle(34)).setOrigin(0.5));
-    md.add(this.add.text(left + cw * 2 + gap * 1.5, top + ch / 2, '→', textStyle(34)).setOrigin(0.5));
-    // Stats: old -> new.
-    const r1 = (v) => Math.round(v * 10) / 10;
-    // (A F.L.O.C.K Tower does no damage before it merges: '-'; the Mothership's zaps show as "3 x 60".)
-    // (A Tower of Rah's beam: damage per second, "70/s".)
-    const dmg = (s) => (!(s.damage > 0) ? '-' : s.shots > 1 ? `${s.shots} x ${formatGold(Math.round(s.damage))}` : `${formatGold(Math.round(s.damage))}${s.perSecond ? '/s' : ''}`);
-    const rows = [['Damage', dmg(pv.a), dmg(pv.merged)], ['Health', formatGold(pv.a.hp), formatGold(pv.merged.hp)], ['Range', `${r1(pv.a.range)} tiles`, `${r1(pv.merged.range)} tiles`]];
-    let y = top + ch + 20;
-    const lx = md.x + 110, mid = md.cx + 40;
-    for (const [label, from, to] of rows) {
-      g.fillStyle(COLORS.frame, 0.08).fillRoundedRect(md.x + 90, y - 2, W - 180, 28, 8);
-      md.add(this.add.text(lx, y + 12, label, bodyStyle(17, COLORS.inkDim, { fontStyle: 'bold' })).setOrigin(0, 0.5));
-      md.add(this.add.text(mid - 22, y + 12, from, bodyStyle(17, COLORS.ink)).setOrigin(1, 0.5));
-      md.add(this.add.text(mid, y + 12, '→', bodyStyle(17, COLORS.inkDim)).setOrigin(0.5));
-      md.add(this.add.text(mid + 22, y + 12, to, bodyStyle(17, COLORS.inkGood, { fontStyle: 'bold' })).setOrigin(0, 0.5));
-      y += 32;
-    }
-    // The ability, in one line.
-    const AB = 60; // the ability box (MergeIcons.js), like a hero ability slot
-    const ab = md.add(this.add.text(0, y + AB / 2, `${M.ability}: ${M.abilityShort}`, bodyStyle(16, '#8a5a00', { fontStyle: 'bold', wordWrap: { width: W - 50 - AB - 12 }, align: 'left' })).setOrigin(0, 0.5));
-    const abW = ab.width, abX = md.cx - (abW + AB + 12) / 2;
-    md.add(abilityIcon(this, M.abilityIcon, abX + AB / 2, y + AB / 2, AB));
-    ab.setX(abX + AB + 12);
-    y += Math.max(AB + 8, ab.height + 8);
-    // The price: gold and Shakes, red when short.
-    const check = checkMerge(gs, a, o.id);
-    const items = [[TEX.coin, `${formatGold(M.cost.gold)}`, gs.gold >= M.cost.gold, COLORS.textGold], [TEX.researchPoint, rpText(M.cost.rp), (gs.researchPoints || 0) >= M.cost.rp, RP_TEXT_COLOR]];
-    const parts = items.map(([key, text, ok, color]) => ({ key, t: this.add.text(0, 0, text, textStyle(19, ok ? color : '#ff8a7a')).setOrigin(0, 0.5) }));
-    const iconW = 28, partW = (p) => (this.textures.exists(p.key) ? iconW + 6 : 0) + p.t.width;
-    const totalW = parts.reduce((s, p) => s + partW(p), 0) + 30;
-    let px = md.cx - totalW / 2;
-    g.fillStyle(0x000000, 0.45).fillRoundedRect(px - 14, y - 2, totalW + 28, 34, 17);
-    for (const p of parts) {
-      if (this.textures.exists(p.key)) { md.add(fitIcon(this.add.image(px + iconW / 2, y + 15, p.key), iconW)); px += iconW + 6; }
-      md.add(p.t.setPosition(px, y + 15));
-      px += p.t.width + 30;
-    }
-    // Buttons.
-    const by = md.y + H - 48;
-    const ok = new Button(this, md.cx - 115, by, 200, 54, 'Merge', () => {
-      md.destroy();
-      const r = gs.mergeBuilding(keepId, otherId);
-      if (!r.ok) this.showBanner(r.reason);
-    }, { color: MERGE_COLOR, invalidFeedback: true, fontSize: 21 });
-    ok.setLabel('Merge', check.ok ? '' : check.reason).setEnabled(check.ok);
-    md.add(ok);
-    md.add(new Button(this, md.cx + 115, by, 200, 54, 'Cancel', () => md.close(), { color: COLORS.buttonDark, fontSize: 21 }));
   }
 
   /** The Upgrade button the player can see right now (quick bar or full panel), for the guide's arrow. */
@@ -2382,7 +2311,7 @@ New walls are built at your wall level (${wallLevel(this.gs)}), so one costs wha
     notifyGuideMessage(this, gs, lab ? `lab-${gs.labGuideStep}` : `tutorial-${gs.tutorialStep}`);
     this.guideText.setText(lab ? labGuideText(gs) : step.text).setFontSize(lab ? 16 : 18);
     const need = lab ? 0 : goldNeeded(gs);
-    this.guideProgress.setText(need && isWaitingForGold(gs) ? `Collect gold from your mine: ${formatGold(gs.gold)} / ${formatGold(need)}` : '');
+    this.guideProgress.setText(need && isWaitingForGold(gs) ? `Collect Bitcoin from your mine: ${formatGold(gs.gold)} / ${formatGold(need)}` : '');
     this.guideProgress.setY(Math.max(70, 26 + this.guideText.height));
     this.guideNext.setVisible(!!step.showNext).setY(step.showNext ? 124 : -1000);
     const skip = lab ? !step.showNext : canSkipTutorial(gs); // the guide's last step just has Next
@@ -2449,6 +2378,8 @@ New walls are built at your wall level (${wallLevel(this.gs)}), so one costs wha
       const m = b.getWorldTransformMatrix();
       return { x: m.tx - b.btnW / 2, y: m.ty - b.btnH / 2, w: b.btnW, h: b.btnH };
     };
+    const mine = () => this.infoOpen && gs.getBuilding(this.selectedId)?.type === 'mine'
+      ? btnRect(this.infoButtons.collect) : building('mine');
     switch (n) {
       case 1: {
         const th = gs.townHall;
@@ -2456,10 +2387,10 @@ New walls are built at your wall level (${wallLevel(this.gs)}), so one costs wha
       }
       case 2: return imageRect(this.shopButton);
       case 3: return this.shopOpen ? card('mine') : imageRect(this.shopButton);
-      case 5: return building('mine');
+      case 5: return mine();
       case 6:
       case 7:
-        if (waiting) return building('mine');
+        if (waiting) return mine();
         if (this.placementActive) return null;
         return this.shopOpen ? card(step.buyType) : imageRect(this.shopButton);
       case 8: {
@@ -2535,7 +2466,8 @@ New walls are built at your wall level (${wallLevel(this.gs)}), so one costs wha
       if (this.selectedId && gs.collectionStatus(this.selectedId)) this.refreshInfo();
     });
     on(['selectionChanged'], (d) => {
-      if (d.id !== this.selectedId) this.infoOpen = false; // a new selection starts with the quick bar
+      // A new selection starts with the quick bar; the RV Lab opens its full panel straight away (its Research button).
+      if (d.id !== this.selectedId) this.infoOpen = gs.getBuilding(d.id)?.type === 'rvlab';
       this.selectedId = d.id;
       if (d.id && this.shopOpen) this.closeShop();
       this.refreshInfo();
@@ -2558,7 +2490,7 @@ New walls are built at your wall level (${wallLevel(this.gs)}), so one costs wha
       const sp = themeInfo(d.special);
       const bonus = (d.bonus || 0) + (d.starGold || 0) ? ` (+${formatGold((d.bonus || 0) + (d.starGold || 0))} bonus)` : '';
       const stars = d.stars ? `${starText(d.stars)} ` : '';
-      this.showBanner(`${stars}${sp ? `${sp.name} (wave ${d.number})` : `Wave ${d.number}`} cleared! +${formatGold(d.bounty)} gold${bonus} · +${rpText(d.rp || 0)}${ruins}`);
+      this.showBanner(`${stars}${sp ? `${sp.name} (wave ${d.number})` : `Wave ${d.number}`} cleared! +${formatGold(d.bounty)} Bitcoin${bonus} · +${rpText(d.rp || 0)}${ruins}`);
       // Then, if the gnomes rebuilt a mine for free, say so.
       if (d.salvaged) this.time.delayedCall(BANNER_MS + 200, () => this.showBanner('Your gnomes salvaged a Bitcoin Mine!'));
       this.refreshAll();
@@ -2596,7 +2528,7 @@ New walls are built at your wall level (${wallLevel(this.gs)}), so one costs wha
     // Restless nights: a wave that's attacking when it gets dark (or that starts in the dark), and dawn after.
     on(['restlessChanged'], (d) => {
       const bonus = Math.round(CONFIG.rules.night.lootBonus * 100);
-      this.showBanner(d.restless ? `Night: the enemies are restless! +${bonus}% gold & ${RP_NAME}` : 'Daylight: the enemies calm down');
+      this.showBanner(d.restless ? `Night: the enemies are restless! +${bonus}% Bitcoin & ${RP_NAME}` : 'Daylight: the enemies calm down');
       this.refreshWave();
     });
     on(['waveCalled'], (d) => {
@@ -2624,7 +2556,7 @@ New walls are built at your wall level (${wallLevel(this.gs)}), so one costs wha
   /** Achievements unlocked during play: a toast with the achievement trophy (a gold medal without the art). */
   queueAchievementToast(id) {
     const a = achievementById(id);
-    if (a) this.queueToast({ title: 'Achievement unlocked!', name: a.name, sub: `+${formatGold(a.reward)} gold to claim  ·  Profile (top left)`, texture: TEX.achievementIcon });
+    if (a) this.queueToast({ title: 'Achievement unlocked!', name: a.name, sub: `+${formatGold(a.reward)} Bitcoin to claim  ·  Profile (top left)`, texture: TEX.achievementIcon });
   }
 
   /** Gold-trimmed toasts under the banner, top center, one at a time: { title, name, sub, texture? } (else a medal). */

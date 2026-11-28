@@ -124,8 +124,10 @@ export function produceMines(state, dt) {
     const stockCap = mineStockCap(b);
     const rate = mineProduction(state, b);
     const before = Math.floor(b.stock || 0);
+    const threshold = CONFIG.rules.mineCoinIconThreshold;
+    const wasReady = (b.stock || 0) / stockCap >= threshold;
     b.stock = Math.min(stockCap, (b.stock || 0) + rate * dt);
-    if (Math.floor(b.stock) !== before) emit(state, 'mineStockChanged', { id: b.id, stock: b.stock });
+    if (Math.floor(b.stock) !== before || wasReady !== (b.stock / stockCap >= threshold)) emit(state, 'mineStockChanged', { id: b.id, stock: b.stock });
   }
 }
 
@@ -180,10 +182,10 @@ export function sendMineToStorage(state, mine) {
 /** Rebuild price for a destroyed building: rules.rebuildCostShare of its current level's cost. */
 export function repairCost(b) {
   const stats = levelStats(b.type, b.level);
-  // A level paid for in Shakes (costCurrency 'rp') counts as rules.burgerGoldValue gold per Shake (never less
+  // A level paid for in Shakes (costCurrency 'rp') counts as rules.shakeGoldValue gold per Shake (never less
   // than the gold the building cost to build), so higher levels cost more to rebuild.
   const levelCost = b.type === 'townHall' ? stats.upgradeCost
-    : stats.costCurrency === 'rp' ? Math.max(buildCost(b.type), stats.cost * CONFIG.rules.burgerGoldValue)
+    : stats.costCurrency === 'rp' ? Math.max(buildCost(b.type), stats.cost * CONFIG.rules.shakeGoldValue)
     : stats.cost;
   return Math.round(levelCost * CONFIG.rules.rebuildCostShare);
 }
@@ -196,7 +198,7 @@ export function checkRepair(state, b) {
   if (!b.destroyed) return { ok: false, reason: 'Not destroyed' };
   if (b.type === 'wall') return { ok: false, reason: 'Walls rebuild after the wave' };
   const cost = repairCost(b);
-  if (state.gold < cost) return { ok: false, reason: `Need ${cost - state.gold} more gold` };
+  if (state.gold < cost) return { ok: false, reason: `Need ${cost - state.gold} more Bitcoin` };
   return { ok: true, reason: '' };
 }
 

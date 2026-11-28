@@ -1,18 +1,14 @@
-// A player's card (v0.7), from the leaderboard or player search: their league badge and name, four stat tiles
-// (furthest wave, Village Hall, rank, achievements), the achievements they've earned, and their villages (best first)
-// with a green Visit button each to go and look at it. A player who hides their villages shows a note instead.
+// A player's card (v0.7), from the leaderboard or player search: their league badge and name, stat tiles
+// (furthest wave, Village Hall, rank), and their villages (best first) with visit and achievements buttons.
 import { Modal } from './Modal.js';
 import { Button } from './Button.js';
+import { AchievementsWindow } from './AchievementsWindow.js';
 import { COLORS, bodyStyle, textStyle } from '../theme.js';
 import { leagueFor, leagueBadgeSize } from '../logic/leagues.js';
 import { ACHIEVEMENTS } from '../logic/achievements.js';
 import { fitIcon, fitWidth } from './uiDraw.js';
 
-import { TEX } from '../assetKeys.js';
-
-const TROPHY = TEX.achievementIcon;
-
-const W = 660, H = 620, ACH_SHOWN = 8;
+const W = 760, H = 620;
 
 /** A green button at the right end of a list row: "Visit" (a village, on the card) or "Profile" (a player's card,
  *  on the leaderboard and Find Players; v0.8.0). */
@@ -26,13 +22,13 @@ export const profileButton = (scene, rightX, y, h, onClick) => rowButton(scene, 
 export class PlayerCardWindow {
   /**
    * @param {object} o
-   * @param {object} o.session  the account session (session.backend.playerProfile)
+   * @param {object} o.session  the account session
    * @param {string} o.username
-   * @param {(profile, baseId) => void} o.onVisit  look at one of their villages
+   * @param {(profile, baseId) => void} [o.onVisit]  look at one of their villages
    * @param {string} [o.focusBaseId] the village it's opened for (a leaderboard row's, or the one just visited): marked
    * @param {() => void} [o.onClose]
    */
-  constructor(scene, { session, username, onVisit, onClose = null, focusBaseId = null }) {
+  constructor(scene, { session, username, onVisit = null, onClose = null, focusBaseId = null }) {
     this.scene = scene;
     this.focusBaseId = focusBaseId;
     this.session = session;
@@ -45,7 +41,7 @@ export class PlayerCardWindow {
   async load() {
     this.message('Loading…');
     try {
-      const p = await this.session.backend.playerProfile(this.username);
+      const p = await this.session.playerProfile(this.username);
       if (!this.modal.frame) return;
       if (!p) { this.message('That player couldn’t be found.', true); return; }
       this.render(p);
@@ -82,10 +78,9 @@ export class PlayerCardWindow {
     const tiles = [
       ['Furthest wave', p.bestWave > 0 ? String(p.bestWave) : '-'],
       ['Village Hall', p.bestTownHall > 0 ? String(p.bestTownHall) : '-'],
-      ['Best rank', p.bestWave > 0 && p.rank ? `#${p.rank}` : '-'], // their best village's leaderboard rank
-      ['Achievements', `${p.achievements.length} / ${ACHIEVEMENTS.length}`]
+      ['Best rank', p.bestWave > 0 && p.rank ? `#${p.rank}` : '-']
     ];
-    const tw = (w - 3 * 10) / 4;
+    const tw = (w - 2 * 10) / tiles.length;
     const g = m.add(s.add.graphics());
     tiles.forEach(([label, value], i) => {
       const tx = left + i * (tw + 10);
@@ -95,27 +90,7 @@ export class PlayerCardWindow {
       m.add(s.add.text(tx + tw / 2, y + 54, label, bodyStyle(14, COLORS.inkDim)).setOrigin(0.5));
     });
 
-    // Achievements: the newest ones as chips (with the trophy), and how many more.
     y += 88;
-    m.add(s.add.text(left, y, 'Achievements', textStyle(19)));
-    y += 30;
-    const byId = new Map(ACHIEVEMENTS.map((a) => [a.id, a]));
-    const earned = [...p.achievements].sort((a, b) => String(b.earnedAt).localeCompare(String(a.earnedAt))).map((a) => byId.get(a.id)).filter(Boolean);
-    if (!earned.length) m.add(s.add.text(left, y + 4, 'None yet.', bodyStyle(16, COLORS.inkDim)));
-    const cw = (w - 10) / 2, ch = 30;
-    earned.slice(0, ACH_SHOWN).forEach((a, i) => {
-      const cx = left + (i % 2) * (cw + 10), cy = y + Math.floor(i / 2) * (ch + 6);
-      g.fillStyle(0xe9e1cf, 1).fillRoundedRect(cx, cy, cw, ch, 9);
-      if (s.textures.exists(TROPHY)) fitIcon(m.add(s.add.image(cx + 17, cy + ch / 2, TROPHY)), 22);
-      const t = m.add(s.add.text(cx + 34, cy + ch / 2, a.name, bodyStyle(15, COLORS.ink, { fontStyle: 'bold' })).setOrigin(0, 0.5));
-      fitWidth(t, cw - 44);
-    });
-    const rows = Math.min(ACH_SHOWN, Math.max(1, earned.length));
-    y += Math.ceil(rows / 2) * (ch + 6);
-    if (earned.length > ACH_SHOWN) { m.add(s.add.text(left + w, y - 2, `+${earned.length - ACH_SHOWN} more`, bodyStyle(14, COLORS.inkDim)).setOrigin(1, 0)); }
-
-    // Villages (best first), each with a Visit button.
-    y += 14;
     m.add(s.add.text(left, y, 'Villages', textStyle(19)));
     y += 30;
     const bottom = m.y + H - 92;
@@ -123,7 +98,7 @@ export class PlayerCardWindow {
       const why = p.publicBases || p.isMe ? 'No villages to show yet.' : `${p.username} keeps their villages private.`;
       m.add(s.add.text(left, y + 4, why, bodyStyle(16, COLORS.inkDim)));
     }
-    const rowH = 38;
+    const rowH = 46, achievementW = 152;
     // The village it was opened for is marked (outlined, like your own row on the leaderboard); else their best one.
     const marked = p.bases.some((b) => b.id === this.focusBaseId) ? this.focusBaseId : p.bases[0] && p.bases[0].id;
     p.bases.forEach((b, i) => {
@@ -136,16 +111,24 @@ export class PlayerCardWindow {
       const rank = m.add(s.add.text(left + 12, ry + rowH / 2, b.rank ? `#${b.rank}` : '-', textStyle(16, b.rank ? COLORS.textGold : COLORS.textDim)).setOrigin(0, 0.5));
       const name = m.add(s.add.text(left + 66, ry + rowH / 2, b.name, bodyStyle(17, COLORS.ink, { fontStyle: 'bold' })).setOrigin(0, 0.5));
       fitWidth(rank, 50);
-      fitWidth(name, w - 350);
-      if (i === 0) m.add(s.add.text(name.x + name.displayWidth + 8, ry + rowH / 2, 'Best', bodyStyle(13, COLORS.inkAccent, { fontStyle: 'bold' })).setOrigin(0, 0.5));
-      m.add(s.add.text(left + w - VISIT_W - 20, ry + rowH / 2, `Village Hall ${b.townHall || '-'}  ·  Wave ${Math.max(b.bestWave || 0, 0)}`, bodyStyle(15, COLORS.inkDim)).setOrigin(1, 0.5));
-      m.add(visitButton(s, left + w - 6, ry + rowH / 2, 30, () => this.visit(p, b.id)));
+      fitWidth(name, w - 470);
+      const achRight = left + w - (this.onVisit ? VISIT_W + 18 : 6);
+      m.add(s.add.text(achRight - achievementW - 16, ry + rowH / 2, `Hall ${b.townHall || '-'} · Wave ${b.bestWave || 0}`,
+        bodyStyle(15, COLORS.inkDim)).setOrigin(1, 0.5));
+      const awards = p.achievements.filter((a) => a.baseId === b.id);
+      const ach = m.add(new Button(s, achRight - achievementW / 2, ry + rowH / 2, achievementW, 38, 'Achievements',
+        () => new AchievementsWindow(s, { publicBase: b, publicAchievements: awards }),
+        { color: COLORS.buttonBlue, fontSize: 16, radius: 8 }));
+      ach.setLabel('Achievements', `${awards.length} / ${ACHIEVEMENTS.length}`);
+      if (this.onVisit) m.add(visitButton(s, left + w - 6, ry + rowH / 2, 38, () => this.visit(p, b.id)));
     });
 
     // The big button: their best village.
-    const best = p.bases[0];
-    const btn = m.add(new Button(s, m.cx, m.y + H - 46, 330, 56, best ? 'Visit Best Village' : 'No Village to Visit', () => best && this.visit(p, best.id), { color: COLORS.buttonGood, fontSize: 21 }));
-    if (!best) btn.setEnabled(false);
+    if (this.onVisit) {
+      const best = p.bases[0];
+      const btn = m.add(new Button(s, m.cx, m.y + H - 46, 330, 56, best ? 'Visit Best Village' : 'No Village to Visit', () => best && this.visit(p, best.id), { color: COLORS.buttonGood, fontSize: 21 }));
+      if (!best) btn.setEnabled(false);
+    }
   }
 
   visit(profile, baseId) {

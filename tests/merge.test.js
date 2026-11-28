@@ -5,7 +5,7 @@ import { CONFIG } from '../src/config.js';
 import { maxHp, maxLevel, levelStats, roomFor, countOwned, displayName, totalSpent } from '../src/logic/buildings.js';
 import { towerRange, towerFireInterval, towerDamageMult, checkRespec } from '../src/logic/abilities.js';
 import {
-  checkMerge, mergeBuildings, mergeCandidates, mergePreview, checkMastery, masteryLevel, syncMastery, MERGE_TYPES, burgersSpentOnLevels
+  checkMerge, previewMerge, mergeBuildings, mergeCandidates, mergePreview, checkMastery, masteryLevel, syncMastery, MERGE_TYPES, shakesSpentOnLevels
 } from '../src/logic/merge.js';
 import { stepDefenses, stepProjectiles, pinEnemy, damageEnemy, sideTargets } from '../src/logic/combat.js';
 import { stepEnemies } from '../src/logic/enemies.js';
@@ -88,6 +88,7 @@ describe('merging: rules', () => {
     expect(checkMerge(s, a)).toMatchObject({ ok: false, reason: 'Needs Level 10', show: false });
     a.level = TOP('cannon');
     expect(checkMerge(s, a)).toMatchObject({ ok: false, reason: 'Needs another Level 10 Cannon', show: true });
+    expect(previewMerge(s, a).notes).toContain('You need another Level 10 Cannon to merge with!');
     addBuilding(s, 'archer', 17, 11, TOP('archer')); // another type doesn't count
     expect(checkMerge(s, a).ok).toBe(false);
     const b = addBuilding(s, 'cannon', 21, 15, TOP('cannon'));
@@ -99,17 +100,23 @@ describe('merging: rules', () => {
     expect(checkMerge(s, addBuilding(s, 'storage', 13, 11, 1)).show).toBe(false);
   });
 
-  it('only between waves, and only with the gold and the Shakes', () => {
+  it('can only purchase when both costs are covered; the merge window lists everything missing', () => {
     const s = village();
     const [a, b] = pair(s, 'cannon');
     s.wave.phase = 'active';
-    expect(checkMerge(s, a, b.id).reason).toBe('Not during a wave');
+    expect(checkMerge(s, a)).toMatchObject({ ok: false, reason: 'Not during a wave' });
     s.wave.phase = 'idle';
     s.gold = 1000;
-    expect(checkMerge(s, a, b.id).reason).toMatch(/more gold/);
+    expect(checkMerge(s, a)).toMatchObject({ ok: false, reason: expect.stringMatching(/more Bitcoin/) });
+    expect(previewMerge(s, a)).toMatchObject({ ok: false, notes: [expect.stringMatching(/^You need [\d,]+ more Bitcoin!$/)] });
+    expect(mergeBuildings(s, a.id, b.id).ok).toBe(false);
+    expect(s.gold).toBe(1000);
     s.gold = 400000;
     s.researchPoints = 10;
-    expect(checkMerge(s, a, b.id).reason).toMatch(/more Shakes/);
+    expect(checkMerge(s, a)).toMatchObject({ ok: false, reason: expect.stringMatching(/more Shakes/) });
+    expect(previewMerge(s, a).costs).toEqual([{ currency: 'gold', amount: CONFIG.merges.cannon.cost.gold, short: false }, { currency: 'rp', amount: CONFIG.merges.cannon.cost.rp, short: true }]);
+    expect(mergeBuildings(s, a.id, b.id).ok).toBe(false);
+    expect(s.buildings).toEqual(expect.arrayContaining([a, b]));
   });
 
   it('merging takes both costs, removes the other copy, keeps both slots (counts as 2)', () => {
@@ -146,7 +153,7 @@ describe('merging: rules', () => {
     try {
       const t = village({ researchPoints: 9000 });
       const [x, y] = [addBuilding(t, 'altar', 13, 15, TOP('altar')), addBuilding(t, 'altar', 21, 15, TOP('altar'))];
-      const refund = burgersSpentOnLevels(y);
+      const refund = shakesSpentOnLevels(y);
       expect(refund).toBeGreaterThan(10000);
       expect(mergeBuildings(t, x.id, y.id).refund).toBe(refund);
       expect(t.researchPoints).toBe(9000 - CONFIG.merges.cannon.cost.rp + refund);

@@ -11,12 +11,12 @@ const hallLevel = (state) => { const th = (state.buildings || []).find((b) => b.
 
 /** Every tip: key (saved) and text. The event that brings each one up is in tipsForEvent. */
 export const TIPS = {
-  rp: () => 'Shakes! The purple bar next to your gold. You get them for every enemy you defeat and every wave you beat, up to a cap set by your Village Hall and Shake Storages (extra is lost). Spend them in the RV Lab (from Village Hall 4) on perks, on hero levels and on spells.',
+  rp: () => 'Shakes! The purple bar next to your Bitcoin. You get them for every enemy you defeat and every wave you beat, up to a cap set by your Village Hall and Shake Storages (extra is lost). Spend them in the RV Lab (from Village Hall 4) on perks, on hero levels and on spells.',
   // v0.14: the first time a Shake Collector can be built (Village Hall 3).
   shakeCollector: () => `Village Hall ${CONFIG.shakeCollector.unlockTownHall} unlocked the Shake Collector and the Shake Storage (Shop, Economy tab)! A Shake Collector makes Shakes over time: click it when its Shake shows, like a mine. A Shake Storage raises how many Shakes you can hold.`,
-  stars: () => `Wave stars: each wave is rated by how much of your village is still standing at the end (walls don't count). 3 stars pays +${pct(CONFIG.rules.waveStars.bonus[2])} gold and Shakes, 2 stars +${pct(CONFIG.rules.waveStars.bonus[1])}. The stars at the top show how you're doing.`,
-  themes: () => `Every wave has a theme now, named in the top bar (Air Raid is flyers only, for example). Swarm, Heist, Siege and the other all-in themes pay bonus gold, and every ${CONFIG.waveThemes.boss.every}th wave is a Boss Wave.`,
-  restless: () => `Night attack! In the dark, enemies are restless: they hit harder and move faster, but pay +${pct(CONFIG.rules.night.lootBonus)} gold and Shakes. Start waves by day for an easier fight, or at night for more loot.`,
+  stars: () => `Wave stars: each wave is rated by how much of your village is still standing at the end (walls don't count). 3 stars pays +${pct(CONFIG.rules.waveStars.bonus[2])} Bitcoin and Shakes, 2 stars +${pct(CONFIG.rules.waveStars.bonus[1])}. The stars at the top show how you're doing.`,
+  themes: () => `Every wave has a theme now, named in the top bar (Air Raid is flyers only, for example). Swarm, Heist, Siege and the other all-in themes pay bonus Bitcoin, and every ${CONFIG.waveThemes.boss.every}th wave is a Boss Wave.`,
+  restless: () => `Night attack! In the dark, enemies are restless: they hit harder and move faster, but pay +${pct(CONFIG.rules.night.lootBonus)} Bitcoin and Shakes. Start waves by day for an easier fight, or at night for more loot.`,
   boss: () => `${CONFIG.enemies.babycar.name} comes next wave! This raid boss drives straight at your Village Hall and smashes through walls. Keep strong defenses near your hall, and be ready for the troops it bursts into.`,
   toilet: () => `${CONFIG.enemies.toilet.name}s come next wave! They tunnel under your walls to the nearest building and pop up to attack. Underground, only a F.L.O.C.K Tower's sight lets your defenses hit them.`,
   pork: () => `${CONFIG.enemies.pork.name} comes next wave! When a F.L.O.C.K Tower spots him he makes a call that silences every F.L.O.C.K Tower near him for ${CONFIG.enemies.pork.call.seconds} s. Keep other defenses covering your F.L.O.C.K Towers.`,

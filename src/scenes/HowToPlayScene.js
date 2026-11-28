@@ -42,8 +42,6 @@ import { VIEW } from '../renderScale.js';
 // "Cannons, Locklair Towers, Litman Mortars or Firework Launchers": the types that can merge (CONFIG.merges).
 // (The Diddypult: "Diddypults"; Tower of Rah: "Towers of Rah")
 const plural = (t) => { const n = CONFIG.defenses[t].name.replace(/^The /, ''); return / of /.test(n) ? n.replace(/^(\S+)/, '$1s') : `${n}s`; };
-const MERGE_NAMES = MERGE_TYPES.length > 1
-  ? `${MERGE_TYPES.slice(0, -1).map(plural).join(', ')} or ${plural(MERGE_TYPES[MERGE_TYPES.length - 1])}` : plural(MERGE_TYPES[0]);
 // The top level they merge at: Level 10, except the types with fewer levels ("Diddypults Level 5").
 const MERGE_TOPS = MERGE_TYPES.filter((t) => maxLevel(t) !== 10).map((t) => `${plural(t)} Level ${maxLevel(t)}`);
 const MERGE_AT = MERGE_TOPS.length ? `top-level (Level 10; ${MERGE_TOPS.join(', ')})` : 'Level 10';
@@ -198,13 +196,13 @@ function buildingStats(type) {
   const out = [grow(type, 'Health', 'hp', 0x4cd137)];
   const levels = fixed('Levels', String(top), top / 10, 0x9a7cff);
   if (type === 'townHall') {
-    out.push(grow(type, 'Gold it holds', 'capacity', 0xffc93c));
+    out.push(grow(type, 'Bitcoin capacity', 'capacity', 0xffc93c));
     out.push(fixed('Unlocks', 'New buildings', 1, 0x3cb8ff));
   } else if (type === 'mine') {
-    out.push(grow(type, 'Gold per second', 'production', 0xffc93c));
-    out.push(grow(type, 'Holds before collecting', 'stockCap', 0x3cb8ff));
+    out.push(grow(type, 'Bitcoin production (per second)', 'production', 0xffc93c));
+    out.push(grow(type, 'Bitcoin capacity (before collecting)', 'stockCap', 0x3cb8ff));
   } else if (type === 'storage') {
-    out.push(grow(type, 'Gold capacity', 'capacity', 0xffc93c));
+    out.push(grow(type, 'Bitcoin capacity', 'capacity', 0xffc93c));
   } else if (type === 'house') {
     out.push(grow(type, 'Gnome workers', 'gnomes', 0xe85d4a));
   } else if (type === 'shakeCollector') {
@@ -489,17 +487,17 @@ export class HowToPlayScene extends Phaser.Scene {
       ['Waves, day & night', [
         'Build as long as you like. Press Start Wave to get 30 seconds to get ready. A "!" shows where enemies will come from.',
         'You can start a raid while heroes recover. Each hero joins after their timer ends and they wake up, even at 2x or 4x speed.',
-        `Day turns to night about every 8 minutes. At night, enemies hit ${Math.round((CONFIG.rules.night.damage - 1) * 100)}% harder and move faster, but you earn +${Math.round(CONFIG.rules.night.lootBonus * 100)}% gold and Shakes.`,
-        `Each wave is harder than the last and new enemies join at set waves; your Village Hall doesn't change that. Every ${CONFIG.waveThemes.boss.every}th wave is a Boss Wave, and special waves pay bonus gold.`,
+        `Day turns to night about every 8 minutes. At night, enemies hit ${Math.round((CONFIG.rules.night.damage - 1) * 100)}% harder and move faster, but you earn +${Math.round(CONFIG.rules.night.lootBonus * 100)}% Bitcoin and Shakes.`,
+        `Each wave is harder than the last and new enemies join at set waves; your Village Hall doesn't change that. Every ${CONFIG.waveThemes.boss.every}th wave is a Boss Wave, and special waves pay bonus Bitcoin.`,
         `The round "1x" button beside Start Wave${IS_TOUCH ? '' : ' (or press T)'} shows the wave's speed: press it for 2x, again for 4x, and again for 1x. It stays until you change it.`,
-        `You get 1 to 3 stars for how much of your village survives. 3 stars pays +${Math.round(CONFIG.rules.waveStars.bonus[2] * 100)}% gold and Shakes. After a wave, everything destroyed is rebuilt free.`,
+        `You get 1 to 3 stars for how much of your village survives. 3 stars pays +${Math.round(CONFIG.rules.waveStars.bonus[2] * 100)}% Bitcoin and Shakes. After a wave, everything destroyed is rebuilt free.`,
         'If your Village Hall falls, you can Retry the wave.'
       ]],
-      ['Gold & Shakes', [
-        'Bitcoin Mines make gold. Select a mine or Shake Collector and press Collect, or tap it when its resource icon floats above it.',
-        'Your Village Hall and Storages decide how much gold you can hold. Enemies that hit a Storage steal some.',
-        'Gnomes mine extra gold and repair buildings. Defeated enemies and achievements pay gold.',
-        `Shakes pay for perks, hero levels, spells and merges. Defeated enemies and beaten waves (${CONFIG.rules.researchPointsPerWave} x the wave number) give Shakes, and so do Shake Collectors (click them like mines) and your Village Hall.`,
+      ['Bitcoin & Shakes', [
+        'Tap a Bitcoin Mine or Shake Collector when its icon shows to collect from every one of that type (Collect All in its Info does the same).',
+        'Your Village Hall and Bitcoin Storages decide how much Bitcoin you can hold. Enemies that hit a Bitcoin Storage steal some.',
+        'Gnomes mine extra Bitcoin and repair buildings. Defeated enemies and achievements pay Bitcoin.',
+        `Shakes pay for perks, hero levels, spells and merges. Defeated enemies and beaten waves (${CONFIG.rules.researchPointsPerWave} x the wave number) give Shakes, and so do Shake Collectors and your Village Hall.`,
         'Your Village Hall and Shake Storages set how many Shakes you can hold; extra is lost, so spend them.'
       ]]
     ];
@@ -516,22 +514,21 @@ export class HowToPlayScene extends Phaser.Scene {
     // Left: leveling buildings.
     let y = this.card(LEFT, CONTENT_TOP, lw, h, 'Upgrading buildings');
     this.bullets(LEFT + 18, y, lw - 36, [
-      'Select a building and press Upgrade. Upgrades are instant and only work by day.',
-      'A building cannot be a higher level than your Village Hall.',
-      'Each level adds health and power. Buildings get bigger and get new art every few levels.',
-      'Upgrading the Village Hall unlocks new buildings and lets you build more of each. It never makes the waves harder: they grow with the wave number.',
-      `Village Halls 11 to ${CONFIG.rules.maxTownHallLevel} bring no new building levels: each allows a few more defenses and 12 more walls. Your Village Hall's Stats tab shows what its next level adds.`,
-      'Walls share one level: "Upgrade Walls" raises every wall at once, and new walls are built at that level.',
-      `After you beat a wave, destroyed buildings are rebuilt free. During a wave you can Rebuild one early for ${Math.round(CONFIG.rules.rebuildCostShare * 100)}% of its cost.`,
-      "Buildings can't be sold: each Village Hall allows a set number of every building, so rearrange your village by moving them in edit mode.",
-      `Merging: two ${MERGE_AT} ${MERGE_NAMES} can merge into one stronger building with its own ability (Merge button, between waves, gold + Shakes). It still counts as two toward the limit, so merging doesn't free a slot. Below the top level, a greyed Merge button shows which buildings can merge.`
+      'Select a building and press Upgrade. The window shows the next level, what it adds and its price; a red note says what\'s missing. Upgrades are instant, between raids only.',
+      'A building can\'t be a higher level than your Village Hall. Each level adds health and power, and buildings get bigger with new art every few levels.',
+      'Upgrading the Village Hall unlocks buildings and lets you build more of each. It never makes waves harder: they grow with the wave number.',
+      `Village Halls 11 to ${CONFIG.rules.maxTownHallLevel} add no building levels, just a few more defenses and 12 more walls each.`,
+      'Walls share one level: "Upgrade Walls" raises every wall at once, and new walls start at that level.',
+      `Destroyed buildings are rebuilt free after you beat a wave, or early with Rebuild for ${Math.round(CONFIG.rules.rebuildCostShare * 100)}% of their cost.`,
+      "Buildings can't be sold. Rearrange your village by moving them in Edit Mode.",
+      `Merging: two ${MERGE_AT} copies of a defense with a Merge button (greyed out below the top level) become one stronger building with its own ability. Confirm in the Merge window, then tap the second copy. It still counts as two toward the limit.`
     ]);
 
     // Right: the RV Lab and abilities, in three numbered steps plus an example.
     const rx = LEFT + lw + gap;
     y = this.card(rx, CONTENT_TOP, rw, h, 'Abilities (RV Lab)');
     const steps = [
-      ['Build the RV Lab', `You need Village Hall ${CONFIG.rvlab.unlockTownHall}. Find it in the Shop under Economy. Each RV Lab level opens the next tier, and upgrading it costs Shakes, not gold.`],
+      ['Build the RV Lab', `You need Village Hall ${CONFIG.rvlab.unlockTownHall}. Find it in the Shop under Economy. Each RV Lab level opens the next tier, and upgrading it costs Shakes, not Bitcoin.`],
       ['Pick a path, then climb it (costs Shakes)', 'Your first pick for a building type locks all of that type to Path A, B or C, and its next tiers are that path\'s. To switch, pay Shakes to reset the path (the old picks are not refunded).'],
       ['Every building gets it', 'Each perk applies to every building of that type at once, whatever its level. Perks cost only Shakes and need only RV Lab level: tier N needs RV Lab level N.']
     ];

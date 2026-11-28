@@ -33,9 +33,9 @@ export const TUTORIAL_STEPS = [
   { text: 'Open the shop.', advanceOn: 'shopOpened', focus: 'shopButton', allow: { ...NONE, shop: true } },
   { text: 'Buy a Bitcoin Mine.', advanceOn: 'placementStarted', match: { type: 'mine' }, focus: 'card:mine', allow: { ...NONE, shop: true, cards: ['mine'] } },
   { text: 'Place it anywhere green.', advanceOn: 'buildingPlaced', match: { type: 'mine' }, backOn: 'placementCancelled', backTo: 3, focus: null, allow: NONE },
-  { text: 'Mines fill with gold. Click it when the coin appears.', advanceOn: 'mineCollected', focus: 'building:mine', allow: { ...NONE, select: ['mine'], collect: true } },
+  { text: 'Mines fill with Bitcoin. Click it when the Bitcoin appears.', advanceOn: 'mineCollected', focus: 'building:mine', allow: { ...NONE, select: ['mine'], collect: true } },
   {
-    text: 'Gold needs somewhere to live. Buy a Storage.', advanceOn: 'buildingPlaced', match: { type: 'storage' },
+    text: 'Bitcoin needs somewhere to live. Buy a Storage.', advanceOn: 'buildingPlaced', match: { type: 'storage' },
     goldGate: () => buildCost('storage'), buyType: 'storage',
     allow: { ...NONE, select: ['mine'], collect: true, shop: true, cards: ['storage'] }
   },

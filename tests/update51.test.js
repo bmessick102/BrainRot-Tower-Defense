@@ -27,7 +27,7 @@ describe('Update 5.1 purchases and collection', () => {
     const gs = village(3);
     const mine = addBuilding(gs, 'mine', 13, 13, 3);
     gs.gold = 0;
-    expect(previewUpgrade(gs, mine)).toMatchObject({ nextLevel: 4, ok: false, requirements: ['Village Hall 4 required', expect.stringContaining('more gold')] });
+    expect(previewUpgrade(gs, mine)).toMatchObject({ nextLevel: 4, ok: false, notes: ['You need to upgrade your Village Hall to level 4!', expect.stringMatching(/^You need [\d,]+ more Bitcoin!$/)], short: true });
     expect(gs.gold).toBe(0);
     expect(mine.level).toBe(3);
     gs.townHall.level = 20;
@@ -38,9 +38,9 @@ describe('Update 5.1 purchases and collection', () => {
     expect(gs.upgradeBuilding(mine.id, preview.level).ok).toBe(false);
     expect(gs.gold).toBe(gold - preview.cost);
     expect(mine.level).toBe(4);
-    expect(hallUpgradeUnlocks(3).quantities).toContainEqual({ type: 'shakeCollector', add: 1, isNew: true });
-    expect(hallUpgradeUnlocks(6).quantities).toContainEqual({ type: 'shakeCollector', add: 1, isNew: false });
-    expect(hallUpgradeUnlocks(8).levels).toContainEqual({ type: 'queenAltar', first: 2, last: 8 });
+    expect(hallUpgradeUnlocks(3)).toContainEqual({ type: 'shakeCollector', add: 1, isNew: true });
+    expect(hallUpgradeUnlocks(6)).toContainEqual({ type: 'shakeCollector', add: 1, isNew: false });
+    expect(hallUpgradeUnlocks(8)).toContainEqual({ type: 'queenAltar', add: 1, isNew: true });
   });
 
   it.each(['mine', 'shakeCollector'])('collects all %s stock using one currency and preserves overflow', (type) => {
@@ -58,12 +58,15 @@ describe('Update 5.1 purchases and collection', () => {
     gs.gold = gs.capacity - 16;
     gs.researchPoints = rpCap(gs) - 16;
     const shake = type === 'shakeCollector', untouched = shake ? gs.gold : gs.researchPoints;
+    expect(gs.collectionStatus(source.id)).toEqual({ shakes: shake, amount: 0, reason: 'Wait for the ready icon' });
+    expect(gs.collect(source.id).ok).toBe(false);
+    expect(other.stock).toBe(15.25);
+    source.stock = 12.5;
     expect(gs.collectionStatus(source.id).amount).toBe(16);
-    gs.on(shake ? 'shakesCollected' : 'mineCollected', () => expect(gs.collect(other.id).ok).toBe(false));
     expect(gs.collect(source.id).collected).toBe(16);
     expect(gs.collect(other.id).ok).toBe(false);
     expect(source.stock).toBe(0.5);
-    expect(other.stock).toBe(6.25);
+    expect(other.stock).toBe(11.25);
     expect(ruined.stock).toBe(100);
     expect(foreign.stock).toBe(100);
     expect(shake ? gs.gold : gs.researchPoints).toBe(untouched);
@@ -91,7 +94,7 @@ describe('Update 5.1 progression', () => {
       expect([gs.gold, gs.researchPoints, cannon.mastery]).toEqual([0, 0, i + 1]);
       expect(gs.researchMastery('cannon', i + 1).ok).toBe(false);
     }
-    expect(masteryFxOf(cannon)).toMatchObject({ rollAdd: 2, trailRadius: 0.6, trailDps: 0.18 });
+    expect(masteryFxOf(cannon)).toMatchObject({ rollAdd: 2, trailRadius: 0.75, trailSeconds: 5, trailDps: 0.3 });
     const data = deserializeGame(serializeGame(gs));
     expect(data.buildings.find((b) => b.id === cannon.id).mastery).toBe(5);
   });
@@ -101,9 +104,9 @@ describe('Update 5.1 progression', () => {
     const collector = addBuilding(s, 'shakeCollector', 10, 10, 10);
     const storage = addBuilding(s, 'shakeStorage', 14, 10, 16);
     collector.picks = ['a', 'a', 'a', 'a', 'a'];
-    expect(collectorProduction(collector)).toBeCloseTo(0.34 * 1.85);
+    expect(collectorProduction(collector)).toBeCloseTo(0.51 * 1.85);
     produceShakeCollectors(s, 240);
-    expect(collector.stock).toBeCloseTo(240 * 0.34 * 1.85);
+    expect(collector.stock).toBeCloseTo(240 * 0.51 * 1.85);
     collector.picks = ['b', 'b', 'b', 'b', 'b'];
     expect(collectorStockCap(collector)).toBe(2296);
     const baseCap = rpCap(s);
@@ -117,7 +120,7 @@ describe('Update 5.1 progression', () => {
 
   it.each([
     ['altar', 'feastHealPct', 40, 50],
-    ['queenAltar', 'encoreSeconds', 4, 8],
+    ['queenAltar', 'encoreSeconds', 4, 6],
     ['mageAltar', 'aegisSeconds', 4, 6]
   ])('%s upgrades its activated statistic on milestones', (type, stat, first, last) => {
     const altar = { type, level: 4 };

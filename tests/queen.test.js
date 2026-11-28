@@ -297,11 +297,11 @@ describe('her RV Lab tree (3 paths x 5 tiers), every tier', () => {
     expect(towerFireInterval(cannon)).toBeCloseTo(plain, 6);
   });
 
-  it('Backup Chorus: adds 2 s to the level 5 cloak', () => {
+  it('Backup Chorus: adds 2 s to the level 5 cloak (4 s + 0.5 s at Level 5)', () => {
     const { s, h } = village(5, ['a', 'b']);
     wave(s); queenWaveStarted(s);
     useEncore(s);
-    expect(h.cloakT).toBe(7);
+    expect(h.cloakT).toBe(6.5);
   });
 
   it('Encore+: while Encore Cloak lasts, defenses in her guard range deal 25% more', () => {

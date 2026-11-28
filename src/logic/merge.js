@@ -21,6 +21,7 @@ import {
 import { towerRange, towerFireInterval, towerDamageMult, labLevel } from './abilities.js';
 import { researchPoints, needRpReason } from './researchPoints.js';
 import { isWaveActive, emit } from './util.js';
+import { shortText } from './upgradePreview.js';
 import { distance } from './iso.js';
 import { footprintCenter } from './grid.js';
 
@@ -57,7 +58,7 @@ export function mergeCandidates(state, b) {
 }
 
 /**
- * Can `b` merge now (with `otherId`, or with any candidate when left out)? { ok, reason, cost, candidates, show }.
+ * Can `b` merge now (with `otherId`, or with any candidate when left out)? { ok, reason, cost, candidates, show, preview }.
  * `show`: whether the panel shows a Merge button at all (a mergeable type at its top level, not merged yet).
  * Reasons are what the greyed button says: "Needs another Level 10 Cannon", "Not during a wave", the missing gold / Shakes.
  */
@@ -84,7 +85,7 @@ export function checkMerge(state, b, otherId = null) {
 }
 
 /** Shakes spent on a building's own levels (levels priced in Shakes, costCurrency 'rp'): refunded when it's merged away. */
-export function burgersSpentOnLevels(b) {
+export function shakesSpentOnLevels(b) {
   return typeConfig(b.type).levels.slice(0, b.level).reduce((sum, l) => sum + (l.costCurrency === 'rp' ? l.cost : 0), 0);
 }
 
@@ -100,7 +101,7 @@ export function mergeBuildings(state, keepId, otherId) {
   const other = state.buildings.find((b) => b.id === otherId);
   state.gold -= check.cost.gold;
   state.researchPoints = researchPoints(state) - check.cost.rp;
-  const refund = burgersSpentOnLevels(other); // allowed past the Shake cap: nothing is lost
+  const refund = shakesSpentOnLevels(other); // allowed past the Shake cap: nothing is lost
   if (refund) state.researchPoints += refund;
   state.buildings = state.buildings.filter((b) => b.id !== otherId);
   keep.merged = true;
@@ -115,7 +116,28 @@ export function mergeBuildings(state, keepId, otherId) {
   return { ok: true, reason: '', refund, removedId: otherId };
 }
 
-// ---------- what the merge preview shows ----------
+// ---------- what the merge window shows ----------
+/**
+ * The merge window's price and everything in the way, as whole sentences for its red "Note!" band (the window opens
+ * for any max-level copy, even with no partner yet): { ok, cost, costs, notes, top }. costs: [{ currency, amount, short }].
+ */
+export function previewMerge(state, b) {
+  const cost = mergeCost(b.type), top = maxLevel(b.type);
+  const rp = researchPoints(state);
+  const notes = [];
+  if (state.gameOver) notes.push('Finish the current raid first.');
+  else if (isWaveActive(state)) notes.push('Merging is only available between raids.');
+  if (b.destroyed) notes.push('Rebuild this building first.');
+  else if (!mergeCandidates(state, b).length) notes.push(`You need another Level ${top} ${plainName(b.type)} to merge with!`);
+  const goldShort = state.gold < cost.gold, rpShort = rp < cost.rp;
+  if (goldShort || rpShort) {
+    const parts = [goldShort && shortText(cost.gold - state.gold, 'gold'), rpShort && shortText(cost.rp - rp, 'rp')].filter(Boolean);
+    notes.push(`You need ${parts.join(' and ')}!`);
+  }
+  const costs = [{ currency: 'gold', amount: cost.gold, short: goldShort }, { currency: 'rp', amount: cost.rp, short: rpShort }];
+  return { ok: !notes.length && !b.merged && b.level >= top, cost, costs, notes, top };
+}
+
 /**
  * A building's key fighting stats: { hp, damage, shots, interval, range, dps } (damage per shell / shot, shots per
  * volley, seconds between volleys, range in tiles, damage per second when every shot hits one enemy). Uses the same
@@ -144,7 +166,7 @@ export function mergePreview(state, b, other) {
 }
 
 // ---------- Mastery ----------
-/** Mastery tiers researched for a mergeable type (0-3). */
+/** Mastery tiers researched for a mergeable type (0 up to its tier count). */
 export function masteryLevel(state, type) {
   const v = state.mastery && state.mastery[type];
   const m = mergeConfig(type);

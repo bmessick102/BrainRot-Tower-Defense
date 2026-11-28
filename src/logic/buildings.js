@@ -273,10 +273,10 @@ export function townHallLevel(state) {
 }
 
 export function needGoldReason(cost, gold) {
-  return `Need ${(cost - gold).toLocaleString('en-US')} more gold`;
+  return `Need ${(cost - gold).toLocaleString('en-US')} more Bitcoin`;
 }
 
-/** Hall gate shared by purchases, their preview, and the Hall's list of newly available upgrades. */
+/** Hall gate shared by purchases and upgrade previews. */
 export function upgradeHallRequirement(type, nextLevel) {
   if (type === 'townHall') return 0;
   return Math.max(nextLevel, levelStats(type, nextLevel).townHall || 0);

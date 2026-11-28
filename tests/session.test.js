@@ -236,6 +236,66 @@ describe('Session (accounts, villages, sync)', () => {
     expect((await backend.listAchievements())[0].claimedAt).toBeTruthy();
   });
 
+  it('earns and claims the same achievement independently in each village', async () => {
+    const home = await session.createBase('Home', { save: village(5) });
+    session.bump('kills', 110);
+    session.earn(['kills100']);
+    const outpost = await session.createBase('Outpost', { save: village(1) });
+    expect(session.earnedIds()).toEqual(new Set());
+    expect(session.villageAchievementStats()).toEqual({ bestTownHall: 1, bestWave: 2, counters: {} });
+    session.bump('kills', 3);
+    expect(session.villageAchievementStats().counters).toEqual({ kills: 3 });
+    expect(session.claim('kills100', home.id)).toBe(false);
+    session.earn(['kills100']);
+    expect(session.claim('kills100')).toBe(true);
+    await session.flush();
+    const fresh = make();
+    await fresh.restore();
+    expect(fresh.earnedIds(home.id)).toEqual(new Set(['kills100']));
+    expect(fresh.unclaimed(home.id)).toEqual(['kills100']);
+    expect(fresh.earnedIds(outpost.id)).toEqual(new Set(['kills100']));
+    expect(fresh.unclaimed(outpost.id)).toEqual([]);
+    expect(fresh.villageAchievementStats(home.id).counters).toEqual({ kills: 110 });
+    expect(fresh.villageAchievementStats(outpost.id).counters).toEqual({ kills: 3 });
+    expect((await backend.playerProfile('Ann')).achievements).toEqual(expect.arrayContaining([
+      expect.objectContaining({ baseId: home.id, id: 'kills100' }),
+      expect.objectContaining({ baseId: outpost.id, id: 'kills100' })
+    ]));
+  });
+
+  it('shows pending awards by village in your profile and keeps them on disk during an upload', async () => {
+    const home = await session.createBase('Home', { save: village(5) });
+    const outpost = await session.createBase('Outpost', { save: village(1) });
+    session.selectBase(home.id);
+    session.earn(['kills100']);
+    const earn = backend.earnAchievements.bind(backend);
+    let finishUpload;
+    const hold = new Promise((resolve) => { finishUpload = resolve; });
+    backend.earnAchievements = async (awards) => {
+      await hold;
+      await earn(awards);
+    };
+    const sending = session.sendOutbox();
+    session.selectBase(outpost.id);
+    session.earn(['wave1']);
+    const awaitingBoth = session.sendOutbox();
+    const awards = [
+      expect.objectContaining({ baseId: home.id, id: 'kills100' }),
+      expect.objectContaining({ baseId: outpost.id, id: 'wave1' })
+    ];
+    try {
+      expect((await session.playerProfile('Ann')).achievements).toEqual(awards);
+      const fresh = make();
+      await fresh.restore();
+      expect(fresh.earnedIds(home.id)).toEqual(new Set(['kills100']));
+      expect(fresh.earnedIds(outpost.id)).toEqual(new Set(['wave1']));
+    } finally {
+      finishUpload();
+      await Promise.all([sending, awaitingBoth]);
+    }
+    expect((await backend.playerProfile('Ann')).achievements).toEqual(awards);
+  });
+
   it('accounts never see each other’s villages', async () => {
     await session.createBase('Ann’s');
     await session.signOut();
