@@ -28,6 +28,11 @@ const CLIPS = { sfx_patapim_quake: 2.5, sfx_pork_call: 3.8, sfx_skeleton_rage: 2
 const FADE = 0.15;
 // Tracks that end abruptly in the original: a quick fade-out over their last seconds (v0.15: the startup jingle).
 const FADE_OUT = { music_startup_jingle: 0.35 };
+// Effects whose original starts (and ends) with near-silence: trimmed to where the sound really is, so they play the
+// moment they're triggered (v0.15.2: the guide message sound had 0.75 s of hiss before its chime). A 5 ms fade-in
+// keeps the cut from clicking.
+const TRIM_SILENCE = new Set(['sfx_guide_message']);
+const TRIM_FILTER = 'silenceremove=start_periods=1:start_threshold=-50dB,areverse,silenceremove=start_periods=1:start_threshold=-55dB,areverse,afade=t=in:d=0.005';
 
 const probe = (file) => {
   let out = '';
@@ -59,6 +64,9 @@ for (const name of fs.readdirSync(SRC).sort()) {
     const t = CLIPS[key];
     encode(src, dst, ['-t', String(t), '-af', `afade=t=out:st=${(t - FADE).toFixed(2)}:d=${FADE}`, '-c:a', 'libmp3lame', '-b:a', '128k']);
     how = `trimmed to ${t} s`;
+  } else if (TRIM_SILENCE.has(key)) {
+    encode(src, dst, ['-af', TRIM_FILTER, '-c:a', 'libmp3lame', '-b:a', '128k']);
+    how = 'trimmed (silence at both ends)';
   } else if (kbps > 128) { encode(src, dst, ['-c:a', 'libmp3lame', '-b:a', '128k']); how = '128k'; }
   else { fs.copyFileSync(src, dst); how = 'copied'; }
   // An original that was already small (a low bitrate) can come out bigger: keep it as is, unless it's trimmed

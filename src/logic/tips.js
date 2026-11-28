@@ -1,10 +1,11 @@
 // First-time tips: a short note from the guide the first time each system shows up, so a new player meets
 // them one at a time instead of all at once. Each tip shows once per village (saved as `tips`), only after
 // the first tutorial, in the guide bubble (UIScene), with "Got it" and "No more tips". Tips that come up
-// together wait in a queue. The RV Lab has its own longer guide (labGuide.js).
+// together wait in a queue. The RV Lab and the Fuel Station have their own longer guides (labGuide.js, fuelGuide.js).
 import { CONFIG } from '../config.js';
 import { emit } from './util.js';
 import { nextWaveInfo, nextWaveComposition } from './waves.js';
+import { isFuelGuideActive } from './fuelGuide.js';
 
 const pct = (v) => `${Math.round(v * 100)}%`;
 const hallLevel = (state) => { const th = (state.buildings || []).find((b) => b.type === 'townHall'); return th ? th.level : 0; };
@@ -34,10 +35,6 @@ export const TIPS = {
   queen: () => 'The Hatsune Queen guards her altar, shooting ground and flying enemies from range with her crossbow. In a wave, use Encore Cloak on the hotbar at the bottom (or press G): she vanishes, hits harder with piercing bolts and heals. She naps after waves to heal.',
   dj: () => 'DJ Babyface\'s hype is full! In a wave, use Drop the Beat on the hotbar at the bottom (or press its number key): every defense in its range fires much faster for a few seconds. Defeating enemies fills it again.',
   fuel: () => 'The Fuel Station (Shop, Economy tab) brews spells with Shakes: click it and press Brew. During waves, brewed spells sit on the hotbar at the bottom: click one (or press its number), then click the map to cast it. Each is used up when cast, and your Village Hall level sets how many you can carry.',
-  // The Fuel Station guide (spells.js fuelGuide), one tip per step.
-  fuelBuild: () => 'Village Hall 2 unlocked the Fuel Station! It brews spells you can cast in a wave. Build it from the Shop (Economy tab): your first spell is on the house.',
-  fuelBrew: () => 'Your Fuel Station is up! Click it and press Brew, then brew a Karuba Coffee (Rage): the first one is free. It makes your defenses fire faster and hit harder for a few seconds.',
-  fuelCast: () => 'Your Karuba Coffee (Rage) is ready. In the next wave it waits on the hotbar at the bottom (its slot pulses): click it (or press its number), then click the map near your defenses to cast it.',
   layout: () => 'Edit mode: pick buildings up into the hotbar and place them again to rearrange your village. Nothing changes until you press Save.',
   walls: () => 'Walls all share one level. Click any wall and press Upgrade Walls to raise every wall at once (each wall costs the new level\'s price). New walls are built at your current wall level.'
 };
@@ -57,14 +54,10 @@ function tipsForEvent(state, name, data) {
   if (name === 'hypeFull') out.push('dj');
   if (name === 'buildingPlaced' && data.type === 'altar') out.push('hero');
   if (name === 'buildingPlaced' && data.type === 'queenAltar') out.push('queen');
-  // The Fuel Station: its guide's steps (it starts at Village Hall 2), or the plain tip for villages past that.
-  const guide = state.fuelGuide || 0; // 1 build, 2 brew the free Karuba Coffee (Rage), 3 cast it (spells.js FUEL_GUIDE)
-  if (name === 'fuelGuideChanged' || name === 'tipsChecked') {
-    const tip = { 1: 'fuelBuild', 2: 'fuelBrew', 3: 'fuelCast' }[guide];
-    if (tip) out.push(tip);
-  }
-  if (name === 'buildingPlaced' && data.type === 'fuelStation' && guide !== 2) out.push('fuel');
-  if (name === 'tipsChecked' && !guide && hallLevel(state) >= CONFIG.fuelStation.unlockTownHall
+  // The Fuel Station: the plain tip, for villages that aren't in its guide (fuelGuide.js, from Village Hall 2).
+  const guide = isFuelGuideActive(state);
+  if (name === 'buildingPlaced' && data.type === 'fuelStation' && !guide) out.push('fuel');
+  if (name === 'tipsChecked' && !guide && !state.fuelGuide && hallLevel(state) >= CONFIG.fuelStation.unlockTownHall
     && !(state.buildings || []).some((b) => b.type === 'fuelStation')) out.push('fuel');
   if (name === 'buildingPlaced' && data.type === 'wall') out.push('walls');
   // The Shake Collector: once the hall allows one and none is built yet (checked when the hall levels up, and on load).

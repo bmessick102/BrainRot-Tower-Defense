@@ -26,7 +26,8 @@ import { checkResearch, checkRespec, labPicks, syncAbilityPicks } from '../logic
 import { rpRoom, spendResearchPoints } from '../logic/researchPoints.js';
 import { collectShakes, collectorShowsIcon } from '../logic/shakes.js';
 import { advanceLabGuide, startLabGuideIfDue, skipLabGuide } from '../logic/labGuide.js';
-import { brewSpell, discardSpell, castSpell, fuelGuideEvent } from '../logic/spells.js';
+import { brewSpell, discardSpell, castSpell } from '../logic/spells.js';
+import { fuelGuideEvent, skipFuelGuide } from '../logic/fuelGuide.js';
 import { mergeBuildings, checkMastery, syncMastery } from '../logic/merge.js';
 
 // The Storage the game saves through. main.js sets it to the account session's storage (src/net/session.js),
@@ -110,7 +111,7 @@ export class GameState {
     this.tipQueue = [];          // tips waiting to show (not saved: they come up again if still due)
     this.researchPoints = 0;     // RP: the currency for RV Lab abilities (researchPoints.js)
     this.spells = [];            // Fuel Station spells brewed and waiting for a raid (spells.js), saved
-    this.fuelGuide = 0;          // Fuel Station guide step (spells.js FUEL_GUIDE: build, free Rage, cast it), saved
+    this.fuelGuide = 0;          // Fuel Station guide step (fuelGuide.js FUEL_GUIDE: build, open, free Rage, cast it), saved
     this.activeSpells = [];      // spell zones in play during a wave (not saved)
     this.wallLevel = 1;          // every wall's level (Upgrade Walls raises them all; new walls start at it), saved
     this.decorSeed = newDecorSeed(); // where the village's grass tufts grow (decor.js; purely visual), saved
@@ -230,6 +231,16 @@ export class GameState {
   /** The RV Lab guide's Skip button. */
   skipLabGuide() {
     return skipLabGuide(this);
+  }
+
+  /** The Fuel Station guide's Next button (its "ready" and last steps). */
+  fuelGuideNext() {
+    return fuelGuideEvent(this, 'next');
+  }
+
+  /** The Fuel Station guide's Skip button. */
+  skipFuelGuide() {
+    return skipFuelGuide(this);
   }
 
   /** After loading: the clock carries on from the saved time of day (a save mid-wave starts that wave again). */

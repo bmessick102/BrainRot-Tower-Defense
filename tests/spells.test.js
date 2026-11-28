@@ -13,6 +13,7 @@ import { GameState } from '../src/state/GameState.js';
 import { makeStateWithTownHall, addBuilding, addEnemy } from './helpers.js';
 import { artTier } from '../src/objects/BuildingView.js';
 import { hotbarSlots } from '../src/logic/hotbar.js';
+import { FUEL_GUIDE, fuelGuideCurrent, fuelGuideHint, isFuelGuideVisible, isFuelGuideActive, isFreeBrew, validFuelGuide } from '../src/logic/fuelGuide.js';
 
 const noStorage = { getItem: () => null, setItem: () => {}, removeItem: () => {} };
 
@@ -282,29 +283,66 @@ describe('the Fuel Station guide (a free first Rage)', () => {
   };
   const tips = (gs) => [...(gs.tipQueue || [])];
 
-  it('starts at Village Hall 2: build it, brew a free Rage, then cast it (its hotbar slot pulses)', () => {
+  it('starts at Village Hall 2 and walks through build, open, a free Rage, Next, cast and Next (its hotbar slot pulses)', () => {
     const gs = fresh(1);
     expect(gs.fuelGuide).toBe(0);
     gs.buildings[0].level = 2;
     gs.emit('townHallUpgraded', { level: 2 });
-    expect(gs.fuelGuide).toBe(1);
-    expect(tips(gs)).toContain('fuelBuild');
+    expect(fuelGuideCurrent(gs).key).toBe('build');
+    expect(isFuelGuideVisible(gs)).toBe(true);
     const st = createBuilding(gs, 'fuelStation', 13, 15, 1);
     gs.buildings.push(st);
     gs.emit('buildingPlaced', { id: st.id, type: 'fuelStation' });
-    expect(gs.fuelGuide).toBe(2);
-    expect(tips(gs)).toContain('fuelBrew');
-    expect(tips(gs)).not.toContain('fuel');
-    expect(brewCost(gs, 'rage')).toBe(0);
+    expect(fuelGuideCurrent(gs).key).toBe('open');
+    expect(tips(gs)).not.toContain('fuel'); // (the guide tells it instead of the plain tip)
+    expect(brewCost(gs, 'rage')).toBe(0); // free from here on, until it's brewed
+    gs.emit('fuelStationOpened', {});
+    expect(fuelGuideCurrent(gs).key).toBe('brew');
+    expect(fuelGuideHint(gs, 'brew')).toMatch(/free/);
     gs.researchPoints = 0;
     expect(gs.brewSpell('rage').ok).toBe(true); // free
-    expect(gs.fuelGuide).toBe(3);
-    expect(tips(gs)).toContain('fuelCast');
+    expect(fuelGuideCurrent(gs).key).toBe('ready');
     expect(brewCost(gs, 'rage')).toBe(CONFIG.fuelStation.spells.rage.brewCost); // only the first is free
+    expect(gs.fuelGuideNext()).toBe(true);
+    expect(fuelGuideCurrent(gs).key).toBe('cast');
     gs.wave.phase = 'active';
+    expect(isFuelGuideVisible(gs)).toBe(false); // (the bubble hides mid-wave; the hotbar slot pulses)
     expect(hotbarSlots(gs).find((x) => x.kind === 'rage').guide).toBe(true);
     expect(gs.castSpell('rage', 20, 20).ok).toBe(true);
-    expect(gs.fuelGuide).toBe(99);
+    expect(fuelGuideCurrent(gs).key).toBe('castDone');
+    expect(gs.fuelGuideNext()).toBe(true);
+    expect(gs.fuelGuide).toBe(FUEL_GUIDE.done);
+  });
+
+  it('skips ahead when a later step is done early, but Next only finishes the step on show; Skip ends it', () => {
+    const gs = fresh(2);
+    gs.fuelGuide = FUEL_GUIDE.open;
+    const st = createBuilding(gs, 'fuelStation', 13, 15, 1);
+    gs.buildings.push(st);
+    expect(gs.fuelGuideNext()).toBe(false);
+    expect(gs.brewSpell('rage').ok).toBe(true); // brewed without the guide's window step: still free, moves on
+    expect(fuelGuideCurrent(gs).key).toBe('ready');
+    gs.wave.phase = 'active';
+    expect(gs.castSpell('rage', 20, 20).ok).toBe(true); // cast before pressing Next
+    expect(fuelGuideCurrent(gs).key).toBe('castDone');
+    const other = fresh(2);
+    other.fuelGuide = FUEL_GUIDE.build;
+    expect(other.skipFuelGuide()).toBe(true);
+    expect(other.fuelGuide).toBe(FUEL_GUIDE.done);
+    expect(isFuelGuideActive(other)).toBe(false);
+  });
+
+  it('a village saved mid-guide by an older version carries on at the same step', () => {
+    for (const [old, key] of [[1, 'build'], [2, 'brew'], [3, 'cast']]) {
+      const gs = fresh(2);
+      gs.fuelGuide = old;
+      expect(fuelGuideCurrent(gs).key).toBe(key);
+    }
+    const gs = fresh(2);
+    gs.fuelGuide = 2;
+    expect(isFreeBrew(gs, 'rage')).toBe(true);
+    expect(validFuelGuide(4)).toBe(true);
+    expect(validFuelGuide(7)).toBe(false);
   });
 
   it('Village Hall 1 gets no Fuel Station tips; a village already past VH2 gets the plain tip (no guide)', () => {
@@ -315,7 +353,6 @@ describe('the Fuel Station guide (a free first Rage)', () => {
     old.emit('tipsChecked', {});
     expect(old.fuelGuide).toBe(0);
     expect(tips(old)).toContain('fuel');
-    expect(tips(old)).not.toContain('fuelBuild');
     old.emit('townHallUpgraded', { level: 6 });
     expect(old.fuelGuide).toBe(0);
   });

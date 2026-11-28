@@ -29,6 +29,7 @@ import { distanceToFootprint } from './grid.js';
 import { distance } from './iso.js';
 import { MAP } from '../mapTiles.js';
 import { emit, isWaveActive, nextId } from './util.js';
+import { isFreeBrew } from './fuelGuide.js';
 
 /** Every spell, in the order the Fuel Station opens them (the hotbar and the window use this order). */
 export const SPELL_KINDS = ['rage', 'heal', 'freeze', 'heat', 'invisibility', 'lightning'];
@@ -325,40 +326,7 @@ export function stepSpells(state, dt) {
   if (state.activeSpells.length) state._spellMarks = true;
 }
 
-// ---------- the Fuel Station guide (a first, free Karuba Coffee: Rage) ----------
-// Like the RV Lab guide (labGuide.js) it never locks anything; its steps are told by first-time tips (tips.js).
-// It starts when the Village Hall reaches level 2 (villages already past that just get the normal Fuel Station tip):
-//   1 build the Fuel Station -> 2 brew a Karuba Coffee (Rage, free) -> 3 cast it in a wave (its hotbar slot pulses) -> 99 done.
-export const FUEL_GUIDE = { off: 0, build: 1, brew: 2, cast: 3, done: 99 };
-const FUEL_GUIDE_STEPS = Object.values(FUEL_GUIDE);
-
-export function fuelGuideStep(state) {
-  return state.fuelGuide || 0;
-}
-
-/** The guide's first brew: a Karuba Coffee (Rage), free. */
-export function isFreeBrew(state, kind) {
-  return kind === 'rage' && fuelGuideStep(state) === FUEL_GUIDE.brew;
-}
-
-/** Move the guide on from a game event. Returns true when its step changed ('fuelGuideChanged'). */
-export function fuelGuideEvent(state, name, data = {}) {
-  const step = fuelGuideStep(state);
-  let next = step;
-  if (name === 'townHallUpgraded' && data.level === 2 && step === FUEL_GUIDE.off && !fuelStation(state)) next = FUEL_GUIDE.build;
-  else if (name === 'buildingPlaced' && data.type === 'fuelStation' && step === FUEL_GUIDE.build) next = FUEL_GUIDE.brew;
-  else if (name === 'spellBrewed' && step === FUEL_GUIDE.brew) next = FUEL_GUIDE.cast;
-  else if (name === 'spellCast' && step === FUEL_GUIDE.cast) next = FUEL_GUIDE.done;
-  if (next === step) return false;
-  state.fuelGuide = next;
-  emit(state, 'fuelGuideChanged', { step: next });
-  return true;
-}
-
-/** A saved guide step: missing (older saves) or one of its steps. */
-export function validFuelGuide(v) {
-  return v === undefined || FUEL_GUIDE_STEPS.includes(v);
-}
+// (The Fuel Station guide, with its free first Karuba Coffee, is in fuelGuide.js.)
 
 // ---------- save data ----------
 /** Brewed spells as saved: a comma list of kinds ("" when none). */

@@ -14,7 +14,7 @@ import { rpCap } from '../src/logic/researchPoints.js';
 import { lockedPath } from '../src/logic/abilities.js';
 import { getWavePlan } from '../src/logic/waves.js';
 import { hideAllTips, TIP_KEYS } from '../src/logic/tips.js';
-import { FUEL_GUIDE } from '../src/logic/spells.js';
+import { FUEL_GUIDE } from '../src/logic/fuelGuide.js';
 import { ensureHero } from '../src/logic/hero.js';
 import { TUTORIAL_DONE_STEP } from '../src/logic/tutorial.js';
 import { MAP } from '../src/mapTiles.js';

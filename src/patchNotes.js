@@ -19,8 +19,8 @@ const allEntries = (release) => release.sections.flatMap((s) => s.entries);
 
 export const PATCH_NOTES = {
   release: '0.15',
-  version: '0.15.1',
-  title: "What's New in v0.15.1",
+  version: '0.15.2',
+  title: "What's New in v0.15.2",
   sections: [
     { type: 'feature', entries: [
       { version: '0.15.0', icon: { building: 'cannon', level: 9 }, title: 'Upgrade windows: see the next level before you buy',
@@ -33,6 +33,8 @@ export const PATCH_NOTES = {
         text: 'Pick up walls from the hotbar, then drag across the map to lay a line or a corner. A lifted building can go straight back to the hotbar with Store. An unsaved layout is kept on this device for next time.' },
       { version: '0.15.0', icon: { building: 'rvlab' }, title: 'More research: Shake buildings and Mastery 4 and 5',
         text: 'Shake Collectors and Shake Storages have their own research paths in the RV Lab. Merged defenses have two more Mastery tiers, paid in Bitcoin and Shakes.' },
+      { version: '0.15.2', icon: { building: 'fuelStation' }, title: 'Fuel Station guide (from Village Hall 2)',
+        text: 'The guide walks you through building the Fuel Station, brewing your free first Karuba Coffee and casting it in a wave, pointing at each step. Skip it any time.' },
       { version: '0.15.0', icon: { building: 'flock' }, title: 'Look closer at visited villages',
         text: 'Tap a building in a village you visit to see its range and every perk and Mastery tier its owner researched.' }
     ] },
@@ -73,6 +75,8 @@ export const PATCH_NOTES = {
     { type: 'fix', entries: [
       { version: '0.15.0', icon: { building: 'townHall', level: 20 }, title: 'Village Halls 16-20 on the leaderboard',
         text: 'The leaderboard showed Village Halls above 15 as lower. It now shows your village\'s real Village Hall.' },
+      { version: '0.15.2', icon: { texture: 'guide_portrait' }, title: 'Guide messages sound right away',
+        text: 'The guide\'s message sound started almost a second after each message appeared. It now plays the moment the message shows.' },
       { version: '0.15.0', icon: { building: 'townHall' }, title: 'Screen fit on phones',
         text: 'Turning a phone, or loading on one, could leave the game the wrong size or with taps landing off target. It now refits every time.' },
       { version: '0.15.0', icon: { building: 'dj' }, title: 'Sound in visited villages',

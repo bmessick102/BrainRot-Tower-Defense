@@ -2,6 +2,28 @@
 
 The version shows in the bottom-left corner of every screen (`package.json` `version` plus the commit). Details for everything below are in [README.md](README.md).
 
+## 0.15.2
+
+A step-by-step Fuel Station guide, and the guide message sound plays without its delay.
+
+### New Features
+
+- **Fuel Station guide** (`src/logic/fuelGuide.js`, replacing the three `fuelBuild` / `fuelBrew` / `fuelCast` tips):
+  starts on `townHallUpgraded` to Village Hall 2 with no Fuel Station, like the RV Lab guide. Steps: build (arrow on
+  the Shop, which opens on the Economy tab at the card's page, then the card; `UIScene.guideShopFocus`, shared with the
+  RV Lab guide) -> open (arrow on the station, then its Brew button; `fuelStationOpened` from `UIScene.openFuelStation`)
+  -> brew the free Karuba Coffee (yellow "Guide:" note in the window, `fuelGuideHint`) -> ready (Next) -> cast in a
+  wave (hotbar slot pulses, `fuelGuidePulses`) -> done (Next). Skip guide ends it. The bubble picks between the two
+  follow-up guides with `UIScene.sideGuide()` (Fuel Station first). Saved `fuelGuide` ids 1 / 2 / 3 keep their old
+  meaning (build / brew / cast), new steps are 4 (open), 5 (ready), 6 (cast done); the free Rage is free at open or
+  brew (`isFreeBrew`). Moved out of `spells.js`; the plain `fuel` tip now shows only outside the guide.
+
+### Bug Fixes
+
+- **Guide message sound delay**: `sfx_guide_message` started with 0.75 s of near-silence (hiss under -60 dB). Its
+  original is now in `art-source/audio`, and `prepare-audio` trims silence from both ends (`TRIM_SILENCE`, 5 ms
+  fade-in), so the chime starts as the message shows (2.7 s, was 3.5).
+
 ## 0.15.1
 
 The startup jingle no longer asks for a tap: it plays during loading only when the browser allows sound.

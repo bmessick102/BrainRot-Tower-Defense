@@ -14,7 +14,8 @@ import { validHype } from './dj.js';
 import { mineStockCap } from './economy.js';
 import { serializeTips, validTips, deserializeTips } from './tips.js';
 import { validResearchPoints } from './researchPoints.js';
-import { serializeSpells, validSpells, deserializeSpells, validFuelGuide } from './spells.js';
+import { serializeSpells, validSpells, deserializeSpells } from './spells.js';
+import { validFuelGuide } from './fuelGuide.js';
 import { PATHS } from './waves.js';
 import { isMergeable, serializeMastery, validMastery, validFreeRespecs } from './merge.js';
 
@@ -66,7 +67,7 @@ export function serializeGame(state, now = new Date()) {
     tips: serializeTips(state),        // first-time tips already shown (tips.js); missing in older saves
     researchPoints: Math.floor(state.researchPoints || 0), // RP for RV Lab abilities; missing in older saves
     spells: serializeSpells(state),    // Fuel Station spells brewed and waiting ("rage,heal"); missing in older saves
-    fuelGuide: state.fuelGuide || 0,   // Fuel Station guide step (spells.js); missing in older saves
+    fuelGuide: state.fuelGuide || 0,   // Fuel Station guide step (fuelGuide.js); missing in older saves
     wallLevel: wallLevel(state), // every wall's level (walls upgrade all at once); missing in older saves
     ...(validDecorSeed(state.decorSeed) ? { decorSeed: state.decorSeed } : {}), // where its grass tufts grow (decor.js); v0.9.1
     debuted: [...(state.debuted || [])], // enemies whose debut wave this village has had (waves.js); missing in older saves

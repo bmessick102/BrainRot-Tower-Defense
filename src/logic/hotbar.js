@@ -2,6 +2,7 @@
 // Slot order: the Brisket King's Brisket Feast, the Hatsune Queen's Encore Cloak, the Locklair Mage's Arcane Aegis, DJ Babyface's Drop the Beat (one per booth), then the brewed Fuel
 // Station spells (one slot per spell type, with how many are brewed). Number keys 1-9 trigger the slots. Clicking
 // the hero or the DJ booth on the map never triggers anything: these slots are the only way. Pure: no Phaser.
+import { fuelGuidePulses } from './fuelGuide.js';
 import { checkFeast, getAltar, heroStats } from './hero.js';
 import { checkEncore, getQueenAltar, queenStats } from './queen.js';
 import { checkAegis, getMageAltar, mageStats } from './mage.js';
@@ -76,7 +77,7 @@ export function hotbarSlots(state) {
     const c = checkCast(state, kind);
     slots.push({
       id: `spell:${kind}`, type: 'spell', kind, name: spellName(kind), ready: c.ok, reason: c.reason,
-      guide: kind === 'rage' && state.fuelGuide === 3, // the Fuel Station guide's free Karuba Coffee (Rage): its slot pulses until cast
+      guide: kind === 'rage' && fuelGuidePulses(state), // the Fuel Station guide's free Karuba Coffee (Rage): its slot pulses until cast
       meter: null, count: n, desc: `${spellSubtext(state, kind)} Click it, then click the map.`
     });
   }

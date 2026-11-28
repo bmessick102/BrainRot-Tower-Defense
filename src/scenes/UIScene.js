@@ -54,6 +54,7 @@ import { hasAbilities, canResearchFor, labLevel, towerRange, towerMinRange, towe
 import { openResearchWindow, abilitySummary } from '../objects/AbilityWindow.js';
 import { currentTip } from '../logic/tips.js';
 import { isLabGuideVisible, labGuideStep, labGuideText } from '../logic/labGuide.js';
+import { isFuelGuideVisible, fuelGuideCurrent, fuelGuideText } from '../logic/fuelGuide.js';
 import { Modal } from '../objects/Modal.js';
 import { openUpgradeWindow } from '../objects/UpgradeWindow.js';
 import { openMergeWindow } from '../objects/MergeWindow.js';
@@ -966,7 +967,14 @@ export class UIScene extends Phaser.Scene {
     if (this.selectedId) this.world.select(null);
     this.shopOpen = true;
     // RV Lab guide, "build one": open on the Economy tab, where the RV Lab is.
-    if (labGuideStep(this.gs)?.key === 'build' && !isGuideVisible(this.gs)) this.shopTab = 'economy';
+    // (and the Fuel Station guide's): on its page, since the Economy tab has more cards than fit on one.
+    const guideCard = isGuideVisible(this.gs) ? null
+      : fuelGuideCurrent(this.gs)?.key === 'build' ? 'fuelStation' : labGuideStep(this.gs)?.key === 'build' ? 'rvlab' : null;
+    if (guideCard) {
+      this.shopTab = 'economy';
+      const types = SHOP_TABS.find((t) => t.key === 'economy').types;
+      this.shopPage = Math.max(0, Math.floor(types.indexOf(guideCard) / shopCardGrid().perPage));
+    }
     this.gs.tutorialEvent('shopOpened');
     // Tutorial: jump to the tab with the building the guide asks for (after the step advanced).
     const step = currentStep(this.gs);
@@ -1328,6 +1336,7 @@ New walls are built at your wall level (${wallLevel(this.gs)}), so one costs wha
       onPerks: () => { openResearchWindow(this, this.gs, { startType: 'fuelStation', onClose: () => this.refreshGuide() }); this.refreshGuide(); }
     });
     this.refreshGuide();
+    this.gs.emit('fuelStationOpened', {}); // Fuel Station guide
   }
 
   /** The RV Lab's research window. */
@@ -2259,12 +2268,14 @@ New walls are built at your wall level (${wallLevel(this.gs)}), so one costs wha
     // (It also shows first-time tips (tips.js) when neither guide has anything to say: "Got it" / "No more tips".)
     this.guideNext = new Button(this, 540, 124, 110, 40, 'Next', () => {
       if (this.tipShown) this.gs.dismissTip();
-      else if (this.labGuideShown()) this.gs.labGuideNext();
+      else if (this.sideGuide() === 'lab') this.gs.labGuideNext();
+      else if (this.sideGuide() === 'fuel') this.gs.fuelGuideNext();
       else this.gs.tutorialEvent('next');
     }, { fontSize: 19, color: COLORS.buttonGood });
     this.guideSkip = new Button(this, 400, 124, 150, 40, 'Skip tutorial', () => {
       if (this.tipShown) this.gs.hideAllTips();
-      else if (this.labGuideShown()) this.gs.skipLabGuide();
+      else if (this.sideGuide() === 'lab') this.gs.skipLabGuide();
+      else if (this.sideGuide() === 'fuel') this.gs.skipFuelGuide();
       else this.gs.skipTutorial();
     }, { fontSize: 16, color: COLORS.buttonDark });
     c.add([this.guideBlocker, this.guideBubble, portrait, this.guideText, this.guideProgress, this.guideNext, this.guideSkip]);
@@ -2276,14 +2287,30 @@ New walls are built at your wall level (${wallLevel(this.gs)}), so one costs wha
     return this.guide && this.guide.visible && this.guide.y < 1000 ? { x: 16, y: this.guide.y, w: 612, h: 160 } : null;
   }
 
-  /** Is the RV Lab guide what the bubble shows right now? (The first tutorial always comes first.) */
-  labGuideShown() {
-    return !isGuideVisible(this.gs) && isLabGuideVisible(this.gs) && !Modal.isOpen(this);
+  /**
+   * The follow-up guide the bubble shows right now: 'lab' (the RV Lab guide), 'fuel' (the Fuel Station guide, v0.15.2)
+   * or null. The first tutorial always comes first, and the bubble hides behind windows (their in-window steps show
+   * inside them). The Fuel Station's starts first (Village Hall 2), so it goes before the RV Lab's (4).
+   */
+  sideGuide() {
+    if (isGuideVisible(this.gs) || Modal.isOpen(this)) return null;
+    if (isFuelGuideVisible(this.gs)) return 'fuel';
+    if (isLabGuideVisible(this.gs)) return 'lab';
+    return null;
+  }
+
+  /** The follow-up guide on show: { kind, step, text, msg (its sound key) }, or null. */
+  sideGuideInfo() {
+    const kind = this.sideGuide(), gs = this.gs;
+    if (kind === 'lab') return { kind, step: labGuideStep(gs), text: labGuideText(gs), msg: `lab-${gs.labGuideStep}` };
+    if (kind === 'fuel') return { kind, step: fuelGuideCurrent(gs), text: fuelGuideText(gs), msg: `fuel-${gs.fuelGuide}` };
+    return null;
   }
 
   refreshGuide() {
     const gs = this.gs;
-    const lab = this.labGuideShown(); // the RV Lab guide (its in-window steps show inside the windows instead)
+    const side = this.sideGuideInfo(); // the RV Lab or Fuel Station guide (their in-window steps show inside the windows)
+    const lab = !!side;
     // First-time tips take the bubble when neither guide is using it (not behind a window).
     const tip = !isGuideVisible(gs) && !lab && !Modal.isOpen(this) ? currentTip(gs) : null;
     this.tipShown = !!tip;
@@ -2307,9 +2334,9 @@ New walls are built at your wall level (${wallLevel(this.gs)}), so one costs wha
       return;
     }
     this.guideNext.setLabel('Next');
-    const step = lab ? labGuideStep(gs) : currentStep(gs);
-    notifyGuideMessage(this, gs, lab ? `lab-${gs.labGuideStep}` : `tutorial-${gs.tutorialStep}`);
-    this.guideText.setText(lab ? labGuideText(gs) : step.text).setFontSize(lab ? 16 : 18);
+    const step = lab ? side.step : currentStep(gs);
+    notifyGuideMessage(this, gs, lab ? side.msg : `tutorial-${gs.tutorialStep}`);
+    this.guideText.setText(lab ? side.text : step.text).setFontSize(lab ? 16 : 18);
     const need = lab ? 0 : goldNeeded(gs);
     this.guideProgress.setText(need && isWaitingForGold(gs) ? `Collect Bitcoin from your mine: ${formatGold(gs.gold)} / ${formatGold(need)}` : '');
     this.guideProgress.setY(Math.max(70, 26 + this.guideText.height));
@@ -2335,7 +2362,6 @@ New walls are built at your wall level (${wallLevel(this.gs)}), so one costs wha
     const gs = this.gs;
     const step = labGuideStep(gs);
     if (!step) return null;
-    const imageRect = (img) => { const r = img.getBounds(); return { x: r.x, y: r.y, w: r.width, h: r.height }; };
     const btnRect = (b) => { const m = b.getWorldTransformMatrix(); return { x: m.tx - b.btnW / 2, y: m.ty - b.btnH / 2, w: b.btnW, h: b.btnH }; };
     const building = (type) => {
       const a = this.world.buildingScreenAnchor(type);
@@ -2343,20 +2369,51 @@ New walls are built at your wall level (${wallLevel(this.gs)}), so one costs wha
     };
     const selected = this.selectedId ? gs.getBuilding(this.selectedId) : null;
     const button = (key) => (this.infoOpen ? this.infoButtons[key] : this.qbButtons[key]);
-    if (step.key === 'build') {
-      if (this.placementActive) return null;
-      if (!this.shopOpen) return imageRect(this.shopButton);
-      const card = this.cardLayer.list.find((c) => c.cardType === 'rvlab');
-      return card ? { x: this.shopPanel.x + card.x, y: this.shopPanel.y + card.y, w: card.cardW, h: card.cardH } : null;
-    }
+    if (step.key === 'build') return this.guideShopFocus('rvlab');
     if (step.key === 'open') return selected && selected.type === 'rvlab' ? btnRect(button('research')) : building('rvlab');
+    return null;
+  }
+
+  /**
+   * A guide's "build one" step: the Shop button, then the building's card in the shop. If the card isn't on show (another
+   * page or tab), the page arrow toward it, else nothing.
+   */
+  guideShopFocus(type) {
+    if (this.placementActive) return null;
+    const imageRect = (img) => { const r = img.getBounds(); return { x: r.x, y: r.y, w: r.width, h: r.height }; };
+    if (!this.shopOpen) return imageRect(this.shopButton);
+    const card = this.cardLayer.list.find((c) => c.cardType === type);
+    if (card) return { x: this.shopPanel.x + card.x, y: this.shopPanel.y + card.y, w: card.cardW, h: card.cardH };
+    const types = SHOP_TABS.find((t) => t.key === this.shopTab).types;
+    const at = types.indexOf(type);
+    if (at < 0) return null;
+    const arrow = Math.floor(at / shopCardGrid().perPage) > this.shopPage ? this.shopNext : this.shopPrev;
+    const m = arrow.getWorldTransformMatrix();
+    return { x: m.tx - arrow.btnW / 2, y: m.ty - arrow.btnH / 2, w: arrow.btnW, h: arrow.btnH };
+  }
+
+  /** What the Fuel Station guide points at: the shop / Fuel Station card, then the station and its Brew button. */
+  fuelGuideFocus() {
+    const gs = this.gs;
+    const step = fuelGuideCurrent(gs);
+    if (!step) return null;
+    const btnRect = (b) => { const m = b.getWorldTransformMatrix(); return { x: m.tx - b.btnW / 2, y: m.ty - b.btnH / 2, w: b.btnW, h: b.btnH }; };
+    if (step.key === 'build') return this.guideShopFocus('fuelStation');
+    if (step.key === 'open') {
+      const selected = this.selectedId ? gs.getBuilding(this.selectedId) : null;
+      if (selected && selected.type === 'fuelStation') return btnRect(this.infoOpen ? this.infoButtons.brew : this.qbButtons.brew);
+      const a = this.world.buildingScreenAnchor('fuelStation');
+      return a ? { x: a.x - a.width / 2, y: a.y, w: a.width, h: a.bottom - a.y } : null;
+    }
     return null;
   }
 
   /** Screen rect the guide currently points at, or null. */
   focusTarget() {
     const gs = this.gs;
-    if (this.labGuideShown()) return this.labGuideFocus();
+    const side = this.sideGuide();
+    if (side === 'lab') return this.labGuideFocus();
+    if (side === 'fuel') return this.fuelGuideFocus();
     if (!isGuideVisible(gs)) return null;
     const step = currentStep(gs);
     const n = gs.tutorialStep;
@@ -2549,7 +2606,7 @@ New walls are built at your wall level (${wallLevel(this.gs)}), so one costs wha
     on(['layoutSaved'], () => this.showBanner('Layout saved!'));
     on(['tutorialChanged'], () => this.refreshAll());
     // The RV Lab guide's bubble: hidden during attacks, back when the wave is beaten.
-    on(['labGuideChanged', 'waveStarted', 'waveCleared', 'tipsChanged'], () => this.refreshGuide());
+    on(['labGuideChanged', 'fuelGuideChanged', 'waveStarted', 'waveCleared', 'tipsChanged'], () => this.refreshGuide());
   }
 
   // ---------- achievement toasts ----------

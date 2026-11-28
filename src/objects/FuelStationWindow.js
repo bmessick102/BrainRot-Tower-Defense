@@ -13,6 +13,8 @@ import { balance } from './AbilityWindow.js';
 import { addSpellIcon, SPELL_COLORS } from './SpellIcons.js';
 import { COLORS, bodyStyle, textStyle } from '../theme.js';
 import { isWaveActive } from '../logic/util.js';
+import { fuelGuideHint } from '../logic/fuelGuide.js';
+import { notifyGuideMessage } from '../audio.js';
 import {
   SPELL_KINDS, spellConfig, spellStats, spellSummary, spellFullName, checkBrew, brewCost, brewedSpells, spellCount, spellSlots, fuelLevel, fuelStation, spellUnlocked
 } from '../logic/spells.js';
@@ -28,7 +30,8 @@ const TRAY_Y = TOP + GRID_H + 12, TRAY_H = 78;
 const SLOT_R = 24;
 const BREW_COLOR = 0x8e5bd6;                           // the RV Lab's purple RP buttons
 const REFRESH_ON = ['researchPointsChanged', 'spellBrewed', 'spellDiscarded', 'buildingUpgraded', 'buildingPlaced',
-  'buildingDestroyed', 'buildingRepaired', 'waveStarted', 'waveCleared', 'abilityResearched', 'abilitiesApplied', 'abilityRespecced', 'townHallUpgraded'];
+  'buildingDestroyed', 'buildingRepaired', 'waveStarted', 'waveCleared', 'abilityResearched', 'abilitiesApplied', 'abilityRespecced', 'townHallUpgraded',
+  'fuelGuideChanged'];
 
 /** Open the Fuel Station window. `onPerks` opens its perk tree (this window closes first). */
 export function openFuelStationWindow(scene, gs, { onClose = null, onPerks = null } = {}) {
@@ -44,8 +47,7 @@ export function openFuelStationWindow(scene, gs, { onClose = null, onPerks = nul
     m.setTitle(lvl ? `Fuel Station · Brew Spells (level ${lvl})` : 'Fuel Station · Brew Spells');
     drawTabs(scene, m, onPerks ? () => { m.close(); onPerks(); } : null);
     const tabsW = 2 * 96 + 6 + 16;
-    m.add(scene.add.text(m.x + 22 + tabsW, m.y + INFO_Y, 'Brew with Shakes. In a wave, click a spell on the hotbar (or press its number), then click the map.',
-      bodyStyle(15, COLORS.inkDim, { wordWrap: { width: W - 44 - tabsW - 170 } })).setOrigin(0, 0.5));
+    infoLine(scene, m, gs, m.x + 22 + tabsW, W - 44 - tabsW - 170);
     balance(scene, m, gs, true, m.x + W - 22, m.y + INFO_Y);
 
     // The spell nodes under a glossy column header.
@@ -67,6 +69,26 @@ export function openFuelStationWindow(scene, gs, { onClose = null, onPerks = nul
   unfollow = () => handlers.forEach(([name, fn]) => gs.off(name, fn));
   refresh();
   return m;
+}
+
+/**
+ * The info row's text: the Fuel Station guide's hint while it has one for this window (a yellow "Guide:" note, as in
+ * the RV Lab window, with the guide's message sound), else how brewing works.
+ */
+function infoLine(scene, m, gs, x, width) {
+  const hint = fuelGuideHint(gs, 'brew');
+  if (!hint) {
+    m.add(scene.add.text(x, m.y + INFO_Y, 'Brew with Shakes. In a wave, click a spell on the hotbar (or press its number), then click the map.',
+      bodyStyle(15, COLORS.inkDim, { wordWrap: { width } })).setOrigin(0, 0.5));
+    return;
+  }
+  notifyGuideMessage(scene, gs, `fuel-${gs.fuelGuide}`);
+  const g = m.add(scene.add.graphics());
+  const t = scene.add.text(x + 12, m.y + INFO_Y, `Guide: ${hint}`, bodyStyle(14, '#5a3a00', { fontStyle: 'bold', wordWrap: { width: width - 24 } })).setOrigin(0, 0.5);
+  // At most three lines: a long hint steps its font down so it stays clear of the title bar and the spells.
+  for (let size = 13; t.height > 52 && size >= 10; size--) t.setFontSize(size);
+  g.fillStyle(0xffd84a, 0.9).fillRoundedRect(x, m.y + INFO_Y - t.height / 2 - 5, Math.min(width, t.width + 24), t.height + 10, 10);
+  m.add(t);
 }
 
 /** Brew / Perks tabs on the info row, drawn like the research window's Defenses / Economy tabs. */
