@@ -19,7 +19,7 @@ import { addTextField } from '../objects/TextField.js';
 import { drawWindow, drawHudPill } from '../objects/uiDraw.js';
 import { MUSIC } from '../assetKeys.js';
 import { showTitleBackdrop } from './TitleBackdropScene.js';
-import { playMusic } from '../audio.js';
+import { playMusic, whenJingleDone } from '../audio.js';
 import { COLORS, bodyStyle, textStyle } from '../theme.js';
 import { VIEW } from '../renderScale.js';
 
@@ -83,13 +83,13 @@ export class AuthScene extends Phaser.Scene {
     addFullscreenButton(this, width - 36, 34);
 
     if (!session.configured) { this.showOffline(); return; }
-    if (session.loggedIn) { this.scene.start('TitleScene'); return; }
+    if (session.loggedIn) { this.pill('Connecting…'); this.toTitle(); return; }
 
     // A saved login skips the form.
     const wait = this.pill('Connecting…');
     session.restore().then((user) => {
       if (!this.sys.isActive()) return;
-      if (user) { this.scene.start('TitleScene', { justLoggedIn: true }); return; }
+      if (user) { this.toTitle({ justLoggedIn: true }); return; } // ("Connecting…" stays up until then)
       wait.forEach((o) => o.destroy());
       this.showForm();
     }).catch((e) => {
@@ -99,6 +99,14 @@ export class AuthScene extends Phaser.Scene {
       this.unreachable = isNetworkError(e);
       this.showForm();
     });
+  }
+
+  /**
+   * On to the title screen (the main menu), once the startup jingle and its short pause are over (v0.15.3): the
+   * connecting step runs while it plays, but the menu never opens over it. At once when it's long done.
+   */
+  toTitle(data) {
+    whenJingleDone(() => { if (this.sys.isActive()) this.scene.start('TitleScene', data); });
   }
 
   /** A small dark caption pill centered at y. Returns its objects. */
@@ -157,7 +165,7 @@ export class AuthScene extends Phaser.Scene {
     this.add.text(cx, TOP + 120, 'Accounts, achievements and the leaderboard\nneed the game’s server, which isn’t set up yet.',
       bodyStyle(19, COLORS.ink, { align: 'center', lineSpacing: 6 })).setOrigin(0.5);
     this.add.text(cx, TOP + 180, 'You can still play: your village is saved in this browser.', bodyStyle(16, COLORS.inkDim)).setOrigin(0.5);
-    new Button(this, cx, TOP + h - 50, 280, 56, 'Play Offline', () => this.scene.start('TitleScene', { offline: true }), { color: COLORS.buttonGood, fontSize: 23 });
+    new Button(this, cx, TOP + h - 50, 280, 56, 'Play Offline', () => this.toTitle({ offline: true }), { color: COLORS.buttonGood, fontSize: 23 });
   }
 
   // ---------- log in / sign up ----------
@@ -246,8 +254,8 @@ export class AuthScene extends Phaser.Scene {
   /** The last account that logged in here plays its device copies (sent at its next login); else the browser's own save. */
   playOffline() {
     if (this.busy) return;
-    if (session.startOffline()) this.scene.start('TitleScene');
-    else this.scene.start('TitleScene', { offline: true });
+    if (session.startOffline()) this.toTitle();
+    else this.toTitle({ offline: true });
   }
 
   /** A log in / sign up couldn't reach the server: say so and offer Retry / Play Offline. */
@@ -333,7 +341,7 @@ export class AuthScene extends Phaser.Scene {
           this.showForm();
           return;
         }
-        this.scene.start('TitleScene', { justLoggedIn: true });
+        this.toTitle({ justLoggedIn: true });
       } catch (e) {
         this.setBusy(false);
         this.resetCaptcha();
@@ -351,7 +359,7 @@ export class AuthScene extends Phaser.Scene {
       await session.signIn(email, password, { captchaToken: this.captchaToken });
       guard.succeeded();
       this.rememberEmail(email);
-      this.scene.start('TitleScene', { justLoggedIn: true });
+      this.toTitle({ justLoggedIn: true });
     } catch (e) {
       this.setBusy(false);
       this.resetCaptcha();

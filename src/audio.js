@@ -5,7 +5,7 @@
 import { requestAudio } from './assetLoader.js';
 import { audioPath } from './assetPlan.js';
 import { clamp01, scaleVolume, musicTrackVolume, ambienceVolumes } from './logic/volume.js';
-import { SFX } from './assetKeys.js';
+import { SFX, MUSIC } from './assetKeys.js';
 import { HERO_TYPES } from './logic/buildings.js';
 
 // Music sits under sound effects so it never drowns them out.
@@ -273,7 +273,7 @@ export function playSfxEndingIn(scene, key, seconds) {
  * scenes; calling again with the same key does nothing.
  */
 export function playMusic(scene, key, { loop = true, seek = 0 } = {}) {
-  if (holdForJingle(() => playMusic(scene, key, { loop, seek }), scene)) return;
+  if (holdForJingle(() => playMusic(scene, key, { loop, seek }), scene, key)) return;
   if (musicKey === key && music && (music.isPlaying || music.tags?.[0]?.dataset.locked === 'true')) return;
   stopMusic();
   if (!whenLoaded(scene, key, () => playMusic(scene, key, { loop, seek }))) return;
@@ -296,7 +296,7 @@ export function resumeMusic(key) {
  * If the new track's file is missing, the current music just keeps playing.
  */
 export function crossfadeMusic(scene, key, ms = 1500, { loop = true } = {}) {
-  if (holdForJingle(() => crossfadeMusic(scene, key, ms, { loop }), scene)) return;
+  if (holdForJingle(() => crossfadeMusic(scene, key, ms, { loop }), scene, key)) return;
   if (musicKey === key && music && music.isPlaying) return;
   if (!whenLoaded(scene, key, () => crossfadeMusic(scene, key, ms, { loop }))) return; // (the current track plays on meanwhile)
   const old = music;
@@ -370,6 +370,7 @@ export function hasAmbience(scene, dayKey, nightKey) {
 /** Start both beds (silent; updateAmbience sets their volumes). Does nothing if they're already playing. */
 export function startAmbience(scene, dayKey, nightKey, { presence = 0 } = {}) {
   if (ambience || ambiencePending || !hasAmbience(scene, dayKey, nightKey)) return;
+  cancelWaitingJingle(); // a village opened before the first tap: too late for the startup jingle
   if (!scene.cache.audio.exists(dayKey) || !scene.cache.audio.exists(nightKey)) {
     // Not loaded yet: fetch both, then start them (silent; they fade in), unless stopAmbience came first.
     const request = {};
@@ -425,9 +426,9 @@ export function stopAmbience() {
 
 // ---------- the startup jingle ----------
 // index.html starts it the moment the page loads (a plain <audio>, before this code has even downloaded) and keeps its
-// state in window.__ibtdJingle: { state: 'playing' | 'done', audio, waiters, endedAt (when it finished playing) }. The
-// loading screen waits while it plays (whenJingleDone, BootScene), and music asked for meanwhile (the title music) starts
-// after it. v0.15.1: a browser that blocks sound before the first click gets no jingle (it's never played on a click).
+// state in window.__ibtdJingle: { state: 'playing' | 'waiting' (for the first click) | 'done', audio, waiters, cancel }.
+// The loading screen waits while it plays (whenJingleDone, BootScene), and music asked for meanwhile (the title music)
+// starts when it ends. If it's still waiting for a first click when a village's music or ambience starts, it's dropped.
 let afterJingle = null; // the latest music call held until the jingle ends
 const startupJingle = () => globalThis.__ibtdJingle || null;
 const jingleState = () => startupJingle()?.state || 'done';
@@ -437,30 +438,52 @@ export const AFTER_JINGLE_MS = 750;
 
 /**
  * Run `fn` once the startup jingle has finished playing and AFTER_JINGLE_MS have passed since (at once if it ended
- * longer ago than that, or never played: blocked by the browser), and `maxMs` after the call at the latest (a file
- * stuck downloading never holds the loading screen for good).
+ * longer ago than that or never played), and `maxMs` after the call at the latest (a file stuck downloading never holds
+ * the loading screen for good). A jingle blocked until the first tap: at once, or with `waitForTap` after that tap
+ * has played it (the cap then counts from the tap).
  */
-export function whenJingleDone(fn, maxMs = 8000) {
+export function whenJingleDone(fn, maxMs = 8000, { waitForTap = false } = {}) {
   const j = startupJingle();
   let ran = false;
   const once = () => { if (!ran) { ran = true; fn(); } };
-  if (jingleState() === 'playing') {
-    // (endedAt is set only when it really played: a blocked start ends it at once, with no pause)
-    j.waiters.push(() => setTimeout(once, typeof j.endedAt === 'number' ? AFTER_JINGLE_MS : 0));
+  const state = jingleState();
+  if (state === 'playing') {
+    j.waiters.push(() => setTimeout(once, AFTER_JINGLE_MS));
     setTimeout(once, maxMs);
-  } else if (typeof j?.endedAt === 'number') {
+  } else if (state === 'waiting' && waitForTap) {
+    // Blocked until the first tap (index.html plays it then): wait for it, and cap the wait from that tap.
+    j.waiters.push(() => setTimeout(once, AFTER_JINGLE_MS));
+    const events = ['pointerdown', 'touchend', 'keydown'];
+    const tapped = () => { events.forEach((e) => globalThis.removeEventListener?.(e, tapped, true)); setTimeout(once, maxMs); };
+    events.forEach((e) => globalThis.addEventListener?.(e, tapped, true));
+  } else if (state === 'done' && typeof j?.endedAt === 'number') {
     const left = j.endedAt + AFTER_JINGLE_MS - performance.now();
     if (left > 0) setTimeout(once, left); else once();
   } else once();
 }
 
-/** While the jingle plays, hold this music call until it (and the pause) is over. True when held. */
-function holdForJingle(play, scene) {
-  if (jingleState() !== 'playing') return false;
-  if (!afterJingle) {
-    const j = startupJingle();
-    j.waiters.push(() => setTimeout(playAfterJingle, typeof j.endedAt === 'number' ? AFTER_JINGLE_MS : 0));
-  }
+/**
+ * Run `fn` now, or at the player's first tap / click / key if the startup jingle is waiting for one ("Tap to start").
+ * (index.html's own listener runs first, so the jingle has started by then.)
+ */
+export function whenStartTapped(fn) {
+  if (jingleState() !== 'waiting') { fn(); return; }
+  const events = ['pointerdown', 'touchend', 'keydown'];
+  const go = () => { events.forEach((e) => globalThis.removeEventListener?.(e, go, true)); fn(); };
+  events.forEach((e) => globalThis.addEventListener?.(e, go, true));
+}
+
+/** Is the startup jingle blocked until the first tap (the browser wouldn't play sound yet)? */
+export function jingleWaitingForTap() {
+  return jingleState() === 'waiting';
+}
+
+/** While the jingle plays (or waits for the first click), hold this music call for after it. True when held. */
+function holdForJingle(play, scene, key) {
+  const state = jingleState();
+  if (state === 'done') return false;
+  if (state === 'waiting' && key !== MUSIC.title) { cancelWaitingJingle(); return false; } // a village's music: go ahead
+  if (!afterJingle) startupJingle().waiters.push(() => setTimeout(playAfterJingle, AFTER_JINGLE_MS));
   afterJingle = { play, scene };
   return true;
 }
@@ -469,6 +492,12 @@ function playAfterJingle() {
   const next = afterJingle;
   afterJingle = null;
   if (next && sceneAlive(next.scene)) next.play();
+}
+
+function cancelWaitingJingle() {
+  if (jingleState() !== 'waiting') return;
+  afterJingle = null; // (the caller's own music plays instead of the held one)
+  startupJingle().cancel();
 }
 
 /** The Music slider moved: the jingle follows it (0 stops it). */

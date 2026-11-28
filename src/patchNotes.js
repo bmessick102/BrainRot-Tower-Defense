@@ -19,8 +19,8 @@ const allEntries = (release) => release.sections.flatMap((s) => s.entries);
 
 export const PATCH_NOTES = {
   release: '0.15',
-  version: '0.15.2',
-  title: "What's New in v0.15.2",
+  version: '0.15.3',
+  title: "What's New in v0.15.3",
   sections: [
     { type: 'feature', entries: [
       { version: '0.15.0', icon: { building: 'cannon', level: 9 }, title: 'Upgrade windows: see the next level before you buy',
@@ -53,6 +53,8 @@ export const PATCH_NOTES = {
         text: 'A building that goes up a level now lights up with gold sparkles and a "Level N!" so you can see the change. The Village Hall\'s is the biggest.' },
       { version: '0.15.0', icon: { texture: 'ui_coin' }, title: 'Prices with coin and Shake icons',
         text: 'Every price shows its coin or Shake icon, and turns red when you can\'t afford it. Greyed-out buttons and guide messages now make a sound.' },
+      { version: '0.15.3', icon: { building: 'dj', level: 7 }, title: '"Tap to start" is back',
+        text: 'The jingle plays every time you start the game. If your browser keeps sound off until you tap, the loading screen asks for a tap, plays the jingle, then opens the menu.' },
       { version: '0.15.1', icon: { building: 'dj', level: 6 }, title: 'No more "Tap to start"',
         text: 'The jingle plays while the game loads whenever your browser allows sound right away (for example when the game is installed as an app). Otherwise loading goes straight to the menu, and a tap never starts it late.' },
       { version: '0.15.0', icon: { building: 'dj', level: 5 }, title: 'A startup jingle',

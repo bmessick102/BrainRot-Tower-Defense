@@ -2,6 +2,19 @@
 
 The version shows in the bottom-left corner of every screen (`package.json` `version` plus the commit). Details for everything below are in [README.md](README.md).
 
+## 0.15.3
+
+"Tap to start" is back, so the startup jingle plays on every start (Chrome blocks page sound on a refresh).
+
+### Changes
+
+- **Startup jingle: "Tap to start" again** (reverts 0.15.1): when `play()` is refused (`NotAllowedError`) the jingle waits
+  (`state: 'waiting'`) and plays on the first pointer / key event, and the full bar reads "Tap to start" / "Click to
+  start" (`jingleWaitingForTap`). That tap (at once when sound was allowed) moves on to the connecting screen
+  (`audio.js whenStartTapped`; AuthScene's "Connecting…" / login check runs while the jingle plays), and AuthScene opens
+  the main menu only after the jingle and `AFTER_JINGLE_MS` (`AuthScene.toTitle` -> `whenJingleDone`, 8 s cap; every
+  path to TitleScene goes through it). The title music waits the same way (`holdForJingle`).
+
 ## 0.15.2
 
 A step-by-step Fuel Station guide, and the guide message sound plays without its delay.

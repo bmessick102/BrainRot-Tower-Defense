@@ -8,7 +8,8 @@ import { ENEMY_KINDS } from '../logic/enemies.js';
 import { MAP } from '../mapTiles.js';
 import { loadSettings } from '../logic/save.js';
 import { getStorage } from '../state/GameState.js';
-import { setMusicLevel, setSfxLevel, whenJingleDone } from '../audio.js';
+import { setMusicLevel, setSfxLevel, whenStartTapped, jingleWaitingForTap } from '../audio.js';
+import { IS_TOUCH } from '../device.js';
 import { COLORS, FONT, textStyle, shade } from '../theme.js';
 import { pickTip } from '../loadingTips.js';
 import { LOADED_EVENT, LOADED_FLAG } from './TitleBackdropScene.js';
@@ -123,9 +124,15 @@ export class BootScene extends Phaser.Scene {
       })
     });
     this.load.once('complete', () => {
-      // v0.15: the full bar stays up until the startup jingle (index.html) has finished, plus a short pause. (A browser
-      // that blocks sound before the first click never plays it: no wait.)
-      whenJingleDone(() => {
+      // v0.15.3: a browser that blocks sound until the first tap: the full bar asks for one ("Tap to start"), and that
+      // tap plays the startup jingle (index.html). Then (at once when sound was allowed) the bar goes and the
+      // "Connecting…" screen (AuthScene) starts while the jingle plays; it opens the main menu only after the jingle
+      // and its short pause (AuthScene.toTitle, audio.js whenJingleDone).
+      if (jingleWaitingForTap()) {
+        label.setText(IS_TOUCH ? 'Tap to start' : 'Click to start');
+        this.tweens.add({ targets: label, scale: 1.08, duration: 520, yoyo: true, repeat: -1, ease: 'Sine.easeInOut' });
+      }
+      whenStartTapped(() => {
         rotate.remove();
         items.forEach((o) => { if (o.scene) o.destroy(); });
         // The title picture's mortar fires its last shot (its man then hovers there on the title menu).
@@ -172,7 +179,7 @@ export class BootScene extends Phaser.Scene {
     // enemies...) were sized for the placeholders, so those only get a notice with a Reload button.
     const keys = missing.map((f) => f.key);
     if (keys.length && !picturesUnsupported()) { requestImages(keys.filter((k) => /^bld_/.test(k)), { front: true }); markBrokenImages(keys.filter((k) => !/^bld_/.test(k))); }
-    whenJingleDone(() => this.scene.start('AuthScene')); // logs in (or picks up a saved login), then the title screen
+    whenStartTapped(() => this.scene.start('AuthScene')); // logs in (or picks up a saved login), then the title screen (after the jingle)
   }
 
   /** Draw a placeholder with a 2D canvas unless a real texture already has this key. */
