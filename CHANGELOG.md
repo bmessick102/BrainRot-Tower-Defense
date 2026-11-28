@@ -2,6 +2,111 @@
 
 The version shows in the bottom-left corner of every screen (`package.json` `version` plus the commit). Details for everything below are in [README.md](README.md).
 
+## 0.15.4
+
+Final-sprint work requested by Brady: one device at a time per account, buy buttons that show what you can afford,
+the building info panel in the upgrade window's look, the Edit Mode controls in one row, game-styled notices and
+"turn your phone" screen, animated connecting dots, hero altars centered in the upgrade window, RV Lab perk cards that
+fit their text, and Robert's credit. No save format change.
+**Database:** run [migration-2026-11-28-single-session.sql](supabase/migration-2026-11-28-single-session.sql) (also in
+`schema.sql`) after deploying. Until it runs, the game works exactly as 0.15.3 did (one device at a time is off).
+
+### New Features
+
+- **One device at a time per account** (the newest login wins). Server: the migration adds
+  `profiles.active_session` and `bases.session_id`, `claim_session(p_session)` (security definer: makes the device the
+  account's), `session_active(p_session)`, and the `bases_session` trigger (`check_base_session`, before update), which
+  raises `IBTD_SESSION_REPLACED` (P0001) for any save of a signed-in player whose `session_id` isn't the account's
+  active one, then clears `session_id` (every save must bring its own; SQL-editor / service-role updates, with no
+  `auth.uid()`, are never refused). Client (`src/net/session.js`): a device id per browser (`ibtd.device` in
+  localStorage, shared by its tabs, which the tab guard already handles); `loadAccount` (log in, sign up, a page load
+  with a saved login) calls `claimDevice`; `uploadBase` / `renameBase` send `session` with each save
+  (`SupabaseBackend.updateBase` writes it to `session_id`); `checkDevice` asks `session_active` every
+  `DEVICE_CHECK_MS` (15 s, `deviceCheck: true` in account.js) and when the page comes back into view. A refused save
+  (`isSessionReplaced`), a stale-revision conflict while the device is no longer the account's, or a failed check calls
+  `deviceReplaced`: unsent progress is kept as a device backup (`reason: 'device'`), every village is given up
+  (`loseBase`), `lock` becomes `{ reason: 'device' }`, `canSend` turns false (no stats or achievement uploads either),
+  and LockOverlay shows "Your village was opened on another device" with Reload; the reload logs in again and takes the
+  account back. Before the migration `claim_session` is missing (PGRST202, `isServerSetupError`): `claimSession`
+  answers false, nothing is sent or checked, and saves are exactly 0.15.3's. LocalBackend mirrors it
+  (`claimSession` / `sessionActive`, `activeSession` on the user, a save with another device id refused). Tests:
+  tests/session.test.js "one device at a time per account" (takeover, refused save, check without saving, reload takes
+  it back, tabs share a device, a server without it); tests/accountsAndSaves.test.js (the Supabase calls, mocked:
+  silent before the migration, `session_id` sent and the refusal read after). The SQL was run (agent-run) in PGlite on
+  top of schema.sql: the claims, the refusals (stale device, no device id, rename) and the SQL-editor case behave as
+  above, and schema.sql and the migration each run twice without error.
+
+### Changes
+
+- **Buy buttons follow what you can pay** (`CurrencyCost.markShort`, `Button.setAffordable`): the Upgrade / Rebuild /
+  Merge buttons in the info panel and the quick bar keep their color (green; Merge gold) only while every cost is
+  covered; when short they turn `COLORS.buttonDark` with the missing amount red (as in the upgrade window), and stay
+  pressable (the window says what's missing). They update live: `researchPointsChanged` now refreshes the panel for any
+  selected building (it did only for the RV Lab, Fuel Station and Shake Collector), `goldChanged` already did. The RV
+  Lab's Research and Reset path buttons and the Fuel Station's Brew button (grey when they can't be used, as before)
+  now show a short amount in red. Shop cards already priced in red when short.
+- **"Opened on another device" and the other lock notices in the game's window style** (`LockOverlay.js`,
+  `lockMessage`): the HTML notice now uses `index.html`'s new `.ibtd-window` / `.ibtd-window-header` / `.ibtd-title` /
+  `.ibtd-button` styles, which copy `drawWindow` (dark frame, slate header, light stone body) and `drawGlossy` (green
+  face, darker lip, shine) and use Lilita One (`@font-face` on `assets/fonts/LilitaOne-Regular.ttf`). Texts for the
+  tab and "saved somewhere else" cases are unchanged.
+- **"Turn your phone" screen in the game's look** (`index.html` `#rotate`): the same window (header "Turn your
+  phone"), the app icon, and the phone-turn badge drawn as a blue glossy button (the `turn` animation kept), sized for
+  320-412 px wide portrait screens.
+
+- **Info panel in the upgrade window's look** (`UIScene.buildInfo` / `syncInfoPic` / `drawInfoStats` /
+  `drawHeroRows`): the panel stays a 440 px side panel in the same place, but draws with the upgrade window's helpers
+  from `src/objects/PurchasePreview.js` through a `panelTarget(box)` stand-in for the Modal. The picture stands on the
+  grass tile (`drawShowcaseTile`, new: the light, tile and picture taken out of `drawShowcase`, scaled by `hw`;
+  `INFO_TILE.hw` 58) instead of the blue showcase card; a hero's altar uses its village footing there too. The Stats
+  tab uses `drawStatBars` (the same `ui_stat_<kind>` icons through `statIconFor`, now exported from `UpgradeWindow.js`;
+  `INFO_BARS` step 38, font 14) and the facts as `drawFacts` rows across the panel (`INFO_NOTES`, wrapped); the ability
+  paths and the Mastery line run across the panel under them. The Hero tab's Status and other rows are `drawFacts` rows
+  (`INFO_FACTS`, 20 px on that tab) and its health is a `drawStatBars` bar. New options: `drawStatBars` `step`, `font`
+  and a row's `current` (reads "current / value", lost health in `GREEN_LOST`; text too long for a bar shrinks with its
+  gain); `drawFacts` `x`, `width`, `size`, `rowH`, `wrap` and a fact's `ink` (the value and its gain now stay clear of
+  the label: the old Hero tab drew "Status" into "Sleeping (night) · wakes for a raid"). Buttons, live updates (health
+  in a raid, collection, hero recovery), `placeInfoPanel` and touch sizes are unchanged; the shop's building card
+  (`drawStats` / `drawBuildingPic`) is unchanged. Tallest panels now 633 px (merged Diddy Trebuchet / KSI Frost Fortress
+  Stats), 632 (Hatsune Queen's Hero tab): inside the 636 px between `INFO_TOP_MIN` and the screen's bottom margin.
+- **Edit Mode controls in one row** (`UIScene.layoutEditRow`, `EDIT_ROW`, `SHIFT_ARROW`; `SHIFT_PAD` and `ROW_BTN`
+  removed): Shift, Select Row, the placement buttons (Put Back / Deselect, Store in Hotbar, Rotate, Place on touch;
+  centered over the hotbar while carrying) and Remove All / Cancel / Save sit in one row centered 28 px above the
+  hotbar (y 570), all 40 px tall, with the hint on a 26 px pill above (was four heights: the pad at y 474, Select Row at
+  474, the hint and Remove All / Cancel / Save at `HOTBAR.y - 32`, the placement buttons at `HOTBAR.y - 90`). Shift is a
+  pill with "Shift" and four 32 px arrow buttons side by side (down-left, up-left, up-right, down-right; on touch each
+  arrow's click area stops halfway to the next). Buttons size to their label (12 px a side, at least 80 px wide); a row
+  wider than the hotbar (988 px) tightens the padding to 6, then the type from 17 to 14 (not needed today: the widest,
+  a phone carrying a building with walls placed, is 938 px). The row and hint rise over the guide bubble
+  (`editRowY` -> `liftClear`; `refreshGuide` re-lays the row). Hidden controls move to y -500. Outside Edit Mode the
+  placement buttons keep their sizes (`PLACE_SIZE`). `hudRects` reports the new rects.
+- **Animated connecting dots** (`AuthScene.animateDots`, `waitingWord`, `DOT_MS` 400): every waiting message ending in
+  "…" or "..." ("Connecting…" in its pill, and "Logging in…" / "Creating…" on the submit button) steps its dots
+  . -> .. -> ... on the scene clock. The text keeps the left edge the full "Word..." has, so the word doesn't move; the
+  pill is sized for "Word...". The timer ends with the text (`destroy`), with `setBusy(false)`, and with the scene.
+- **Robert's credit** (`src/credits.js`): "Code" is now "Gameplay ideas, playtesting and balancing".
+
+### Bug Fixes
+
+- **RV Lab perk card overflow** (`AbilityWindow.drawDetails`): the "locked to Path X" note's box was centered on the
+  button's line (`y + h - 42`), so a three-line note ran 3 px past the card's bottom onto the Reset path button; it now
+  stands on the card's bottom (14 px inside) and grows upward, smaller type if it has to. The description, "applies"
+  line and checklist step down a size together (`SIZES`, four steps) when they'd run into the button or note: three
+  checks under a long description hid "Not during a wave" under the Research button (Cannon Path A Tier 4, Gandolf
+  Tower Mastery 5, Brisket King Path B Tier 5). A long reason under the button ("Needs a Gandolf the Grand: merge two at
+  Level 10") shrinks to the button's width. Checked by an agent-run sweep of every node of all 21 trees (lab level 4
+  and 5, no Shakes, path taken, fully researched, Mastery locked / open / owned) on desktop and touch: no text outside
+  its card or window, none overlapping.
+- **Hero altars in the upgrade window** (`PurchasePreview.drawShowcaseTile`, `BuildingView.showcaseFooting`): the
+  window stood every picture on its bottom edge 30 px below the tile's center and fitted it to 260 x 186. The altars'
+  pads meet the ground `GROUND_SHARE` (44-45% King / Queen, 21% Mage) up their pictures, so the King's and Queen's pads
+  were drawn 76-86% of the tile's width (56-65% in the village) with their centers about 50 px behind the tile's
+  center. A picture with a footing now puts that ground point on the tile's center at the village's width share
+  (`spriteScale` x `levelSizeFactor`), capped so it stays under the name (the Mage's tall statue: about 51% of the tile).
+  The other 21 types, their last pictures and the merged pictures (their `art.ground` is 0.16-0.25) were checked in the
+  same window and were not off; they are unchanged. (The `bld_mageAltar_lv*` points in `MERGED_MUZZLE` are his staff
+  tip, not a foot anchor.)
+
 ## 0.15.3
 
 "Tap to start" is back, so the startup jingle plays on every start (Chrome blocks page sound on a refresh).

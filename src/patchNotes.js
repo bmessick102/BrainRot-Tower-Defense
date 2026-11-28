@@ -19,14 +19,16 @@ const allEntries = (release) => release.sections.flatMap((s) => s.entries);
 
 export const PATCH_NOTES = {
   release: '0.15',
-  version: '0.15.3',
-  title: "What's New in v0.15.3",
+  version: '0.15.4',
+  title: "What's New in v0.15.4",
   sections: [
     { type: 'feature', entries: [
       { version: '0.15.0', icon: { building: 'cannon', level: 9 }, title: 'Upgrade windows: see the next level before you buy',
         text: 'Upgrade now opens a window with the next level\'s picture, what it adds and its price. If something is missing, a red note says what (a Village Hall level, more Bitcoin). The Village Hall\'s window shows every building its next level unlocks.' },
       { version: '0.15.0', icon: { building: 'archer', level: 10 }, title: 'Merge window',
         text: 'Merge opens a window with the merged defense, its stats, its ability and its price, even before you have a second copy. Confirm, then tap the second copy on the map.' },
+      { version: '0.15.4', icon: { building: 'townHall', level: 18 }, title: 'One device at a time',
+        text: 'Your account plays on one device at a time. Logging in on another device stops the first one from saving and tells it so; reload there to play on it again. An old copy can no longer overwrite your village.' },
       { version: '0.15.0', icon: { texture: 'ui_achievement' }, title: 'Achievements for each village',
         text: 'Each village earns its own achievements and rewards. Open your Profile (top left) to see them and claim the ones for the village you\'re playing. Player cards show each village\'s achievements.' },
       { version: '0.15.0', icon: { building: 'wall' }, title: 'Draw walls in Edit Mode',
@@ -43,6 +45,12 @@ export const PATCH_NOTES = {
         text: 'Tap a Bitcoin Mine or Shake Collector when its icon shows to collect from every one of that type at once, as far as your storage has room. The rest stays inside. Collect All in a building\'s Info does the same.' },
       { version: '0.15.0', icon: { texture: 'ui_coin' }, title: 'Gold is now called Bitcoin',
         text: 'Your coins were always Bitcoin, and now every price, reward, perk and tip says so. Nothing else changes: you keep everything you had.' },
+      { version: '0.15.4', icon: { building: 'archer', level: 9 }, title: 'Building info looks like the upgrade window',
+        text: 'A building\'s Info, Stats and Hero tabs now match the upgrade window: the building on its grass tile, the same stat bars with their icons, and the same fact rows. Health bars still drop live during a raid.' },
+      { version: '0.15.4', icon: { texture: 'ui_coin' }, title: 'Buy buttons show what you can afford',
+        text: 'Upgrade, Rebuild and Merge stay green (Merge gold) only when you have enough. When you\'re short they turn dark with the missing price in red, and they change the moment your Bitcoin or Shakes do.' },
+      { version: '0.15.4', icon: { texture: 'ui_edit_layout_button' }, title: 'Edit Mode buttons in one row',
+        text: 'Shift, Select Row, the buttons for what you\'re carrying, Remove All, Cancel and Save now sit in one straight row just above the hotbar, with the tip on a slim line above. Shift is four small arrows side by side.' },
       { version: '0.15.0', icon: { building: 'townHall', level: 14 }, title: 'New Village Hall and Shake Storage pictures',
         text: 'Village Halls 13 to 20 have new artwork, and Shake Storages have new pictures for Levels 13 to 16.' },
       { version: '0.15.0', icon: { building: 'rvlab' }, title: 'Bigger RV Lab and How to Play',
@@ -53,12 +61,18 @@ export const PATCH_NOTES = {
         text: 'A building that goes up a level now lights up with gold sparkles and a "Level N!" so you can see the change. The Village Hall\'s is the biggest.' },
       { version: '0.15.0', icon: { texture: 'ui_coin' }, title: 'Prices with coin and Shake icons',
         text: 'Every price shows its coin or Shake icon, and turns red when you can\'t afford it. Greyed-out buttons and guide messages now make a sound.' },
+      { version: '0.15.4', icon: { texture: 'title_logo' }, title: 'Messages in the game\'s style',
+        text: 'The "opened on another device" and "opened in another tab" messages and the "turn your phone" screen now use the game\'s own windows, buttons and lettering.' },
+      { version: '0.15.4', icon: { building: 'dj', level: 4 }, title: 'Moving dots while connecting',
+        text: 'The Connecting, Logging in and Creating messages show dots that keep moving, so you can see the game is still working.' },
       { version: '0.15.3', icon: { building: 'dj', level: 7 }, title: '"Tap to start" is back',
         text: 'The jingle plays every time you start the game. If your browser keeps sound off until you tap, the loading screen asks for a tap, plays the jingle, then opens the menu.' },
       { version: '0.15.1', icon: { building: 'dj', level: 6 }, title: 'No more "Tap to start"',
         text: 'The jingle plays while the game loads whenever your browser allows sound right away (for example when the game is installed as an app). Otherwise loading goes straight to the menu, and a tap never starts it late.' },
       { version: '0.15.0', icon: { building: 'dj', level: 5 }, title: 'A startup jingle',
-        text: 'The game plays a short jingle as it loads. If your browser keeps sound off until you tap, the loading screen asks for a tap first.' }
+        text: 'The game plays a short jingle as it loads. If your browser keeps sound off until you tap, the loading screen asks for a tap first.' },
+      { version: '0.15.4', icon: { texture: 'ui_achievement' }, title: 'Updated team credits',
+        text: 'Robert is now credited for gameplay ideas, playtesting and balancing (Settings, Credits tab).' }
     ] },
     { type: 'balance', entries: [
       { version: '0.15.0', icon: { building: 'shakeCollector', level: 9 }, title: 'Shake Collectors make 3 times as much',
@@ -77,6 +91,10 @@ export const PATCH_NOTES = {
     { type: 'fix', entries: [
       { version: '0.15.0', icon: { building: 'townHall', level: 20 }, title: 'Village Halls 16-20 on the leaderboard',
         text: 'The leaderboard showed Village Halls above 15 as lower. It now shows your village\'s real Village Hall.' },
+      { version: '0.15.4', icon: { building: 'rvlab', level: 5 }, title: 'RV Lab perk cards fit their text',
+        text: 'A locked-path note ran over the bottom of its perk card, a checklist\'s last line could hide under the Research button, and a long reason ran off the button. Everything now fits inside the card.' },
+      { version: '0.15.4', icon: { building: 'altar', level: 5 }, title: 'Hero altars in the upgrade window',
+        text: 'The Brisket King, Hatsune Queen and Locklair Mage altars looked too big and stood off the middle of the grass tile. They now stand in the middle of the tile, sized like in your village.' },
       { version: '0.15.2', icon: { texture: 'guide_portrait' }, title: 'Guide messages sound right away',
         text: 'The guide\'s message sound started almost a second after each message appeared. It now plays the moment the message shows.' },
       { version: '0.15.0', icon: { building: 'townHall' }, title: 'Screen fit on phones',

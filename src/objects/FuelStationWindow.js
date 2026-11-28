@@ -6,7 +6,7 @@
 // there to pour it out). The Perks tab opens its perk tree in the RV Lab window. It redraws on RP, brewing,
 // upgrades and waves. Rules live in src/logic/spells.js.
 import { Modal, confirmDialog } from './Modal.js';
-import { currencyCost } from './CurrencyCost.js';
+import { currencyCost, markShort } from './CurrencyCost.js';
 import { Button } from './Button.js';
 import { drawBadge, drawGlossy, fitWidth } from './uiDraw.js';
 import { balance } from './AbilityWindow.js';
@@ -195,7 +195,7 @@ function drawDetails(scene, m, gs, kind, x, y, w, h) {
   const price = c.cost ?? brewCost(gs, kind);
   const b = new Button(scene, x + w / 2, y + h - 42, w - 40, 56, 'Brew · Free', () => gs.brewSpell(kind),
     { color: BREW_COLOR, fontSize: 22, radius: 12, invalidFeedback: true });
-  if (price > 0) b.setCosts([{ currency: 'rp', amount: price }], 'Brew', c.reason);
+  if (price > 0) b.setCosts(markShort(gs, [{ currency: 'rp', amount: price }]).costs, 'Brew', c.reason); // (short: red, v0.15.4)
   else b.setLabel('Brew · Free', c.reason);
   b.setEnabled(c.ok);
   m.add(b);

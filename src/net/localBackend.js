@@ -4,7 +4,7 @@
 // Not secure (anyone with the browser can read it) and never used in the built game.
 
 import { mergeVillageCounters } from '../logic/achievements.js';
-import { conflictError } from './errors.js';
+import { conflictError, sessionReplacedError } from './errors.js';
 import { boardPage } from './paging.js';
 
 const DB_KEY = 'ibtd.dev.db';
@@ -117,11 +117,15 @@ export class LocalBackend {
    * Like SupabaseBackend.updateBase: `updatedAt` is the village's revision (it moves only when the save or
    * checkpoint changes, always forward); with `expected`, a stale change is refused with a conflict error.
    */
-  async updateBase(id, fields, { expected = null } = {}) {
+  async updateBase(id, fields, { expected = null, session = null } = {}) {
     await wait();
     const d = this.db();
     const b = d.bases.find((x) => x.id === id && x.userId === this.userId);
     if (!b) throw new Error('That village no longer exists.');
+    // One device at a time (v0.15.4): a save from a device that isn't the account's any more is refused, like the
+    // database's bases_session trigger. (A call without a device id stands for the server itself, as in the tests.)
+    const owner = d.users.find((u) => u.id === this.userId);
+    if (session && owner && owner.activeSession && owner.activeSession !== session) throw sessionReplacedError();
     if (expected && b.updatedAt !== expected) throw conflictError(b.updatedAt);
     const same = (k) => fields[k] === undefined || JSON.stringify(fields[k] ?? null) === JSON.stringify(b[k] ?? null);
     const content = !same('save') || !same('checkpoint');
@@ -132,6 +136,22 @@ export class LocalBackend {
     if (content) b.updatedAt = new Date(Math.max(Date.now(), (Date.parse(b.updatedAt) || 0) + 1)).toISOString();
     this.write(d);
     return { updatedAt: b.updatedAt };
+  }
+
+  /** Like SupabaseBackend.claimSession: this device becomes the account's one device (the newest login wins). */
+  async claimSession(session) {
+    await wait();
+    const d = this.db();
+    this.me(d).activeSession = session;
+    this.write(d);
+    return true;
+  }
+
+  /** Is `session` still the account's device? */
+  async sessionActive(session) {
+    await wait();
+    const u = this.db().users.find((x) => x.id === this.userId);
+    return !u || !u.activeSession || u.activeSession === session;
   }
 
   async deleteBase(id) {

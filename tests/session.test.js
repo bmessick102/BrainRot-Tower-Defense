@@ -323,3 +323,90 @@ describe('the leaderboard catches up with the game', () => {
     expect(rows.find((r) => r.isMe).bestWave).toBe(126);
   });
 });
+
+describe('one device at a time per account (v0.15.4)', () => {
+  // Two devices: each its own browser storage and its own connection to the same server.
+  const setup = async () => {
+    const server = memoryStorage();
+    const phone = { device: memoryStorage(), timers: manualTimers() };
+    const laptop = { device: memoryStorage(), timers: manualTimers() };
+    const open = (d) => new Session({ backend: new LocalBackend(server), storage: d.device, timers: d.timers });
+    phone.session = open(phone);
+    await phone.session.signUp('kim@example.com', 'secret123', 'Kim');
+    await phone.session.createBase('Home');
+    writeGame(phone.session.storage, makeStateWithTownHall({ gold: 300, tutorialStep: 11, tutorialDone: true }, 3));
+    await phone.timers.runAll();
+    return { server, phone, laptop, open };
+  };
+
+  it('the newest login wins: the first device is told, stops saving, and the server refuses its saves', async () => {
+    const { phone, laptop, open } = await setup();
+    expect(phone.session.deviceOn).toBe(true);
+    laptop.session = open(laptop);
+    await laptop.session.signIn('kim@example.com', 'secret123');
+    expect(laptop.session.deviceOn).toBe(true);
+    // The phone's next save is refused by the server, and the phone stops (keeping that progress as a backup).
+    writeGame(phone.session.storage, makeStateWithTownHall({ gold: 999, tutorialStep: 11, tutorialDone: true }, 3));
+    await phone.timers.runAll();
+    expect(phone.session.lock).toMatchObject({ reason: 'device', name: 'Home' });
+    expect(phone.session.canSend).toBe(false);
+    expect((await laptop.session.backend.listBases())[0].save.gold).toBe(300);
+    expect([...phone.device.map.keys()].some((k) => k.startsWith('ibtd.backup.'))).toBe(true);
+    // ...and saves no more: nothing is scheduled.
+    writeGame(phone.session.storage, makeStateWithTownHall({ gold: 5, tutorialStep: 11, tutorialDone: true }, 3));
+    expect(phone.timers.size).toBe(0);
+    // The laptop saves as usual.
+    writeGame(laptop.session.storage, makeStateWithTownHall({ gold: 444, tutorialStep: 11, tutorialDone: true }, 3));
+    await laptop.timers.runAll();
+    expect((await laptop.session.backend.listBases())[0].save.gold).toBe(444);
+    expect(laptop.session.lock).toBe(null);
+  });
+
+  it('the first device notices on its next check, even without saving', async () => {
+    const { phone, laptop, open } = await setup();
+    expect(await phone.session.checkDevice()).toBe(true);
+    laptop.session = open(laptop);
+    await laptop.session.signIn('kim@example.com', 'secret123');
+    expect(await phone.session.checkDevice()).toBe(false);
+    expect(phone.session.lock.reason).toBe('device');
+  });
+
+  it('a reload on the first device takes the account back', async () => {
+    const { phone, laptop, open } = await setup();
+    laptop.session = open(laptop);
+    await laptop.session.signIn('kim@example.com', 'secret123');
+    const reloaded = open(phone); // the phone reloads the page: its saved login is picked up and claims the account again
+    await reloaded.restore();
+    expect(reloaded.deviceOn).toBe(true);
+    expect(await laptop.session.checkDevice()).toBe(false);
+    expect(laptop.session.lock.reason).toBe('device');
+    writeGame(reloaded.storage, makeStateWithTownHall({ gold: 777, tutorialStep: 11, tutorialDone: true }, 3));
+    await phone.timers.runAll();
+    expect((await reloaded.backend.listBases())[0].save.gold).toBe(777);
+  });
+
+  it('the tabs of one browser share a device (the tab guard handles those)', async () => {
+    const { phone, open } = await setup();
+    const tab2 = open(phone);
+    await tab2.restore();
+    expect(tab2.deviceIdNow()).toBe(phone.session.deviceIdNow());
+    expect(await phone.session.checkDevice()).toBe(true);
+  });
+
+  it('a server without it (migration not run yet) works exactly as before', async () => {
+    const server = memoryStorage();
+    const plain = (d) => {
+      const be = new LocalBackend(server);
+      be.claimSession = undefined; be.sessionActive = undefined; // an older server
+      return new Session({ backend: be, storage: d, timers: manualTimers() });
+    };
+    const a = plain(memoryStorage());
+    await a.signUp('old@example.com', 'secret123', 'Old');
+    expect(a.deviceOn).toBe(false);
+    expect(a.deviceSession()).toBe(null);
+    const b = plain(memoryStorage());
+    await b.signIn('old@example.com', 'secret123');
+    expect(await a.checkDevice()).toBe(true);
+    expect(a.lock).toBe(null);
+  });
+});

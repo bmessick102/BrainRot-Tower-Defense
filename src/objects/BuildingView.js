@@ -256,6 +256,18 @@ export function spriteScale(type) {
 }
 
 /**
+ * How a hero's altar picture (a GROUND_SHARE type) stands on a showcase tile, like on its plot in the village (the
+ * upgrade window's grass tile, PurchasePreview.drawShowcase; v0.15.4): `width`, its width as a share of the tile's
+ * (spriteScale times the level's growth), and `ground`, the share of its height from its bottom that goes on the tile's
+ * center. null for every other type (their pictures are fitted to the window).
+ */
+export function showcaseFooting(type, level) {
+  const ground = GROUND_SHARE[type];
+  if (ground === undefined) return null;
+  return { ground, width: spriteScale(type) * levelSizeFactor(level, topLevelOf(type), type) };
+}
+
+/**
  * Size a building sprite to its footprint (times spriteScale) and stand it on the ground.
  * The shrunken art's base stays centered in the footprint: its front corner sits between the
  * footprint's center and front corner. Returns that base point (bottom-center of the sprite).

@@ -32,6 +32,13 @@ const LABEL_W = 150;
 const LAST_EMAIL = 'ibtd.lastEmail';
 const CAPTCHA_ROW = 18;     // extra window height when the human check sits beside the button
 const OFFLINE_ROW = 66;     // room under the window for Retry / Play Offline
+const DOT_MS = 400;         // waiting messages ("Connecting…"): the dots step . .. ... this often (v0.15.4)
+
+/** The word of a waiting message that ends in an ellipsis ("Connecting…" -> "Connecting"), else null. */
+export function waitingWord(text) {
+  const m = /^(.*?)(?:…|\.\.\.)$/.exec(text || '');
+  return m && m[1] ? m[1] : null;
+}
 
 // Spam guard (src/net/spamGuard.js): a growing wait after repeated failed log ins / sign ups, and at most one
 // "send it again" email per RESEND_GAP_MS.
@@ -72,6 +79,7 @@ export class AuthScene extends Phaser.Scene {
     this.canResend = false;
     this.unreachable = false; // the server couldn't be reached: offer Retry / Play Offline
     this.typedEmail = '';
+    this.stopDots = null;  // stops the submit button's animated dots ("Logging in...")
   }
 
   create() {
@@ -109,12 +117,32 @@ export class AuthScene extends Phaser.Scene {
     whenJingleDone(() => { if (this.sys.isActive()) this.scene.start('TitleScene', data); });
   }
 
-  /** A small dark caption pill centered at y. Returns its objects. */
+  /** A small dark caption pill centered at y (a waiting message's dots animate: animateDots). Returns its objects. */
   pill(text, y = 470) {
-    const t = this.add.text(VIEW.width / 2, y, text, textStyle(22)).setOrigin(0.5).setDepth(2);
+    const word = waitingWord(text);
+    const t = this.add.text(VIEW.width / 2, y, word ? `${word}...` : text, textStyle(22)).setOrigin(0.5).setDepth(2);
     const g = this.add.graphics().setDepth(1);
-    drawHudPill(g, t.x - t.width / 2 - 22, y - 20, t.width + 44, 40);
+    drawHudPill(g, t.x - t.width / 2 - 22, y - 20, t.width + 44, 40); // (sized for the longest, "Word...")
+    if (word) this.animateDots(t, word);
     return [t, g];
+  }
+
+  /**
+   * A waiting message's dots step . -> .. -> ... -> . every DOT_MS (v0.15.4). The word stays put: the text keeps the
+   * left edge the full "Word..." has when centered, so only the dots change. The timer ends when the text is destroyed
+   * or the scene stops (its clock is cleared). Returns a function that stops it and re-centers the text.
+   */
+  animateDots(t, word) {
+    const { x, originX, originY } = t;
+    t.setText(`${word}...`);
+    t.setOrigin(0, originY).setX(x - t.width * originX);
+    let n = 0;
+    const step = () => { n = (n % 3) + 1; if (t.active) t.setText(word + '.'.repeat(n)); };
+    step();
+    const timer = this.time.addEvent({ delay: DOT_MS, loop: true, callback: step });
+    const stop = () => { timer.remove(); t.off('destroy', stop); };
+    t.once('destroy', stop);
+    return () => { stop(); if (t.active) t.setOrigin(originX, originY).setX(x); };
   }
 
   clearUi() {
@@ -270,9 +298,12 @@ export class AuthScene extends Phaser.Scene {
 
   setBusy(busy, label = '') {
     this.busy = busy;
+    if (this.stopDots) { this.stopDots(); this.stopDots = null; }
     if (!this.submitBtn) return;
     this.submitBtn.setEnabled(!busy);
     this.submitBtn.setLabel(busy ? label : (this.tab === 'signup' ? 'Create Account' : 'Log In'));
+    const word = busy && waitingWord(label); // "Logging in…" / "Creating…": its dots animate too
+    if (word) this.stopDots = this.animateDots(this.submitBtn.label, word);
     for (const f of Object.values(this.fields || {})) f.node.disabled = busy;
   }
 

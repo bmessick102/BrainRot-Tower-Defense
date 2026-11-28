@@ -3,7 +3,7 @@
 // lines, one under the other), `lines` centered. The window shrinks the spacing and text if it all doesn't fit.
 export const CREDITS_TEAM = [
   { name: 'Brady Messick', role: ['Programming & game concept', 'UI/UX, sound design & playtesting'] },
-  { name: 'Robert', role: 'Code' },
+  { name: 'Robert', role: 'Gameplay ideas, playtesting and balancing' },
   { name: 'Cole Martin', role: 'Game art, sound effects, UI/UX' },
   { name: 'Nathan DiCarlo', role: 'Testing' }
 ];

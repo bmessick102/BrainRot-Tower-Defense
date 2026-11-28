@@ -79,42 +79,95 @@
       /* Typing boxes (login, names) still select text normally. */
       input { -webkit-user-select: text; user-select: text; }
 
-      /* Phones held upright: ask to turn sideways (the game is laid out for a landscape screen). */
-      #rotate {
-        display: none; position: fixed; inset: 0; z-index: 10; background: #10140f; color: #fff6d8;
-        flex-direction: column; align-items: center; justify-content: center; gap: 22px; text-align: center;
-        font: bold 22px/1.35 "Trebuchet MS", system-ui, sans-serif; padding: 24px; box-sizing: border-box;
+      /* The game's window and button look in HTML (v0.15.4), for what shows before Phaser can draw or over it: the
+         "turn your phone sideways" screen and the "opened in another tab / on another device" notice
+         (src/objects/LockOverlay.js). Colors from src/theme.js COLORS (frame, body, bodyShade, header, headerLight,
+         ink, buttonGood, buttonBlue); shapes from src/objects/uiDraw.js drawWindow / drawGlossy. */
+      @font-face {
+        font-family: "Lilita One"; font-display: swap;
+        src: url("%BASE_URL%assets/fonts/LilitaOne-Regular.ttf") format("truetype");
       }
-      #rotate img { width: 140px; height: auto; border-radius: 24px; }
+      .ibtd-window {
+        position: relative; box-sizing: border-box; width: 100%; max-width: 560px; border: 4px solid #1b1712;
+        border-radius: 18px; overflow: hidden; background: linear-gradient(#efe9dc 40%, #dcd4c3);
+        box-shadow: 2px 7px 0 rgba(0, 0, 0, 0.35); color: #3a2e22; text-align: center;
+      }
+      .ibtd-window-header {
+        background: linear-gradient(#4d5762 45%, #3b434c 45%); border-bottom: 3px solid #1b1712;
+        padding: 10px 18px 12px;
+      }
+      .ibtd-title, .ibtd-button {
+        font-family: "Lilita One", "Arial Black", "Segoe UI Black", sans-serif; font-weight: normal; color: #ffffff;
+        -webkit-text-stroke: 1.5px #000000; paint-order: stroke fill; text-shadow: 0 2px 0 rgba(0, 0, 0, 0.65);
+        letter-spacing: 0.2px;
+      }
+      .ibtd-title { margin: 0; font-size: 26px; line-height: 1.2; }
+      .ibtd-window-body {
+        padding: 18px 22px 22px; font: bold 17px/1.4 "Trebuchet MS", "Segoe UI", Arial, sans-serif;
+      }
+      .ibtd-window-body p { margin: 0 0 18px; }
+      .ibtd-window-body small { display: block; margin-top: 10px; font-size: 15px; color: #7a6a55; }
+      .ibtd-button {
+        --face: #6cbf2c; --lip: #4a8220;
+        display: inline-block; min-width: 200px; padding: 9px 26px 13px; font-size: 22px; cursor: pointer;
+        border: 2px solid #1b1712; border-radius: 12px; background:
+          linear-gradient(rgba(255, 255, 255, 0.3), rgba(255, 255, 255, 0.3)) 3px 2px / calc(100% - 6px) 38% no-repeat,
+          var(--face);
+        box-shadow: inset 0 -4px 0 var(--lip), 1px 4px 0 rgba(0, 0, 0, 0.3);
+      }
+      .ibtd-button:hover { filter: brightness(1.12); }
+      .ibtd-button:active { transform: scale(0.96, 0.92); }
+      .ibtd-button.blue { --face: #3d8fe0; --lip: #2a6198; }
+
+      /* Phones held upright: ask to turn sideways (the game is laid out for a landscape screen), in a game window. */
+      #rotate {
+        display: none; position: fixed; inset: 0; z-index: 10; background: #10140f;
+        flex-direction: column; align-items: center; justify-content: center; padding: 16px; box-sizing: border-box;
+      }
+      #rotate .ibtd-window { max-width: 400px; }
+      #rotate .ibtd-window-body { display: flex; flex-direction: column; align-items: center; gap: 16px; padding: 18px 18px 20px; }
+      #rotate .ibtd-window-body p { margin: 0; }
+      #rotate .art { display: flex; align-items: center; justify-content: center; gap: 18px; }
+      #rotate img { width: 104px; height: auto; border-radius: 18px; border: 3px solid #1b1712; box-shadow: 1px 4px 0 rgba(0, 0, 0, 0.3); }
+      /* The phone-turn badge, drawn like the game's blue glossy buttons (drawGlossy). */
       #rotate .rotate-badge {
-        display: grid; place-items: center; width: 120px; height: 108px; border-radius: 18px;
-        border: 3px solid #f2a227; background: linear-gradient(#425972, #253348);
-        box-shadow: 0 4px #0a1119, inset 0 2px #ffffff45;
+        display: grid; place-items: center; width: 104px; height: 104px; box-sizing: border-box; border-radius: 14px;
+        border: 2px solid #1b1712; background:
+          linear-gradient(rgba(255, 255, 255, 0.3), rgba(255, 255, 255, 0.3)) 3px 2px / calc(100% - 6px) 38% no-repeat,
+          #3d8fe0;
+        box-shadow: inset 0 -5px 0 #2a6198, 1px 4px 0 rgba(0, 0, 0, 0.3);
       }
       #rotate .phone {
         position: relative; width: 38px; height: 65px; box-sizing: border-box;
-        border: 4px solid #ffdc88; border-radius: 8px; background: linear-gradient(150deg, #71afcf, #325976);
-        box-shadow: 0 0 0 2px #182331, inset 0 0 0 2px #182331, 2px 3px #152130;
+        border: 4px solid #ffffff; border-radius: 8px; background: linear-gradient(150deg, #9be2ff, #2a8cd4);
+        box-shadow: 0 0 0 2px #1b1712, inset 0 0 0 2px #1b1712, 2px 3px rgba(0, 0, 0, 0.35);
         animation: turn 2.2s ease-in-out infinite;
       }
       #rotate .phone::after {
         content: ''; position: absolute; bottom: 3px; left: 9px; width: 12px; height: 3px;
-        border-radius: 2px; background: #ffdc88;
+        border-radius: 2px; background: #ffffff;
       }
-      #rotate small { font-size: 16px; color: #c9bfa3; font-weight: normal; }
       @keyframes turn { 0%, 25% { transform: rotate(0); } 55%, 100% { transform: rotate(-90deg); } }
       @media (prefers-reduced-motion: reduce) { #rotate .phone { animation: none; transform: rotate(-45deg); } }
-      @media (max-height: 440px) { #rotate { gap: 12px; } #rotate img { width: 100px; } }
+      @media (max-height: 440px) { #rotate .ibtd-window-body { gap: 10px; } #rotate img, #rotate .rotate-badge { width: 84px; height: 84px; } }
+      @media (max-width: 340px) { #rotate .ibtd-title { font-size: 22px; } #rotate .ibtd-window-body { font-size: 15px; } }
       @media (orientation: portrait) and (pointer: coarse) { #rotate { display: flex; } }
     </style>
   </head>
   <body>
     <div id="game"></div>
     <div id="rotate" aria-live="polite">
-      <img src="apple-touch-icon.png" alt="" />
-      <div class="rotate-badge" aria-hidden="true"><div class="phone"></div></div>
-      <div>Turn your phone sideways to play</div>
-      <small>Tip: Add to Home Screen to play full screen</small>
+      <div class="ibtd-window">
+        <div class="ibtd-window-header"><h1 class="ibtd-title">Turn your phone</h1></div>
+        <div class="ibtd-window-body">
+          <div class="art">
+            <img src="apple-touch-icon.png" alt="" />
+            <div class="rotate-badge" aria-hidden="true"><div class="phone"></div></div>
+          </div>
+          <p>Turn your phone sideways to play</p>
+          <small>Tip: Add to Home Screen to play full screen</small>
+        </div>
+      </div>
     </div>
     <script type="module" src="/src/main.js"></script>
   </body>

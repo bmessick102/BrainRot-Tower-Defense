@@ -1,7 +1,7 @@
 // The online backend: Supabase Auth (email + password) and the tables in supabase/schema.sql.
 // Every method returns plain camelCase objects and throws an Error with a player-friendly message.
 import { createClient } from '@supabase/supabase-js';
-import { networkError, conflictError } from './errors.js';
+import { networkError, conflictError, sessionReplacedError, isSessionReplaced } from './errors.js';
 import { boardPage, isMissingFunction, isServerSetupError } from './paging.js';
 
 const BASE_COLUMNS = 'id, name, save, checkpoint, town_hall, wave, best_wave, created_at, updated_at';
@@ -178,14 +178,19 @@ export class SupabaseBackend {
    * error (isConflictError) and changes nothing. Throws when no row matched (the village was deleted
    * elsewhere, or the login changed), so it stays unsent.
    */
-  async updateBase(id, fields, { expected = null } = {}) {
+  async updateBase(id, fields, { expected = null, session = null } = {}) {
     if (!this.userId) throw new Error('Your login expired. Log in again.');
     const uid = this.userId;
     const cols = baseColumns(fields);
     if (fields.save !== undefined || fields.checkpoint !== undefined) cols.updated_at = new Date().toISOString();
+    // One device at a time (v0.15.4): the device id goes with the save (only once claimSession found the server
+    // ready for it); the database refuses it unless it's the account's device (bases_session trigger).
+    if (session) cols.session_id = session;
     let q = this.db.from('bases').update(cols).eq('id', id).eq('user_id', uid);
     if (expected) q = q.eq('updated_at', expected);
-    const rows = check(await q.select('id, updated_at'));
+    const res = await q.select('id, updated_at');
+    if (res.error && isSessionReplaced(res.error)) throw sessionReplacedError();
+    const rows = check(res);
     if (rows && rows.length) return { updatedAt: rows[0].updated_at };
     if (expected) {
       // Nothing matched: a newer revision (another tab or device saved), or the village is gone.
@@ -193,6 +198,32 @@ export class SupabaseBackend {
       if (now) throw conflictError(now.updated_at);
     }
     throw new Error('That village no longer exists.');
+  }
+
+  // ---------- one device at a time (v0.15.4, supabase/migration-2026-11-28-single-session.sql) ----------
+  /**
+   * Make `session` (this browser's device id) the account's one device. True when the server enforces it; false
+   * when it doesn't have the migration yet (the game then works as before).
+   */
+  async claimSession(session) {
+    if (!this.userId) return false;
+    const { error } = await this.db.rpc('claim_session', { p_session: session });
+    if (error) {
+      if (isServerSetupError(error)) return false;
+      throw friendlyError(error);
+    }
+    return true;
+  }
+
+  /** Is `session` still the account's device? (True when the server doesn't know: nothing to enforce.) */
+  async sessionActive(session) {
+    if (!this.userId) return true;
+    const { data, error } = await this.db.rpc('session_active', { p_session: session });
+    if (error) {
+      if (isServerSetupError(error)) return true;
+      throw friendlyError(error);
+    }
+    return data !== false;
   }
 
   async deleteBase(id) {

@@ -8,7 +8,7 @@
 // points or the buildings change, keeping the selected node.
 import { Modal, confirmDialog } from './Modal.js';
 import { Button } from './Button.js';
-import { currencyCost } from './CurrencyCost.js';
+import { currencyCost, markShort } from './CurrencyCost.js';
 import { buildingTextureKey } from './BuildingView.js';
 import { drawBadge, fitWidth, fitIcon } from './uiDraw.js';
 import { COLORS, bodyStyle, textStyle, mix, RP_TEXT_COLOR } from '../theme.js';
@@ -225,35 +225,64 @@ function drawDetails(scene, m, x, y, w, h, d) {
   cy += 38;
   fitWidth(m.add(scene.add.text(x + 20, cy, d.subtitle || `Path ${d.path.toUpperCase()} · ${pathName(d.type, d.path)} · Tier ${d.tier}`, bodyStyle(14, d.ink || INK[d.path], { fontStyle: 'bold' }))), w - 40);
   cy += 30;
+  // What it does, who it applies to and the checklist, fitted above the button or note: when they'd run into it
+  // (three checks under a long text), every line steps down a size until they fit (v0.15.4: the last check hid
+  // under the Research button).
+  const top = cy;
   const desc = m.add(scene.add.text(x + 20, cy, info.desc, bodyStyle(18, COLORS.ink, { wordWrap: { width: w - 40 }, lineSpacing: 4 })));
-  cy += desc.height + 14;
-  if (d.applies) {
-    const ap = m.add(scene.add.text(x + 20, cy, d.applies, bodyStyle(14, COLORS.inkDim, { fontStyle: 'italic', wordWrap: { width: w - 40 } })));
-    cy += ap.height + 12;
-  }
-  cy += 6;
-  if (d.checks && d.checks.length) {
-    g.fillStyle(COLORS.frame, 0.15).fillRect(x + 20, cy - 10, w - 40, 1);
-    for (const [ok, text] of d.checks) {
-      m.add(scene.add.text(x + 22, cy, ok ? '✔' : '✘', bodyStyle(15, ok ? COLORS.inkGood : COLORS.inkBad, { fontStyle: 'bold' })));
-      const check = m.add(scene.add.text(x + 44, cy, text, bodyStyle(16, ok ? COLORS.ink : COLORS.inkBad, { wordWrap: { width: w - 64 } })));
-      cy += Math.max(25, check.height + 6);
+  const ap = d.applies ? m.add(scene.add.text(x + 20, cy, d.applies, bodyStyle(14, COLORS.inkDim, { fontStyle: 'italic', wordWrap: { width: w - 40 } }))) : null;
+  const checks = (d.checks || []).map(([ok, text]) => [
+    m.add(scene.add.text(x + 22, cy, ok ? '✔' : '✘', bodyStyle(15, ok ? COLORS.inkGood : COLORS.inkBad, { fontStyle: 'bold' }))),
+    m.add(scene.add.text(x + 44, cy, text, bodyStyle(16, ok ? COLORS.ink : COLORS.inkBad, { wordWrap: { width: w - 64 } })))
+  ]);
+  let divider = null;
+  const place = (k) => {
+    let at = top;
+    desc.setY(at); at += desc.height + 14 * k;
+    if (ap) { ap.setY(at); at += ap.height + 12 * k; }
+    at += 6 * k;
+    if (checks.length) {
+      divider = at - 10 * k;
+      for (const [mark, check] of checks) { mark.setY(at); check.setY(at); at += Math.max(25 * k, check.height + 6 * k); }
     }
-  }
+    return at;
+  };
+  // Type sizes, largest first: [description, applies, check, check mark, spacing].
+  const SIZES = [[18, 14, 16, 15, 1], [17, 13, 15, 14, 0.85], [16, 13, 14, 13, 0.75], [15, 12, 13, 12, 0.65]];
   const by = y + h - 42;
+  const fit = (limit) => {
+    for (const [ds, as, cs, ms, k] of SIZES) {
+      desc.setFontSize(ds).setLineSpacing(Math.round(4 * k));
+      if (ap) ap.setFontSize(as);
+      for (const [mark, check] of checks) { mark.setFontSize(ms); check.setFontSize(cs); }
+      cy = place(k);
+      if (cy <= limit) return;
+    }
+  };
   if (d.button) {
+    fit(by - 33 - 6); // the button's top, less a gap
     // The price is on the button ("Research · 240 RP"); the RP balance is at the top right.
     const b = new Button(scene, x + w / 2, by, w - 40, 66, d.button.label, d.button.onClick, { color: d.buttonColor ?? (d.rp ? 0x8e5bd6 : COLORS.buttonGood), fontSize: 20, radius: 12, invalidFeedback: true });
     const reason = d.button.ok ? '' : d.button.sub || '';
-    if (d.button.costs?.length) b.setCosts(d.button.costs, d.button.label, reason);
+    if (d.button.costs?.length) b.setCosts(markShort(scene.registry.get('gameState'), d.button.costs).costs, d.button.label, reason); // (short amounts red, v0.15.4)
     else b.setLabel(d.button.label, reason);
+    b.sub.setScale(Math.min(1, (w - 56) / Math.max(1, b.sub.width))); // a long reason stays on the button (v0.15.4)
     b.setEnabled(!!d.button.ok);
     m.add(b);
   } else if (d.note) {
+    // The note's box stands on the card's bottom (inside its border), between the card text's side margins, and grows
+    // upward with its lines (v0.15.4: a three-line note ran over the card's border onto the Reset path button). The
+    // text above makes room for it first; then a note still too tall gets smaller type.
     const bg = m.add(scene.add.graphics());
-    const nt = m.add(scene.add.text(x + w / 2, by, d.note, textStyle(17, d.noteGood ? '#b6f59a' : COLORS.textDim, { align: 'center', wordWrap: { width: w - 64 } })).setOrigin(0.5));
-    bg.fillStyle(0x000000, 0.4).fillRoundedRect(x + 20, by - nt.height / 2 - 12, w - 40, nt.height + 24, 12);
-  }
+    const bottom = y + h - 14, padY = 10;
+    const nt = m.add(scene.add.text(x + w / 2, 0, d.note, textStyle(17, d.noteGood ? '#b6f59a' : COLORS.textDim, { align: 'center', wordWrap: { width: w - 64 } })).setOrigin(0.5));
+    fit(bottom - nt.height - padY * 2 - 8);
+    for (let size = 16; nt.height + padY * 2 > bottom - cy - 8 && size >= 13; size--) nt.setFontSize(size);
+    const boxH = nt.height + padY * 2;
+    nt.setY(bottom - boxH / 2);
+    bg.fillStyle(0x000000, 0.4).fillRoundedRect(x + 20, bottom - boxH, w - 40, boxH, 12);
+  } else fit(y + h - 14);
+  if (divider !== null) g.fillStyle(COLORS.frame, 0.15).fillRect(x + 20, divider, w - 40, 1);
 }
 
 /** Five pips, one per tier colored by its pick (same look as over buildings on the map), centered at (x, y). */
@@ -532,7 +561,7 @@ export function openResearchWindow(scene, gs, { onClose = null, startType = null
           confirmLabel: 'Reset', costs: shakeCost(rc.cost), onConfirm: () => { if (gs.respecPath(type).ok) { selected = null; refresh(); } }
         });
       }, { color: 0x8e5bd6, fontSize: 18, radius: 12, invalidFeedback: true });
-      rb.setCosts(shakeCost(rc.cost), 'Reset path').setEnabled(rc.ok);
+      rb.setCosts(markShort(gs, shakeCost(rc.cost)).costs, 'Reset path').setEnabled(rc.ok); // (short amounts red, v0.15.4)
       m.add(rb);
     }
   };

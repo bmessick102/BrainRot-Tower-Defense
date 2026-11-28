@@ -130,6 +130,18 @@ export class Button extends Phaser.GameObjects.Container {
     return this;
   }
 
+  /**
+   * A buy button's color follows what the player can pay (v0.15.4): its own color while every cost is covered, the
+   * neutral dark button while short (the short amounts are red: markShort). It stays pressable (it opens the window that
+   * says what's missing).
+   */
+  setAffordable(ok) {
+    if (this.buyColor === undefined) this.buyColor = this.color;
+    const color = ok ? this.buyColor : COLORS.buttonDark;
+    if (color !== this.color) { this.color = color; this.redraw(); }
+    return this;
+  }
+
   get contentWidth() {
     return Math.max(this.costRow?.width || this.label.width, this.sub.width);
   }

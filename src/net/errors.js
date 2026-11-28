@@ -25,3 +25,17 @@ export function conflictError(serverRev = null) {
 export function isConflictError(e) {
   return !!(e && e.conflict === true);
 }
+
+/**
+ * The account was opened on another device (v0.15.4): the newest login wins, so this device may no longer save
+ * (the server refuses it: supabase/migration-2026-11-28-single-session.sql).
+ */
+export function sessionReplacedError() {
+  const e = new Error('This account was opened on another device, so this one stopped saving.');
+  e.sessionReplaced = true;
+  return e;
+}
+
+export function isSessionReplaced(e) {
+  return !!(e && (e.sessionReplaced === true || /IBTD_SESSION_REPLACED/.test(String(e.message || ''))));
+}

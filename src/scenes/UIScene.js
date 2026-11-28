@@ -21,7 +21,7 @@ import { isWaveActive } from '../logic/util.js';
 import { canFastForward, getWaveSpeed, setWaveSpeed, nextWaveSpeed } from '../logic/fastForward.js';
 import { loadWaveSpeed, saveFastSetting } from '../logic/save.js';
 import { gnomeStats, gnomeTier } from '../logic/villagers.js';
-import { currencyCost } from '../objects/CurrencyCost.js';
+import { currencyCost, markShort } from '../objects/CurrencyCost.js';
 import { Button } from '../objects/Button.js';
 import { ResourceBar, formatSpaced } from '../objects/ResourceBar.js';
 import { drawWindow, drawGlossy, drawHudPill, drawRibbon, drawBadge, drawShowcaseCard, drawCardStrip, drawAngledArrow, fitWidth, fitIcon, addHeroBadge, heroKindOf } from '../objects/uiDraw.js';
@@ -31,7 +31,8 @@ import {
 } from '../logic/hudLayout.js';
 import { MAP } from '../mapTiles.js';
 import { BUILDING_DESCRIPTIONS } from '../buildingText.js';
-import { buildingTextureKey, buildingPictureKey, MERGE_GEAR } from '../objects/BuildingView.js';
+import { buildingTextureKey, buildingPictureKey, MERGE_GEAR, showcaseFooting } from '../objects/BuildingView.js';
+import { drawShowcaseTile, drawStatBars, drawFacts } from '../objects/PurchasePreview.js';
 import { TEX, SFX } from '../assetKeys.js';
 import { playSfx, playSfxCapped, notifyGuideMessage } from '../audio.js';
 import { COLORS, bodyStyle, textStyle, RP_BAR_COLORS, RP_COLOR } from '../theme.js';
@@ -56,7 +57,7 @@ import { currentTip } from '../logic/tips.js';
 import { isLabGuideVisible, labGuideStep, labGuideText } from '../logic/labGuide.js';
 import { isFuelGuideVisible, fuelGuideCurrent, fuelGuideText } from '../logic/fuelGuide.js';
 import { Modal } from '../objects/Modal.js';
-import { openUpgradeWindow } from '../objects/UpgradeWindow.js';
+import { openUpgradeWindow, statIconFor } from '../objects/UpgradeWindow.js';
 import { openMergeWindow } from '../objects/MergeWindow.js';
 import { beamDamagePerSecond } from '../logic/beams.js';
 import { flockMarkBonus } from '../logic/flock.js';
@@ -109,6 +110,14 @@ const INFO_COL = PIC.x + PIC.w + 16;
 const INFO_COL_W = INFO_W - INFO_COL - 18;
 const SHOP_INFO_W = 480;
 const INFO_BTN_H = 48; // keeps the tallest panel (Upgrade + abilities + Repair) clear of the Settings icon
+// The panel in the upgrade window's look (v0.15.4, PurchasePreview.js): the picture on its grass tile (a smaller tile,
+// INFO_TILE.hw half wide, its top face centered at INFO_TILE.y), the same stat bars and fact rows, sized for the panel.
+const INFO_TILE = { hw: 58, y: INFO_PIC_Y + PIC.h - 44 };
+const INFO_BARS = { step: 38, font: 14 };                    // stat bars (drawStatBars)
+const INFO_FACTS = { size: 14, rowH: 22 };                   // label / value rows (drawFacts)
+const INFO_NOTES = { size: 15, rowH: 22, wrap: true };       // a line of text each (drawFacts, wrapped)
+/** A container as the PurchasePreview helpers' drawing target (they draw into a Modal: m.x, m.y, m.add). */
+const panelTarget = (box) => ({ x: 0, y: 0, add: (...objs) => { const list = objs.flat(); box.add(list); return list[0]; } });
 const BANNER_MS = 2500;
 /** The Mastery button's second line: how far the type's Mastery is ("1 / 3 tiers"). */
 const masteryButtonSub = (gs, type) => `${masteryLevel(gs, type)} / ${masteryTierCount(type)} tiers`;
@@ -131,9 +140,24 @@ const SPECIAL_BTN_MAX = 300; // the widest the button grows for a long hint
 // Layout editor hotbar (bottom left, beside the Edit button) and its cards.
 const HOTBAR = { x: 16, y: 598, w: 988, h: 114 };
 const HOTBAR_CARD = { w: 84, h: 92, gap: 8 };
-const SHIFT_PAD = { x: 96, y: 474, dx: 34, dy: 26 }; // center of the layout shift pad and its buttons' offsets
-// Select Row (edit mode): a toggle right of the shift pad; while it's on, clicking a wall picks up its whole run.
-const ROW_BTN = { x: 248, y: 474, w: 150, h: 48 };
+// Edit mode's controls (v0.15.4): one row just above the hotbar, every control EDIT_ROW.h tall on one center line
+// (Shift arrows, Select Row, the carried building's buttons, Remove All, Cancel, Save), the hint on a slim line above.
+// Buttons are their label's width plus `pad` a side (at least `minW`); a row too wide for the hotbar tightens the
+// padding to `minPad`, then the type to `minFont`. layoutEditRow places it all.
+const EDIT_ROW = { h: 40, gap: 6, groupGap: 14, font: 17, minFont: 14, pad: 12, minPad: 6, minW: 80, hintH: 26, hintGap: 4 };
+// Shift (a part of the row): "Shift" and four small arrow buttons side by side, on a dark pill.
+const SHIFT_ARROW = { w: 32, h: 32, gap: 4, label: 10 }; // label: the space before "Shift" (and between it and the arrows)
+// Placement buttons outside edit mode (placing from the shop): [width, height, font] each.
+const PLACE_SIZE = { rotate: [170, 52, 19], place: [160, 52, 21], cancel: [160, 52, 21], store: [180, 52, 18] };
+
+/** A button's type size (its label and the smaller line under it), redrawn. */
+function setButtonFont(b, size) {
+  if (b.fontSize === size) return;
+  b.fontSize = size;
+  b.label.setFontSize(size);
+  b.sub.setFontSize(Math.max(12, Math.round(size * 0.7)));
+  b.redraw();
+}
 
 export class UIScene extends Phaser.Scene {
   constructor() {
@@ -671,15 +695,21 @@ export class UIScene extends Phaser.Scene {
    * Cancel and Place too (with a mouse: click to place, right-click / Esc to cancel).
    */
   buildRotateButton() {
-    this.rotateBtn = new Button(this, 640, 628, 170, 52, IS_TOUCH ? 'Rotate' : 'Rotate (R)', () => this.world.rotatePlacement(), { fontSize: 19 });
-    this.placeBtn = new Button(this, 640, 628, 160, 52, 'Place', () => this.world.confirmPlacement(), { color: COLORS.buttonGood, fontSize: 21 });
-    this.cancelPlaceBtn = new Button(this, 640, 628, 160, 52, 'Cancel', () => this.world.cancelPlacement(), { color: COLORS.buttonDanger, fontSize: 21 });
-    this.storeBtn = new Button(this, 640, 628, 180, 52, 'Store in Hotbar', () => this.world.storeHeld(), { color: COLORS.buttonBlue, fontSize: 18 });
+    const P = PLACE_SIZE;
+    this.rotateBtn = new Button(this, 640, 628, P.rotate[0], P.rotate[1], IS_TOUCH ? 'Rotate' : 'Rotate (R)', () => this.world.rotatePlacement(), { fontSize: P.rotate[2] });
+    this.placeBtn = new Button(this, 640, 628, P.place[0], P.place[1], 'Place', () => this.world.confirmPlacement(), { color: COLORS.buttonGood, fontSize: P.place[2] });
+    this.cancelPlaceBtn = new Button(this, 640, 628, P.cancel[0], P.cancel[1], 'Cancel', () => this.world.cancelPlacement(), { color: COLORS.buttonDanger, fontSize: P.cancel[2] });
+    this.storeBtn = new Button(this, 640, 628, P.store[0], P.store[1], 'Store in Hotbar', () => this.world.storeHeld(), { color: COLORS.buttonBlue, fontSize: P.store[2] });
+    this.rotateBtn.normalSize = P.rotate; this.placeBtn.normalSize = P.place; this.cancelPlaceBtn.normalSize = P.cancel; this.storeBtn.normalSize = P.store;
     for (const b of [this.rotateBtn, this.placeBtn, this.cancelPlaceBtn, this.storeBtn]) b.setDepth(650);
+    this.placeRow = [];
     this.showPlacementButtons(null);
   }
 
-  /** Lay out the placement buttons in a centered row: [Cancel] [Rotate] [Place]. `d`: placementChanged data. */
+  /**
+   * Lay out the placement buttons in a centered row: [Cancel] [Rotate] [Place]. `d`: placementChanged data.
+   * In edit mode they're the middle of the edit row instead (layoutEditRow).
+   */
   showPlacementButtons(d) {
     const active = !!(d && d.active);
     const rotate = active && d.type === 'wall' && CONFIG.walls.segmentLength > 1; // single-tile walls don't turn
@@ -692,6 +722,9 @@ export class UIScene extends Phaser.Scene {
     this.cancelPlaceBtn.setLabel(stocked ? 'Deselect' : mode === 'move' || mode === 'row' ? 'Put Back' : 'Cancel');
     const row = [(touch || (active && this.world.editMode)) && this.cancelPlaceBtn, store && this.storeBtn, rotate && this.rotateBtn, touch && this.placeBtn].filter(Boolean);
     for (const b of [this.rotateBtn, this.placeBtn, this.cancelPlaceBtn, this.storeBtn]) if (!row.includes(b)) b.setVisible(false).setY(-500);
+    this.placeRow = row;
+    if (this.editRowOn()) { this.layoutEditRow(); return; }
+    for (const b of row) { const [w, h, font] = b.normalSize; setButtonFont(b, font); b.resize(w, h); }
     const gap = 14, rowW = row.reduce((t, b) => t + b.btnW, 0) + gap * (row.length - 1);
     let x = 640 - rowW / 2;
     let y = this.world.editMode ? HOTBAR.y - 90 : 628; // above the hotbar in edit mode
@@ -740,20 +773,87 @@ export class UIScene extends Phaser.Scene {
     this.hotbar = c;
     this.hotbarPage = 0;
 
-    // Actions above the hotbar (right) and a hint (left).
-    const ay = H.y - 32;
+    // The edit row above the hotbar (layoutEditRow places it): the hint on a slim line, then Shift and Select Row
+    // (left), the carried building's buttons (middle), Remove All, Cancel and Save (right).
+    const R = EDIT_ROW, opts = { fontSize: R.font, radius: 10 };
     this.editHintBg = this.add.graphics().setDepth(600).setVisible(false);
-    this.editHint = this.add.text(H.x + 22, ay, 'Click a building to pick it up · click the hotbar to store it', textStyle(16)).setOrigin(0, 0.5).setDepth(601).setVisible(false);
-    const right = H.x + H.w;
-    this.layoutSave = new Button(this, right - 70, ay, 140, 46, 'Save', () => this.world.saveLayout(), { color: COLORS.buttonGood, fontSize: 20, radius: 12 });
-    this.layoutCancel = new Button(this, right - 70 - 150, ay, 140, 46, 'Cancel', () => this.world.leaveEdit(), { color: COLORS.buttonDark, fontSize: 20, radius: 12 });
-    this.layoutRemoveAll = new Button(this, right - 70 - 150 - 170, ay, 160, 46, 'Remove All', () => this.world.storeAllBuildings(), { color: COLORS.button, fontSize: 20, radius: 12 });
+    this.editHint = this.add.text(H.x + 14, -500, 'Click a building to pick it up · click the hotbar to store it', textStyle(15)).setOrigin(0, 0.5).setDepth(601).setVisible(false);
+    this.layoutSave = new Button(this, 0, -500, R.minW, R.h, 'Save', () => this.world.saveLayout(), { ...opts, color: COLORS.buttonGood });
+    this.layoutCancel = new Button(this, 0, -500, R.minW, R.h, 'Cancel', () => this.world.leaveEdit(), { ...opts, color: COLORS.buttonDark });
+    this.layoutRemoveAll = new Button(this, 0, -500, R.minW, R.h, 'Remove All', () => this.world.storeAllBuildings(), { ...opts, color: COLORS.button });
     for (const b of [this.layoutSave, this.layoutCancel, this.layoutRemoveAll]) b.setDepth(601).setVisible(false);
     this.buildShiftPad();
     // Select Row: green while on (like a selected tab).
-    this.rowBtn = new Button(this, ROW_BTN.x, ROW_BTN.y, ROW_BTN.w, ROW_BTN.h, 'Select Row', () => this.world.setRowSelect(!this.world.rowSelect),
-      { color: COLORS.buttonDark, fontSize: 19, radius: 12 });
+    this.rowBtn = new Button(this, 0, -500, R.minW, R.h, 'Select Row', () => this.world.setRowSelect(!this.world.rowSelect),
+      { ...opts, color: COLORS.buttonDark });
     this.rowBtn.setDepth(601).setVisible(false);
+  }
+
+  /** Is the edit row up (edit mode with its layout draft)? */
+  editRowOn() {
+    return !!(this.hotbar && this.world.editMode && this.world.layout);
+  }
+
+  /** Center y of the edit row: just above the hotbar, lifted (with its hint) over the guide bubble while that's up. */
+  editRowY() {
+    const R = EDIT_ROW, cy = HOTBAR.y - 8 - R.h / 2;
+    const top = cy - R.h / 2 - R.hintGap - R.hintH;
+    const r = { x: HOTBAR.x, y: top, w: HOTBAR.w, h: cy + R.h / 2 - top };
+    return liftClear(r, [this.guideRect(), this.abilityBar && this.abilityBar.rect()]) + (cy - top);
+  }
+
+  /**
+   * Edit mode's controls in one straight row just above the hotbar (v0.15.4, Brady's request; before, they sat at four
+   * heights): Shift and Select Row on the left, the carried building's buttons centered between them and Remove All /
+   * Cancel / Save on the right, all EDIT_ROW.h tall on one center line, with the hint on a slim line above. Only the
+   * controls showing are packed (no gaps), and the hidden ones wait off screen so they never block clicks. A row too
+   * wide for the hotbar (a phone carrying a wall: Put Back, Store, Rotate and Place too) tightens its buttons' padding,
+   * then their type.
+   */
+  layoutEditRow() {
+    if (!this.editRowOn()) return;
+    const R = EDIT_ROW;
+    const left = [this.shiftPad.visible && this.shiftPad, this.rowBtn.visible && this.rowBtn].filter(Boolean);
+    const mid = this.placeRow || [];
+    const right = [this.layoutRemoveAll, this.layoutCancel, this.layoutSave];
+    const groups = [left, mid, right].filter((grp) => grp.length);
+    const buttons = [...left, ...mid, ...right].filter((o) => o !== this.shiftPad);
+    let pad = R.pad, font = R.font;
+    const fontOf = (b) => (b === this.placeBtn ? font + 1 : font);
+    const widthOf = (o) => (o === this.shiftPad ? this.shiftPadW : Math.max(R.minW - (R.pad - pad) * 2, Math.ceil(o.contentWidth) + pad * 2));
+    const groupW = (grp) => grp.reduce((t, o) => t + widthOf(o), 0) + R.gap * (grp.length - 1);
+    const total = () => groups.reduce((t, grp) => t + groupW(grp), 0) + R.groupGap * (groups.length - 1);
+    const setFonts = () => { for (const b of buttons) setButtonFont(b, fontOf(b)); };
+    setFonts();
+    while (total() > HOTBAR.w && pad > R.minPad) pad -= 2;
+    while (total() > HOTBAR.w && font > R.minFont) { font--; setFonts(); }
+
+    const y = this.editRowY();
+    const put = (list, x0) => {
+      let x = x0;
+      for (const o of list) {
+        const w = widthOf(o);
+        if (o === this.shiftPad) o.setPosition(x, y);
+        else o.resize(w, R.h).setVisible(true).setPosition(x + w / 2, y);
+        x += w + R.gap;
+      }
+    };
+    put(left, HOTBAR.x);
+    const rightX = HOTBAR.x + HOTBAR.w - groupW(right);
+    put(right, rightX);
+    if (mid.length) {
+      // Centered over the hotbar, kept clear of the groups beside it.
+      const leftEnd = left.length ? HOTBAR.x + groupW(left) + R.groupGap : HOTBAR.x;
+      const w = groupW(mid);
+      const x = Math.max(leftEnd, Math.min(rightX - R.groupGap - w, HOTBAR.x + (HOTBAR.w - w) / 2));
+      put(mid, x);
+    }
+    // The hint: a slim pill above the row's left end.
+    const hy = y - R.h / 2 - R.hintGap - R.hintH / 2;
+    this.editHint.setPosition(HOTBAR.x + 14, hy);
+    this.editHintRect = { x: HOTBAR.x, y: hy - R.hintH / 2, w: this.editHint.width + 28, h: R.hintH };
+    this.editHintBg.clear();
+    drawHudPill(this.editHintBg, this.editHintRect.x, this.editHintRect.y, this.editHintRect.w, this.editHintRect.h);
   }
 
   /** The Select Row toggle's look (green + "On" while on) and the hint that goes with it. */
@@ -766,27 +866,34 @@ export class UIScene extends Phaser.Scene {
   }
 
   /**
-   * Shift pad (left, above the hotbar): four round arrows along the map's diagonal grid lines that slide the
-   * whole placed layout one tile (GameScene.shiftWholeLayout; nothing changes until Save).
+   * Shift (the edit row's left end): "Shift" and four small arrow buttons side by side on a dark pill, each arrow
+   * along the map's diagonal grid line it slides the whole placed layout one tile (GameScene.shiftWholeLayout; nothing
+   * changes until Save). The container's origin is the pill's left end, at the row's center line (this.shiftPadW wide).
    */
   buildShiftPad() {
-    const P = SHIFT_PAD;
-    const c = this.add.container(P.x, P.y).setDepth(601).setVisible(false);
+    const A = SHIFT_ARROW, h = EDIT_ROW.h;
+    const c = this.add.container(0, -500).setDepth(601).setVisible(false);
     const bg = this.add.graphics();
-    drawHudPill(bg, -P.dx - 30, -P.dy - 30, (P.dx + 30) * 2, (P.dy + 30) * 2);
-    c.add([bg, this.add.text(0, 0, 'Shift', textStyle(15)).setOrigin(0.5)]);
-    // Each button sits in its corner; its arrow points along the grid line it moves the layout
-    // (screen angle of one tile step: col+1 runs down-right, row+1 down-left).
+    const label = this.add.text(A.label, -1, 'Shift', textStyle(14)).setOrigin(0, 0.5);
+    const x0 = A.label * 2 + Math.ceil(label.width);
+    const w = x0 + 4 * A.w + 3 * A.gap + 4;
+    drawHudPill(bg, 0, -h / 2, w, h);
+    c.add([bg, label]);
+    // Screen angle of one tile step: col+1 runs down-right, row+1 down-left. Left to right: down-left, up-left, up-right,
+    // down-right (a clockwise sweep).
     const a = Math.atan2(MAP.tileHeight / 2, MAP.tileWidth / 2);
-    const dirs = [[1, 0, a, 1, 1], [0, 1, Math.PI - a, -1, 1], [-1, 0, Math.PI + a, -1, -1], [0, -1, -a, 1, -1]];
-    for (const [dc, dr, ang, sx, sy] of dirs) {
-      const b = new Button(this, sx * P.dx, sy * P.dy, 40, 40, '', () => this.world.shiftWholeLayout(dc, dr), { circle: true, color: COLORS.buttonBlue });
+    const dirs = [[0, 1, Math.PI - a], [-1, 0, Math.PI + a], [0, -1, -a], [1, 0, a]];
+    dirs.forEach(([dc, dr, ang], i) => {
+      const b = new Button(this, x0 + A.w / 2 + i * (A.w + A.gap), 0, A.w, A.h, '', () => this.world.shiftWholeLayout(dc, dr), { circle: true, color: COLORS.buttonBlue });
+      // Touch screens grow a small button's click area; side by side, each arrow's stops halfway to the next one.
+      if (IS_TOUCH && b.input) b.input.hitArea.setTo(-A.w / 2 - A.gap / 2, -h / 2 - 8, A.w + A.gap, h + 16);
       const arrow = this.add.graphics();
-      drawAngledArrow(arrow, 0, -2, 24, ang);
+      drawAngledArrow(arrow, 0, -2, 20, ang);
       b.add(arrow);
       c.add(b);
-    }
+    });
     this.shiftPad = c;
+    this.shiftPadW = w;
   }
 
   /** Show / hide the editor and rebuild the hotbar cards from the draft. */
@@ -794,19 +901,20 @@ export class UIScene extends Phaser.Scene {
     const world = this.world, on = !!(world.editMode && world.layout);
     this.hotbar.setVisible(on);
     for (const o of [this.layoutSave, this.layoutCancel, this.layoutRemoveAll, this.editHint, this.editHintBg]) o.setVisible(on);
-    // The shift pad, while anything is placed (it moves out of the way when hidden so it never blocks clicks).
+    // Shift, while anything is placed (hidden controls move off screen so they never block clicks; layoutEditRow
+    // places the ones showing).
     const canShift = on && world.layout.stored.length < this.gs.buildings.length;
-    this.shiftPad.setVisible(canShift).setY(canShift ? SHIFT_PAD.y : -500);
+    this.shiftPad.setVisible(canShift);
+    if (!canShift) this.shiftPad.setY(-500);
     // Select Row, while any wall is placed.
     const walls = on && this.gs.buildings.some((b) => b.type === 'wall' && !isStoredIn(world.layout, b.id));
-    this.rowBtn.setVisible(walls).setY(walls ? ROW_BTN.y : -500);
+    this.rowBtn.setVisible(walls);
+    if (!walls) this.rowBtn.setY(-500);
     if (on) this.refreshRowSelect();
-    for (const b of [this.layoutSave, this.layoutCancel, this.layoutRemoveAll]) b.setY(on ? HOTBAR.y - 32 : -500);
+    if (!on) for (const b of [this.layoutSave, this.layoutCancel, this.layoutRemoveAll]) b.setY(-500);
     this.hotbarCards.removeAll(true);
     if (!on) return;
     const H = HOTBAR;
-    this.editHintBg.clear();
-    drawHudPill(this.editHintBg, H.x, H.y - 53, this.editHint.width + 44, 42);
 
     const groups = hotbarGroups(this.gs, world.layout);
     const left = world.layout.stored.length;
@@ -814,6 +922,7 @@ export class UIScene extends Phaser.Scene {
     this.layoutSave.setLabel('Save', left ? `${left} to place` : '');
     this.layoutRemoveAll.setEnabled(left < this.gs.buildings.length);
     this.hotbarEmpty.setText(groups.length ? '' : 'Everything is placed. Save to keep this layout, or click a building to pick it up.');
+    this.layoutEditRow();
 
     // Paging: as many cards as fit between the arrows.
     const x0 = 64, x1 = H.w - 64, cw = HOTBAR_CARD.w, gap = HOTBAR_CARD.gap;
@@ -1232,8 +1341,7 @@ New walls are built at your wall level (${wallLevel(this.gs)}), so one costs wha
     this.infoName = this.add.text(18, 10, '', textStyle(22));
     this.infoLevel = this.add.text(18, 38, '', textStyle(15, COLORS.textGold));
     this.infoContent = this.add.container(0, 0); // rebuilt on every refresh
-    this.infoPicBg = this.add.graphics();
-    this.infoPic = this.drawBuildingPic(this.infoPicBg, PIC.x, INFO_PIC_Y, TEX.coin);
+    this.infoPicBox = this.add.container(0, 0); // the picture on its grass tile (syncInfoPic)
     // The Brisket King's portrait on his altar's picture (not on the Hero tab, which shows the king himself).
     this.infoHeroBadge = addHeroBadge(this, PIC.x + PIC.w - 24, INFO_PIC_Y + 24, 36).setVisible(false);
     this.infoQueenBadge = addHeroBadge(this, PIC.x + PIC.w - 24, INFO_PIC_Y + 24, 36, 'queen').setVisible(false); // ...the Hatsune Queen's on hers
@@ -1271,7 +1379,7 @@ New walls are built at your wall level (${wallLevel(this.gs)}), so one costs wha
       mastery: new Button(this, INFO_W / 2, 0, bw, INFO_BTN_H, 'Mastery', () => this.openAbilities(true), { color: MERGE_COLOR, invalidFeedback: true, fontSize: 19 })
     };
     const close = new Button(this, INFO_W - 12, 12, 42, 40, '', () => this.world.select(null), { color: COLORS.buttonDanger, icon: 'x', radius: 9 });
-    c.add([this.infoBg, this.infoBlocker, this.infoName, this.infoLevel, this.infoPicBg, this.infoPic, this.infoHeroBadge, this.infoQueenBadge, this.infoMageBadge, this.infoGear, this.infoTagBg, this.infoTagText, this.infoContent,
+    c.add([this.infoBg, this.infoBlocker, this.infoName, this.infoLevel, this.infoPicBox, this.infoHeroBadge, this.infoQueenBadge, this.infoMageBadge, this.infoGear, this.infoTagBg, this.infoTagText, this.infoContent,
       ...Object.values(this.infoTabs), ...Object.values(this.infoButtons), close]);
     this.infoPanel = c;
     this.hideInfo();
@@ -1306,10 +1414,17 @@ New walls are built at your wall level (${wallLevel(this.gs)}), so one costs wha
     this.infoHeroBadge.setVisible(b.type === 'altar' && this.infoTab !== 'hero');
     this.infoQueenBadge.setVisible(b.type === 'queenAltar' && this.infoTab !== 'hero');
     this.infoMageBadge.setVisible(b.type === 'mageAltar' && this.infoTab !== 'hero');
-    if (picKey === this.infoPicKey) return;
-    this.infoPicKey = picKey;
-    this.infoPicBg.clear();
-    this.drawBuildingPic(this.infoPicBg, PIC.x, INFO_PIC_Y, picKey, this.infoPic);
+    // A hero's altar (or the Mage's statue, standing when destroyed) stands on its tile like in the village.
+    const footing = picKey.startsWith(`bld_${b.type}_lv`) ? showcaseFooting(b.type, b.level) : null;
+    const cacheKey = `${picKey}:${footing ? b.level : ''}`;
+    if (cacheKey === this.infoPicKey) return;
+    this.infoPicKey = cacheKey;
+    // The upgrade window's grass tile and picture (PurchasePreview.drawShowcaseTile), sized to the panel (v0.15.4).
+    this.infoPicBox.removeAll(true);
+    const g = this.add.graphics();
+    this.infoPicBox.add(g);
+    drawShowcaseTile(this, panelTarget(this.infoPicBox), g, { cx: PIC.x + PIC.w / 2, tileY: INFO_TILE.y, hw: INFO_TILE.hw,
+      picture: { key: picKey, footing }, box: [PIC.w - 12, PIC.h - 34], topY: INFO_PIC_Y + 2 });
   }
 
   hideInfo() {
@@ -1640,14 +1755,7 @@ New walls are built at your wall level (${wallLevel(this.gs)}), so one costs wha
     ];
     const g = this.add.graphics();
     box.add(g);
-    for (const [i, [label, value, gain, ink]] of rows.entries()) {
-      if (i > 0) g.fillStyle(COLORS.frame, 0.12).fillRect(INFO_COL, y - 3, INFO_COL_W, 1);
-      box.add(this.add.text(INFO_COL, y, label, bodyStyle(14, COLORS.inkDim)));
-      const v = this.add.text(INFO_COL + INFO_COL_W, y, value, bodyStyle(14, ink || COLORS.ink, ink ? { fontStyle: 'bold' } : {})).setOrigin(1, 0);
-      box.add(v);
-      if (gain) box.add(this.add.text(v.x - v.width - 4, y + 1, gain, bodyStyle(12, COLORS.inkGood)).setOrigin(1, 0));
-      y += queen ? 21 : 23;
-    }
+    y = this.drawHeroRows(box, g, b, y, rows, { current: h ? Math.max(0, h.hp) : st.maxHp, value: st.maxHp, next: nxt ? nxt.maxHp : null });
     // The ability, under the picture, across the panel.
     y = queen ? this.drawEncoreCard(box, st, Math.max(y + 4, INFO_PIC_Y + PIC.h + 12)) : this.drawFeastCard(box, st, Math.max(y + 4, INFO_PIC_Y + PIC.h + 12));
     drawHeroAbilityProgress(this, box, g, b, PIC.x, y + 5, INFO_W - PIC.x * 2, queen ? ENCORE_COLOR : COLORS.button);
@@ -1657,6 +1765,22 @@ New walls are built at your wall level (${wallLevel(this.gs)}), so one costs wha
       bodyStyle(13, COLORS.inkDim, { align: 'center', wordWrap: { width: INFO_W - PIC.x * 2 - 16 } })).setOrigin(0.5, 0);
     box.add(tip);
     return tip.y + tip.height + 10;
+  }
+
+  /**
+   * A hero's rows on the Hero tab in the upgrade window's look (v0.15.4): the status as a fact row, the hero's health as
+   * the window's stat bar (live: what's lost darker; the next level's gain lighter), then the other rows as fact rows
+   * (drawFacts: label, value, the next level's gain in green). rows: [[label, value, gain, ink]] with 'Status' first;
+   * its 'Health' row becomes the bar. Returns the y below.
+   */
+  drawHeroRows(box, g, b, y, rows, health) {
+    const t = panelTarget(box), opts = { x: INFO_COL, width: INFO_COL_W, ...INFO_FACTS, rowH: 20 }; // (a little tighter: the Hero tab is the tallest panel)
+    const facts = (list) => list.map(([label, value, gain, ink]) => ({ label, value, gain, ink }));
+    y = drawFacts(this, t, g, facts(rows.slice(0, 1)), y, opts);
+    const top = heroStatsFor({ ...b, level: maxLevel(b.type) }).maxHp;
+    const bar = { label: 'Health', icon: 'hp', value: health.value, current: health.current, next: health.next, max: top, fmt: (n) => formatGold(Math.round(n)) };
+    y = drawStatBars(this, t, g, [bar], { y: y + 5, x: INFO_COL, width: INFO_COL_W, ...INFO_BARS }) - INFO_BARS.step + 30 + 3;
+    return drawFacts(this, t, g, facts(rows.slice(1).filter(([label]) => label !== 'Health')), y, opts);
   }
 
   /**
@@ -1743,14 +1867,7 @@ New walls are built at your wall level (${wallLevel(this.gs)}), so one costs wha
     ];
     const g = this.add.graphics();
     box.add(g);
-    for (const [i, [label, value, gain, ink]] of rows.entries()) {
-      if (i > 0) g.fillStyle(COLORS.frame, 0.12).fillRect(INFO_COL, y - 3, INFO_COL_W, 1);
-      box.add(this.add.text(INFO_COL, y, label, bodyStyle(14, COLORS.inkDim)));
-      const v = this.add.text(INFO_COL + INFO_COL_W, y, value, bodyStyle(14, ink || COLORS.ink, ink ? { fontStyle: 'bold' } : {})).setOrigin(1, 0);
-      box.add(v);
-      if (gain) box.add(this.add.text(v.x - v.width - 4, y + 1, gain, bodyStyle(12, COLORS.inkGood)).setOrigin(1, 0));
-      y += 21;
-    }
+    y = this.drawHeroRows(box, g, b, y, rows, { current: b.destroyed ? 0 : b.hp, value: st.maxHp, next: nxt ? nxt.maxHp : null });
     y = this.drawAegisCard(box, st, Math.max(y + 4, INFO_PIC_Y + PIC.h + 12));
     drawHeroAbilityProgress(this, box, g, b, PIC.x, y + 5, INFO_W - PIC.x * 2, AEGIS_COLOR);
     y += 36;
@@ -1811,13 +1928,13 @@ New walls are built at your wall level (${wallLevel(this.gs)}), so one costs wha
       y += t.height + 12;
       return mergeInfo ? this.drawMergeAbility(box, mergeInfo, y) : y;
     }
-    y = this.drawStats(box, b, INFO_COL, y, INFO_COL_W) + 8;
+    y = this.drawInfoStats(box, b, y);
     // (A merged defense's ability is already in the traits above; its icon row is on the Info tab.)
-    // Its ability paths: "Heavy Shot 2/5 · Piercing Shot" in each path's color.
+    // Its ability paths: "Heavy Shot 2/5 · Piercing Shot" in each path's color (across the panel, under the facts).
     if (hasAbilities(b.type)) {
       const ink = { a: '#b8640a', b: '#2a6fb0', c: '#2f8a2f' };
       for (const line of abilitySummary(b)) {
-        const t = this.add.text(INFO_COL, y, line.text, bodyStyle(14, ink[line.path], { fontStyle: 'bold', wordWrap: { width: INFO_COL_W } }));
+        const t = this.add.text(PIC.x, y, line.text, bodyStyle(14, ink[line.path], { fontStyle: 'bold', wordWrap: { width: INFO_W - PIC.x * 2 } }));
         box.add(t);
         y += t.height + 2;
       }
@@ -1825,7 +1942,7 @@ New walls are built at your wall level (${wallLevel(this.gs)}), so one costs wha
       if (mergedConfigOf(b) && !b.destroyed) {
         const have = masteryLevel(this.gs, b.type), n = masteryTierCount(b.type);
         const names = Array.from({ length: have }, (_, k) => masteryTier(b.type, k + 1).name).join(', ');
-        const t = this.add.text(INFO_COL, y, `★ Mastery ${have}/${n} · ${have ? names : 'research it in the RV Lab'}`, bodyStyle(14, '#a86f00', { fontStyle: 'bold', wordWrap: { width: INFO_COL_W } }));
+        const t = this.add.text(PIC.x, y, `★ Mastery ${have}/${n} · ${have ? names : 'research it in the RV Lab'}`, bodyStyle(14, '#a86f00', { fontStyle: 'bold', wordWrap: { width: INFO_W - PIC.x * 2 } }));
         box.add(t);
         y += t.height + 2;
       }
@@ -1834,7 +1951,22 @@ New walls are built at your wall level (${wallLevel(this.gs)}), so one costs wha
     return y;
   }
 
-  /** Stat bars + notes for building b into container box at (x, y), `width` wide. Returns the y below. */
+  /**
+   * The Stats tab in the upgrade window's look (v0.15.4, PurchasePreview.js): the stat bars with their icons in the
+   * column beside the picture (the health bar live: what's lost darker, the next level's gain lighter), then the facts
+   * as the window's fact rows across the panel under the picture. Returns the y below.
+   */
+  drawInfoStats(box, b, y) {
+    const t = panelTarget(box), g = this.add.graphics();
+    box.add(g);
+    const rows = this.statRows(b).map((r) => ({ ...r, label: r.label === 'HP' ? 'Hit points' : r.label, icon: statIconFor(r.label, b.type) }));
+    y = drawStatBars(this, t, g, rows, { y, x: INFO_COL, width: INFO_COL_W, ...INFO_BARS }) - INFO_BARS.step + 30 + 10;
+    const notes = this.statNotes(b);
+    if (notes.length) y = drawFacts(this, t, g, notes.map((text) => ({ text })), Math.max(y, INFO_PIC_Y + PIC.h + 4), { x: PIC.x, width: INFO_W - PIC.x * 2, ...INFO_NOTES });
+    return y + 8;
+  }
+
+  /** Stat bars + notes (the shop's building card) for building b into container box at (x, y), `width` wide. Returns the y below. */
   drawStats(box, b, x, y, width, preview = false) {
     const g = this.add.graphics();
     box.add(g);
@@ -1943,13 +2075,13 @@ New walls are built at your wall level (${wallLevel(this.gs)}), so one costs wha
     if (b.destroyed && b.type !== 'wall') {
       const rep = checkRepair(gs, b);
       const ok = rep.ok && tutorialAllows(gs, 'repair');
-      btn.repair.setCosts([{ currency: 'gold', amount: repairCost(b) }], 'Rebuild', rep.ok ? (ok ? '' : 'Follow the guide') : rep.reason).setEnabled(ok);
+      this.refreshRepairButton(btn.repair, b, ok, rep.ok ? (ok ? '' : 'Follow the guide') : rep.reason);
       shown.push(btn.repair);
       if (this.refreshUpgradeButton(btn.upgrade, b, ruin).ok) shown.push(btn.upgrade);
     } else if (this.mergeButtonState(b).show) {
       // Max level and mergeable: Merge takes the Upgrade button's place.
       const mg = this.mergeButtonState(b);
-      btn.merge.setCosts(mg.costs, mg.label, mg.sub).setEnabled(mg.ok);
+      btn.merge.setCosts(mg.costs, mg.label, mg.sub).setEnabled(mg.ok).setAffordable(mg.afford);
       btn.merge.resize(Math.max(QB.upgradeW, Math.ceil(btn.merge.contentWidth) + 24));
       shown.push(btn.merge);
     } else {
@@ -1999,15 +2131,22 @@ New walls are built at your wall level (${wallLevel(this.gs)}), so one costs wha
     if (up.cost === null) return { label: 'Max level', sub: '', ok: false };
     const label = ruin ? 'Rebuild' : b.type === 'wall' ? 'Upgrade Walls' : 'Upgrade';
     const sub = b.type === 'wall' ? `All ${up.count} to level ${up.level}` : `To level ${b.level + 1}`;
-    return { label, sub, ok: true, costs: [{ currency: up.currency || 'gold', amount: up.cost }] };
+    const price = markShort(this.gs, [{ currency: up.currency || 'gold', amount: up.cost }]); // (short amounts red)
+    return { label, sub, ok: true, costs: price.costs, afford: price.ok };
   }
 
   refreshUpgradeButton(button, building, ruin) {
     const state = this.upgradeButtonState(building, ruin);
     if (state.costs) button.setCosts(state.costs, state.label, state.sub);
     else button.setLabel(state.label, state.sub);
-    button.setEnabled(state.ok);
+    button.setEnabled(state.ok).setAffordable(state.afford !== false); // green only when it can be paid (v0.15.4)
     return state;
+  }
+
+  /** Rebuild (a destroyed building): its price, red and on the dark button while short (v0.15.4). */
+  refreshRepairButton(button, b, ok, reason) {
+    const price = markShort(this.gs, [{ currency: 'gold', amount: repairCost(b) }]);
+    button.setCosts(price.costs, 'Rebuild', reason).setEnabled(ok).setAffordable(price.ok);
   }
 
   /**
@@ -2017,8 +2156,8 @@ New walls are built at your wall level (${wallLevel(this.gs)}), so one costs wha
   mergeButtonState(b) {
     const c = checkMerge(this.gs, b);
     if (!c.show) return { show: false, preview: !!c.preview, top: maxLevel(b.type) };
-    const costs = [{ currency: 'gold', amount: c.cost.gold }, { currency: 'rp', amount: c.cost.rp }];
-    return { show: true, label: 'Merge', sub: c.ok ? '' : c.reason, ok: !b.destroyed, costs };
+    const price = markShort(this.gs, [{ currency: 'gold', amount: c.cost.gold }, { currency: 'rp', amount: c.cost.rp }]);
+    return { show: true, label: 'Merge', sub: c.ok ? '' : c.reason, ok: !b.destroyed, costs: price.costs, afford: price.ok };
   }
 
   /** The greyed Merge preview tapped: one line on how merging works. */
@@ -2118,7 +2257,7 @@ New walls are built at your wall level (${wallLevel(this.gs)}), so one costs wha
     const upW = INFO_W - 32 - (preview ? MERGE_PREVIEW_W.info + 6 : 0);
     btn.upgrade.resize(upW).setX(16 + upW / 2);
     if (mg.show) {
-      btn.merge.setCosts(mg.costs, mg.label, mg.sub).setEnabled(mg.ok);
+      btn.merge.setCosts(mg.costs, mg.label, mg.sub).setEnabled(mg.ok).setAffordable(mg.afford);
       visible.push(btn.merge);
     } else {
       this.refreshUpgradeButton(btn.upgrade, b, ruin);
@@ -2146,7 +2285,7 @@ New walls are built at your wall level (${wallLevel(this.gs)}), so one costs wha
     if (showRepair) {
       const rep = checkRepair(gs, b);
       const repOk = rep.ok && tutorialAllows(gs, 'repair');
-      btn.repair.setCosts([{ currency: 'gold', amount: repairCost(b) }], 'Rebuild', rep.ok ? (repOk ? '' : 'Follow the guide') : rep.reason).setEnabled(repOk);
+      this.refreshRepairButton(btn.repair, b, repOk, rep.ok ? (repOk ? '' : 'Follow the guide') : rep.reason);
       visible.push(btn.repair);
     }
 
@@ -2323,6 +2462,7 @@ New walls are built at your wall level (${wallLevel(this.gs)}), so one costs wha
     const visible = (isGuideVisible(gs) || lab || !!tip) && !covered;
     this.guide.setVisible(visible);
     this.guide.setY(visible ? y : 2000);
+    if (this.editRowOn()) this.layoutEditRow(); // the edit row rises over the bubble while it's up
     if (!visible) return;
     if (tip) {
       notifyGuideMessage(this, gs, `tip-${tip.key}`);
@@ -2499,8 +2639,8 @@ New walls are built at your wall level (${wallLevel(this.gs)}), so one costs wha
     on(['researchPointsChanged', 'baseReset'], (d) => {
       this.refreshResearchPoints();
       if (d && d.lost > 0) this.showRpLost(d.lost);
-      const sel = this.selectedId && gs.getBuilding(this.selectedId);
-      if (sel && ['rvlab', 'fuelStation', 'shakeCollector'].includes(sel.type)) this.refreshInfo();
+      // (Any selected building: its Upgrade or Merge price may be in Shakes, and its button follows what you can pay.)
+      if (this.selectedId && gs.getBuilding(this.selectedId)) this.refreshInfo();
     });
     on(['goldChanged', 'buildingPlaced', 'buildingUpgraded', 'wallsUpgraded', 'baseReset', 'abilityResearched', 'abilitiesApplied'], () => {
       this.refreshShopBadge();
@@ -2691,9 +2831,9 @@ New walls are built at your wall level (${wallLevel(this.gs)}), so one costs wha
     };
     if (this.world.editMode && this.hotbar.visible) {
       r.layoutHotbar = { ...HOTBAR };
-      r.editHint = { x: HOTBAR.x, y: HOTBAR.y - 53, w: this.editHint.width + 44, h: 42 };
+      r.editHint = this.editHintRect || null;
       r.layoutSave = btn(this.layoutSave); r.layoutCancel = btn(this.layoutCancel); r.layoutRemoveAll = btn(this.layoutRemoveAll);
-      if (this.shiftPad.visible) r.shiftPad = { x: SHIFT_PAD.x - SHIFT_PAD.dx - 30, y: SHIFT_PAD.y - SHIFT_PAD.dy - 30, w: (SHIFT_PAD.dx + 30) * 2, h: (SHIFT_PAD.dy + 30) * 2 };
+      if (this.shiftPad.visible) r.shiftPad = { x: this.shiftPad.x, y: this.shiftPad.y - EDIT_ROW.h / 2, w: this.shiftPadW, h: EDIT_ROW.h };
       if (this.rowBtn.visible) r.rowSelect = btn(this.rowBtn);
     }
     return r;

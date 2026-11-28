@@ -22,7 +22,7 @@ function makeBackend(storage) {
 
 const storage = deviceStorage();
 // The tab guard: a village opened in another tab of this browser stops this tab saving it (tabGuard.js).
-export const session = new Session({ backend: makeBackend(storage), storage, guard: new TabGuard({ bus: makeTabBus() }) });
+export const session = new Session({ backend: makeBackend(storage), storage, guard: new TabGuard({ bus: makeTabBus() }), deviceCheck: true });
 
 // Another tab logged out or switched accounts: this tab starts over as whoever is logged in now (its unsent
 // progress is in the device copies and is picked up at that account's next login).
@@ -36,5 +36,8 @@ if (session.backend) {
 
 // Leaving or hiding the page: send anything waiting (the device copy covers it if this doesn't finish).
 if (typeof document !== 'undefined') {
-  document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'hidden') session.flush(); });
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'hidden') session.flush();
+    else session.checkDevice(); // back on screen: still this account's device? (v0.15.4)
+  });
 }

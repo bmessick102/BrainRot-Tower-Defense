@@ -5,7 +5,7 @@
 // the wave changes, and buys through GameState.upgradeBuilding with the level it showed (a stale window can't buy twice).
 import { Modal } from './Modal.js';
 import { Button } from './Button.js';
-import { buildingTextureKey } from './BuildingView.js';
+import { buildingTextureKey, showcaseFooting } from './BuildingView.js';
 import { drawShowcaseCard, fitIcon, fitWidth } from './uiDraw.js';
 import { drawShowcase, drawStatBars, drawFacts, drawPurchaseFooter, PREVIEW_W, PREVIEW_H } from './PurchasePreview.js';
 import { ensureEncoreTextures, ENCORE_ICON } from './EncoreIcon.js';
@@ -183,9 +183,10 @@ export function openUpgradeWindow(scene, gs, b) {
     m.clear();
     const g = m.add(scene.add.graphics());
     const loaded = !artKey || scene.textures.exists(artKey);
+    const shown = loaded ? nextLevel : Math.max(1, level); // the level whose picture shows
     drawShowcase(scene, m, g, {
       name: buildingName(b.type),
-      picture: { key: buildingTextureKey(scene, b.type, loaded ? nextLevel : Math.max(1, level)) },
+      picture: { key: buildingTextureKey(scene, b.type, shown), footing: showcaseFooting(b.type, shown) },
       tag: { small: wall ? 'Wall level' : 'Level', big: hall && level === 0 ? 'Ruin → 1' : `${level} → ${nextLevel}` }
     });
     const { bars, facts } = upgradeContent(scene, gs.getBuilding(b.id), level, nextLevel, status);

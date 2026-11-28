@@ -589,4 +589,27 @@ describe('Supabase backend guards (mocked, no network)', () => {
     await expect(be.createBase({ name: 'y' })).rejects.toThrow(/Log in again/);
     await expect(be.updateBase('b1', { name: 'y' })).rejects.toThrow(/Log in again/);
   });
+
+  it('one device at a time (v0.15.4): off and silent before the migration, enforced after it', async () => {
+    const be = make();
+    // Before the migration: the functions aren't there, so the game claims nothing and saves exactly as before.
+    const missing = { data: null, error: { code: 'PGRST202', message: 'Could not find the function public.claim_session' } };
+    be.db = { rpc: async () => missing };
+    expect(await be.claimSession('device-1234')).toBe(false);
+    expect(await be.sessionActive('device-1234')).toBe(true);
+    be.db = fakeDb({ data: [{ id: 'b1', updated_at: 't1' }], error: null });
+    await be.updateBase('b1', { name: 'x' });
+    expect(be.db.calls.find((c) => c[0] === 'update')[1]).toEqual({ name: 'x' }); // no device id sent
+    // After it: the device id goes with each save, and a refusal reads as "opened on another device".
+    const rpcs = [];
+    be.db = { rpc: async (name, args) => { rpcs.push([name, args]); return { data: name === 'session_active' ? false : null, error: null }; } };
+    expect(await be.claimSession('device-1234')).toBe(true);
+    expect(await be.sessionActive('device-1234')).toBe(false);
+    expect(rpcs).toEqual([['claim_session', { p_session: 'device-1234' }], ['session_active', { p_session: 'device-1234' }]]);
+    be.db = fakeDb({ data: [{ id: 'b1', updated_at: 't2' }], error: null });
+    await be.updateBase('b1', { name: 'y' }, { session: 'device-1234' });
+    expect(be.db.calls.find((c) => c[0] === 'update')[1]).toEqual({ name: 'y', session_id: 'device-1234' });
+    be.db = fakeDb({ data: null, error: { code: 'P0001', message: 'IBTD_SESSION_REPLACED: this account was opened on another device.' } });
+    await expect(be.updateBase('b1', { name: 'z' }, { session: 'device-1234' })).rejects.toMatchObject({ sessionReplaced: true });
+  });
 });

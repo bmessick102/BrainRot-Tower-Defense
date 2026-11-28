@@ -17,6 +17,11 @@
 //   Villages offers to restore. Wall-clock times (`savedAt`) never decide anything.
 // - Tabs (tabGuard.js): opening a village in a second tab tells the first one, which stops saving it
 //   (`lock`: the game shows "This village was opened in another tab").
+// - Devices (v0.15.4): one device at a time per account, the newest login wins. Every login (and every page load
+//   with a saved login) claims the account for this browser's device id (claimDevice); the server then refuses
+//   village saves from any other device, and the old device notices on its next save or check (checkDevice, every
+//   DEVICE_CHECK_MS and when the page comes back into view) and stops (`lock` 'device'). A reload there logs in
+//   again and takes the account back. Off while the server doesn't have it yet (claimSession answers false).
 // - Device copies belong to one account (`uid`): another account logging in on the same device never sees
 //   them; they wait for their own account's next login.
 // - Offline (startOffline): when the server can't be reached at launch, the last account that logged in on
@@ -24,7 +29,7 @@
 //   logs in again; nothing is sent, and achievement rewards can't be claimed, until then.
 import { parseSave } from '../logic/save.js';
 import { COUNTERS, estimateBestWave, mergeVillageCounters } from '../logic/achievements.js';
-import { isConflictError } from './errors.js';
+import { isConflictError, isSessionReplaced } from './errors.js';
 
 export const MAX_BASES = 5;
 export const BASE_NAME_MAX = 20;
@@ -57,6 +62,8 @@ const LAST_EMAIL = 'ibtd.lastEmail';     // the login screen's remembered email 
 const importedKey = (uid) => `ibtd.imported.${uid}`; // fingerprints of villages this account imported
 const indexKey = (uid) => `ibtd.account.${uid}`;     // the account's village list, stats and achievements, for offline play
 const UPLOAD_MS = 1500;  // a village uploads this long after its last change
+const DEVICE_KEY = 'ibtd.device';   // this browser's device id (one device at a time per account, v0.15.4)
+export const DEVICE_CHECK_MS = 15000; // how often a device asks whether it is still the account's device
 const STATS_MS = 4000;   // stats / achievements upload this long after their last change
 const RETRY_MS = [3000, 8000, 20000, 45000];
 const mirrorKey = (id) => `ibtd.cloud.${id}`;
@@ -97,7 +104,7 @@ export class Session {
    * @param {Storage|null} o.storage the device's localStorage
    * @param {import('./tabGuard.js').TabGuard|null} [o.guard] tells this browser's other tabs which village is open here
    */
-  constructor({ backend = null, storage = null, timers = null, guard = null } = {}) {
+  constructor({ backend = null, storage = null, timers = null, guard = null, deviceCheck = false } = {}) {
     this.backend = backend;
     this.local = storage;
     this.timers = timers || { set: (fn, ms) => setTimeout(fn, ms), clear: (t) => clearTimeout(t) };
@@ -105,7 +112,13 @@ export class Session {
     // Villages this tab gave up (another tab opened them, or the server has a newer copy): never saved from
     // this tab again, whatever its game does. `lock` says why; the game shows it and offers only a reload.
     this.lostIds = new Set();
-    this.lock = null; // { reason: 'tab' | 'conflict', baseId, name }
+    this.lock = null; // { reason: 'tab' | 'conflict' | 'device', baseId, name }
+    // One device at a time (claimDevice): `deviceOn` once the server has this device as the account's; `deviceCheck`
+    // asks it again every DEVICE_CHECK_MS (the game's session; tests call checkDevice themselves).
+    this.deviceId = null;
+    this.deviceOn = false;
+    this.deviceCheck = deviceCheck;
+    this.deviceTimer = null;
     this.reset();
     this.guard = guard;
     if (guard) {
@@ -123,6 +136,8 @@ export class Session {
   }
 
   reset() {
+    this.stopDeviceCheck();
+    this.deviceOn = false;
     // The old account's pending uploads stop first (before its villages are dropped).
     for (const t of [this.statsTimer, ...(this.bases || []).map((b) => b.timer)]) if (t) this.timers.clear(t);
     for (const b of this.bases || []) b.timer = null;
@@ -162,7 +177,7 @@ export class Session {
   /** Playing the device copies while the server can't be reached (startOffline). */
   get offline() { return !!(this.user && this.user.offline); }
   /** Uploads (villages, stats, achievements) can go now. */
-  get canSend() { return !!this.backend && !!this.user && !this.offline; }
+  get canSend() { return !!this.backend && !!this.user && !this.offline && !(this.lock && this.lock.reason === 'device'); } // (the account's other device has it now)
   get activeBase() { return this.bases.find((b) => b.id === this.activeId) || null; }
   baseById(id) { return this.bases.find((b) => b.id === id) || null; }
 
@@ -295,7 +310,7 @@ export class Session {
       this.updateSync();
       try {
         // Only on top of the revision this tab last had: a newer save from another tab or device is never overwritten.
-        const r = await this.backend.updateBase(b.id, { save: b.save, checkpoint: b.checkpoint, townHall: b.townHall, wave: b.wave, bestWave: b.bestWave || 0 }, { expected: b.serverRev || null });
+        const r = await this.backend.updateBase(b.id, { save: b.save, checkpoint: b.checkpoint, townHall: b.townHall, wave: b.wave, bestWave: b.bestWave || 0 }, { expected: b.serverRev || null, session: this.deviceSession() });
         b.retry = 0;
         if (r && r.updatedAt) b.serverRev = r.updatedAt;
         b.syncedRev = rev;
@@ -305,6 +320,9 @@ export class Session {
         // leaderboard is behind the game's own count, so the two catch up.
         if (this.user && Number.isFinite(this.serverBestWave) && this.stats.bestWave > this.serverBestWave) this.statsChanged();
       } catch (e) {
+        if (isSessionReplaced(e)) { this.deviceReplaced(); return; }
+        // Refused as stale because the account's other device saved it: say that (not "saved somewhere else").
+        if (isConflictError(e) && this.deviceOn && !(await this.checkDevice())) return;
         if (isConflictError(e)) { this.uploadConflict(b, e); return; }
         console.warn('Village upload failed', e);
         const delay = RETRY_MS[Math.min(b.retry || 0, RETRY_MS.length - 1)];
@@ -356,6 +374,82 @@ export class Session {
     if (!this.held.has(id) && !claiming) return null;
     if (claiming && this.guard.newerThan(m)) return null; // this tab opened it after that one did: that one gives way
     return this.loseBase(id, 'tab');
+  }
+
+  // ---------- one device at a time (v0.15.4) ----------
+  /** This browser's device id (made once, kept in localStorage; the tabs of one browser share it). */
+  deviceIdNow() {
+    if (!this.deviceId) {
+      this.deviceId = this.lget(DEVICE_KEY);
+      if (!this.deviceId) {
+        this.deviceId = globalThis.crypto && crypto.randomUUID ? crypto.randomUUID() : `d-${Date.now()}-${Math.random().toString(16).slice(2)}`;
+        this.lset(DEVICE_KEY, this.deviceId);
+      }
+    }
+    return this.deviceId;
+  }
+
+  /** The device id that goes with a save while the server enforces one device (else null: saves as before). */
+  deviceSession() {
+    return this.deviceOn ? this.deviceIdNow() : null;
+  }
+
+  /**
+   * Make this device the account's one device (after every login and saved-login pickup: the newest login wins).
+   * A server without it (the migration not run yet) answers false and everything works as before. Never throws.
+   */
+  async claimDevice() {
+    this.stopDeviceCheck();
+    this.deviceOn = false;
+    if (!this.canSend || !this.backend.claimSession) return false;
+    try {
+      this.deviceOn = !!(await this.backend.claimSession(this.deviceIdNow()));
+    } catch (e) {
+      console.warn('Could not claim this device for the account', e);
+    }
+    if (this.deviceOn) this.scheduleDeviceCheck();
+    return this.deviceOn;
+  }
+
+  scheduleDeviceCheck() {
+    this.stopDeviceCheck();
+    if (this.deviceCheck && this.deviceOn) this.deviceTimer = setTimeout(() => { this.deviceTimer = null; this.checkDevice(); }, DEVICE_CHECK_MS);
+  }
+
+  stopDeviceCheck() {
+    if (this.deviceTimer) { clearTimeout(this.deviceTimer); this.deviceTimer = null; }
+  }
+
+  /** Is this still the account's device? If not, stop (deviceReplaced). A failed check (offline) just tries again later. */
+  async checkDevice() {
+    if (!this.deviceOn || !this.canSend || !this.backend.sessionActive) return true;
+    let still = true;
+    try { still = await this.backend.sessionActive(this.deviceIdNow()); } catch { /* can't tell: ask again later */ }
+    if (!this.deviceOn) return false;
+    if (still === false) { this.deviceReplaced(); return false; }
+    this.scheduleDeviceCheck();
+    return true;
+  }
+
+  /**
+   * The account was opened on another device: this one stops saving every village (unsent progress stays on this
+   * device as a backup, like a conflict's) and the game shows "opened on another device" with Reload.
+   */
+  deviceReplaced() {
+    if (this.lock && this.lock.reason === 'device') return; // (told once)
+    this.deviceOn = false;
+    this.stopDeviceCheck();
+    if (!this.lock) {
+      const open = this.activeBase;
+      this.lock = { reason: 'device', baseId: open ? open.id : null, name: open ? open.name : '' };
+    }
+    for (const b of this.bases) {
+      if (b.lost) continue;
+      if (b.dirty) this.keepBackup(b, { save: b.save, checkpoint: b.checkpoint }, 'device');
+      this.loseBase(b.id, 'device');
+    }
+    this.updateSync();
+    this.changed();
   }
 
   /** Upload everything waiting right now (before logging out, leaving the page, or a manual Save). Never throws. */
@@ -432,6 +526,7 @@ export class Session {
     const last = this.lget(lastBaseKey(user.id));
     this.activeId = this.baseById(last) ? last : (this.bases[0] ? this.bases[0].id : null);
     this.saveIndex();
+    await this.claimDevice(); // the newest login wins: any other device of this account stops saving
     this.changed();
   }
 
@@ -648,7 +743,7 @@ export class Session {
     const clean = String(name || '').trim().slice(0, BASE_NAME_MAX);
     if (!clean) throw new Error('Type a name first.');
     // (Not a new revision: a name never conflicts with a save.)
-    await this.backend.updateBase(id, { name: clean });
+    await this.backend.updateBase(id, { name: clean }, { session: this.deviceSession() });
     b.name = clean;
     this.saveIndex();
     this.changed();
